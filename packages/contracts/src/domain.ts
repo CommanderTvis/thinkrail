@@ -401,3 +401,30 @@ export interface HistorySearchResult {
 	messageTotal: number;
 	indexing: boolean;
 }
+
+/** Scope of a prompt template — global (pi's global dir) or project-scoped. */
+export type TemplateScope = "global" | "project";
+
+/** A prompt template's metadata — what `template.list` returns. Deliberately body-free: both list
+ * consumers (the composer's `/` menu, the Templates settings rows) render metadata only, and shipping
+ * every file's full text would make a listing cost the whole corpus (the host reads only each file's
+ * bounded frontmatter head to build these). The full text travels solely on the by-name `template.get`/
+ * `template.save` path, as {@link Template}. */
+export interface TemplateInfo {
+	/** The template's unique name (within its scope). */
+	name: string;
+	/** Optional description of the template's purpose. */
+	description?: string;
+	/** Optional hint for argument placeholders or usage. */
+	argumentHint?: string;
+	/** Where the template lives — global or project-scoped. */
+	scope: TemplateScope;
+	/** Absolute path to the template file on disk. */
+	filePath: string;
+}
+
+/** A full prompt template: metadata + the complete file text (frontmatter + body). */
+export interface Template extends TemplateInfo {
+	/** The full file text: frontmatter + body. */
+	content: string;
+}
