@@ -21,7 +21,7 @@ import type { LoginState } from "../auth";
 import type { HydratedRuntime } from "../chat/hydrate";
 import type { ChatTurn, ExtUiDialogRequest, ToolResultState } from "../chat/types";
 import type { ConnectionStatus } from "../transport";
-import { isSkillPath, selectWorkspaceTick } from "./selectors";
+import { type HistoryTarget, isSkillPath, selectWorkspaceTick } from "./selectors";
 
 /** A center tab. File tabs (Monaco) and chat tabs share the strip, discriminated by `kind`. */
 export interface FileTab {
@@ -458,6 +458,14 @@ interface AppState {
 	 */
 	chatLocationRequest: ChatLocationRequest | null;
 	/**
+	 * A request to open (or, when it is already open, re-trigger) the active chat's history-search
+	 * overlay, set by the shell's global `Ctrl+R` handler and consumed by that chat's `ChatView`. The
+	 * chord is swallowed app-wide (it would otherwise reload the page), so it fires with focus anywhere —
+	 * the file tree, an editor, the transcript — and this is how it reaches the one mounted `ChatView`.
+	 * A fresh object each call so a repeated chord still fires.
+	 */
+	historyOpenRequest: { sessionId: string } | null;
+	/**
 	 * The live-refresh signal, per workspace: `tick` increments on every `workspace.fsChanged` push (the
 	 * host's debounced worktree change notifier); `paths`/`truncated` are the LAST batch only. Panels
 	 * select their workspace's entry and silently refetch on `tick` change — the store holds only the
@@ -633,6 +641,14 @@ interface AppState {
 	requestChatLocation: (req: ChatLocationRequest) => void;
 	/** Dismiss the jump deep link once `ChatView` has consumed it (scrolled to the anchored turn). */
 	clearChatLocation: () => void;
+	/**
+	 * Ask a chat to open its history-search overlay (the shell's global `Ctrl+R`). Activates the target
+	 * tab **atomically** with the request: the chord fires over any tab, and `CenterTabs` mounts one tab
+	 * body at a time, so a request for a chat that isn't on screen would never be consumed.
+	 */
+	requestHistoryOpen: (target: HistoryTarget) => void;
+	/** Dismiss the history-open request once `ChatView` has acted on it. */
+	clearHistoryOpen: () => void;
 	/** Enqueue a toast; returns its id so a caller can dismiss it early. An identical live toast (same
 	 * variant/title/message — e.g. a retried failure) coalesces: no twin is added, the existing id returns.
 	 * The queue caps at `MAX_TOASTS` (oldest drop). Prefer the `toast` helper. */
@@ -728,6 +744,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	changesRequest: null,
 	changesView: "list",
 	chatLocationRequest: null,
+	historyOpenRequest: null,
 	fsChangesByWorkspace: {},
 	skillChangeTickByWorkspace: {},
 	skillsSyncedTickBySession: {},
@@ -1275,6 +1292,12 @@ export const useAppStore = create<AppState>((set, get) => ({
 			activeWorkspaceId: req.workspaceId,
 		}),
 	clearChatLocation: () => set({ chatLocationRequest: null }),
+	requestHistoryOpen: (target) =>
+		set((s) => ({
+			historyOpenRequest: { sessionId: target.sessionId },
+			activeTabByWorkspace: { ...s.activeTabByWorkspace, [target.workspaceId]: target.tabId },
+		})),
+	clearHistoryOpen: () => set({ historyOpenRequest: null }),
 	pushToast: (toast) => {
 		const twin = get().toasts.find(
 			(t) => t.variant === toast.variant && t.title === toast.title && t.message === toast.message,

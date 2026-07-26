@@ -11,7 +11,7 @@ import { ArrowDown } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
 import { Popover, PopoverAnchor, PopoverTrigger } from "@/components/ui/popover";
-import { EMPTY_RUNTIME, selectSkillsStale, toast, useAppStore } from "@/store";
+import { EMPTY_RUNTIME, SettingsSection, selectSkillsStale, toast, useAppStore } from "@/store";
 import { errorText, getTransport } from "@/transport";
 import { AskStatesContext, deriveAskStates } from "./askState";
 import { type ChatActions, ChatActionsContext } from "./ChatActions";
@@ -201,6 +201,9 @@ export default function ChatView({
 	const [planOpen, setPlanOpen] = useState(false);
 	const [slashActive, setSlashActive] = useState(false);
 	const [templates, setTemplates] = useState<TemplateInfo[]>([]);
+	// "A `template.list` response came back and it was empty" — never "we haven't asked yet" or "the ask
+	// failed". See the fetch effect below for why the distinction matters.
+	const [templatesEmpty, setTemplatesEmpty] = useState(false);
 	// The history overlay's save-as-template dialog: non-null while open, carrying the prompt hit its body
 	// is prefilled from — `TemplateEditorDialog` itself is always mounted (controlled by `open` below), the
 	// same idiom `panels/TemplatesSettings.tsx` uses for its own New/Edit instance.
@@ -260,13 +263,20 @@ export default function ChatView({
 	// session-create-time `commands` snapshot) is deliberately stale — see `chat/SPEC.md`'s Template
 	// slots section. The previous (possibly stale) list stays rendered until the fresh one lands — a
 	// same-open-transition flicker would be worse than a few-ms-stale row.
+	// `templatesEmpty` is what gates the menu's "no templates yet" nudge, and it is deliberately NOT
+	// `templates.length === 0`: that list starts empty and stays empty when a request fails (the catch is
+	// silent by design — a failed listing must not break the menu), so deriving emptiness from it would
+	// claim "you have no templates" during the first fetch of every chat and permanently after a failure.
+	// Only a resolved response can answer the question, so only a resolved response sets this.
 	useEffect(() => {
 		if (!slashActive) return;
 		let cancelled = false;
 		getTransport()
 			.request("template.list", { workspaceId })
 			.then((res) => {
-				if (!cancelled) setTemplates(res.templates);
+				if (cancelled) return;
+				setTemplates(res.templates);
+				setTemplatesEmpty(res.templates.length === 0);
 			})
 			.catch(() => {});
 		return () => {
@@ -361,9 +371,24 @@ export default function ChatView({
 			.catch(() => {});
 	};
 
-	// Ctrl+R in the composer seeds the overlay with the current draft (never a stale store value) —
+	// Opening history recall seeds the overlay with the current draft (never a stale store value) —
 	// `useHistorySearch` owns everything from here (debounce, scope cycling, stale-response drop).
 	const onHistoryOpen = () => openOverlay(draft);
+
+	// Open the Templates manager — what the `/` menu's empty-state nudge does. The store edge lives here,
+	// not in the presentational `Composer`.
+	const onManageTemplates = () => useAppStore.getState().openSettings(SettingsSection.Templates);
+
+	// Dismissing the overlay (Escape) hands focus BACK to the prompt field, caret where it was, so the
+	// user can keep typing the draft they interrupted. Opening the overlay moved focus into its query
+	// input; closing unmounts that input, which would otherwise strand focus on `<body>` — every
+	// subsequent keystroke lost. This is the dismiss path only: the *other* ways the overlay closes each
+	// own where focus goes next (an insert focuses the composer itself, a jump scrolls another chat into
+	// view, save-as-template hands off to a dialog), so none of them route through here.
+	const onDismissHistory = () => {
+		closeHistory();
+		composerRef.current?.refocus();
+	};
 
 	// Enter on a prompt hit: replace the draft, focus, caret at end, close — no submit.
 	const onInsertHit = (hit: PromptHit) => {
@@ -451,6 +476,20 @@ export default function ChatView({
 		setFlashRowId(rows[index]?.id ?? null);
 		useAppStore.getState().clearChatLocation();
 	}, [chatLocationRequest, sessionId, rows, runtime.turnIdByMessageIndex, turns]);
+
+	// Consume the shell's global `Ctrl+R` (`store.historyOpenRequest`), the chord's only handler app-wide —
+	// it fires with focus anywhere, so it can't be a key handler in the composer or the overlay. Already
+	// open → cycle the scope (what the chord means once the overlay has focus); otherwise open it through
+	// the composer's `openHistory` handle, so the chord and the composer's own history button take the
+	// identical path (menus dismissed, draft-seeded).
+	const historyOpenRequest = useAppStore((s) => s.historyOpenRequest);
+	const historyOverlayOpen = historyState.open;
+	useEffect(() => {
+		if (historyOpenRequest?.sessionId !== sessionId) return;
+		useAppStore.getState().clearHistoryOpen();
+		if (historyOverlayOpen) cycleScope();
+		else composerRef.current?.openHistory();
+	}, [historyOpenRequest, sessionId, historyOverlayOpen, cycleScope]);
 
 	// Auto-clear the flash, decoupled from the effect above: `clearChatLocation()` there flips
 	// `chatLocationRequest` to null, which is one of that effect's own deps — if the timeout lived there,
@@ -592,11 +631,10 @@ export default function ChatView({
 							state={historyState}
 							workspaceNames={workspaceNames}
 							onQueryChange={setQuery}
-							onCycleScope={cycleScope}
 							onSetScope={setScope}
 							onToggleStage={toggleStage}
 							onMoveSelection={moveSelection}
-							onClose={closeHistory}
+							onClose={onDismissHistory}
 							onInsert={onInsertHit}
 							onInsertAndSend={onInsertAndSendHit}
 							onOpenMessage={openMessage}
@@ -621,6 +659,8 @@ export default function ChatView({
 							onAbort={onAbort}
 							onHistoryOpen={onHistoryOpen}
 							onPickTemplate={onPickTemplate}
+							onManageTemplates={onManageTemplates}
+							templatesEmpty={templatesEmpty}
 						/>
 					</div>
 					<TemplateEditorDialog
