@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, type Page, test } from "@playwright/test";
+import { worktreeRows } from "./fixtures/app";
 import { E2E_PI_AGENT_DIR } from "./fixtures/paths";
 
 // Tagged @agent: drives a real pi agent. THE restart test — the one scenario the shared-host suite
@@ -129,7 +130,6 @@ test("a pending questionnaire survives a host kill -9: reboot, reopen, answer, a
 	await expect(page.locator('[data-testid="workspace-item"][data-active="true"]')).toHaveCount(1, {
 		timeout: 20_000,
 	});
-	await page.getByTestId("start-chat").click();
 	await expect(page.getByTestId("chat-input")).toBeVisible();
 
 	await page
@@ -160,8 +160,8 @@ test("a pending questionnaire survives a host kill -9: reboot, reopen, answer, a
 	await page.getByTestId("project-item").first().click();
 	// The workspace persisted; its session is now DISK-ONLY (the live one died with the host), so it
 	// surfaces in chat history and re-opens through the hydration path.
-	await expect(page.getByTestId("workspace-item").first()).toBeVisible({ timeout: 15_000 });
-	await page.getByTestId("workspace-item").first().click();
+	await expect(worktreeRows(page).first()).toBeVisible({ timeout: 15_000 });
+	await worktreeRows(page).first().click();
 	await page.getByTestId("chat-history").click();
 	await page.getByTestId("closed-chat-item").first().click();
 	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(1);
