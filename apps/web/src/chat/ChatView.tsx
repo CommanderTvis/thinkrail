@@ -34,6 +34,7 @@ import {
 } from "./Composer";
 import { ExtUiDialog } from "./ExtUiDialog";
 import { HistoryOverlay } from "./HistoryOverlay";
+import { planGlance } from "./planView";
 import { type ChatRow, deriveRows, rowIndexForTurn } from "./rows";
 import { SkillsDialog } from "./SkillsDialog";
 import { StreamIndicator, type StreamStatus, streamStatus } from "./StreamIndicator";
@@ -511,8 +512,8 @@ export default function ChatView({
 		return () => clearTimeout(timer);
 	}, [flashRowId]);
 
-	// A turn-divider's "files changed" chip → deep-link the right panel to the changed file (flip to Changes
-	// + highlight its row; the diff opens only on an explicit click). The divider hands over exactly one path
+	// A turn-divider's "files changed" chip → deep-link the changed file (flip to Changes, highlight its
+	// row, and open its diff tab — handled and consumed by ChangesPanel). The divider hands over exactly one path
 	// — the round's only artifact, or the row the user picked from the expanded list — so nothing here has to
 	// guess which of several the user meant. These are the chat's touches of the store outside the renderers,
 	// kept here in the integration layer.
@@ -547,6 +548,14 @@ export default function ChatView({
 	const askStates = useMemo(
 		() => deriveAskStates(runtime.turns, runtime.askAnswers),
 		[runtime.turns, runtime.askAnswers],
+	);
+
+	// The plan's glance state — "working or waiting on you?" — derived from session state (streaming +
+	// any awaiting questionnaire), never stored, so the TODO strip can't claim "in work" while the
+	// system waits (see planView.ts).
+	const planGlanceState = useMemo(
+		() => planGlance(isStreaming, askStates),
+		[isStreaming, askStates],
 	);
 
 	// Interactive tool renderers reach the agent through this context (kept out of the presentational
@@ -594,7 +603,11 @@ export default function ChatView({
 													data-open={planOpen}
 													className="flex min-w-0 items-center gap-xs text-muted text-xs hover:text-text"
 												>
-													<ChatPlanStripContent plan={plan} open={planOpen} />
+													<ChatPlanStripContent
+														plan={plan}
+														open={planOpen}
+														glance={planGlanceState}
+													/>
 												</button>
 											</PopoverTrigger>
 										) : null
@@ -604,7 +617,7 @@ export default function ChatView({
 								/>
 							</div>
 						</PopoverAnchor>
-						<ChatPlanContent plan={plan} />
+						<ChatPlanContent plan={plan} glance={planGlanceState} />
 					</Popover>
 					<div
 						data-testid="chat-scroll"
@@ -617,6 +630,9 @@ export default function ChatView({
 							context={listContext}
 							components={CHAT_LIST_COMPONENTS}
 							className="min-h-0 flex-1"
+							// Any chat opens at the latest message (a fresh mount would otherwise land mid-transcript);
+							// the jump-to-message deep link overrides post-mount with its centered scrollToIndex.
+							initialTopMostItemIndex={{ index: Math.max(rows.length - 1, 0), align: "end" }}
 							followOutput={followOutput}
 							atBottomStateChange={handleAtBottom}
 							atBottomThreshold={50}

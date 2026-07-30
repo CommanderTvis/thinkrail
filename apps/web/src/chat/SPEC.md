@@ -137,6 +137,12 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   `data-flash` + a `bg-[var(--primary-10)]` transition on the row wrapper, cleared after 1600ms) draw the
   eye to it. Either resolving a row or giving up (toasted as "couldn't locate the message") always clears
   the request — `ChatView` is its only consumer, so an unresolved request must never linger.
+- **Open at the latest message** — the chat `Virtuoso` mounts with `initialTopMostItemIndex = { index:
+  last row, align: "end" }`, so every freshly shown transcript (new tab, reopen from history, auto-open,
+  reload) starts at the bottom instead of mid-scroll; jump-to-message (above) runs post-mount and
+  overrides with its centered `scrollToIndex`. Streaming follow stays `useChatScroll`'s job
+  (pointer-aware `followOutput` — unchanged). E2e: `auto-open-chats.spec.ts` asserts a long seeded
+  transcript's last message is in view without scrolling.
 - **Composer & chrome** — `Composer` (prompt field + send/steer/followUp/abort, `@`-mentions, `/`
   commands + template **slot sessions** (Tab-through placeholders — see the Template slots bullet
   below), image paste/drop, `openHistory` on its imperative handle → `onHistoryOpen`) plus its props-driven **slash-completion
@@ -470,13 +476,43 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
 - **Chat TODO plan** — the chat's `pi-todos` list surfaced **only in the chat** (engine:
   [[module-pi-todos]]; host read/write: [[submodule-server-todos]]):
   `useChatTodos` (the `todo.*` data hook — fetch + live `pi.event` refetch + edits + the add-nudge + the
-  `openMarkdown` snapshot action), `TodoList` (loose items + named groups, add-row + an "open as markdown"
-  button), `planMarkdown` (a pure `plan → markdown` compiler), and `ChatPlan` (`ChatPlanStripContent` +
+  `openMarkdown` snapshot action), `planView` (pure derivations over the DTO: `groupProgress`,
+  `planSummary`, `planGlance`/`sessionGlance`, `planSections`, and `shouldNudgeOnAdd`. A group's *status* is
+  **not** derived here — the host computes it and ships it on `TodoGroupItem.status`, so the rule has one
+  home; a user edit therefore re-reads the plan rather than patching it locally, see `useChatTodos`), `TodoList` (the
+  **status-ordered, group-first** rendering (`planSections`) — group = task: the **in-progress** task
+  (its whole group) on top with **no section header**, then a **To do** section (the pending groups,
+  then the user's pending loose items), then a **"Done" label** at the very bottom under which **each
+  finished task is its own foldable row** (collapsed — title + `N done`) plus the done loose items (not
+  one collapse over all of Done). Finished *steps* stay inline in their (active/pending)
+  group; only whole done tasks move to Done. Each group is a header row (derived status icon + title +
+  done/total badge), the `active` group emphasized; the user's loose items carry a per-row `user` badge
+  (no separate "Your requests" header — they're placed by status). Plus the add-row + an "open as
+  markdown" button. **Status ordering is UI-only** — the agent's `formatPlan` stays plan-order so its
+  "work in order" discipline is unaffected), `planMarkdown` (a pure `plan →
+  markdown` compiler, `## <group> — n/m` sections), and `ChatPlan` (`ChatPlanStripContent` +
   `ChatPlanContent` — a header strip that opens the plan in a `Popover` over the chat; `ChatView` composes
   the `Popover` anchored to the header, so the popup hangs flush under it at the chat's left edge). There
   is no right-panel Todo tab — the plan lives in the conversation. The "open as markdown" action compiles
   the current plan and opens it as an ephemeral `doc` tab (`store.openDoc`), rendered by the panels'
   `MarkdownPreview` — no file is written to disk.
+  **The glance state** keeps the plan honest as the user's status window: `planGlance(isStreaming,
+  askStates)` — derived from session state in `ChatView`, **never stored**, so the agent can't make it
+  lie — renders the `in_progress` step as working (dot), **waiting for your answer**
+  (`MessageCircleQuestion` — the same glyph as the `ask_user_question` card, when the agent stopped with
+  an awaiting question), or **paused — waiting for you**
+  (`CirclePause`, any other stop: turn ended, error). **The header strip reflects the agent's state,
+  not the checkboxes** (`stripStatus`, decoupled from the `in_progress` step): it shows "waiting for
+  your answer" **even when every item is done** (the earlier strip hid it whenever there was no
+  in-progress step, so an agent blocked on a question read as "finished"); "working" while it runs;
+  "paused" only when it stopped with open steps left; and nothing extra on a clean finish (all done,
+  idle). `TodoList` stays props-driven — it receives the resolved glance, never reads the transport.
+  **The add-nudge respects that waiting state.** A user add always stores the item (loose, at the end),
+  but `nudgeAgent` **only wakes the agent when it isn't waiting on the user** (`shouldNudgeOnAdd` —
+  skip iff the glance is `waiting_question`): waking an agent that stopped on an `ask_user_question`
+  would send it off to work the new item and forget to return to its own question, so instead the item
+  just queues and is picked up on the agent's next natural turn (when the user answers, or a later idle
+  nudge). `working` rides a `followUp`, plain `waiting`/idle a `prompt`, unchanged.
 
 ## Boundary
 

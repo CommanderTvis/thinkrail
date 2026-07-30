@@ -59,7 +59,10 @@ of the host.
     `disabled`) — the workspace Skills manager's `skills.state` rows.
   - **`SessionSummary`** — a chat session as the host reports it for hydration (read side); `live`
     distinguishes an in-memory session (auto-restored) from a disk-only one (surfaced in chat-history,
-    re-opened on demand). `session.getMessages` returns `{ summary, messages }` (the transcript is
+    re-opened on demand — except one carrying unfinished TODOs, which a client auto-opens). The optional
+    **`openTodos`** (count of non-`done` items in the chat's TODO plan) is populated only by
+    `session.list` (the host decorates via the todos module); absent = unknown, treated as 0 — an
+    additive optional field, so no protocol-version bump. `session.getMessages` returns `{ summary, messages }` (the transcript is
     **`TranscriptMessage[]`** — the pi-canonical `Message` union widened with **`WireCustomMessage`**, a
     type-only mirror of pi-coding-agent's Node-only `CustomMessage`, so extension-injected messages like
     the ask replies cross the wire; the summary reflects the now-live session after a disk re-open).
@@ -127,6 +130,9 @@ of the host.
   carries only what the panel renders (`type`/`status` stay `string`: tolerate whatever is on disk);
   **`TodoItem`/`TodoGroupItem`/`TodoPlan`** + the **`TodoStatus`/`TodoOrigin`** unions — the in-chat plan
   DTOs, **mirrored** from `pi-todos/core` (never imported), carrying the chat's per-session TODO list.
+  `TodoGroupItem` additionally carries **`status: TodoGroupStatus`** — the group's *task* lifecycle
+  (`pending`/`active`/`done`), **derived by the host** from the steps (`pi-todos`' `groupStatus`) rather than
+  stored: shipping it means the truth table has one home and no client re-derives it.
   **history-search read DTOs** — **`HistoryScope`** (the overlay's cycle: this chat → workspace →
   project → everywhere); **`PromptHit`** (a recalled prompt; carries optional `messageIndex` +
   `anchorText` — the kept-newest occurrence's jump anchor) and **`MessageHit`** (a full-text

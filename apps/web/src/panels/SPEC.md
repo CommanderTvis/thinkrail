@@ -264,8 +264,20 @@ a project picker, the prompt hero, and the reused
   closing a chat tab routes to `store.closeChatToHistory` (keeps the session alive) and shows a
   **chat-history** dropdown (recently-closed + disk-only chats, shown only when non-empty). On
   workspace-activate it **hydrates**: `session.list` → **live** sessions auto-restore as tabs
-  (`session.getMessages` → `messagesToRuntime` → `store.hydrateSession`); **disk-only** ones go to history
-  via `store.noteClosedChats`. Reopening restores a live runtime's tab, or for a disk-only chat re-opens it
+  (`session.getMessages` → `messagesToRuntime` → `store.hydrateSession`), and so do **disk-only sessions
+  carrying unfinished TODOs** (`SessionSummary.openTodos > 0` — work in progress survives a host restart
+  as open tabs, hydrated with the disk-attach tick baseline), **capped at the newest `AUTO_OPEN_LIMIT`**:
+  a long-lived workspace can hold a dozen half-finished chats, and opening every one would bury the tab
+  strip and pull every transcript into memory, so past the cap they stay one click away in history. The
+  remaining **disk-only** ones go to
+  history via `store.noteClosedChats`. Two guarantees ride that pass: **never-empty** — when nothing
+  opened (and no session in *this client's* store was closed to history, which is what vetoes the
+  fallback; closes aren't persisted, so after a reload a closed chat is indistinguishable from any other
+  disk chat and may reopen), the most recent disk chat
+  auto-opens as a fallback; **most-recent focus** — the newest (`updatedAt` desc) hydrates first and alone,
+  the rest then load in parallel, and
+  `hydrateSession` only takes focus while the workspace has no active tab, so the latest auto-opened chat
+  lands focused without ever stealing an existing selection (e2e: `auto-open-chats.spec.ts`). Reopening restores a live runtime's tab, or for a disk-only chat re-opens it
   on the host (`getMessages`) + hydrates — so a reload, a second tab, or a host restart all rebuild from the
   host. A rejected new-chat `session.create` or history-reopen `getMessages` raises a `store.toast.error`
   (the click would otherwise do nothing, silently; a failed reopen stays in history for a retry).
@@ -360,17 +372,20 @@ a project picker, the prompt hero, and the reused
   action) — so the flip is one concept rather than something re-derived per request type, and a divider chip
   that only reveals a view (expanding its artifact list, no path picked) needs no path to do it.
   `ChangesPanel` watches
-  `changesRequest` (set by a chat turn-divider's "files changed" chip) and **highlights** the requested
-  file's row (resolved with `matchesWorktreePath` against `git.status`) — deliberately without opening its
-  diff tab; the diff opens only on the user's explicit click, so a chat chip never steals the center area.
+  `changesRequest` (set by a chat turn-divider's "files changed" chip), **highlights** the requested
+  file's row (resolved with `matchesWorktreePath` against `git.status`) **and opens its diff tab** in the
+  center — the chip/list-row click *is* the user's explicit ask to see that change, so stopping at a
+  highlight read as broken. A path no longer in the current diff (a round from days ago) degrades to
+  highlight-only: there is no diff to show. The intent is **consumed** (`clearChangesRequest`) once
+  handled — it opens a center tab, so a git-status re-read replaying it would yank the user's tab back.
   `SpecsPanel` watches **`specRequest`** (the "N specs" chip) and **opens the rendered spec**
   (`openFileInTab`, which canonicalizes the reported path — pi may report it absolute or `./`-prefixed — to
   the worktree-relative **tab identity**, so a deep link can never open a second tab for a file already open
   under its relative path; that lives in the choke point, not in each caller, and it means a spec created
   seconds ago and not yet in the graph opens just the same) — a spec has nothing to preview short of its
   content, and the tree row lights up on its own since rows key off the active tab id. That intent is
-  **consumed** (`clearSpecRequest`) once handled: unlike the highlight-only Changes link, it opens a center
-  tab, so replaying it on a remount or a graph refetch would yank the user's tab back mid-edit. Two intents, two
+  **consumed** (`clearSpecRequest`) once handled: like the Changes link, it opens a center tab, so
+  replaying it on a remount or a graph refetch would yank the user's tab back mid-edit. Two intents, two
   effects: a spec chip must never land in the git-derived Changes view, which structurally cannot show a
   gitignored `.thinkrail/context/` scratch spec — the empty-Changes bug that motivated the split.
   Both intents carry **exactly one path**: a round that wrote several artifacts resolves the ambiguity in the

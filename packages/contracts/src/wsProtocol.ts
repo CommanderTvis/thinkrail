@@ -87,7 +87,10 @@ import type {
 // post-refresh list (the picker's freshness affordance) as `RefreshedModels` — `{ models, complete }`,
 // where `complete` says whether the pass actually settled inside the host's budget (only then is the
 // list authoritative) — with `force` bypassing pi's 4h provider freshness throttle.
-export const PROTOCOL_VERSION = 19;
+// v20: `TodoGroupItem.status` — a group's derived task lifecycle (`pending|active|done`), computed by the
+// host from the steps and **required** on the DTO; clients render it instead of deriving it, so an older
+// host would leave a newer UI bucketing every group as `pending`.
+export const PROTOCOL_VERSION = 20;
 
 /**
  * The `server.welcome` push payload (the first message on every WS connect). `protocolVersion` lets a
