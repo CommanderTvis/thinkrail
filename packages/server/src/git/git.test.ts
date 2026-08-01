@@ -1,8 +1,18 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { gitDiffFile, gitStatus, listBranches, numstatPath, prefetchBranch } from "./git";
+import type { Workspace } from "@thinkrail/contracts";
+import { changedFileArgs, diffBaseRef, resolveDiffRange } from "./diffScope";
+import {
+	gitDiffFile,
+	gitStatus,
+	listBranches,
+	listCommits,
+	numstatPath,
+	prefetchBranch,
+} from "./git";
+import { isSafeRef } from "./refs";
 
 let dataDir: string;
 let repo: string;
@@ -37,7 +47,7 @@ afterEach(() => {
 });
 
 /** Register the repo itself as workspace `w1` (branch = base = main) for the gitDiffFile tests. */
-function seedWorkspace(): void {
+function seedWorkspace(extra: Partial<Workspace> = {}): void {
 	writeFileSync(
 		join(dataDir, "workspaces.json"),
 		JSON.stringify([
@@ -49,9 +59,20 @@ function seedWorkspace(): void {
 				worktreePath: repo,
 				baseBranch: "main",
 				createdAt: 1,
+				...extra,
 			},
 		]),
 	);
+}
+
+/** A commit on a `feature` branch off `main`, so the scopes have a real range to span. Returns its oid. */
+function commitOnFeature(file: string, content: string, message: string): string {
+	writeFileSync(join(repo, file), content);
+	git(repo, "add", "-A");
+	git(repo, "commit", "-m", message);
+	return new TextDecoder()
+		.decode(Bun.spawnSync(["git", "-C", repo, "rev-parse", "HEAD"], { stdout: "pipe" }).stdout)
+		.trim();
 }
 
 test("gitDiffFile returns both sides: base content vs worktree content (trailing newline intact)", () => {
@@ -201,4 +222,275 @@ test("gitStatus reads the Default workspace's branch live, not the persisted sna
 	);
 	git(repo, "switch", "-c", "feature/live");
 	expect(gitStatus("w-default").branch).toBe("feature/live");
+});
+
+test("diffBaseRef resolves the re-pointed diff target over the creation base", () => {
+	expect(diffBaseRef({ baseBranch: "main" })).toBe("main");
+	expect(diffBaseRef({ baseBranch: "main", diffBase: "origin/release" })).toBe("origin/release");
+});
+
+test("resolveDiffRange: one definition per scope (branch / uncommitted / commit)", () => {
+	const ws = { baseBranch: "main", worktreePath: repo };
+
+	// Default (and explicit `branch`): everything vs the diff base, ending at the worktree.
+	expect(resolveDiffRange(ws)).toEqual(resolveDiffRange(ws, { kind: "branch" }));
+	const branch = resolveDiffRange(ws, { kind: "branch" });
+	// `--end-of-options` brackets the revs so a flag-shaped ref can't be parsed as one; the trailing `--`
+	// closes the other side, so a rev that also names a path isn't an "ambiguous argument".
+	expect(changedFileArgs(branch, "--name-status")).toEqual([
+		"diff",
+		"--name-status",
+		"--end-of-options",
+		"main",
+		"--",
+	]);
+	expect(branch).toMatchObject({ untracked: true, originalRef: "main", modifiedRef: null });
+	// The re-pointed target is what a branch range spans.
+	expect(resolveDiffRange({ ...ws, diffBase: "origin/release" }, { kind: "branch" })).toMatchObject(
+		{
+			listRevs: ["origin/release"],
+			originalRef: "origin/release",
+		},
+	);
+
+	// Uncommitted: worktree vs HEAD, untracked files included.
+	const uncommitted = resolveDiffRange(ws, { kind: "uncommitted" });
+	expect(changedFileArgs(uncommitted, "--numstat")).toEqual([
+		"diff",
+		"--numstat",
+		"--end-of-options",
+		"HEAD",
+		"--",
+	]);
+	expect(uncommitted).toMatchObject({ untracked: true, originalRef: "HEAD", modifiedRef: null });
+
+	// One commit: `sha^` vs `sha`, both sides from history, no untracked files.
+	const sha = commitOnFeature("second.txt", "second\n", "second");
+	const commit = resolveDiffRange(ws, { kind: "commit", sha });
+	const parent = commit.originalRef ?? "";
+	expect(parent).toMatch(/^[0-9a-f]{40,}$/);
+	expect(parent).not.toBe(sha);
+	expect(commit).toMatchObject({ untracked: false, modifiedRef: sha, listRevs: [parent, sha] });
+	// An abbreviated sha resolves to the same full-oid range.
+	expect(resolveDiffRange(ws, { kind: "commit", sha: sha.slice(0, 8) })).toEqual(commit);
+});
+
+test("resolveDiffRange degrades a root commit to an add-style diff (no parent to subtract)", () => {
+	const ws = { baseBranch: "main", worktreePath: repo };
+	const root = new TextDecoder()
+		.decode(
+			Bun.spawnSync(["git", "-C", repo, "rev-list", "--max-parents=0", "HEAD"], {
+				stdout: "pipe",
+			}).stdout,
+		)
+		.trim();
+	const range = resolveDiffRange(ws, { kind: "commit", sha: root });
+	expect(range).toMatchObject({ untracked: false, originalRef: null, modifiedRef: root });
+	// `git show` (not `git diff`), since there is no `sha^` — the range's changed files are still listable.
+	expect(changedFileArgs(range, "--name-status")).toEqual([
+		"show",
+		"--format=",
+		"--name-status",
+		"--end-of-options",
+		root,
+		"--",
+	]);
+	const listed = Bun.spawnSync(["git", "-C", repo, ...changedFileArgs(range, "--name-status")], {
+		stdout: "pipe",
+	});
+	expect(new TextDecoder().decode(listed.stdout)).toContain("README.md");
+});
+
+test("resolveDiffRange rejects a non-oid sha before it reaches git, and an unknown commit", () => {
+	const ws = { baseBranch: "main", worktreePath: repo };
+	expect(() => resolveDiffRange(ws, { kind: "commit", sha: "--output=/tmp/pwn" })).toThrow(
+		/Not a commit id/,
+	);
+	expect(() => resolveDiffRange(ws, { kind: "commit", sha: "HEAD" })).toThrow(/Not a commit id/);
+	expect(() => resolveDiffRange(ws, { kind: "commit", sha: "deadbeef" })).toThrow(/Unknown commit/);
+});
+
+test("gitStatus scopes: branch spans the base range, uncommitted only the dirty worktree", () => {
+	git(repo, "switch", "-c", "feature");
+	commitOnFeature("committed.txt", "committed\n", "add committed.txt");
+	seedWorkspace({ branch: "feature" });
+	writeFileSync(join(repo, "dirty.txt"), "dirty\n");
+
+	const branchPaths = gitStatus("w1").changes.map((c) => c.path);
+	expect(branchPaths).toEqual(["committed.txt", "dirty.txt"]);
+
+	const uncommitted = gitStatus("w1", { kind: "uncommitted" }).changes.map((c) => c.path);
+	expect(uncommitted).toEqual(["dirty.txt"]);
+});
+
+test("gitStatus/gitDiffFile for a commit scope read only that commit, from history", () => {
+	git(repo, "switch", "-c", "feature");
+	commitOnFeature("script.ts", "export const one = 1;\n", "add script");
+	const sha = commitOnFeature("script.ts", "export const two = 2;\n", "edit script");
+	seedWorkspace({ branch: "feature" });
+	// Worktree dirt (tracked + untracked) must not leak into a historical scope.
+	writeFileSync(join(repo, "script.ts"), "export const three = 3;\n");
+	writeFileSync(join(repo, "untracked.txt"), "nope\n");
+
+	const scope = { kind: "commit", sha } as const;
+	const changes = gitStatus("w1", scope).changes;
+	expect(changes.map((c) => c.path)).toEqual(["script.ts"]);
+	expect(changes[0]).toMatchObject({ status: "modified", added: 1, removed: 1 });
+
+	expect(gitDiffFile("w1", "script.ts", scope)).toEqual({
+		original: "export const one = 1;\n",
+		modified: "export const two = 2;\n",
+	});
+});
+
+test("gitStatus/listCommits measure against the re-pointed diffBase, not the creation base", () => {
+	git(repo, "switch", "-c", "release");
+	commitOnFeature("released.txt", "released\n", "release-only");
+	git(repo, "switch", "-c", "feature");
+	const sha = commitOnFeature("feature.txt", "feature\n", "feature-only");
+	seedWorkspace({ branch: "feature", baseBranch: "main", diffBase: "release" });
+
+	// vs `release`: only the feature commit's file (the release-only file is common to both).
+	expect(gitStatus("w1").changes.map((c) => c.path)).toEqual(["feature.txt"]);
+	const { commits } = listCommits("w1");
+	expect(commits.map((c) => c.sha)).toEqual([sha]);
+	expect(commits[0]).toMatchObject({ subject: "feature-only", author: "test" });
+	expect(commits[0]?.shortSha).toBe(sha.slice(0, commits[0]?.shortSha.length));
+	expect(commits[0]?.committedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+
+	// vs the creation base `main`: both commits' files, newest commit first.
+	seedWorkspace({ branch: "feature", baseBranch: "main" });
+	expect(gitStatus("w1").changes.map((c) => c.path)).toEqual(["feature.txt", "released.txt"]);
+	expect(listCommits("w1").commits.map((c) => c.subject)).toEqual(["feature-only", "release-only"]);
+});
+
+test("listCommits: a subject carrying the field separator can't shift author or timestamp", () => {
+	git(repo, "switch", "-c", "feature");
+	// The separator is a control char, but `%s` is repository-controlled and can contain it — the format's
+	// field order (structured head, free-text tail) is what actually keeps the later fields in place.
+	writeFileSync(join(repo, "spoof.txt"), "spoof\n");
+	git(repo, "add", "-A");
+	git(repo, "commit", "-m", "subject\u001fnot-the-author\u001f1999-01-01T00:00:00+00:00");
+	seedWorkspace({ branch: "feature" });
+
+	const commit = listCommits("w1").commits[0];
+	expect(commit?.author).toBe("test"); // the real author, not the injected one
+	expect(commit?.committedAt).not.toContain("1999"); // a real timestamp, so no NaN relative time
+	expect(Number.isFinite(Date.parse(commit?.committedAt ?? ""))).toBe(true);
+	// The whole subject survives, minus the control chars we never put on the wire.
+	expect(commit?.subject).toBe("subjectnot-the-author1999-01-01T00:00:00+00:00");
+});
+
+test("an option-shaped ref reaches git as a rev, never as an option", () => {
+	// `git update-ref` accepts a name the `git branch` porcelain refuses, so this ref is reachable from any
+	// untrusted repo via `for-each-ref` → the BranchPicker. isSafeRef closes the mutation doors; the read
+	// sites' `--end-of-options` is the second line of defense for a ref already persisted.
+	const probe = join(dataDir, "pwn-probe.txt");
+	git(repo, "update-ref", `refs/heads/--output=${probe}`, "HEAD");
+	expect(isSafeRef(`--output=${probe}`)).toBe(false);
+	expect(listBranches("p1").local).toContain(`--output=${probe}`);
+
+	seedWorkspace({ diffBase: `--output=${probe}` });
+	// It reaches git as a REV (this one resolves — the crafted ref points at HEAD, hence an empty diff), never
+	// as an option: the file the "ref" names is not written. A *failed* read is asserted separately, where it
+	// throws rather than reading as a clean worktree.
+	expect(gitStatus("w1").changes).toEqual([]);
+	expect(listCommits("w1").commits).toEqual([]);
+	expect(existsSync(probe)).toBe(false);
+});
+
+test("isSafeRef accepts real refs and refuses anything git could re-read as more than a name", () => {
+	for (const ok of [
+		"main",
+		"origin/main",
+		"release-1.2",
+		"feature/a_b",
+		"HEAD",
+		// Long, but every component is a name git accepts — `check-ref-format` caps no length, so neither do
+		// we: such a branch is listable by `for-each-ref`, hence selectable as a base or a diff target.
+		`feature/${"a".repeat(200)}/${"b".repeat(200)}`,
+	])
+		expect(isSafeRef(ok)).toBe(true);
+	for (const bad of [
+		"",
+		"-main",
+		"--output=/tmp/x",
+		"main..HEAD",
+		"main^",
+		"main~1",
+		"main:path",
+		"with space",
+		"tab\there",
+		"ctrl\u001fchar",
+		// Revision metadata git itself refuses inside a ref name — `check-ref-format`'s rules, reproduced.
+		"main@{yesterday}",
+		"@{u}",
+		"@",
+		"main.lock",
+		"refs/heads/.hidden",
+		"a//b",
+		"/main",
+		"main/",
+		"main.",
+	])
+		expect(isSafeRef(bad)).toBe(false);
+});
+
+test("listCommits: a crafted AUTHOR name can't shift the timestamp or truncate itself", () => {
+	git(repo, "switch", "-c", "feature");
+	// `%an` is free text too, and it sits *between* the structured fields and the subject — the earlier
+	// "structured fields first" framing did not protect it: an author carrying the old `\u001f` separator
+	// shifted the subject one field over and truncated the author. NUL-separated fields of fixed arity do.
+	writeFileSync(join(repo, "spoof.txt"), "spoof\n");
+	git(repo, "add", "-A");
+	git(
+		repo,
+		"-c",
+		"user.name=ev\u001fil\u001f1999-01-01T00:00:00+00:00",
+		"-c",
+		"user.email=e@thinkrail.test",
+		"commit",
+		"-m",
+		"real subject",
+	);
+	seedWorkspace({ branch: "feature" });
+
+	const commit = listCommits("w1").commits[0];
+	expect(commit?.author).toBe("evil1999-01-01T00:00:00+00:00"); // whole name, control chars stripped
+	expect(commit?.subject).toBe("real subject"); // not shifted by the injected separators
+	expect(commit?.committedAt).not.toContain("1999");
+	expect(Number.isFinite(Date.parse(commit?.committedAt ?? ""))).toBe(true);
+});
+
+test("plainText strips invisible deception (bidi overrides, zero-width) from repo text", () => {
+	git(repo, "switch", "-c", "feature");
+	writeFileSync(join(repo, "bidi.txt"), "bidi\n");
+	git(repo, "add", "-A");
+	// A right-to-left override can make a subject *render* as something else entirely; a zero-width space
+	// hides inside a name. Both go before the wire, while ordinary non-ASCII text stays.
+	git(repo, "commit", "-m", "fix\u202egnisrever\u202c pa\u200bth — caf\u00e9 \u2713");
+	seedWorkspace({ branch: "feature" });
+
+	expect(listCommits("w1").commits[0]?.subject).toBe("fixgnisrever path — café ✓");
+});
+
+test("a base ref that also names a path still lists changes (the trailing `--`)", () => {
+	// A branch and a file with the same name is an "ambiguous argument" for `git diff <rev>` — which used to
+	// fail the whole read and surface as NO CHANGES. The `--` after the revs settles it as a rev.
+	writeFileSync(join(repo, "docs"), "a file called docs\n");
+	git(repo, "add", "-A");
+	git(repo, "commit", "-m", "add a file named docs");
+	git(repo, "branch", "docs");
+	git(repo, "switch", "-c", "feature");
+	commitOnFeature("feature.txt", "feature\n", "feature work");
+	seedWorkspace({ branch: "feature", baseBranch: "docs" });
+
+	expect(gitStatus("w1").changes.map((c) => c.path)).toEqual(["feature.txt"]);
+	expect(listCommits("w1").commits.map((c) => c.subject)).toEqual(["feature work"]);
+});
+
+test("a failed diff throws — a broken read is never reported as a clean worktree", () => {
+	seedWorkspace({ diffBase: "no-such-branch" });
+	writeFileSync(join(repo, "dirty.txt"), "dirty\n");
+	expect(() => gitStatus("w1")).toThrow(/Could not read the changed files/);
 });
