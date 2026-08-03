@@ -21,7 +21,7 @@ function DropdownMenuContent({
 					// has; we cap at 60vh so the menu never swallows the screen either. Vertical scrolling only —
 					// `overflow-y-auto` alone leaves `overflow-x` at `auto`, so a wide row (a long commit subject)
 					// would add a horizontal scrollbar to a menu whose rows are supposed to truncate.
-					"z-50 min-w-[12rem] max-h-[min(60vh,var(--radix-dropdown-menu-content-available-height))] overflow-y-auto overflow-x-hidden rounded-[var(--radius-md)] border border-border2 bg-elevated p-xs text-text shadow-[var(--shadow-md)]",
+					"z-50 min-w-[12rem] max-h-[min(60vh,var(--radix-dropdown-menu-content-available-height))] overflow-y-auto overflow-x-hidden rounded-[var(--radius-md)] border border-border-default bg-container-elevated-bg p-xs text-text-default shadow-[var(--shadow-md)]",
 					className,
 				)}
 				{...props}
@@ -37,7 +37,7 @@ function DropdownMenuItem({
 	return (
 		<DropdownMenuPrimitive.Item
 			className={cn(
-				"relative flex cursor-default select-none items-center gap-sm rounded-[var(--radius-sm)] px-sm py-xs tr-text-ui text-text outline-none transition-colors focus:bg-hover data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&_svg]:size-4 [&_svg]:shrink-0 [&_svg]:text-muted",
+				"relative flex cursor-default select-none items-center gap-sm rounded-[var(--radius-sm)] px-sm py-xs tr-text-ui text-text-default outline-none transition-colors focus:bg-control-bg-hovered data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&_svg]:size-4 [&_svg]:shrink-0 [&_svg]:text-text-muted",
 				className,
 			)}
 			{...props}
@@ -51,7 +51,7 @@ function DropdownMenuLabel({
 }: React.ComponentProps<typeof DropdownMenuPrimitive.Label>) {
 	return (
 		<DropdownMenuPrimitive.Label
-			className={cn("px-sm py-xs tr-text-eyebrow text-muted", className)}
+			className={cn("px-sm py-xs tr-text-eyebrow text-text-muted", className)}
 			{...props}
 		/>
 	);
@@ -63,7 +63,7 @@ function DropdownMenuSeparator({
 }: React.ComponentProps<typeof DropdownMenuPrimitive.Separator>) {
 	return (
 		<DropdownMenuPrimitive.Separator
-			className={cn("-mx-xs my-xs h-px bg-border2", className)}
+			className={cn("-mx-xs my-xs h-px bg-border-default", className)}
 			{...props}
 		/>
 	);

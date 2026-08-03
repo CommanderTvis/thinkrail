@@ -185,7 +185,7 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 				// The toolbar holds the scope selector and the target-branch picker as well as the List|Tree
 				// segments, so it is named for what it is, not for the one control it used to hold.
 				aria-label="Changes scope and view"
-				className="flex h-8 shrink-0 items-center gap-xs border-border2 border-b bg-bg-dark px-sm"
+				className="flex h-8 shrink-0 items-center gap-xs border-border-default border-b bg-container-header-bg px-sm"
 			>
 				<div className="mr-auto flex min-w-0 items-center gap-xs">
 					{/* Keyed ON PURPOSE (do not "clean up") by the menu's full identity — workspace **and** target ref:
@@ -207,7 +207,7 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 							refreshing={branchesRefreshing}
 							label="vs"
 							testid="changes-target-picker"
-							triggerClassName="flex h-6 min-w-0 max-w-[200px] items-center gap-xs rounded-[var(--radius-sm)] px-xs outline-none transition-colors hover:bg-hover focus-visible:ring-2 focus-visible:ring-primary data-[open=true]:bg-hover"
+							triggerClassName="flex h-6 min-w-0 max-w-[200px] items-center gap-xs rounded-[var(--radius-sm)] px-xs outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary data-[open=true]:bg-control-bg-hovered"
 							onSelect={(ref) => void pointAt(ref)}
 							onRefresh={refreshBranches}
 						/>
@@ -229,20 +229,22 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 			<div className="min-h-0 flex-1 overflow-auto">
 				{status === null && error !== null ? (
 					<div data-testid="changes-error" className="flex flex-col items-start gap-xs px-sm py-xs">
-						<p className="tr-text-metadata text-red">Could not read the changes: {error}</p>
+						<p className="tr-text-metadata text-feedback-error">
+							Could not read the changes: {error}
+						</p>
 						<button
 							type="button"
 							data-testid="changes-retry"
 							onClick={reload}
-							className="rounded-[var(--radius-sm)] px-xs py-[2px] tr-text-metadata text-hint transition-colors hover:bg-hover hover:text-muted"
+							className="rounded-[var(--radius-sm)] px-xs py-[2px] tr-text-metadata text-text-subtle transition-colors hover:bg-control-bg-hovered hover:text-text-muted"
 						>
 							Retry
 						</button>
 					</div>
 				) : status === null ? (
-					<p className="px-sm py-xs tr-text-metadata text-hint">Loading…</p>
+					<p className="px-sm py-xs tr-text-metadata text-text-subtle">Loading…</p>
 				) : status.changes.length === 0 ? (
-					<p data-testid="changes-empty" className="px-sm py-xs tr-text-metadata text-hint">
+					<p data-testid="changes-empty" className="px-sm py-xs tr-text-metadata text-text-subtle">
 						No changes in this scope.
 					</p>
 				) : changesView === "tree" ? (
@@ -282,7 +284,7 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 													{dir ? (
 														<span
 															data-testid="change-path-dir"
-															className="min-w-0 shrink-[20] truncate text-hint"
+															className="min-w-0 shrink-[20] truncate text-text-subtle"
 														>
 															{dir}
 														</span>
@@ -292,7 +294,7 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 													    the panel — the same rule DiffPane's header chip follows. */}
 													<span
 														data-testid="change-path-base"
-														className={`min-w-0 shrink truncate ${statusNameClass(change.status) || "text-muted"}`}
+														className={`min-w-0 shrink truncate ${statusNameClass(change.status) || "text-text-muted"}`}
 													>
 														{base}
 													</span>

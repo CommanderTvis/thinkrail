@@ -13,7 +13,9 @@ import { useLiveTabContent } from "./useLiveTabContent";
 const MonacoDiff = lazy(() => import("./MonacoDiff"));
 const RenderedDiff = lazy(() => import("./RenderedDiff"));
 
-const loading = <div className="flex h-full items-center justify-center text-hint">Loading…</div>;
+const loading = (
+	<div className="flex h-full items-center justify-center text-text-subtle">Loading…</div>
+);
 
 /**
  * The center pane for a diff tab: a slim header over the diff. A non-markdown file gets the read-only
@@ -116,7 +118,7 @@ export function DiffPane({ tab }: { tab: DiffTab }) {
 				data-testid="diff-view-toggle"
 				role="toolbar"
 				aria-label="Diff view mode"
-				className="flex h-8 shrink-0 items-center gap-xs border-border2 border-b bg-bg-dark px-sm"
+				className="flex h-8 shrink-0 items-center gap-xs border-border-default border-b bg-container-header-bg px-sm"
 			>
 				<span
 					data-testid="diff-path"
@@ -124,14 +126,17 @@ export function DiffPane({ tab }: { tab: DiffTab }) {
 					className="mr-auto flex min-w-0 items-baseline tr-code-text"
 				>
 					{dir ? (
-						<span data-testid="diff-path-dir" className="min-w-0 shrink-[20] truncate text-hint">
+						<span
+							data-testid="diff-path-dir"
+							className="min-w-0 shrink-[20] truncate text-text-subtle"
+						>
 							{dir}
 						</span>
 					) : null}
 					{/* Truncatable, not `shrink-0`: a long basename must never push the ¶/copy/layout controls
 					    out of the header on a narrow pane (the same rule as the Changes list's path rows) — but it
 					    out-lasts the dir prefix 20:1, so the name survives until the prefix is gone. */}
-					<span data-testid="diff-path-base" className="min-w-0 shrink truncate text-muted">
+					<span data-testid="diff-path-base" className="min-w-0 shrink truncate text-text-muted">
 						{base}
 					</span>
 				</span>
@@ -148,7 +153,11 @@ export function DiffPane({ tab }: { tab: DiffTab }) {
 					</HeaderIconButton>
 				)}
 				<HeaderIconButton testid="diff-copy" label="Copy file contents" onClick={() => void copy()}>
-					{copied ? <Check className="size-3.5 text-green" /> : <Copy className="size-3.5" />}
+					{copied ? (
+						<Check className="size-3.5 text-feedback-success" />
+					) : (
+						<Copy className="size-3.5" />
+					)}
 				</HeaderIconButton>
 				{toggles}
 			</div>
@@ -199,7 +208,9 @@ function HeaderIconButton({
 			title={label}
 			onClick={onClick}
 			className={`flex size-6 items-center justify-center rounded-[var(--radius-sm)] outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary ${
-				active ? "bg-elevated text-text" : "text-hint hover:bg-hover hover:text-text"
+				active
+					? "bg-container-elevated-bg text-text-default"
+					: "text-text-subtle hover:bg-control-bg-hovered hover:text-text-default"
 			}`}
 		>
 			{children}

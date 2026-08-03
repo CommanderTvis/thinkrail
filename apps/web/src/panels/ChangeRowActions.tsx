@@ -58,14 +58,14 @@ export function ChangeRowActions({
 				data-testid="change-row"
 				data-active={active || open ? true : undefined}
 				className={`group flex min-w-0 items-center rounded-[var(--radius-sm)] ${
-					active || open ? "bg-hover" : "hover:bg-hover"
+					active || open ? "bg-control-bg-hovered" : "hover:bg-control-bg-hovered"
 				}`}
 			>
 				{children({ onContextMenu })}
 				<DropdownMenuTrigger
 					data-testid="change-row-menu"
 					aria-label={`Actions for ${path}`}
-					className={`${ROW_MENU_SLOT} flex items-center justify-center rounded-[var(--radius-sm)] text-muted opacity-0 outline-none transition hover:bg-elevated hover:text-text focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-primary group-hover:opacity-100 data-[state=open]:opacity-100`}
+					className={`${ROW_MENU_SLOT} flex items-center justify-center rounded-[var(--radius-sm)] text-text-muted opacity-0 outline-none transition hover:bg-container-elevated-bg hover:text-text-default focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-primary group-hover:opacity-100 data-[state=open]:opacity-100`}
 				>
 					<ChevronDown className="size-4" />
 				</DropdownMenuTrigger>
