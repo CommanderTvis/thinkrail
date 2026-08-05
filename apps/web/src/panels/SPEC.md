@@ -15,26 +15,31 @@ arrangement (so the mobile shell is an additive layer, not a rewrite).
 
 ## Boundary
 
-- **Owns:** `ProjectTree` (+ the `NewWorkspaceDialog` its "+" opens **and** each workspace row's
-  hover-revealed **kebab menu** (`MoreVertical`, `DropdownMenu`) — a `DropdownMenuSub` **"Open in"**
-  (rendered only when at least one editor was detected — never a dead entry), **Copy path**, **Reveal in
-  file manager**, and (worktrees only) **Remove workspace**. "Open in"'s items come from `editor.list`
-  (an `EditorInfo[]`), fetched once per `ProjectTree` mount — not per row, since installed editors are
-  host-wide — and passed down; an entry's `kind` routes the click: `"gui"` calls `workspace.openIn`
-  (launches that editor detached at the worktree, host-side); `"terminal"` (Vim — it has no window of its
-  own) instead activates the workspace and runs it in that workspace's embedded terminal (`addTerminal`'s
-  one-shot `initialCommand`, sent by `TerminalInstance` once its PTY is ready — see `store/SPEC.md`), never
-  asking the host to spawn a TTY-less process. **Copy path** writes `worktreePath` to the clipboard
-  (`copyText`, silent — no toast, matching `ChangeRowActions`'s identical item). **Reveal** calls
-  `workspace.reveal` (the host's own file manager, at the worktree). **Remove** is styled destructive
-  (red text/icon) and, unlike the other items, doesn't act on `onSelect` — it `preventDefault`s (so
-  Radix's close-then-refocus-trigger doesn't fight the dialog opening right behind it) and opens a
-  **`ConfirmDialog`** (a *centered* modal, not `ConfirmPopover`: the kebab is a generic overflow trigger,
-  not itself a delete affordance, so anchoring a confirm box to it the way a dedicated Remove button would
-  reads oddly). It forces the same deliberate choice every confirm in this codebase does (Cancel takes
-  initial focus; `destructive` shows a warning glyph + red button; Esc/outside-click cancel). Removal
-  itself is **event-driven** (no per-client optimism): confirming just fires `workspace.remove` and lets
-  every client — including this one — react to the host's `workspace.removed` push via the store's
+- **Owns:** `ProjectTree`. Each top-level project row is a compact 28px IDE-tree row:
+  **always-visible chevron** + folder/name + a collapsed-only plain workspace count + a **bare muted Create
+  workspace `+` always visible in a fixed right-edge column** (the rail-header Add project `+` is unchanged).
+  Long names truncate before the count/action; there is deliberately **no visible Close or overflow icon**.
+  Hover highlights the full row and the highlight remains while its **project context menu** is open.
+  Right-click opens that PR-#167-styled menu at the pointer without selecting/navigating; a scroll-cancelled
+  ~700ms long press is its touch equivalent. With a project-name button focused, the standard Context Menu
+  key or Shift+F10 opens the same menu for keyboard-only use; arrow/activate/Escape keys work normally.
+  The menu is neutral
+  **Plus Create workspace**, separator, **X Close project**; Create is exactly the direct `+` flow. Close
+  opens a centered, neutral `ConfirmDialog` titled **“Close {name}?”**, description **“Removes this project
+  from the open projects list. Its repository, workspaces, chats, and running activity are kept. Reopen it
+  from Add project → Recents.”**, Cancel initially focused, and **Close project**; Cancel, backdrop, and
+  Escape dismiss. Confirm fires `project.close` and waits for the full `project.updated` push—no optimistic
+  removal; success is the
+  row disappearing with no toast, while rejection keeps it and raises an error toast. Menu/dialog dismissal
+  restores the source project-name focus; successful close focuses the fallback project name or rail Add
+  project. `ProjectTree` also owns the `NewWorkspaceDialog` the per-project `+` opens **and** each
+  workspace row's hover-revealed **kebab menu** (`MoreVertical`, `DropdownMenu`) — a `DropdownMenuSub`
+  **"Open in"** (rendered only when at least one editor was detected), **Copy path**, **Reveal in file
+  manager**, and (worktrees only) **Remove workspace**. "Open in" comes from the host-wide `editor.list`;
+  GUI entries call `workspace.openIn`, while terminal-kind Vim activates the workspace and runs through
+  `addTerminal`'s one-shot `initialCommand`. Copy writes `worktreePath`; Reveal calls `workspace.reveal`.
+  Remove is styled destructive and opens a centered `ConfirmDialog`; confirming fires
+  `workspace.remove` and lets every client react to the host's `workspace.removed` push via the store's
   `applyWorkspaceRemoved`; a rejected request (no event will come) surfaces an error toast, leaving the row
   in place. Each **workspace row** is **two-line**: the display
   `name` on top with the git **branch on a second line beneath it** (muted, monospace), rendered only when
@@ -56,8 +61,10 @@ arrangement (so the mobile shell is an additive layer, not a rewrite).
   Default workspace) are presented as an explicit choice (see `WelcomePanel`), so opening and the
   "project home" gesture converge on the same surface. Opening goes through the shared
   **`useOpenProject`** hook (reused by `ProjectTree` **and**
-  `WelcomePanel`, so the flow is identical in the rail and the Welcome screen): `project.open`, and on
-  failure `project.inspect` → either offers to bootstrap the folder into a repo — a modal **`ConfirmDialog`**
+  `WelcomePanel`, so the flow is identical in the rail and the Welcome screen): `project.open` reactivates
+  a closed known path under its same id (or opens a new one), then the initiating client selects Project
+  Home while every client receives `project.updated`; on failure `project.inspect` → either offers to
+  bootstrap the folder into a repo — a modal **`ConfirmDialog`**
   (confirm → `project.init`) — when it's `initable`, or surfaces the error in a **`NoticeDialog`** — so a
   non-git folder is never a silent no-op — and neither is a host that couldn't *show* a folder dialog (that
   throws; the notice carries the reason, and the request runs on a raised `timeoutMs` since the picker waits
@@ -115,7 +122,10 @@ project folder"; **project + no specs** → a spec-first **"Set up project"** (p
 only possible action; once a project is shown, opening another is the projects-rail **"+"** (the same
 dropdown), so Welcome stays the *work-in-this-project* surface. That card hangs the shared
 **`AddProjectMenu`** dropdown off it (same menu as the projects-rail "+": Open project / Open GitHub (soon)
-/ Recents), so `Card` is a `forwardRef` usable as a Radix `asChild` trigger. **"Work in project folder"**
+/ Recents). Recents is the store's `recentProjects`: one last-opened path list containing open + closed
+records with no status badge; selecting either runs the shared open flow and lands at Project Home, with a
+closed record retaining its id and workspace state. `Card` is a `forwardRef` usable as a Radix `asChild`
+trigger. **"Work in project folder"**
 (`House` icon, matching the rail's Default row) **direct-enters** the Default workspace — no dialog: the
 shared `enterDefaultWorkspace` helper lists the project's workspaces, stores them, and activates the
 `kind === "default"` row; an older host with no Default row degrades to an error toast. **"Start building"** is the
