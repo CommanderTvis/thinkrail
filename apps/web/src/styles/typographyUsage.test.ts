@@ -1,7 +1,13 @@
 import { describe, expect, it } from "bun:test";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
-import { loadTypography, proseRootClassName, resolveStyle } from "../../scripts/typography";
+import {
+	allStyles,
+	loadTypography,
+	proseRootClassName,
+	resolveStyle,
+	styleClassName,
+} from "../../scripts/typography";
 
 /**
  * The adoption guard: components may not re-declare typography that a generated semantic style already
@@ -35,8 +41,11 @@ function sourceFiles(dir = SRC): string[] {
 }
 const FILES = sourceFiles();
 const read = (p: string) => readFileSync(p, "utf8");
-/** Source with block comments removed — docstrings name classes to explain them, which is not a usage. */
-const code = (p: string) => read(p).replace(/\/\*[\s\S]*?\*\//g, "");
+/** Source with comments removed — explanations that name classes are not consumers. */
+const code = (p: string) =>
+	read(p)
+		.replace(/\/\*[\s\S]*?\*\//g, "")
+		.replace(/^[ \t]*\/\/.*$/gm, "");
 const rel = (p: string) => p.slice(p.indexOf("/src/") + 5);
 
 /**
@@ -125,6 +134,42 @@ describe("component usage", () => {
 		expect(offenders).toEqual([]);
 	});
 
+	it("emits no semantic style without a legitimate consumer", () => {
+		const styles = allStyles(typography);
+		const textStyles = styles.filter((style) => !style.prose);
+		const byId = new Map(textStyles.map((style) => [style.id, style]));
+		const source = FILES.map(code).join("\n");
+		const namedClasses = new Set(
+			[...source.matchAll(/(?<![-\w.])(tr-[a-z0-9]+(?:-[a-z0-9]+)*)(?![-\w])/g)].map(
+				(match) => match[1] as string,
+			),
+		);
+		const proseSystems = Object.keys(typography.proseSystems);
+		const mountedProse = new Set(
+			proseSystems.filter((system) => namedClasses.has(proseRootClassName(typography, system))),
+		);
+		expect(proseSystems.filter((system) => !mountedProse.has(system))).toEqual([]);
+
+		// Reachability roots: the body base, every mounted prose selector's target, and classes named by
+		// shipped source. Following references also keeps a canonical target live when a live alias uses it.
+		const live = new Set<string>([typography.rootStyle.$ref]);
+		for (const style of styles) {
+			if (style.prose && style.ref && mountedProse.has(style.group)) live.add(style.ref);
+			if (!style.prose && namedClasses.has(styleClassName(typography, style.group, style.name)))
+				live.add(style.id);
+		}
+		const queue = [...live];
+		for (let index = 0; index < queue.length; index++) {
+			const ref = byId.get(queue[index] as string)?.ref;
+			if (ref && !live.has(ref)) {
+				live.add(ref);
+				queue.push(ref);
+			}
+		}
+
+		expect(textStyles.filter((style) => !live.has(style.id)).map((style) => style.id)).toEqual([]);
+	});
+
 	/**
 	 * `<pre>` and `<code>` are the one place "no class" is not neutral: Tailwind's preflight targets
 	 * them directly with the OS monospace stack, and a directly-matching rule beats the family a parent
@@ -185,8 +230,8 @@ describe("markdown prose systems", () => {
 			h5: { fontSize: "s12", fontWeight: "medium" },
 			h6: { fontSize: "s10", fontWeight: "medium", textTransform: "uppercase" },
 			inlineCode: { fontFamily: "code", fontSize: "s13" },
-			codeBlock: { fontFamily: "code", fontSize: "s11" },
-			tableBody: { fontSize: "s12", fontWeight: "regular" },
+			codeBlock: { fontFamily: "code", fontSize: "s13" },
+			tableBody: { fontSize: "s12", fontWeight: "light" },
 			tableHeader: { fontSize: "s12", fontWeight: "semibold" },
 		};
 		for (const [name, shape] of Object.entries(expected))
@@ -213,7 +258,7 @@ describe("markdown prose systems", () => {
 		const ladder = ["h1", "h2", "h3", "h4", "h5", "h6"].map((h) => px(`doc.${h}`) as number);
 		for (let i = 1; i < ladder.length; i++)
 			expect(ladder[i], `doc.h${i + 1} <= doc.h${i}`).toBeLessThanOrEqual(ladder[i - 1] as number);
-		// Document code is bigger than chat code, because the surrounding body copy is bigger too.
-		expect(px("doc.codeBlock")).toBeGreaterThan(px("chat.codeBlock") as number);
+		// Chat and document fenced code now share one 13px mono size; document code is never smaller.
+		expect(px("doc.codeBlock")).toBeGreaterThanOrEqual(px("chat.codeBlock") as number);
 	});
 });

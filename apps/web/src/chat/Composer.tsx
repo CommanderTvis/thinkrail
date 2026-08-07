@@ -584,7 +584,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 	};
 
 	return (
-		<div className="relative flex shrink-0 flex-col border-border-default border-t bg-container-header-bg">
+		<div className="relative flex shrink-0 flex-col border-border-muted border-t bg-container-workspace-bg">
 			{mentionOpen ? (
 				<div
 					data-testid="mention-menu"
@@ -596,7 +596,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 							type="button"
 							data-testid="mention-item"
 							onClick={() => pickMention(candidate)}
-							className={`flex w-full items-center gap-sm rounded-[var(--radius-sm)] px-sm py-xs text-left tr-text-ui ${index === mentionActiveIndex ? "bg-control-bg-hovered text-text-default" : "text-text-muted"}`}
+							className={`flex w-full items-center gap-sm rounded-[var(--radius-sm)] px-sm py-xs text-left tr-text-ui ${index === mentionActiveIndex ? "bg-control-bg-selected text-text-default" : "text-text-muted"}`}
 						>
 							{candidate.kind === "dir" ? (
 								<FolderIcon className="size-3.5 shrink-0" />
@@ -629,7 +629,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 									replaceDraft("");
 									onManageTemplates();
 								}}
-								className="flex w-full items-center gap-sm rounded-[var(--radius-sm)] border-border-default border-t px-sm py-xs text-left text-text-subtle tr-text-metadata hover:bg-control-bg-hovered hover:text-text-default"
+								className="flex w-full items-center gap-sm rounded-[var(--radius-sm)] border-border-default border-t px-sm py-xs text-left text-text-muted tr-text-metadata hover:bg-control-bg-hovered hover:text-text-default"
 							>
 								<Sparkles className="size-3 shrink-0" />
 								<span className="truncate">
@@ -646,7 +646,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 					type="button"
 					data-testid="slot-hint"
 					onClick={() => stepSlot(1)}
-					className="absolute bottom-full left-sm mb-xs rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg px-sm py-xs text-text-subtle tr-text-metadata shadow-[var(--shadow-md)] hover:bg-control-bg-hovered hover:text-text-default"
+					className="absolute bottom-full left-sm mb-xs rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg px-sm py-xs text-text-muted tr-text-metadata shadow-[var(--shadow-md)] hover:bg-control-bg-hovered hover:text-text-default"
 				>
 					slot {slotIdx + 1}/{slots.length} · ⇥ next · esc done
 				</button>
@@ -664,7 +664,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 								type="button"
 								aria-label="Remove image"
 								onClick={() => setImages((prev) => prev.filter((p) => p.id !== img.id))}
-								className="text-text-subtle hover:text-text-default"
+								className="text-text-muted hover:text-text-default"
 							>
 								<X className="size-3" />
 							</button>
@@ -674,13 +674,18 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 			) : null}
 
 			<div className="flex flex-col gap-sm p-sm">
-				{/* Input background now lives here (not on the textarea below — it's `bg-transparent`), so the
-				 * backdrop's tint spans, painted behind the textarea's transparent background, show through.
-				 * `rounded-[var(--radius-md)]` matches the textarea's own corner radius so this container's own
-				 * background is clipped to the same rounded shape — with no session active this wrapper is
-				 * otherwise invisible (no border, no padding of its own), so the composer looks identical to
-				 * before this layer existed. */}
-				<div className="relative rounded-[var(--radius-md)] bg-control-bg">
+				{/* The input's border AND background live here (the textarea below is `bg-transparent` + has no
+				 * border), so the backdrop's tint spans, painted behind the textarea, show through. The 1px
+				 * border is on this wrapper so `bg-clip-padding` (background-clip: padding-box) clips the fill to
+				 * *inside* the border — the fill can't bleed past the rounded border, and the border stays fully
+				 * visible. Border colour: `control-border-default` at rest, `control-border-active` via
+				 * `focus-within` while the textarea is being edited (the textarea is the only focusable child) —
+				 * never an accent border. **Composer-specific:** the active border is the *single* focus outline;
+				 * unlike other controls it carries NO accent focus ring (the textarea below has none), so the
+				 * neutral border + accent ring never double up here. The fill is clipped by `bg-clip-padding` +
+				 * `rounded` and the slot backdrop clips itself (its own `overflow-hidden` below), so this wrapper
+				 * needs no `overflow-hidden`. */}
+				<div className="relative rounded-[var(--radius-md)] border border-control-border-default bg-control-bg bg-clip-padding transition-colors focus-within:border-control-border-active">
 					{slots ? (
 						<div
 							ref={attachBackdrop}
@@ -694,8 +699,10 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 							 * this way by default (its own UA stylesheet), but a plain <div> does not, so this
 							 * has to be spelled out explicitly for the two to wrap identical text identically.
 							 * The mirrored content overflows the `overflow-hidden` parent, whose scroll offsets
-							 * the textarea's `onScroll` sets imperatively (see `attachBackdrop`). */}
-							<div className="w-full whitespace-pre-wrap break-words border border-transparent px-md py-sm tr-text-ui">
+							 * the textarea's `onScroll` sets imperatively (see `attachBackdrop`). The border now
+							 * lives on the wrapper (this backdrop already sits inside it), so the mirror needs only
+							 * the shared `px-md py-sm` padding to line its content box up with the textarea. */}
+							<div className="w-full whitespace-pre-wrap break-words px-md py-sm tr-text-ui">
 								{withOffsets(highlightSegments(value, slots, slotIdx)).map((seg) => (
 									<span
 										key={seg.start}
@@ -788,7 +795,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 						// `relative` keeps the textarea a positioned participant so it paints ABOVE the absolute
 						// slot-highlight backdrop (its earlier DOM sibling) — otherwise a static textarea paints
 						// under the backdrop and the native caret/selection get dimmed by the active-slot tint.
-						className="relative min-h-[108px] w-full resize-none rounded-[var(--radius-md)] border border-border-default bg-transparent px-md py-sm tr-text-ui text-text-default outline-none transition-colors placeholder:text-text-subtle focus:border-primary focus-visible:ring-2 focus-visible:ring-primary-soft"
+						className="relative min-h-[108px] w-full resize-none rounded-[var(--radius-md)] bg-transparent px-md py-sm tr-text-ui text-text-default outline-none placeholder:text-text-muted"
 					/>
 				</div>
 				<div className="flex flex-wrap items-center gap-sm">
@@ -835,7 +842,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 							aria-label={isStreaming ? "Steer" : "Send"}
 							onClick={() => submit(isStreaming ? "steer" : "send")}
 							disabled={!value.trim() && images.length === 0}
-							className="flex size-8 shrink-0 items-center justify-center rounded-[var(--radius-md)] bg-primary text-text-on-primary hover:opacity-90 disabled:pointer-events-none disabled:opacity-50"
+							className="flex size-8 shrink-0 items-center justify-center rounded-[var(--radius-md)] bg-control-primary-bg text-control-primary-text hover:opacity-90 disabled:pointer-events-none disabled:bg-control-disabled-bg disabled:text-control-disabled-text"
 						>
 							<ArrowUp className="size-4" />
 						</button>

@@ -335,7 +335,7 @@ function ProjectRow({
 			data-testid="project-item"
 			data-menu-open={menuOpen}
 			className={`group flex h-7 items-center gap-xs rounded-[var(--radius-sm)] pr-xs pl-xs transition-colors ${
-				menuOpen ? "bg-control-bg-hovered" : "hover:bg-control-bg-hovered"
+				menuOpen ? "bg-control-bg-selected" : "hover:bg-control-bg-hovered"
 			}`}
 		>
 			<button
@@ -343,7 +343,7 @@ function ProjectRow({
 				data-testid="project-expand"
 				aria-label={isExpanded ? "Collapse project" : "Expand project"}
 				onClick={onToggle}
-				className="flex size-4 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-subtle transition-colors hover:text-text-default focus-visible:text-text-default"
+				className="flex size-4 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-muted transition-colors hover:text-text-default focus-visible:text-text-default"
 				data-expanded={isExpanded}
 			>
 				<Chevron className="size-4" />
@@ -365,7 +365,7 @@ function ProjectRow({
 			{!isExpanded && workspaceCount > 0 && (
 				<span
 					data-testid="project-workspace-count"
-					className="shrink-0 tr-text-metadata text-text-subtle"
+					className="shrink-0 tr-text-metadata text-text-muted"
 				>
 					{workspaceCount}
 				</span>
@@ -490,7 +490,7 @@ function WorkspaceRow({
 				data-active={isActive}
 				data-kind={workspace.kind ?? "worktree"}
 				className={`group flex min-h-7 items-center gap-sm rounded-[var(--radius-sm)] py-xs pr-xs pl-xl transition-colors ${
-					isActive || menuOpen ? "bg-control-bg-hovered" : "hover:bg-control-bg-hovered"
+					isActive || menuOpen ? "bg-control-bg-selected" : "hover:bg-control-bg-hovered"
 				}`}
 			>
 				<button
@@ -498,7 +498,7 @@ function WorkspaceRow({
 					onClick={onSelect}
 					className="flex min-w-0 flex-1 items-center gap-sm text-left"
 				>
-					<Icon className={`size-4 shrink-0 ${isActive ? "text-primary" : "text-text-subtle"}`} />
+					<Icon className={`size-4 shrink-0 ${isActive ? "text-primary" : "text-text-muted"}`} />
 					{/* Name on top, the git branch on a second line beneath it — the display name is decoupled
 					    from the branch, so surface both without crowding one line. The branch line is hidden when
 					    they coincide, so pristine/legacy rows stay a single compact line. */}
@@ -522,7 +522,7 @@ function WorkspaceRow({
 				<DiffStatBadge
 					added={stats?.added ?? 0}
 					removed={stats?.removed ?? 0}
-					className="group-hover:hidden"
+					className="self-start group-hover:hidden"
 				/>
 				<DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
 					<DropdownMenuTrigger
@@ -532,7 +532,7 @@ function WorkspaceRow({
 						// can't be hover-only-invisible: a touch device has no hover and would never discover
 						// it. `opacity-0` only applies under `(hover: hover)` (a device that actually has a
 						// hover state to reveal it on) — everywhere else (touch) it stays visible by default.
-						className="flex size-5 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-muted opacity-100 outline-none transition hover:bg-container-elevated-bg hover:text-text-default [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100"
+						className="flex size-5 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-muted opacity-100 outline-none transition hover:bg-container-elevated-bg hover:text-text-default [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-primary data-[state=open]:opacity-100"
 					>
 						<MoreVertical className="size-4" />
 					</DropdownMenuTrigger>

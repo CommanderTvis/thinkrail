@@ -66,14 +66,14 @@ export function Shell() {
 									>
 										{contextProject.name}
 									</span>
-									<ChevronRight className="size-3 shrink-0 text-text-subtle" />
+									<ChevronRight className="size-3 shrink-0 text-text-muted" />
 								</span>
 								<span data-testid="scope-name" className="max-w-[220px] truncate text-text-default">
 									{activeWorkspace?.name ?? "Project home"}
 								</span>
 							</div>
 							{activeWorkspace ? (
-								<div className="mt-0.5 flex min-w-0 items-center gap-xs text-text-subtle tr-text-metadata">
+								<div className="mt-0.5 flex min-w-0 items-center gap-xs text-text-muted tr-text-metadata">
 									<GitBranch className="size-3 shrink-0" />
 									<span data-testid="scope-branch" className="truncate">
 										{activeWorkspace.branch}
@@ -139,7 +139,7 @@ export function Shell() {
 					<ResizablePanel id="right" order={3} defaultSize={30} minSize={16}>
 						<ResizablePanelGroup direction="vertical" autoSaveId="thinkrail-right">
 							<ResizablePanel id="right-files" order={1} defaultSize={60} minSize={20}>
-								<div data-testid="right-panel" className="h-full min-h-0 bg-container-content-bg">
+								<div data-testid="right-panel" className="h-full min-h-0 bg-container-sidebar-bg">
 									<ErrorBoundary label="Files" resetKeys={[activeWorkspaceId]}>
 										<RightPanel />
 									</ErrorBoundary>
@@ -147,7 +147,7 @@ export function Shell() {
 							</ResizablePanel>
 							<ResizableHandle direction="vertical" data-testid="resize-terminals" />
 							<ResizablePanel id="right-terminals" order={2} defaultSize={40} minSize={15}>
-								<div className="h-full min-h-0 bg-container-content-bg">
+								<div className="h-full min-h-0 bg-container-terminal-bg">
 									<ErrorBoundary label="Terminals" resetKeys={[activeWorkspaceId]}>
 										<TerminalsPanel />
 									</ErrorBoundary>

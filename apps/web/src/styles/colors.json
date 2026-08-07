@@ -7,6 +7,7 @@
 
 	"scale": {
 		"subtle": 10,
+		"wash": 12,
 		"soft": 20,
 		"muted": 40,
 		"strong": 60
@@ -16,6 +17,7 @@
 		"text-default": { "from": "text", "publish": true },
 		"text-muted": { "from": "muted", "publish": true },
 		"text-subtle": { "from": "hint", "publish": true },
+		"text-disabled": { "from": "disabled", "alpha": "strong", "publish": true },
 		"text-on-primary": { "from": "onAccent", "publish": true },
 		"text-link": {
 			"from": "info",
@@ -23,13 +25,18 @@
 			"note": "global.css `a {}` is the only consumer; no component styles a bare link"
 		},
 
-		"container-workspace-bg": { "from": "background", "publish": true },
+		"container-workspace-bg": {
+			"from": "background",
+			"publish": true,
+			"note": "the app surface, and with it the opened-document canvas — a document reads as part of the workspace (Monaco's EDITOR_THEME, the markdown/spec preview, the chat column, the tab strip)"
+		},
 		"container-sidebar-bg": { "from": "sidebar", "publish": true },
+		"container-terminal-bg": { "from": "sidebar", "publish": true },
 		"container-header-bg": { "from": "header", "publish": true },
 		"container-content-bg": {
 			"from": "content",
 			"publish": true,
-			"note": "the code canvas: Monaco, Shiki, the terminal, the markdown preview"
+			"note": "the recessed read-a-diff/read-code canvas, NOT the document canvas (that is workspace): the Changes diff (Monaco THEME), rendered diffs, Shiki code blocks, and the center-column backdrop behind them"
 		},
 		"container-elevated-bg": {
 			"from": "elevated",
@@ -39,8 +46,13 @@
 
 		"control-bg": { "from": "input", "publish": true },
 		"control-bg-hovered": { "from": "hover", "publish": true },
+		"control-bg-selected": { "from": "hover", "publish": true },
 		"control-primary-bg": { "from": "accent", "publish": true },
 		"control-primary-text": { "from": "onAccent", "publish": true },
+		"control-border-default": { "from": "border", "publish": true },
+		"control-border-active": { "from": "borderStrong", "publish": true },
+		"control-disabled-bg": { "from": "input", "publish": true },
+		"control-disabled-text": { "from": "disabled", "alpha": "strong", "publish": true },
 
 		"border-default": { "from": "borderStrong", "publish": true },
 		"border-muted": { "from": "border", "publish": true },
@@ -49,20 +61,19 @@
 		"primary-subtle": { "from": "accent", "alpha": "subtle", "publish": true },
 		"primary-soft": { "from": "accent", "alpha": "soft", "publish": true },
 		"primary-muted": { "from": "accent", "alpha": "muted", "publish": true },
-		"primary-strong": { "from": "accent", "alpha": "strong", "publish": true },
 
 		"on-primary-soft": { "from": "onAccent", "alpha": "soft", "publish": true },
 
 		"feedback-info": { "from": "info", "publish": true },
-		"feedback-info-subtle": { "from": "info", "alpha": "subtle", "publish": true },
+		"feedback-info-subtle": { "from": "info", "alpha": "wash", "publish": true },
 		"feedback-success": { "from": "success", "publish": true },
-		"feedback-success-subtle": { "from": "success", "alpha": "subtle", "publish": true },
+		"feedback-success-subtle": { "from": "success", "alpha": "wash", "publish": true },
 		"feedback-success-muted": { "from": "success", "alpha": "muted", "publish": true },
 		"feedback-error": { "from": "danger", "publish": true },
-		"feedback-error-subtle": { "from": "danger", "alpha": "subtle", "publish": true },
+		"feedback-error-subtle": { "from": "danger", "alpha": "wash", "publish": true },
 		"feedback-error-muted": { "from": "danger", "alpha": "muted", "publish": true },
 		"feedback-warning": { "from": "warning", "publish": true },
-		"feedback-warning-subtle": { "from": "warning", "alpha": "subtle", "publish": true },
+		"feedback-warning-subtle": { "from": "warning", "alpha": "wash", "publish": true },
 
 		"bubble-user-bg": { "from": "bubbleAccent", "alpha": "subtle", "publish": true },
 		"bubble-user-border": { "from": "bubbleAccent", "alpha": "muted", "publish": true },

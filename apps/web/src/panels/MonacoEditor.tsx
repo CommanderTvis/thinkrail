@@ -1,6 +1,11 @@
 import MonacoReact, { type BeforeMount, type OnMount } from "@monaco-editor/react";
 import { useEffect, useRef } from "react";
-import { defineThinkrailTheme, sharedEditorOptions, THEME, watchThemeSwap } from "./monacoSetup";
+import {
+	defineThinkrailTheme,
+	EDITOR_THEME,
+	sharedEditorOptions,
+	watchThemeSwap,
+} from "./monacoSetup";
 
 const beforeMount: BeforeMount = (m) => defineThinkrailTheme(m);
 
@@ -10,7 +15,7 @@ export default function MonacoEditor({ path, content }: { path: string; content:
 
 	// Mirrors TerminalInstance's observer: follow atomic `[data-theme]` swaps while mounted.
 	const onMount: OnMount = (_editor, m) => {
-		observerRef.current = watchThemeSwap(m);
+		observerRef.current = watchThemeSwap(m, EDITOR_THEME);
 	};
 
 	useEffect(() => () => observerRef.current?.disconnect(), []);
@@ -20,11 +25,11 @@ export default function MonacoEditor({ path, content }: { path: string; content:
 			height="100%"
 			path={path}
 			value={content}
-			theme={THEME}
+			theme={EDITOR_THEME}
 			beforeMount={beforeMount}
 			onMount={onMount}
 			loading={
-				<div className="flex h-full items-center justify-center text-text-subtle">
+				<div className="flex h-full items-center justify-center text-text-muted">
 					Loading editor…
 				</div>
 			}

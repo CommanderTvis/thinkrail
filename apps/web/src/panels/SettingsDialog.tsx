@@ -54,7 +54,7 @@ export function SettingsDialog() {
 				<div className="flex min-h-0 flex-1 flex-col md:flex-row">
 					<nav
 						aria-label="Settings sections"
-						className="flex shrink-0 gap-xs overflow-x-auto border-border-default border-b p-sm md:w-[192px] md:flex-col md:gap-0.5 md:overflow-x-visible md:overflow-y-auto md:border-r md:border-b-0 md:bg-container-header-bg md:p-md"
+						className="flex shrink-0 gap-xs overflow-x-auto border-border-default border-b p-sm md:w-[192px] md:flex-col md:gap-0.5 md:overflow-x-visible md:overflow-y-auto md:border-r md:border-b-0 md:bg-container-elevated-bg md:p-md"
 					>
 						{SECTIONS.map(({ id, label, icon: Icon }) => {
 							const active = section === id;
@@ -80,11 +80,11 @@ export function SettingsDialog() {
 						{SOON.map(({ label, icon: Icon }) => (
 							<span
 								key={label}
-								className="flex shrink-0 cursor-default items-center gap-sm rounded-[var(--radius-md)] px-md py-sm text-text-subtle tr-text-ui opacity-60"
+								className="flex shrink-0 cursor-default items-center gap-sm rounded-[var(--radius-md)] px-md py-sm text-text-disabled tr-text-ui"
 							>
 								<Icon className="size-4 shrink-0" />
 								{label}
-								<span className="ml-auto rounded-full border border-border-default px-xs py-0.5 tr-text-label-pill text-text-subtle">
+								<span className="ml-auto rounded-full border border-border-default px-xs py-0.5 tr-text-label-pill text-text-disabled">
 									Soon
 								</span>
 							</span>

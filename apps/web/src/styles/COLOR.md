@@ -34,7 +34,7 @@ now derives variable names rather than tabulating them). Editing the generated f
 disagree. There is no lookup table to keep in step, and no more names like `--blue` for `info`.
 
 A **palette entry** answers *which colour* (`--warning`, `--elevated`, `--hint`). A **semantic token**
-answers *what for* (`feedback-warning`, `container-elevated-bg`, `text-subtle`). Components name roles;
+answers *what for* (`feedback-warning`, `container-elevated-bg`, `text-muted`). Components name roles;
 the palette is internal.
 
 ```tsx
@@ -57,25 +57,28 @@ equals `border-default` is not a second weight, it is a second name).
 
 | family | tokens | notes |
 | --- | --- | --- |
-| Text | `text-default` · `text-muted` · `text-subtle` · `text-on-primary` | three tiers, because the palette defines three greys and the UI uses all of them |
-| Container | `container-workspace-bg` · `container-sidebar-bg` · `container-header-bg` · `container-content-bg` · `container-elevated-bg` | `content` is the code canvas (Monaco, Shiki, terminal); `elevated` is every raised surface |
-| Control | `control-bg` · `control-bg-hovered` · `control-primary-bg` · `control-primary-text` | no `-disabled` pair — disabled is `disabled:opacity-50` |
+| Text | `text-default` · `text-muted` · `text-subtle` · `text-disabled` · `text-on-primary` | `text-subtle` (from the `hint` palette key) is the secondary-metadata tier (branch lines, spec role labels); `text-disabled` (its own `disabled` palette key @ 60%, decoupled from `muted` so future `muted` changes don't move it) is reserved for genuinely disabled UI text (e.g. the Settings "Soon" item) |
+| Container | `container-workspace-bg` · `container-sidebar-bg` · `container-terminal-bg` · `container-header-bg` · `container-content-bg` · `container-elevated-bg` | **The opened-document canvas is `workspace`, not `content`**: the Monaco file editor and the markdown/spec preview sit on the same surface as the chat column and the tab strip, so a document reads as part of the workspace. `content` is the **recessed diff canvas** — the Changes diff, rendered diffs, Shiki code blocks, and the center-column backdrop behind them — which is why Monaco defines two themes (`EDITOR_THEME` = workspace, `THEME` = content). `terminal` is the terminal panel + xterm canvas (currently sourced from the same palette key as `sidebar`); `elevated` is every raised surface |
+| Control | `control-bg` · `control-bg-hovered` · `control-bg-selected` · `control-primary-bg` · `control-primary-text` · `control-border-default` · `control-border-active` · `control-disabled-bg` · `control-disabled-text` | `control-bg-hovered` is pointer hover only; `control-bg-selected` is the persistent selected/open/active/highlight fill (currently the same palette source). `control-border-default` is the resting form-control border; `control-border-active` (from `borderStrong`) is the **stronger neutral** border of an *active* control — pressed/`active:` buttons, an open selector (`data-[open=true]`), and a focused text input/textarea. It is the border only: the accent focus **ring** stays as the focus indicator (so accent = focus, neutral-strong = active). Never on inactive/default controls, nor on selected nav rows, tabs, or static surfaces. **Disabled is a first-class control state**, not an opacity utility: a disabled control wears `control-disabled-bg` + `control-disabled-text` (they reuse the neutral-control and `disabled`-tier palette values today, but are their own roles so a theme can re-point disabled independently). Text/icon-only controls take just `control-disabled-text`; non-control disabled text stays on `text-disabled`. Do **not** use `disabled:opacity-*` on controls |
 | Border | `border-default` · `border-muted` | |
-| Primary | `primary` + `primary-subtle` · `-soft` · `-muted` · `-strong`, `on-primary-soft` | |
+| Primary | `primary` + `primary-subtle` · `-soft` · `-muted`, `on-primary-soft` | |
 | Feedback | `feedback-{info,success,warning,error}` + the `-subtle` / `-muted` steps in use | a solid border is the solid colour, so there is no `-border` tier |
 | Chat bubble | `bubble-user-bg` · `bubble-user-border` | tinted from the manifest's own `bubbleAccent` |
 | Effects | `overlay` · `sunken` | written per light/dark by the theme engine |
 
-There is no `text-disabled`, no `text-strong` and no `text-link` utility: the first two duplicate other
-tokens, and `--text-link` exists as a variable for `global.css`'s `a {}` alone.
+There is no `text-strong` and no `text-link` utility: they duplicate other tokens, and `--text-link`
+exists as a variable for `global.css`'s `a {}` alone.
 
 ## Transparency: one form only
 
-**A tint is a token, mixed `in srgb`, on a four-step scale.**
+**A tint is a token, mixed `in srgb`, on the alpha scale.**
 
 ```
-subtle 10%   ·   soft 20%   ·   muted 40%   ·   strong 60%
+subtle 10%   ·   wash 12%   ·   soft 20%   ·   muted 40%   ·   strong 60%
 ```
+
+`wash` (12%) is the feedback-surface fill step (`feedback-*-subtle`), kept one notch above `subtle`
+(10%) so `primary-subtle` and `bubble-user-bg` stay at 10% while feedback backgrounds read at 12%.
 
 Tailwind's `/40` opacity modifier is **not used on colour utilities**. It mixes `in oklab`, so the same
 nominal percentage rendered differently depending on whether it came from a class or a token — and the
@@ -86,10 +89,14 @@ the scale, never a new number in a class name.
 
 Monaco, xterm, mermaid and Shiki cannot wear a class; they read the tokens through `getComputedStyle`
 and rebuild after the `[data-theme]` swap. They name the same semantic tokens everything else does
-(`--container-content-bg`, `--text-subtle`, `--editor-selection-bg`), so there is one name per value.
-Those four tokens are therefore **not** mapped in `@theme inline` — a utility nothing can use is dead
-weight. Values reach them canonicalised to hex via `cssColorToHex` (`lib/utils.ts`), because the built
-CSS is minified and Monaco/xterm accept hex only.
+(`--container-workspace-bg`, `--container-content-bg`, `--text-muted`, `--editor-selection-bg`), so there
+is one name per value. Monaco reads *both* container roles, because which canvas it is painting depends on
+the tab: `EDITOR_THEME` (workspace) for a file editor, `THEME` (content) for the Changes diff.
+The roles these consumers *share* with components (`--container-*-bg`, `--text-muted`) stay published and
+mapped in `@theme inline`; the ones **only** they read (`--editor-selection-bg` / `-text`) are
+`publish: false` and unmapped — a utility nothing can use is dead weight. Values reach them canonicalised
+to hex via `cssColorToHex` (`lib/utils.ts`), because the built CSS is minified and Monaco/xterm accept
+hex only.
 
 **What they do NOT cover, deliberately.** Each of these libraries paints far more than we hand it, and
 the remainder comes from its own built-in palette:
@@ -138,7 +145,8 @@ escape hatch, or a second name for a value that already has one.
 because one tier is our judgement rather than the standard's:
 
 - on every RESTING surface (`background`, `content`, `sidebar`, `header`, `elevated`, `input`) text
-  meets WCAG AA in full — 4.5 for body and secondary text, 3.0 for the quietest tier;
+  meets WCAG AA in full — 4.5 for body and the `text-muted` tier;
+- the deliberately quiet `text-subtle` / `hint` tier remains visible at **3.0** on every resting surface;
 - on the transient HOVER surface the floor is **3.0**, not 4.5.
 
 WCAG has no "transient state" allowance, so the hover tier is a line we drew deliberately. These themes

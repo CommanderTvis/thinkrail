@@ -278,7 +278,7 @@ export function AskUserQuestionCard({
 			<div
 				data-testid="ask-user-question"
 				data-tone="active"
-				className="overflow-hidden rounded-[var(--radius-lg)] border border-primary-muted bg-container-elevated-bg ring-1 ring-primary-soft"
+				className="overflow-hidden rounded-[var(--radius-lg)] border border-primary-muted bg-clip-padding bg-container-elevated-bg ring-1 ring-primary-soft"
 			>
 				{multi ? (
 					<div className="flex items-center gap-xs overflow-x-auto border-border-default border-b px-md py-sm">
@@ -336,7 +336,7 @@ export function AskUserQuestionCard({
 								data-testid="ask-skip"
 								onClick={() => reply({ answers: [], cancelled: true })}
 								disabled={!actions}
-								className="text-text-muted tr-text-ui hover:text-text-default disabled:opacity-50"
+								className="text-text-muted tr-text-ui hover:text-text-default disabled:text-control-disabled-text"
 							>
 								Skip
 							</button>
@@ -345,7 +345,7 @@ export function AskUserQuestionCard({
 									type="button"
 									data-testid="ask-continue"
 									onClick={() => setTab(Math.min(tab + 1, reviewTab))}
-									className="rounded-[var(--radius-md)] bg-primary px-md py-1.5 tr-text-action text-text-on-primary hover:opacity-90"
+									className="rounded-[var(--radius-md)] bg-control-primary-bg px-md py-1.5 tr-text-action text-control-primary-text hover:opacity-90"
 								>
 									Next →
 								</button>
@@ -355,7 +355,7 @@ export function AskUserQuestionCard({
 									data-testid="ask-submit"
 									onClick={() => reply({ answers, cancelled: false })}
 									disabled={!canSubmit}
-									className="rounded-[var(--radius-md)] bg-primary px-md py-1.5 tr-text-action text-text-on-primary hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+									className="rounded-[var(--radius-md)] bg-control-primary-bg px-md py-1.5 tr-text-action text-control-primary-text hover:opacity-90 disabled:cursor-not-allowed disabled:bg-control-disabled-bg disabled:text-control-disabled-text"
 								>
 									Submit
 								</button>
@@ -390,7 +390,7 @@ function SupersededRecord({ questions }: { questions: AskUserQuestionItem[] }) {
 				Superseded — you replied in chat instead of answering these.
 			</div>
 			{questions.map((q) => (
-				<div key={q.question} className="pl-[calc(0.875rem+var(--spacing-sm))] text-text-subtle">
+				<div key={q.question} className="pl-[calc(0.875rem+var(--spacing-sm))] text-text-muted">
 					{q.question}
 				</div>
 			))}
@@ -434,8 +434,8 @@ function ComposingCard({ count }: { count: number }) {
 					Preparing questions…{count > 0 ? ` (${count} ready)` : ""}
 				</div>
 				<div className="flex animate-pulse flex-col gap-xs" aria-hidden="true">
-					<div className="h-8 rounded-[var(--radius-md)] bg-control-bg-hovered" />
-					<div className="h-8 rounded-[var(--radius-md)] bg-control-bg-hovered" />
+					<div className="h-8 rounded-[var(--radius-md)] bg-control-bg-selected" />
+					<div className="h-8 rounded-[var(--radius-md)] bg-control-bg-selected" />
 				</div>
 			</div>
 		</div>
@@ -488,14 +488,14 @@ function ModeHint({
 }) {
 	if (review) {
 		return (
-			<span className="flex items-center gap-xs text-text-subtle tr-text-metadata">
+			<span className="flex items-center gap-xs text-text-muted tr-text-metadata">
 				<ListChecks className="size-3.5 shrink-0" /> Review your answers
 			</span>
 		);
 	}
 	const multi = !!question?.multiSelect;
 	return (
-		<span className="flex items-center gap-xs text-text-subtle tr-text-metadata">
+		<span className="flex items-center gap-xs text-text-muted tr-text-metadata">
 			{multi ? (
 				<ListChecks className="size-3.5 shrink-0" />
 			) : (
@@ -570,14 +570,14 @@ function QuestionBody({
 												value={state.notes[opt.label] ?? ""}
 												placeholder="Add a note for the model…"
 												onChange={(e) => onNote(opt.label, e.target.value)}
-												className="w-full resize-none rounded-[var(--radius-sm)] border border-border-default bg-control-bg px-sm py-xs text-text-default tr-text-metadata outline-none focus:border-primary"
+												className="w-full resize-none rounded-[var(--radius-sm)] border border-control-border-default bg-control-bg px-sm py-xs text-text-default tr-text-metadata outline-none focus-visible:border-control-border-active focus-visible:ring-2 focus-visible:ring-primary-soft"
 											/>
 										) : (
 											<button
 												type="button"
 												data-testid="ask-note-toggle"
 												onClick={() => onToggleNote(opt.label)}
-												className="flex items-center gap-xs text-text-subtle tr-text-metadata hover:text-text-muted"
+												className="flex items-center gap-xs text-text-muted tr-text-metadata hover:text-text-muted"
 											>
 												<Pencil className="size-3" />
 												{state.notes[opt.label]?.trim() ? "Edit note" : "Add note"}
@@ -607,7 +607,7 @@ function QuestionBody({
 						data-testid="ask-preview"
 						className="min-w-0 overflow-auto rounded-[var(--radius-md)] border border-border-default bg-control-bg px-sm py-xs tr-text-metadata"
 					>
-						<div className="mb-xs text-text-subtle tr-text-metadata">
+						<div className="mb-xs text-text-muted tr-text-metadata">
 							Preview · {previewSource.label}
 						</div>
 						<Markdown text={previewSource.preview} />
@@ -731,7 +731,7 @@ function OtherOptionRow({
 				placeholder="type your own answer…"
 				onFocus={onActivate}
 				onChange={(e) => onText(e.target.value)}
-				className="min-w-0 flex-1 border-none bg-transparent tr-text-ui text-text-default outline-none placeholder:text-text-subtle"
+				className="min-w-0 flex-1 border-none bg-transparent tr-text-ui text-text-default outline-none placeholder:text-text-muted"
 			/>
 		</label>
 	);
@@ -816,7 +816,7 @@ function ReviewView({
 			<ul className="flex flex-col gap-md">
 				{questions.map((q, i) => (
 					<li key={q.question} data-testid="ask-review-item" className="flex flex-col gap-xs">
-						<span className="text-text-subtle tr-text-metadata">{q.header || `Q${i + 1}`}</span>
+						<span className="text-text-muted tr-text-metadata">{q.header || `Q${i + 1}`}</span>
 						<QuestionRecap question={q} answer={byIndex.get(i)} variant="review" />
 					</li>
 				))}
@@ -891,7 +891,7 @@ function QuestionRecap({
 	return (
 		<div className="flex flex-col gap-xs">
 			<div className="flex items-start gap-sm">
-				<MessageCircleQuestion className="mt-0.5 size-3.5 shrink-0 text-text-subtle" />
+				<MessageCircleQuestion className="mt-0.5 size-3.5 shrink-0 text-text-muted" />
 				<p
 					data-testid={reviewing ? "ask-review-question" : undefined}
 					className={cn("tr-text-ui", reviewing ? "text-text-default" : "text-text-muted")}
@@ -911,7 +911,7 @@ function QuestionRecap({
 									data-selected={isSel}
 									className={cn(
 										"flex items-center gap-xs tr-text-ui",
-										isSel ? "text-text-default" : "text-text-subtle",
+										isSel ? "text-text-default" : "text-text-muted",
 									)}
 								>
 									{isSel ? (
@@ -947,14 +947,14 @@ function QuestionRecap({
 					{!answer ? (
 						<div
 							data-testid="ask-review-unanswered"
-							className="flex items-center gap-xs pl-[calc(0.875rem+var(--spacing-sm))] text-text-subtle tr-text-metadata italic"
+							className="flex items-center gap-xs pl-[calc(0.875rem+var(--spacing-sm))] text-text-muted tr-text-metadata italic"
 						>
 							<SkipForward className="size-3 shrink-0" /> Not answered
 						</div>
 					) : null}
 				</>
 			) : !answer ? (
-				<div className="flex items-center gap-xs pl-[calc(0.875rem+var(--spacing-sm))] text-text-subtle tr-text-metadata italic">
+				<div className="flex items-center gap-xs pl-[calc(0.875rem+var(--spacing-sm))] text-text-muted tr-text-metadata italic">
 					<SkipForward className="size-3 shrink-0" /> No answer (skipped).
 				</div>
 			) : (
@@ -967,7 +967,7 @@ function QuestionRecap({
 				</div>
 			)}
 			{answer?.notes ? (
-				<div className="pl-[calc(0.875rem+var(--spacing-sm))] text-text-subtle tr-text-metadata">
+				<div className="pl-[calc(0.875rem+var(--spacing-sm))] text-text-muted tr-text-metadata">
 					Note: {answer.notes}
 				</div>
 			) : null}

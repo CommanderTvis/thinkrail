@@ -10,35 +10,41 @@
 	--text-default: var(--text);
 	--text-muted: var(--muted);
 	--text-subtle: var(--hint);
+	--text-disabled: color-mix(in srgb, var(--disabled) 60%, transparent);
 	--text-on-primary: var(--on-accent);
 	--text-link: var(--info); /* global.css `a {}` is the only consumer; no component styles a bare link */
-	--container-workspace-bg: var(--background);
+	--container-workspace-bg: var(--background); /* the app surface, and with it the opened-document canvas — a document reads as part of the workspace (Monaco's EDITOR_THEME, the markdown/spec preview, the chat column, the tab strip) */
 	--container-sidebar-bg: var(--sidebar);
+	--container-terminal-bg: var(--sidebar);
 	--container-header-bg: var(--header);
-	--container-content-bg: var(--content); /* the code canvas: Monaco, Shiki, the terminal, the markdown preview */
+	--container-content-bg: var(--content); /* the recessed read-a-diff/read-code canvas, NOT the document canvas (that is workspace): the Changes diff (Monaco THEME), rendered diffs, Shiki code blocks, and the center-column backdrop behind them */
 	--container-elevated-bg: var(--elevated); /* every raised surface: dialogs, popovers, menus, toasts, cards, code blocks */
 	--control-bg: var(--input);
 	--control-bg-hovered: var(--hover);
+	--control-bg-selected: var(--hover);
 	--control-primary-bg: var(--accent);
 	--control-primary-text: var(--on-accent);
+	--control-border-default: var(--border);
+	--control-border-active: var(--border-strong);
+	--control-disabled-bg: var(--input);
+	--control-disabled-text: color-mix(in srgb, var(--disabled) 60%, transparent);
 	--border-default: var(--border-strong);
 	--border-muted: var(--border);
 	--primary: var(--accent);
 	--primary-subtle: color-mix(in srgb, var(--accent) 10%, transparent);
 	--primary-soft: color-mix(in srgb, var(--accent) 20%, transparent);
 	--primary-muted: color-mix(in srgb, var(--accent) 40%, transparent);
-	--primary-strong: color-mix(in srgb, var(--accent) 60%, transparent);
 	--on-primary-soft: color-mix(in srgb, var(--on-accent) 20%, transparent);
 	--feedback-info: var(--info);
-	--feedback-info-subtle: color-mix(in srgb, var(--info) 10%, transparent);
+	--feedback-info-subtle: color-mix(in srgb, var(--info) 12%, transparent);
 	--feedback-success: var(--success);
-	--feedback-success-subtle: color-mix(in srgb, var(--success) 10%, transparent);
+	--feedback-success-subtle: color-mix(in srgb, var(--success) 12%, transparent);
 	--feedback-success-muted: color-mix(in srgb, var(--success) 40%, transparent);
 	--feedback-error: var(--danger);
-	--feedback-error-subtle: color-mix(in srgb, var(--danger) 10%, transparent);
+	--feedback-error-subtle: color-mix(in srgb, var(--danger) 12%, transparent);
 	--feedback-error-muted: color-mix(in srgb, var(--danger) 40%, transparent);
 	--feedback-warning: var(--warning);
-	--feedback-warning-subtle: color-mix(in srgb, var(--warning) 10%, transparent);
+	--feedback-warning-subtle: color-mix(in srgb, var(--warning) 12%, transparent);
 	--bubble-user-bg: color-mix(in srgb, var(--bubble-accent) 10%, transparent);
 	--bubble-user-border: color-mix(in srgb, var(--bubble-accent) 40%, transparent);
 	--selection-text: var(--selection-foreground, inherit); /* nullable in the manifest (high contrast keeps the native foreground) */
@@ -69,23 +75,29 @@
 	--color-text-default: var(--text-default);
 	--color-text-muted: var(--text-muted);
 	--color-text-subtle: var(--text-subtle);
+	--color-text-disabled: var(--text-disabled);
 	--color-text-on-primary: var(--text-on-primary);
 	--color-container-workspace-bg: var(--container-workspace-bg);
 	--color-container-sidebar-bg: var(--container-sidebar-bg);
+	--color-container-terminal-bg: var(--container-terminal-bg);
 	--color-container-header-bg: var(--container-header-bg);
 	--color-container-content-bg: var(--container-content-bg);
 	--color-container-elevated-bg: var(--container-elevated-bg);
 	--color-control-bg: var(--control-bg);
 	--color-control-bg-hovered: var(--control-bg-hovered);
+	--color-control-bg-selected: var(--control-bg-selected);
 	--color-control-primary-bg: var(--control-primary-bg);
 	--color-control-primary-text: var(--control-primary-text);
+	--color-control-border-default: var(--control-border-default);
+	--color-control-border-active: var(--control-border-active);
+	--color-control-disabled-bg: var(--control-disabled-bg);
+	--color-control-disabled-text: var(--control-disabled-text);
 	--color-border-default: var(--border-default);
 	--color-border-muted: var(--border-muted);
 	--color-primary: var(--primary);
 	--color-primary-subtle: var(--primary-subtle);
 	--color-primary-soft: var(--primary-soft);
 	--color-primary-muted: var(--primary-muted);
-	--color-primary-strong: var(--primary-strong);
 	--color-on-primary-soft: var(--on-primary-soft);
 	--color-feedback-info: var(--feedback-info);
 	--color-feedback-info-subtle: var(--feedback-info-subtle);

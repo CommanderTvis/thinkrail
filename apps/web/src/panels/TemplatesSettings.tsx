@@ -95,7 +95,7 @@ function StarterTemplatesOffer() {
 
 	return (
 		<div className="flex flex-col items-start gap-sm">
-			<p className="text-text-subtle tr-text-metadata">
+			<p className="text-text-muted tr-text-metadata">
 				No templates yet. Add a few common ones to get started.
 			</p>
 			<Button
@@ -221,7 +221,7 @@ export function TemplatesSettings() {
 		<section data-testid="settings-templates" className="flex flex-col gap-lg">
 			<div className="flex flex-col gap-xs">
 				<h3 className="tr-title-section text-text-default">Prompt templates</h3>
-				<p className="text-text-subtle tr-text-metadata">
+				<p className="text-text-muted tr-text-metadata">
 					Reusable prompts, expanded from the composer's <code className="tr-code-text">/</code>{" "}
 					menu. Global templates are available in every workspace; project templates live in this
 					worktree's <code className="tr-code-text">.pi/prompts/</code>.
@@ -229,9 +229,9 @@ export function TemplatesSettings() {
 			</div>
 
 			{loading ? (
-				<p className="text-text-subtle tr-text-ui">Loading templates…</p>
+				<p className="text-text-muted tr-text-ui">Loading templates…</p>
 			) : failed ? (
-				<p data-testid="templates-error" className="text-text-subtle tr-text-ui">
+				<p data-testid="templates-error" className="text-text-muted tr-text-ui">
 					Couldn't read templates from the host — reopen Settings to retry.
 				</p>
 			) : (
@@ -305,7 +305,7 @@ function TemplateGroup({
 				scope === "global" ? (
 					<StarterTemplatesOffer />
 				) : (
-					<p className="text-text-subtle tr-text-metadata">No templates yet.</p>
+					<p className="text-text-muted tr-text-metadata">No templates yet.</p>
 				)
 			) : (
 				<div className="flex flex-col gap-xs">
@@ -382,7 +382,7 @@ function TemplateRow({
 				<div className="flex min-w-0 flex-1 flex-col">
 					<span className="truncate tr-text-ui text-text-default">{template.name}</span>
 					{template.description ? (
-						<span className="truncate text-text-subtle tr-text-metadata">
+						<span className="truncate text-text-muted tr-text-metadata">
 							{template.description}
 						</span>
 					) : null}
@@ -395,7 +395,7 @@ function TemplateRow({
 							aria-label="Open as file"
 							title="Open as file"
 							onClick={openAsFile}
-							className="flex size-6 items-center justify-center rounded-[var(--radius-sm)] text-text-muted transition hover:bg-container-elevated-bg hover:text-text-default"
+							className="flex size-6 items-center justify-center rounded-[var(--radius-sm)] text-text-muted transition hover:bg-control-bg-hovered hover:text-text-default"
 						>
 							<FileText className="size-3.5" />
 						</button>
@@ -406,7 +406,7 @@ function TemplateRow({
 						aria-label="Edit"
 						title="Edit"
 						onClick={onEdit}
-						className="flex size-6 items-center justify-center rounded-[var(--radius-sm)] text-text-muted transition hover:bg-container-elevated-bg hover:text-text-default"
+						className="flex size-6 items-center justify-center rounded-[var(--radius-sm)] text-text-muted transition hover:bg-control-bg-hovered hover:text-text-default"
 					>
 						<Pencil className="size-3.5" />
 					</button>
@@ -416,7 +416,7 @@ function TemplateRow({
 							data-testid="template-delete"
 							aria-label="Delete"
 							title="Delete"
-							className="flex size-6 items-center justify-center rounded-[var(--radius-sm)] text-text-muted transition hover:bg-container-elevated-bg hover:text-feedback-error"
+							className="flex size-6 items-center justify-center rounded-[var(--radius-sm)] text-text-muted transition hover:bg-control-bg-hovered hover:text-feedback-error"
 						>
 							<Trash2 className="size-3.5" />
 						</button>

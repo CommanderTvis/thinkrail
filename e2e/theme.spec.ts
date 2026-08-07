@@ -40,13 +40,15 @@ async function pickTheme(page: Page, theme: string): Promise<void> {
 	await expect(dialog).toBeHidden();
 }
 
+// `workspace`, not `content`: the opened-document canvas rides the workspace surface, and only the
+// Changes diff stays on the recessed `content` role — see the Container row in `styles/COLOR.md`.
 async function expectEditorMatchesTheme(page: Page): Promise<void> {
 	const colors = await page
 		.locator(".monaco-editor")
 		.first()
 		.evaluate((editor) => {
 			const token = getComputedStyle(document.documentElement)
-				.getPropertyValue("--container-content-bg")
+				.getPropertyValue("--container-workspace-bg")
 				.trim();
 			const probe = document.createElement("div");
 			probe.style.backgroundColor = token;

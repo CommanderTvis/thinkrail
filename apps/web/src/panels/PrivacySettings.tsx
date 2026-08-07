@@ -22,18 +22,18 @@ export function PrivacySettings() {
 		<section data-testid="settings-privacy" className="flex flex-col gap-lg">
 			<div className="flex flex-col gap-xs">
 				<h3 className="tr-title-section text-text-default">Usage analytics</h3>
-				<p className="text-text-subtle tr-text-metadata">
+				<p className="text-text-muted tr-text-metadata">
 					Anonymous usage analytics help us understand which features matter. Your choice is saved
 					on the host and follows you across devices.
 				</p>
 			</div>
 
-			<div className="flex items-center justify-between gap-md rounded-[var(--radius-md)] border border-border-default px-md py-sm">
+			<div className="flex items-center justify-between gap-md rounded-[var(--radius-md)] border border-border-default bg-control-bg px-md py-sm">
 				<div className="flex flex-col gap-0.5">
 					<span className="tr-title-compact text-text-default">
 						Share anonymous usage analytics
 					</span>
-					<span className="text-text-subtle tr-text-metadata">
+					<span className="text-text-muted tr-text-metadata">
 						{enabled ? "On — thank you for helping improve ThinkRail." : "Off — nothing is sent."}
 					</span>
 				</div>

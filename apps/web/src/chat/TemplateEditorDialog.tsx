@@ -21,7 +21,7 @@ import { assembleTemplate, stripFrontmatter } from "./templateText";
 const SYNTAX_HINT = `$1, $ARGUMENTS, \${1:-default} — pi prompt-template syntax`;
 
 const INPUT_CLASS =
-	"w-full rounded-[var(--radius-md)] border border-border-default bg-control-bg px-md py-sm tr-text-ui text-text-default outline-none transition-colors placeholder:text-text-subtle focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary-soft disabled:opacity-50";
+	"w-full rounded-[var(--radius-md)] border border-control-border-default bg-control-bg px-md py-sm tr-text-ui text-text-default outline-none transition-colors placeholder:text-text-muted focus-visible:border-control-border-active focus-visible:ring-2 focus-visible:ring-primary-soft disabled:bg-control-disabled-bg disabled:text-control-disabled-text";
 
 /**
  * Mirrors the server's `isValidTemplateName` (`packages/server/src/templates/templates.ts`) exactly — a
@@ -212,7 +212,7 @@ export function TemplateEditorDialog({
 							/>
 						</div>
 						{!workspaceId && !editing ? (
-							<p className="text-text-subtle tr-text-metadata">
+							<p className="text-text-muted tr-text-metadata">
 								Open a workspace to save a project-scoped template.
 							</p>
 						) : null}
@@ -255,7 +255,7 @@ export function TemplateEditorDialog({
 							spellCheck={false}
 							rows={8}
 						/>
-						<p className="text-text-subtle tr-text-metadata">{SYNTAX_HINT}</p>
+						<p className="text-text-muted tr-text-metadata">{SYNTAX_HINT}</p>
 					</Field>
 
 					{error ? (
@@ -325,9 +325,9 @@ function ScopeOption({
 			disabled={disabled}
 			onClick={onSelect}
 			className={cn(
-				"flex-1 rounded-[var(--radius-md)] border px-md py-sm text-left tr-text-ui outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-50",
+				"flex-1 rounded-[var(--radius-md)] border px-md py-sm text-left tr-text-ui outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:bg-control-disabled-bg disabled:text-control-disabled-text",
 				active
-					? "border-primary-muted bg-primary-subtle text-text-default"
+					? "border-primary-muted bg-clip-padding bg-primary-subtle text-text-default"
 					: "border-border-default text-text-muted hover:bg-control-bg-hovered hover:text-text-default",
 			)}
 		>

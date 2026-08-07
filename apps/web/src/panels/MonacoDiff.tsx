@@ -41,7 +41,7 @@ export default function MonacoDiff({
 
 	// Mirrors MonacoEditor's observer: follow atomic `[data-theme]` swaps while mounted.
 	const onMount: DiffOnMount = (editor, m) => {
-		observerRef.current = watchThemeSwap(m);
+		observerRef.current = watchThemeSwap(m, THEME);
 		editorRef.current = editor;
 		const model = editor.getModel();
 		modelsRef.current = model ? [model.original, model.modified] : [];
@@ -81,9 +81,7 @@ export default function MonacoDiff({
 			beforeMount={beforeMount}
 			onMount={onMount}
 			loading={
-				<div className="flex h-full items-center justify-center text-text-subtle">
-					Loading diff…
-				</div>
+				<div className="flex h-full items-center justify-center text-text-muted">Loading diff…</div>
 			}
 			// `useInlineViewWhenSpaceIsLimited: false`: the pane-header toggle must do what it says — without
 			// it Monaco silently renders Split as inline on a narrow pane, which reads as a broken toggle.

@@ -156,7 +156,7 @@ export function cssVarName(t: Typography, group: string, id: string): string {
 	return `--${t.metadata.cssVarPrefix}-${group}-${kebab(id)}`;
 }
 
-/** `title.dialog` → `tr-title-dialog`; `ui.default` → `tr-text-ui`; `code.inline` → `tr-code-inline`. */
+/** `title.dialog` → `tr-title-dialog`; `ui.default` → `tr-text-ui`; `code.text` → `tr-code-text`. */
 export function styleClassName(t: Typography, group: string, id: string): string {
 	const p = t.metadata.classPrefix;
 	if (group === "ui") return id === "default" ? `${p}-text-ui` : `${p}-text-${kebab(id)}`;
@@ -194,21 +194,20 @@ export const PROSE_SELECTORS: Record<string, string> = {
 	list: " :is(ul, ol, li)",
 	tableBody: " :is(table, td)",
 	tableHeader: " th",
+	// Inline code that is a direct child of a table cell (`<td><code>` / `<th><code>`) — a fenced block
+	// in a cell is `<td><pre><code>`, whose `code` parent is `pre`, so it's excluded here and stays
+	// `codeBlock`. Same specificity as `inlineCode` but emitted after it (last in this map), so it wins
+	// for cell inline code while paragraph inline code keeps `inlineCode`.
+	tableInlineCode: " :is(td, th) > code",
 };
 
 /** The prose roles that render code, in every prose system. */
-export const PROSE_CODE_NAMES = new Set(["inlineCode", "codeBlock"]);
+export const PROSE_CODE_NAMES = new Set(["inlineCode", "codeBlock", "tableInlineCode"]);
 
 /* ── validation ─────────────────────────────────────────────────────────────────────────────── */
 
 /** `textStyles` ids allowed to use a monospace family — every other one must be proportional. */
-export const CODE_STYLE_IDS = new Set([
-	"code.text",
-	"code.inline",
-	"code.block",
-	"code.document",
-	"code.otp",
-]);
+export const CODE_STYLE_IDS = new Set(["code.text", "code.document", "code.otp", "code.textSmall"]);
 
 /** Should `id` render in a monospace family? The single definition of the mono policy. */
 export function isCodeStyleId(t: Typography, id: string): boolean {

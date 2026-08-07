@@ -63,19 +63,19 @@ export function TreeRow({
 			// control out and the `+N −M` column stops lining up with the folder rows'.
 			className={`flex h-6 w-full min-w-0 items-center gap-xs rounded-[var(--radius-sm)] px-xs text-left tr-text-ui text-text-muted ${
 				highlight === "self"
-					? `hover:bg-control-bg-hovered ${active ? "bg-control-bg-hovered" : ""}`
+					? `hover:bg-control-bg-hovered ${active ? "bg-control-bg-selected" : ""}`
 					: ""
 			}`}
 		>
 			{kind === "dir" ? (
-				<Chevron className="size-3.5 shrink-0 text-text-subtle" />
+				<Chevron className="size-3.5 shrink-0 text-text-muted" />
 			) : (
 				<span className="size-3.5 shrink-0" />
 			)}
 			{kind === "dir" ? (
-				<Folder className="size-4 shrink-0 text-text-subtle" />
+				<Folder className="size-4 shrink-0 text-text-muted" />
 			) : (
-				<FileIcon className="size-4 shrink-0 text-text-subtle" />
+				<FileIcon className="size-4 shrink-0 text-text-muted" />
 			)}
 			<span className={`min-w-0 flex-1 truncate ${labelClassName ?? ""}`}>{label}</span>
 			{trailing}

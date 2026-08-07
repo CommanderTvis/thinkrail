@@ -84,7 +84,7 @@ export function reconcileModel(
 
 /** A shared pill-trigger look for the project + branch pickers (mockup `.pill`). */
 const PILL =
-	"flex h-8 min-w-0 items-center gap-sm rounded-[var(--radius-md)] border border-border-default bg-control-bg px-sm tr-text-ui text-text-default outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary data-[open=true]:border-primary-strong data-[open=true]:bg-control-bg-hovered";
+	"flex h-8 min-w-0 items-center gap-sm rounded-[var(--radius-md)] border border-control-border-default bg-clip-padding bg-control-bg px-sm tr-text-ui text-text-default outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary data-[open=true]:border-control-border-active data-[open=true]:bg-control-bg-selected";
 
 /**
  * The start-working surface: a **target control** chooses where the work runs — an isolated worktree
@@ -461,7 +461,7 @@ export function NewWorkspaceDialog({
 				{/* where: the target control — both modes always visible, the two-mode model in one glance */}
 				<fieldset
 					data-testid="ws-target"
-					className="flex w-fit items-center gap-0.5 rounded-[var(--radius-md)] border border-border-default bg-control-bg p-0.5"
+					className="flex w-fit items-center gap-0.5 rounded-[var(--radius-md)] border border-control-border-default bg-control-bg p-0.5"
 				>
 					<legend className="sr-only">Where the work runs</legend>
 					<TargetOption
@@ -539,7 +539,7 @@ export function NewWorkspaceDialog({
 					{promptNote ? (
 						<p
 							data-testid="ws-prompt-note"
-							className="mb-xs flex items-start gap-sm rounded-[var(--radius-md)] border border-primary-muted bg-primary-subtle px-md py-sm text-left text-text-muted tr-text-metadata leading-snug"
+							className="mb-xs flex items-start gap-sm rounded-[var(--radius-md)] border border-primary-muted bg-clip-padding bg-primary-subtle px-md py-sm text-left text-text-muted tr-text-metadata leading-snug"
 						>
 							<Sparkles className="mt-0.5 size-3.5 shrink-0 text-primary" />
 							<span>{promptNote}</span>
@@ -573,12 +573,12 @@ export function NewWorkspaceDialog({
 					) : prompt.trim() && isolated ? (
 						<p
 							data-testid="workspace-naming-hint"
-							className="px-xs text-text-subtle tr-text-metadata"
+							className="px-xs text-text-muted tr-text-metadata"
 						>
 							ThinkRail will name the workspace and branch from your request.
 						</p>
 					) : (
-						<p className="mt-xs text-text-subtle tr-text-metadata">
+						<p className="mt-xs text-text-muted tr-text-metadata">
 							Type <span className="tr-code-text">/</span> for a project skill — previewed from the
 							current checkout; the created workspace's session is authoritative.
 						</p>
@@ -611,7 +611,7 @@ export function NewWorkspaceDialog({
 						data-testid="create-workspace"
 						disabled={creating}
 						onClick={() => void create()}
-						className="flex h-8 shrink-0 items-center gap-sm rounded-[var(--radius-md)] bg-primary px-md tr-text-action text-text-on-primary outline-none transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-50"
+						className="flex h-8 shrink-0 items-center gap-sm rounded-[var(--radius-md)] bg-control-primary-bg px-md tr-text-action text-control-primary-text outline-none transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:ring-primary disabled:bg-control-disabled-bg disabled:text-control-disabled-text"
 					>
 						{isolated ? "Create" : "Start"}
 						<span className="inline-flex h-4 min-w-4 items-center justify-center rounded-[3px] bg-on-primary-soft px-1 tr-code-text">
@@ -691,7 +691,7 @@ function ProjectPicker({
 					<Box className="size-3 text-text-on-primary" />
 				</span>
 				<span className="truncate">{current}</span>
-				<ChevronDown className="size-3 shrink-0 text-text-subtle" />
+				<ChevronDown className="size-3 shrink-0 text-text-muted" />
 			</PopoverTrigger>
 			<PopoverContent align="start" container={container} className="w-[280px] p-0">
 				<Command>

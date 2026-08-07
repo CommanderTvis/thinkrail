@@ -49,7 +49,9 @@ function DropdownMenuSubTrigger({
 	return (
 		<DropdownMenuPrimitive.SubTrigger
 			className={cn(
-				"relative flex cursor-default select-none items-center gap-sm rounded-[var(--radius-sm)] px-sm py-xs tr-text-ui text-text-default outline-none transition-colors focus:bg-control-bg-hovered data-[state=open]:bg-control-bg-hovered [&_svg]:size-4 [&_svg]:shrink-0 [&_svg]:text-text-muted",
+				menuItemClass,
+				// An open submenu is a persistent state, not a pointer hover — same fill as the item highlight.
+				"data-[state=open]:bg-control-bg-selected",
 				className,
 			)}
 			{...props}

@@ -45,10 +45,10 @@ both markdown surfaces, the `<body>` base).
 | Group | Ids |
 |---|---|
 | `fontFamilies` | `interface` (Geist Variable, all proportional UI + reading text) · `code` (JetBrains Mono Variable, code only) · `brand` → **`{ "$ref": "interface" }`** (the brand display role today *is* the interface face; swapping in a licensed face means replacing this one alias) |
-| `fontWeights` | `regular` 400 · `medium` 500 · `semibold` 600 · `brand` 800 |
+| `fontWeights` | `light` 370 · `regular` 400 · `medium` 500 · `semibold` 600 · `brand` 800 |
 | `fontSizes` | `s10` `s11` `s12` `s13` `s14` `s16` `s18` `s20` `s24` `s44` (px) |
-| `lineHeights` | `compact` 1.25 · `code` 1.5 · `default` 1.6 |
-| `letterSpacings` | `normal` · `wide` 0.05em · `widest` 0.1em · `brand` 0.5px |
+| `lineHeights` | `compact` 1.25 · `metadata` 1.3333 (12px→16px, 18px→24px) · `ui` 1.4286 (14px→20px) · `code` 1.5 · `relaxed` 1.5385 (13px→20px) · `default` 1.6 |
+| `letterSpacings` | `normal` · `loose` 0.02em · `wide` 0.05em · `widest` 0.1em · `brand` 0.5px |
 
 **Semantic styles** are what components use. Each names seven primitive references and nothing else, so
 it resolves deterministically — there is no inheritance, no per-usage branching, no fallback:
@@ -76,10 +76,11 @@ The rules, all enforced by `typography:validate`:
 `textStyles` groups: **brand** (`wordmark`, `hero`) · **heading** (`xl`, `lg`, `md`, `sm` — the shared
 document heading scale) · **title** (`dialog`, `card`→dialog, `section`, `compact`, `entity`→body.reading)
 · **ui** (`default`, `metadata`, `eyebrow`, `labelPill`→eyebrow, `action`→title.compact,
-`emphasis`→title.compact) · **body** (`reading`) · **code** (`text`, `inline`, `block`, `document`,
-`otp`). `proseSystems` holds one entry per markdown surface, almost entirely aliases into the above.
+`emphasis`→title.compact) · **body** (`reading`) · **code** (`text` — the base 13px code style, `document`, `otp`, `textSmall` — an 11px code style for
+inline code in table cells). `proseSystems` holds one entry per markdown surface, almost entirely aliases
+into the above. Dead aliases are not retained: prose points directly to the semantic style it uses.
 
-**21 canonical definitions + 28 aliases = 49 styles.**
+**20 canonical definitions + 30 aliases = 50 styles.**
 
 One prose rule is deliberately *not* a semantic style: `<strong>` / `<b>` gets **weight only**
 (`--tr-font-weight-medium`), emitted by the generator into each prose system. A complete style there
@@ -91,7 +92,7 @@ data. Rationale lives in this file.
 ## The `<body>` base
 
 `rootStyle` is the typography of text that carries no semantic class — and it is **a `$ref`, never
-values** (today `{ "$ref": "ui.default" }`, so 12px/400/1.6 interface). The generator emits it as a
+values** (today `{ "$ref": "ui.default" }`, so 14px/370 interface with a 20px line height). The generator emits it as a
 `body { … }` rule inside `@layer base`, which puts it *below* every semantic class in the cascade: it is
 a floor, never something a component relies on.
 
@@ -117,7 +118,7 @@ The generator derives one class per semantic style, mechanically:
 | `ui.default` · `ui.metadata` | `.tr-text-ui` · `.tr-text-metadata` |
 | `ui.eyebrow` · `ui.labelPill` · `ui.action` · `ui.emphasis` | `.tr-text-eyebrow` · `.tr-text-label-pill` · `.tr-text-action` · `.tr-text-emphasis` |
 | `body.reading` | `.tr-text-reading` |
-| `code.text` · `code.inline` · `code.block` · `code.document` · `code.otp` | `.tr-code-text` · `.tr-code-inline` · `.tr-code-block` · `.tr-code-document` · `.tr-code-otp` |
+| `code.text` · `code.document` · `code.otp` · `code.textSmall` | `.tr-code-text` · `.tr-code-document` · `.tr-code-otp` · `.tr-code-text-small` |
 | `proseSystems.<id>.*` | `.tr-prose-<id>` + one element selector each |
 
 Primitive tokens are also emitted as custom properties — `--tr-font-family-code`,
@@ -166,7 +167,7 @@ naming its own type. Two exist:
 | | `chat` (`.tr-prose-chat`) | `doc` (`.tr-prose-doc`) |
 |---|---|---|
 | mounted by | `chat/Markdown.tsx` | `panels/MarkdownPreview.tsx` |
-| body, blockquote, lists | 14 / 400 / 1.6 | 14 / 400 / 1.6 |
+| body, blockquote, lists | 14 / 370 / 1.6 | 14 / 370 / 1.6 |
 | h1 | 18 / 600 | **24 / 600** |
 | h2 | 14 / 600 | **20 / 600** |
 | h3 | 12 / 600 | **18 / 600** |
@@ -174,8 +175,9 @@ naming its own type. Two exist:
 | h5 | 12 / 500 | 14 / 600 |
 | h6 | 10 / 500 uppercase | 12 / 600 uppercase |
 | inline code | 13 mono | 13 mono |
-| fenced code | 11 mono / 1.5 | 13 mono / 1.5 |
-| table body / header | 12 / 400 · 12 / 600 | 14 / 400 · 14 / 600 |
+| fenced code | 13 mono / 1.54 | 13 mono / 1.5 |
+| table body / header | 12 / 370 · 12 / 600 | 14 / 370 · 14 / 600 |
+| table cell inline code | **11 mono / 1.5** (`code.textSmall`) | 13 mono (`code.text`) |
 | `strong` / `b` | weight 500 only | weight 500 only |
 
 **Why two.** A chat bubble is a stream of short messages: headings there are separators, and a 24px h1
@@ -188,7 +190,7 @@ uppercase — the convention every markdown renderer settles on, since documents
 that deep.
 
 The two systems share their canonical definitions: `chat.h1` and `doc.h3` are both `{ "$ref":
-"heading.md" }`, body copy everywhere is `body.reading`. Only 3 of the 26 prose entries are canonical
+"heading.md" }`, body copy everywhere is `body.reading`. Only 3 of the 28 prose entries are canonical
 definitions of their own.
 
 `strong` / `b` gets **weight 500 only** in both systems — family, size, line-height, tracking, transform
@@ -225,14 +227,17 @@ those are proportional. Validation enforces this: a monospace family on a non-co
 
 ## Weight policy
 
-- **400** — ordinary UI, body, entity, metadata and status text.
+- **370** (`light`) — ordinary UI, body, entity, metadata and status text (interface family).
+- **400** (`regular`) — monospace / code text only (`code.*`).
 - **500** — buttons (`ui.action`), in-page section titles, compact titles, inline emphasis
-  (`ui.emphasis`), chat prose h4–h6 and `strong`.
+  (`ui.emphasis`), uppercase labels (`ui.eyebrow`/`labelPill`), chat prose h4–h6 and `strong`.
 - **600** — dialog titles, card titles, alert titles, every `heading.*`, chat prose h1–h3, document
   prose h1–h6 and table headers.
 - **800** — brand only.
 
-Disabled = `opacity-50`, no token.
+Disabled control colors come from `control-disabled-bg` / `control-disabled-text`; disabled non-control
+text uses `text-disabled`. Typography does not encode disabled state, and controls do not use opacity to
+simulate it.
 
 ## Permitted exceptions
 
@@ -242,7 +247,7 @@ The allowlist is deliberately tiny, and each entry is enforced by name in
 | Surface | Why it cannot use a semantic class |
 |---|---|
 | `panels/monacoSetup.ts` | Monaco takes `fontFamily` / `fontSize` / `lineHeight` as JS options — it reads `--tr-font-family-code`, `--tr-font-size-s11`, `--tr-line-height-default`, so it cannot drift from a code block |
-| `panels/TerminalInstance.tsx` | xterm, same reason (`--tr-font-family-code` + `--tr-font-size-s11`) |
+| `panels/TerminalInstance.tsx` | xterm, same reason — it reads `--tr-font-family-code` + `--tr-font-size-s13` (the primitives behind `code.text`), and owns row height through its own `lineHeight` option rather than a CSS line-height |
 | `chat/tools/visualize/mermaid.ts` | mermaid's theme config takes a family string (`--tr-font-family-code`) |
 | `index.css`, `styles/tokens.css`, `styles/global.css` | the mapping layers themselves |
 
