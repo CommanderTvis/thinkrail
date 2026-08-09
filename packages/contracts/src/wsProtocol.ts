@@ -43,6 +43,25 @@ import type {
 	WireModel,
 } from "./piProtocol";
 
+/**
+ * A batch of one terminal's output. Addressed to the PTY's owning client, never broadcast.
+ *
+ * `truncated` says the host had to drop the *oldest* held output to stay bounded — a shell can emit faster than
+ * it can be shipped and `bun-pty` offers no way to slow it down — so the client can mark the gap instead of
+ * appearing to have simply printed less.
+ */
+export interface TerminalDataPush {
+	id: string;
+	data: string;
+	truncated?: boolean;
+}
+
+/** The shell behind a terminal exited; its tab is now dead and must say so instead of looking alive. */
+export interface TerminalExitPush {
+	id: string;
+	exitCode: number;
+}
+
 /** Bumped on any breaking wire change; sent in `server.welcome` so a stale UI can detect host drift. */
 // v4: model.* / session.create / session.setModel / SessionSummary now carry `WireModel` (pi's `Model`
 // minus the secret-bearing `baseUrl`/`headers`); the host re-resolves the real model by `{provider,id}`.
@@ -109,7 +128,17 @@ import type {
 // + recent project views, and project.updated streams full snapshots so every client converges.
 // v25: existing-worktree adoption — `Workspace.kind: "external"` marks user-owned checkouts;
 // `workspace.listExisting` discovers candidates and `workspace.openExisting` registers one in place.
-export const PROTOCOL_VERSION = 25;
+// v26: terminals belong to ONE client, keyed by the `?client=` page identity on the socket URL (stable across
+// that client's reconnects, new on reload). Output is addressed to the owner instead of broadcast to a topic
+// every socket subscribed to, and carries an optional `truncated` flag when the host had to drop held output;
+// `terminal.exit` announces a dead shell; `terminal.alive` lets a tab re-attaching to a shell it detached
+// earlier confirm it is still there. `terminal.create` additionally takes the client's measured `cols`/`rows`.
+// v27: unresolved requests survive reconnect: the client replays the same request id and the host deduplicates
+// by `(clientKey, requestId)`. The client acknowledges each response it processes (`WsAck`), which is what lets
+// the host free the retained copy — an *un*acknowledged one may have died with its socket and stays replayable.
+// The version prevents a replaying UI from connecting to a pre-dedup host and executing a mutation twice after
+// a lost response.
+export const PROTOCOL_VERSION = 27;
 
 /**
  * The `server.welcome` push payload (the first message on every WS connect). `protocolVersion` lets a
@@ -204,6 +233,7 @@ export const WS_METHODS = {
 	terminalWrite: "terminal.write",
 	terminalResize: "terminal.resize",
 	terminalClose: "terminal.close",
+	terminalAlive: "terminal.alive",
 	dialogSelectDirectory: "dialog.selectDirectory",
 	// Skill-only command preview for New Workspace, before a worktree/session exists.
 	skillList: "skill.list",
@@ -280,7 +310,13 @@ export const WS_CHANNELS = {
 	// In-app login flow updates (a `LoginPush` per frame), keyed by loginId. Session-less — a login runs on
 	// the Welcome screen before any session exists, so this is the sibling of pi.extensionUi, not scoped to one.
 	providerLogin: "provider.login",
+	// Both terminal channels are addressed to the ONE client that owns the PTY, not broadcast: a shell's bytes
+	// are that client's alone (tokens, keys, private paths), and a second browser filtering them out
+	// client-side is not isolation. Ownership is keyed to a client id that survives reconnects — see
+	// `terminalManager.closeClientTerminals`.
 	terminalData: "terminal.data",
+	/** `{ id, exitCode }` — the shell behind a terminal exited, so its tab is now dead and must say so. */
+	terminalExit: "terminal.exit",
 	// The workspace-registry lifecycle trio, broadcast to every client so registry membership is shared
 	// domain state (architecture #9), not per-client. All three are emitted by the `workspaces` module's
 	// injected publisher (host maps kind → channel); every client reacts identically (no per-client
@@ -456,10 +492,20 @@ export interface WsMethodMap {
 	// Commits on the workspace's branch that its diff base doesn't have (`git log <base>..HEAD`), newest
 	// first and capped host-side — the scope menu's commit rows.
 	"git.listCommits": { params: { workspaceId: string }; result: { commits: GitCommit[] } };
-	"terminal.create": { params: { workspaceId: string }; result: { id: string } };
+	// `cols`/`rows` are the client's already-measured grid. Optional so an older client still works, but
+	// sending them matters: a PTY spawned at a default 80×24 renders its first prompt at the wrong size and
+	// then reflows when the real size arrives, which can visibly garble it.
+	"terminal.create": {
+		params: { workspaceId: string; cols?: number; rows?: number };
+		result: { id: string };
+	};
 	"terminal.write": { params: { id: string; data: string }; result: Ack };
 	"terminal.resize": { params: { id: string; cols: number; rows: number }; result: Ack };
 	"terminal.close": { params: { id: string }; result: Ack };
+	// Is this id still a live PTY the caller owns? A tab re-attaching to a shell it detached earlier has to
+	// ask, because `terminal.exit` is only heard by a MOUNTED terminal and a detach happens exactly when none
+	// is mounted — so the shell may have died unobserved.
+	"terminal.alive": { params: { id: string }; result: { alive: boolean } };
 	"dialog.selectDirectory": { params: Record<string, never>; result: { path: string | null } };
 	// Preview from the selected project's current checkout; the eventual worktree session is authoritative.
 	"skill.list": { params: { projectId: string }; result: SlashCommandInfo[] };
@@ -597,6 +643,35 @@ export interface WsRequest<M extends WsMethodName = WsMethodName> {
 	params: WsParams<M>;
 	sessionId?: string;
 }
+
+/**
+ * Client→host receipt for responses it has processed, batched (one frame may cover many ids).
+ *
+ * It is the *only* proof the host has that a reply landed. A `send` that succeeds says the bytes were
+ * queued, not that the page read them — a socket dying with a reply still in its buffer looks identical to
+ * a delivered one. So until the id is acknowledged the host keeps the result replayable, and the page's
+ * reconnect replay gets the original result instead of a second execution; once acknowledged the page can
+ * never replay that id, and the retained copy has no reader left.
+ */
+export interface WsAck {
+	ack: string[];
+}
+
+/**
+ * Client→host reconciliation, sent on every (re)connect ahead of the replays: the complete set of ids this
+ * page still considers unresolved. Every *other* settled result the host holds for it is free to go.
+ *
+ * A receipt is only as reliable as the socket carrying it, and once one is lost nothing would ever re-send it —
+ * the request it named is already gone from the page's pending map, so it is neither replayed nor acknowledged
+ * again. Rather than confirm the confirmations, each reconnect simply restates the whole truth, which repairs
+ * every receipt the previous socket took down with it.
+ */
+export interface WsResume {
+	resume: string[];
+}
+
+/** Anything the client sends: a request, a receipt, or a reconnect reconciliation (discriminate on the key). */
+export type WsClientMessage = WsRequest | WsAck | WsResume;
 
 /**
  * A failure the **host names**, so a client can react to *this* error rather than to "something failed".

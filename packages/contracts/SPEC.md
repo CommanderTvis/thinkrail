@@ -228,7 +228,10 @@ of the host.
   **`settings.changed`** (the full `AppConfig`, broadcast so every client
   converges) / **`provider.login`** — the session-less in-app login stream (a `LoginPush`
   per frame, keyed by `loginId`; the sibling of `pi.extensionUi`, since a login runs on the Welcome screen
-  before any session exists) / `terminal.data` / the **workspace lifecycle trio** — **`workspace.created`**
+  before any session exists) / `terminal.data` + **`terminal.exit`** (the only **addressed** channels — sent to
+  the single client that owns the PTY rather than broadcast, so a shell's bytes never reach another browser;
+  `terminal.data` may carry `truncated` when the host had to drop held output) / the **workspace lifecycle
+  trio** — **`workspace.created`**
   / **`workspace.updated`** / **`workspace.removed`** — registry membership changes fanned out to every
   client so it stays shared domain state (architecture #9), all emitted by the server's `workspaces`
   publisher (never a per-client optimistic mutation). `created`/`updated` carry the **full persisted
@@ -239,7 +242,17 @@ of the host.
   worktree-relative deduped paths, capped — `truncated` = treat as wildcard); an **invalidation nudge,
   not data**: clients re-read via the existing read methods, so a duplicate/replayed frame is harmless.
   The `WsMethodMap` typed request/result map +
-  `WsParams`/`WsResult` helpers, and `PROTOCOL_VERSION`.
+  `WsParams`/`WsResult` helpers, and `PROTOCOL_VERSION`. Request ids are also the reconnect idempotency key:
+  an unresolved client replays the same frame/id, and the host returns the one cached result for
+  `(clientKey, requestId)` instead of executing the handler again. Two client→host frames that are *not* requests close
+  that loop (hence **`WsClientMessage`**, discriminated on the key): **`WsAck`** (`{ ack: string[] }`) names
+  responses the client has *read* — the only thing that distinguishes a reply the page received from one that
+  died in a socket buffer, and so the only thing that lets the host free a retained result — and **`WsResume`**
+  (`{ resume: string[] }`), sent on every (re)connect ahead of the replays, names the complete set the page
+  still considers unresolved, so the host can release everything else. `resume` exists because a receipt is only
+  as reliable as the socket carrying it and nothing would ever re-send a lost one: restating the live set beats
+  confirming the confirmations. This behavior is protocol-versioned — a replaying UI must never run against a
+  pre-dedup host.
 
 ## Get right
 
