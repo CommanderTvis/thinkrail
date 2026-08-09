@@ -78,10 +78,10 @@ import {
 	templateDirs,
 } from "../templates";
 import {
-	closeTerminal,
+	attachTerminal,
+	closeTerminalTab,
 	closeWorkspaceTerminals,
-	createTerminal,
-	isTerminalAlive,
+	listTerminals,
 	resizeTerminal,
 	writeTerminal,
 } from "../terminal";
@@ -109,13 +109,11 @@ import { dropLogin, recordLoginStart } from "./loginAnalytics";
 /**
  * Who a request came from. Threaded to every handler so one can scope a resource to its caller; most ignore
  * it, since almost everything the host owns is shared domain state that every client sees identically
- * (architecture #9). Terminals are the exception — a PTY belongs to one client.
+ * (architecture #9). Terminals use it for *attachment*, not ownership — a shell belongs to its tab, but only
+ * the client currently attached may receive its output or drive it.
  */
 export interface RequestContext {
-	/**
-	 * The calling client's id (`?client=` on its socket URL). Stable across that client's reconnects and new
-	 * on every reload, which is what lets a PTY outlive a dropped connection without outliving the page.
-	 */
+	/** The calling client's id (`?client=` on its socket URL), stable across that client's reconnects. */
 	clientKey: string;
 }
 
@@ -273,12 +271,27 @@ const handlers: Record<string, Handler> = {
 	// Every terminal op is scoped to `ctx.clientKey`: a PTY belongs to the client that created it, so another
 	// connection can neither read its output nor write to or kill it. An id the caller doesn't own is treated
 	// exactly like one that doesn't exist.
-	"terminal.create": (params, ctx) => {
+	// SYNCHRONOUS ON PURPOSE — see `attachTerminal`. Lookup and insert in one tick is what makes attach atomic
+	// on Bun's single event loop, so two concurrent attaches for the same tab cannot both spawn a shell. An
+	// `await` anywhere in this path silently reintroduces double-spawn.
+	"terminal.attach": (params, ctx) => {
 		// Forwarded whole rather than rebuilt: under `exactOptionalPropertyTypes`, an absent `cols` and an
 		// explicit `cols: undefined` are different types, and only the former means "use the default".
-		const p = params as { workspaceId: string; cols?: number; rows?: number };
-		return createTerminal(p.workspaceId, ctx.clientKey, p);
+		const p = params as {
+			workspaceId: string;
+			tabKey: string;
+			title?: string;
+			cols?: number;
+			rows?: number;
+		};
+		return attachTerminal(p.workspaceId, p.tabKey, ctx.clientKey, p);
 	},
+	"terminal.list": (params) => ({
+		tabs: listTerminals((params as { workspaceId: string }).workspaceId),
+	}),
+	// Both carry the caller: only the client currently ATTACHED to a terminal may drive it. A displaced client
+	// can still hold a valid PTY id, and a reconnect replays its queued frames — without this its keystrokes
+	// would land in whoever took the tab over.
 	"terminal.write": (params, ctx) => {
 		const p = params as { id: string; data: string };
 		writeTerminal(p.id, p.data, ctx.clientKey);
@@ -289,13 +302,10 @@ const handlers: Record<string, Handler> = {
 		resizeTerminal(p.id, p.cols, p.rows, ctx.clientKey);
 		return { ok: true } as const;
 	},
-	"terminal.close": (params, ctx) => {
-		closeTerminal((params as { id: string }).id, ctx.clientKey);
-		return { ok: true } as const;
+	"terminal.close": (params) => {
+		const p = params as { workspaceId: string; tabKey: string; force?: boolean };
+		return closeTerminalTab(p.workspaceId, p.tabKey, p.force ?? false);
 	},
-	"terminal.alive": (params, ctx) => ({
-		alive: isTerminalAlive((params as { id: string }).id, ctx.clientKey),
-	}),
 	"skill.list": (params) => {
 		const { projectId } = params as { projectId: string };
 		const project = listProjects().find((candidate) => candidate.id === projectId);

@@ -12,6 +12,7 @@ import type {
 	SessionSummary,
 	SlashCommandInfo,
 	SpecGraphNode,
+	TerminalTabInfo,
 	ThemeId,
 	ThinkingLevel,
 	WireModel,
@@ -121,6 +122,7 @@ export const SettingsSection = {
 	Providers: "providers",
 	Github: "github",
 	Appearance: "appearance",
+	Terminal: "terminal",
 	Templates: "templates",
 	Privacy: "privacy",
 } as const;
@@ -145,13 +147,27 @@ export interface Toast {
  * the newest visible. */
 const MAX_TOASTS = 5;
 
-/** A terminal tab. `clientId` is the stable UI key; the server PTY id is owned by its `TerminalInstance`. */
+/**
+ * A terminal tab — a local mirror of host state, not the authority.
+ *
+ * The host owns the tab list (`terminal.list`); `tabKey` is the durable identity it keys shells on, so this
+ * store never holds the only record of a running shell. That inversion is deliberate: when the browser was the
+ * sole keeper of the tab→shell mapping, losing it mid-round-trip spawned a duplicate shell and orphaned the
+ * original for the life of the host.
+ */
 export interface TerminalTab {
-	clientId: string;
+	tabKey: string;
 	workspaceId: string;
 	title: string;
-	/** A command to run once, right after this tab's PTY is ready (e.g. "Open in Vim") — never replayed. */
+	/** A command to run once, only if the attach actually created this shell (e.g. "Open in Vim"). */
 	initialCommand?: string;
+	/**
+	 * This client minted the tab and its `terminal.attach` has not landed yet, so the host does not know about
+	 * it. Only such a tab may survive an authoritative list that omits it — anything else missing from the
+	 * host's list is a tab that genuinely no longer exists (another client closed it), and keeping it would let
+	 * its instance re-attach and resurrect both the tab and a shell.
+	 */
+	attachPending?: true;
 }
 
 /** A chat tab the user closed — reopenable from history; its session + runtime stay alive in `sessions`. */
@@ -618,6 +634,8 @@ interface AppState {
 	/** Anonymous-usage-analytics switch (host-owned, same `applyConfig` fold as `theme`). Only this boolean
 	 * ever reaches a client — events are emitted host-side and the install id never crosses the wire. */
 	analyticsEnabled: boolean;
+	/** How much terminal output the host keeps for replay, in KiB (host-owned; same `applyConfig` fold). */
+	terminalReplayKb: number;
 	/** Transient notifications, oldest-first (the Toaster renders + times them out). At-most a handful live
 	 * at once; a failed wire call that has no better home (no chat tab to host an error turn) lands here. */
 	toasts: Toast[];
@@ -719,8 +737,11 @@ interface AppState {
 	) => void;
 	clearWorkspaceTabs: (workspaceId: string) => void;
 	addTerminal: (workspaceId: string, initialCommand?: string) => void;
-	closeTerminalTab: (workspaceId: string, clientId: string) => void;
-	setActiveTerminalTab: (workspaceId: string, clientId: string) => void;
+	setWorkspaceTerminals: (workspaceId: string, tabs: TerminalTabInfo[]) => void;
+	settleTerminalAttach: (workspaceId: string, tabKey: string) => void;
+	consumeTerminalInitialCommand: (workspaceId: string, tabKey: string) => void;
+	closeTerminalTab: (workspaceId: string, tabKey: string) => void;
+	setActiveTerminalTab: (workspaceId: string, tabKey: string) => void;
 	openChatSession: (
 		workspaceId: string,
 		sessionId: string,
@@ -1049,6 +1070,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	settingsSection: SettingsSection.Providers,
 	theme: DEFAULT_CONFIG.theme,
 	analyticsEnabled: DEFAULT_CONFIG.analyticsEnabled,
+	terminalReplayKb: DEFAULT_CONFIG.terminalReplayKb,
 	toasts: [],
 	setStatus: (status) => set({ status }),
 	setWelcome: (protocolVersion) => set({ protocolVersion }),
@@ -1336,37 +1358,111 @@ export const useAppStore = create<AppState>((set, get) => ({
 	addTerminal: (workspaceId, initialCommand) =>
 		set((s) => {
 			const list = s.terminalsByWorkspace[workspaceId] ?? [];
-			const clientId = crypto.randomUUID();
+			const tabKey = crypto.randomUUID();
 			const tab: TerminalTab = {
-				clientId,
+				tabKey,
 				workspaceId,
 				title: nextTerminalTitle(list),
+				attachPending: true,
 				...(initialCommand ? { initialCommand } : {}),
 			};
+			// No create call: mounting the instance attaches, and attach is what registers the tab host-side.
 			return {
 				terminalsByWorkspace: { ...s.terminalsByWorkspace, [workspaceId]: [...list, tab] },
-				activeTerminalByWorkspace: { ...s.activeTerminalByWorkspace, [workspaceId]: clientId },
+				activeTerminalByWorkspace: { ...s.activeTerminalByWorkspace, [workspaceId]: tabKey },
 			};
 		}),
-	closeTerminalTab: (workspaceId, clientId) =>
+	/**
+	 * Adopt the host's tab list for a workspace.
+	 *
+	 * Host order and titles win. A tab is kept despite being absent from that list ONLY while its own attach is
+	 * still in flight — that request is what registers it, so dropping it would unmount the very instance about
+	 * to make the call. Any other local tab the host does not list has genuinely gone (another client closed
+	 * it), and preserving it would let its instance re-attach and bring back both the tab and a shell.
+	 */
+	setWorkspaceTerminals: (workspaceId, tabs) =>
 		set((s) => {
-			const list = (s.terminalsByWorkspace[workspaceId] ?? []).filter(
-				(t) => t.clientId !== clientId,
-			);
-			const wasActive = s.activeTerminalByWorkspace[workspaceId] === clientId;
+			const local = s.terminalsByWorkspace[workspaceId] ?? [];
+			const known = new Set(tabs.map((tab) => tab.tabKey));
+			const pending = local.filter((tab) => !known.has(tab.tabKey) && tab.attachPending);
+			const merged: TerminalTab[] = [
+				...tabs.map((tab) => {
+					const existing = local.find((candidate) => candidate.tabKey === tab.tabKey);
+					// Confirmed by the host, so no longer pending whatever this client thought.
+					return {
+						tabKey: tab.tabKey,
+						workspaceId,
+						title: tab.title,
+						...(existing?.initialCommand ? { initialCommand: existing.initialCommand } : {}),
+					};
+				}),
+				...pending,
+			];
+			const active = s.activeTerminalByWorkspace[workspaceId] ?? null;
+			const activeSurvives = merged.some((tab) => tab.tabKey === active);
+			return {
+				terminalsByWorkspace: { ...s.terminalsByWorkspace, [workspaceId]: merged },
+				activeTerminalByWorkspace: {
+					...s.activeTerminalByWorkspace,
+					[workspaceId]: activeSurvives ? active : (merged.at(-1)?.tabKey ?? null),
+				},
+			};
+		}),
+	/** The tab's attach landed: the host knows about it, so it is no longer exempt from an authoritative list. */
+	settleTerminalAttach: (workspaceId, tabKey) =>
+		set((s) => {
+			const list = s.terminalsByWorkspace[workspaceId] ?? [];
+			if (!list.some((t) => t.tabKey === tabKey && t.attachPending)) return s;
+			return {
+				terminalsByWorkspace: {
+					...s.terminalsByWorkspace,
+					[workspaceId]: list.map(({ attachPending, ...rest }) =>
+						rest.tabKey === tabKey
+							? rest
+							: { ...rest, ...(attachPending ? { attachPending } : {}) },
+					),
+				},
+			};
+		}),
+	/**
+	 * Spend a tab's one-shot `initialCommand`, so it can never run a second time.
+	 *
+	 * `created` alone is not enough to gate on: a tab whose shell exited gets a *fresh* one on the next attach,
+	 * which is also `created` — so an "Open in Vim" tab would reopen vim every time the workspace was revisited.
+	 * The intent belongs to the tab's creation, not to any shell behind it.
+	 */
+	consumeTerminalInitialCommand: (workspaceId, tabKey) =>
+		set((s) => {
+			const list = s.terminalsByWorkspace[workspaceId] ?? [];
+			if (!list.some((t) => t.tabKey === tabKey && t.initialCommand)) return s;
+			return {
+				terminalsByWorkspace: {
+					...s.terminalsByWorkspace,
+					[workspaceId]: list.map(({ initialCommand, ...rest }) =>
+						rest.tabKey === tabKey
+							? rest
+							: { ...rest, ...(initialCommand ? { initialCommand } : {}) },
+					),
+				},
+			};
+		}),
+	closeTerminalTab: (workspaceId, tabKey) =>
+		set((s) => {
+			const list = (s.terminalsByWorkspace[workspaceId] ?? []).filter((t) => t.tabKey !== tabKey);
+			const wasActive = s.activeTerminalByWorkspace[workspaceId] === tabKey;
 			return {
 				terminalsByWorkspace: { ...s.terminalsByWorkspace, [workspaceId]: list },
 				activeTerminalByWorkspace: {
 					...s.activeTerminalByWorkspace,
 					[workspaceId]: wasActive
-						? (list.at(-1)?.clientId ?? null)
+						? (list.at(-1)?.tabKey ?? null)
 						: (s.activeTerminalByWorkspace[workspaceId] ?? null),
 				},
 			};
 		}),
-	setActiveTerminalTab: (workspaceId, clientId) =>
+	setActiveTerminalTab: (workspaceId, tabKey) =>
 		set((s) => ({
-			activeTerminalByWorkspace: { ...s.activeTerminalByWorkspace, [workspaceId]: clientId },
+			activeTerminalByWorkspace: { ...s.activeTerminalByWorkspace, [workspaceId]: tabKey },
 		})),
 	openChatSession: (workspaceId, sessionId, model, thinkingLevel, syncedTick) =>
 		set((s) => {
@@ -1640,7 +1736,12 @@ export const useAppStore = create<AppState>((set, get) => ({
 		set({ settingsOpen: true, settingsSection: section }),
 	closeSettings: () => set({ settingsOpen: false }),
 	setSettingsSection: (section) => set({ settingsSection: section }),
-	applyConfig: (config) => set({ theme: config.theme, analyticsEnabled: config.analyticsEnabled }),
+	applyConfig: (config) =>
+		set({
+			theme: config.theme,
+			analyticsEnabled: config.analyticsEnabled,
+			terminalReplayKb: config.terminalReplayKb,
+		}),
 	requestRightTab: (workspaceId, tab) => set({ rightTabRequest: { workspaceId, tab } }),
 	// The path intent and the flip always travel together — one action, so no call site can send half of it.
 	// The nav count is stamped here, at the click, because that is when the user navigated — the panel only
