@@ -72,9 +72,9 @@ test("model picker plus file and portable-skill completion use the live session 
 	// The thinking-level picker is the honest effort knob.
 	await expect(page.getByTestId("thinking-selector")).toBeVisible();
 
-	// Cheap win #3 — the stats bar renders (token/cost) as soon as the session reports stats.
+	// Cheap win #3 — the stats bar renders current context as soon as the session reports stats.
 	await expect(page.getByTestId("session-stats")).toBeVisible();
-	await expect(page.getByTestId("session-stats")).toContainText(/tok/);
+	await expect(page.getByTestId("session-stats")).toContainText(/[?%]\/\d/);
 
 	// The worktree session is authoritative and discovers the fixture's Claude-compatible project alias.
 	const input = page.getByTestId("chat-input");
@@ -107,10 +107,23 @@ test("stats refresh after a turn completes (cheap win #3)", { tag: "@agent" }, a
 	await page.getByTestId("chat-send").click();
 
 	// Key off turn *completion* (the agent_end notice), not model output — the stats refresh hangs off
-	// `agent_end`, and the env's default model may vary. The stats bar stays mounted with token/cost.
+	// `agent_end`, and the env's default model may vary. The stats bar then shows cumulative usage.
 	await expect(
 		page.locator('[data-testid="chat-message"][data-role="system"]').filter({ hasText: "Done" }),
 	).toBeVisible({ timeout: 80_000 });
-	await expect(page.getByTestId("session-stats")).toBeVisible();
-	await expect(page.getByTestId("session-stats")).toContainText(/tok/);
+	const stats = page.getByTestId("session-stats");
+	await expect(stats).toBeVisible();
+	await expect(stats).toContainText(/[↑↓RW]/);
+
+	// Populated usage wraps at field boundaries on a phone instead of pushing the context or Skills out.
+	await page.setViewportSize({ width: 320, height: 720 });
+	const skills = page.getByTestId("open-skills");
+	await expect(skills).toBeVisible();
+	const statsBox = await stats.boundingBox();
+	const skillsBox = await skills.boundingBox();
+	if (!statsBox || !skillsBox) throw new Error("chat header item has no bounding box");
+	for (const box of [statsBox, skillsBox]) {
+		expect(box.x).toBeGreaterThanOrEqual(0);
+		expect(box.x + box.width).toBeLessThanOrEqual(320);
+	}
 });
