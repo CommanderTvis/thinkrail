@@ -13,7 +13,7 @@ import {
 	Trash2,
 	X,
 } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { type MouseEvent, useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
 	ContextMenu,
@@ -534,18 +534,24 @@ function WorkspaceRow({
 	const isExternal = isExternalWorkspace(workspace);
 	const Icon = isDefault ? House : isExternal ? FolderOpen : GitBranch;
 	const [menuOpen, setMenuOpen] = useState(false);
+	const openMenuFromContext = (event: MouseEvent) => {
+		event.preventDefault();
+		setMenuOpen(true);
+	};
 	// A centered dialog, not an anchored popover: the trigger is a generic overflow icon, not a dedicated
 	// delete affordance, so anchoring a confirm box to it the way the old dedicated Remove button did would
 	// read oddly. Opened from the menu item's `onSelect`, `preventDefault`ed so Radix's own close-then-
 	// return-focus-to-trigger doesn't fight the dialog's focus trap opening right behind it.
 	const [confirmOpen, setConfirmOpen] = useState(false);
 	return (
-		<>
-			<div
+		<li>
+			<fieldset
+				aria-label={workspace.name}
 				data-testid="workspace-item"
 				data-active={isActive}
 				data-kind={workspace.kind ?? "worktree"}
-				className={`group flex min-h-7 items-center gap-sm rounded-[var(--radius-sm)] py-xs pr-xs pl-xl transition-colors ${
+				onContextMenu={openMenuFromContext}
+				className={`group flex min-h-7 min-w-0 items-center gap-sm rounded-[var(--radius-sm)] border-0 py-xs pr-xs pl-xl transition-colors ${
 					isActive || menuOpen ? "bg-control-bg-selected" : "hover:bg-control-bg-hovered"
 				}`}
 			>
@@ -638,7 +644,7 @@ function WorkspaceRow({
 						)}
 					</DropdownMenuContent>
 				</DropdownMenu>
-			</div>
+			</fieldset>
 			{!isDefault && (
 				<ConfirmDialog
 					open={confirmOpen}
@@ -670,6 +676,6 @@ function WorkspaceRow({
 					onConfirm={onRemove}
 				/>
 			)}
-		</>
+		</li>
 	);
 }
