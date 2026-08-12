@@ -59,7 +59,6 @@ import {
 	resolveLogin,
 	startLogin,
 } from "../auth";
-import { findOpenBranchReview } from "../branch-review";
 import { selectDirectory } from "../dialog";
 import { listAvailableEditors, openEditor, revealInFileManager } from "../editors";
 import { readDir, readFile } from "../fs";
@@ -303,10 +302,6 @@ const handlers: Record<string, Handler> = {
 		return openExistingWorktree(p.projectId, p.path);
 	},
 	"workspace.list": (params) => listWorkspaces((params as { projectId: string }).projectId),
-	"workspace.openReview": (params) => {
-		const ws = getWorkspace((params as { workspaceId: string }).workspaceId);
-		return findOpenBranchReview(ws.worktreePath, ws.branch);
-	},
 	"workspace.remove": (params) => {
 		const id = (params as { id: string }).id;
 		// Non-blocking archive: drop the record now (gone from `workspace.list` immediately) + the fast

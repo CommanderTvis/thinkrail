@@ -15,7 +15,6 @@ import type {
 	HistorySearchResult,
 	JbcentralConnectResult,
 	LoginReply,
-	OpenBranchReview,
 	Project,
 	ProjectPathStatus,
 	ProviderStatusReport,
@@ -210,8 +209,7 @@ export interface TerminalTabsPush {
 // no longer restore the removed chat.
 // v36: `review.close` atomically archives non-draft records and publishes the fresh open snapshot; clients
 // no longer follow it with an initiating-only `review.get` fold.
-// v37: `workspace.openReview` returns the active branch's optional GitHub PR / GitLab MR number.
-export const PROTOCOL_VERSION = 37;
+export const PROTOCOL_VERSION = 36;
 
 /**
  * The `server.welcome` push payload (the first message on every WS connect). `protocolVersion` lets a
@@ -275,7 +273,6 @@ export const WS_METHODS = {
 	workspaceListExisting: "workspace.listExisting",
 	workspaceOpenExisting: "workspace.openExisting",
 	workspaceList: "workspace.list",
-	workspaceOpenReview: "workspace.openReview",
 	workspaceRemove: "workspace.remove",
 	workspaceDiffStats: "workspace.diffStats",
 	// Per-workspace per-skill enable/disable override (over the project baseline).
@@ -570,10 +567,6 @@ export interface WsMethodMap {
 		result: Workspace;
 	};
 	"workspace.list": { params: { projectId: string }; result: Workspace[] };
-	"workspace.openReview": {
-		params: { workspaceId: string };
-		result: OpenBranchReview | null;
-	};
 	"workspace.remove": { params: { id: string }; result: Ack };
 	"workspace.diffStats": { params: { id: string }; result: DiffStats };
 	// Per-workspace per-skill override over the project baseline; `null` clears it. Echoes the `Workspace`.
