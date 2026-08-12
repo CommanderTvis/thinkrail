@@ -1,4 +1,3 @@
-import { delimiter } from "node:path";
 import { fileURLToPath } from "node:url";
 import { defineConfig, devices } from "@playwright/test";
 import {
@@ -9,7 +8,6 @@ import {
 	E2E_PI_AGENT_DIR,
 	E2E_PICK_DIR_POINTER,
 	E2E_PORT,
-	E2E_WIRE_PROXY_PORT,
 } from "./e2e/fixtures/paths";
 
 const rootDir = fileURLToPath(new URL(".", import.meta.url));
@@ -20,11 +18,6 @@ const staticDir = fileURLToPath(new URL("./apps/web/dist", import.meta.url));
 // (e2e/fixtures/portBlock.ts). Supersedes the manual THINKRAIL_E2E_PORT knob
 // (THINKRAIL_E2E_PORT_BASE pins the whole per-worktree block explicitly when ever needed).
 const PORT = E2E_PORT;
-const isShardLane = process.env.THINKRAIL_E2E_LANE !== undefined;
-const hostCommand =
-	process.env.THINKRAIL_E2E_SKIP_BUILD === "1"
-		? "bun packages/server/src/dev.ts"
-		: "bun run build:web && bun packages/server/src/dev.ts";
 // A stub `central` (JetBrains Central CLI) and `code` (VS Code CLI) on the host's PATH so the JetBrains AI
 // flow and the workspace row's "Open in" are both drivable deterministically — no real CLI, network,
 // JetBrains auth, or editor install. Prepended so each wins over any real install on the dev machine.
@@ -35,9 +28,8 @@ export default defineConfig({
 	// The headless workflow-test suite has its own config (playwright.workflows.config.ts) — no browser,
 	// no webServer; `bun run test:workflows`. Never picked up by the browser suites.
 	testIgnore: "workflows/**",
-	// One worker owns one stateful host. Shard lanes stay serial internally; fullyParallel only lets
-	// Playwright distribute individual tests (rather than uneven whole files) across separate processes.
-	fullyParallel: isShardLane,
+	// Serial: the suite shares one stateful host (one DATA_DIR), so tests must not race on persistence.
+	fullyParallel: false,
 	workers: 1,
 	forbidOnly: !!process.env.CI,
 	retries: process.env.CI ? 1 : 0,
@@ -53,7 +45,7 @@ export default defineConfig({
 	// Self-contained: build the web app, boot the host on an isolated port + state dir, and tear it all
 	// down after. `bun run e2e` needs nothing else running.
 	webServer: {
-		command: hostCommand,
+		command: "bun run build:web && bun packages/server/src/dev.ts",
 		cwd: rootDir,
 		url: `http://localhost:${PORT}/health`,
 		reuseExistingServer: false,
@@ -83,8 +75,8 @@ export default defineConfig({
 			PI_OFFLINE: "1",
 			// Put the stub `central` first on PATH (see fakeBinDir), and pin the proxy port so wiring is
 			// deterministic and never reads the dev machine's real ~/.wire/config.json.
-			PATH: `${fakeBinDir}${delimiter}${process.env.PATH ?? ""}`,
-			WIRE_PROXY_PORT: String(E2E_WIRE_PROXY_PORT),
+			PATH: `${fakeBinDir}:${process.env.PATH ?? ""}`,
+			WIRE_PROXY_PORT: "19516",
 			// Control file the stub `central` reads live to pick its outcome (signed in / not signed in /
 			// error), letting a test drive the JetBrains AI card's non-happy branches without restarting the host.
 			CENTRAL_STUB_STATE: E2E_CENTRAL_STATE,
