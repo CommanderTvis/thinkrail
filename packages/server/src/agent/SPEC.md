@@ -103,7 +103,10 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     is never trusted (blocks disclosure *and* arbitrary-URL injection). The **hydration read side** —
     `listSessions(workspaceId, cwd)` (live sessions
     **unioned with on-disk** ones pi persisted under `cwd`, live winning on id → `SessionSummary[]` tagged
-    `live`) + `getSessionMessages(sessionId, workspaceId, cwd)` (re-opens a disk session into the manager if
+    `live`; before treating that disk list as authoritative it strictly scans every transcript header and
+    verifies pi returned every file, so an unreadable/malformed/skipped file rejects the read rather than
+    masquerading as absent and being tombstoned by reconnect reconciliation) +
+    `getSessionMessages(sessionId, workspaceId, cwd)` (re-opens a disk session into the manager if
     not live, then returns `{ summary, messages }` — `TranscriptMessage[]`: the pi-canonical subset **plus
     `custom` messages**, which carry the `ask-user-answers` replies the questionnaire card pairs by tool
     call id), plus **`ensureSessionAttached(sessionId, workspaceId, cwd)`** — the same single-flighted
@@ -126,11 +129,30 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     healed by the restart repair); `getSessionWorkspaceId(sessionId)` (the live session→workspace
     lookup the host's auto-rename hook keys on); `removeSession`/`disposeAllSessions`;
     **`removeWorkspaceSessions(workspaceId, cwd?)`** (the **archive teardown**: abort a streaming turn,
-    `removeSession` every live session for the workspace, then delete pi's on-disk transcripts rooted at
+    then dispose every live session for the workspace **unconditionally** — bypassing the per-chat delete
+    guard that `removeSession` enforces, so a chat whose recoverable delete is mid-trash cannot abort the
+    teardown loop and strand its siblings — then delete pi's on-disk transcripts rooted at
     the worktree `cwd` — pi's `SessionManager` is append-only, so purge = `list(cwd)` then `rm` the files
     whose recorded `cwd` matches, never `rm -rf` the encoded dir since pi's cwd→dir encoding can alias
     distinct cwds; `cwd` omitted on a double-archive skips only the disk purge);
-    `setSessionPublisher` + `setSessionManagerFactory` seams.
+    **`deleteSession(sessionId, workspaceId, cwd)`** (mark it deleted before any await so an in-flight disk
+    attach cannot register afterward; that tombstone also makes a retained live entry non-addressable to
+    **every session command, including `session.dispose`, for the full delete transaction**, so another
+    client cannot append a turn behind the pending trash move or destroy the rollback target. **The
+    transaction is single-flighted per session id**: a concurrent second trash click (another tab/client)
+    for the same chat joins the running transaction (or is rejected as unknown when a foreign workspace
+    names the id) rather than starting a rival one — two owners of the shared tombstone would let the
+    loser's failure roll it back mid-move and briefly re-open the chat — and **only the transaction that
+    installed the tombstone clears it on failure**, so an earlier successful deletion's permanent tombstone
+    survives a later spurious re-delete. Abort a live turn if needed but retain the live entry, resolve a
+    live transcript from that session's own `SessionManager` (never a lossy directory listing), otherwise
+    use the same strict disk lookup above, move the exact matching-cwd transcript to the OS trash via
+    `trashFile`, then dispose the live entry and publish `SessionDeletedPayload` for client convergence;
+    only an exact trashed file or a successfully established absence counts as deletion. Any lookup or trash
+    failure throws, rolls back the tombstone it installed, restores command access to the same
+    transcript/live entry, and publishes nothing; there is deliberately no permanent-unlink fallback behind
+    a recoverable UI action);
+    `setSessionPublisher` + `setSessionDeletedPublisher` + `setSessionManagerFactory` seams.
   - `oneshot` — one-shot LLM completions **without** an `AgentSession` (no tools/extensions/disk):
     `completeOnce(request)` picks a model from the shared runtime's authenticated set and dispatches a
     single `runtime.completeSimple()` — pi's canonical provider-agnostic request path, which resolves
@@ -233,9 +255,9 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
       compiled binary lacks). The workspace packages' `pi.skills` manifests aren't auto-discovered for
       file-path entries — their `skills/` dirs (`pi-spec-graph`, `pi-thinkrail-workflow`, `pi-todos`) are
       wired via **`additionalSkillPaths`**.
-    - **Compiled binary:** the launcher awaits the **`registerBundledRuntime({ factories, skillsDir })`
-      seam** before the first session — the same bundled extensions as **value-imported default-export
-      factories** (pi gives `extensionFactories` full API parity with path loading; what's lost —
+    - **Compiled binary:** the launcher awaits the **`registerBundledRuntime({ factories, skillsDir,
+      trashHelpers })` seam** before the first session — the same bundled extensions as
+      **value-imported default-export factories** (pi gives `extensionFactories` full API parity with path loading; what's lost —
       file-relative `baseDir`, per-reload re-evaluation — none of them use) plus a staged on-disk
       skills dir (pi reads `SKILL.md` via plain fs, so skills must live on the real filesystem). The
       seam also performs the **binary-only pi registrations**: pi hides Node-only provider code behind
@@ -248,7 +270,14 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
       imports inside the seam** — literal specifiers are statically bundled by `bun build --compile`,
       while dev (which never calls the seam) never loads the flow modules or the AWS SDK. Registration
       lands in the same `pi-ai` instance pi consults at login time because the catalog pins one exact
-      `pi-ai` version repo-wide (one store entry → one bundled module instance).
+      `pi-ai` version repo-wide (one store entry → one bundled module instance). Chat trash has two
+      artifact seams behind the same registration: the wrapper statically installs `@stroncium/procfs`'s
+      `processMountinfo` parser because `trash`'s Linux path reaches it through a binary-opaque
+      template-literal CommonJS `require`; and the launcher stages `trash`'s `macos-trash` /
+      `windows-trash.exe` helpers to real executable paths and injects them as `trashHelpers`, because the
+      package's internal `new URL(…, import.meta.url)` points inside `/$bunfs/` after compilation. The
+      wrapper executes an injected helper on macOS/Windows and otherwise delegates to `trash`; source mode stays on
+      `trash` entirely. No platform degrades to permanent unlink.
     Both modes append `extensionFactories`: a **headless-search policy** (a `tool_call` hook defaulting
     `web_search`'s `workflow` to `"none"`, since pi-web-access would otherwise open a browser curator our
     `rpc` host can't render) **and** `askUserQuestionExtension` (registers the `ask_user_question` tool).
@@ -274,7 +303,9 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
   + `/compat` subpaths, value-imported **only** inside `registerBundledRuntime`'s dynamic imports); `pi-web-access` + `pi-visualize` + `pi-spec-graph` +
   `pi-thinkrail-workflow` + `pi-todos` (the bundled extensions — loaded by path, never value-imported here; the
   compiled binary's value-imports live in `apps/cli`'s generated build module); `typebox` (the
-  `ask_user_question` parameter schema);
+  `ask_user_question` parameter schema); `trash` (the cross-platform OS recycle-bin implementation;
+  called with globbing disabled and allowed to throw — never degraded to `unlink`);
+  `@stroncium/procfs` (directly pinned solely for the compiled Linux trash parser inclusion seam);
   `contracts` (`PiEvent`/`Model`/`ThinkingLevel`/`ImageContent`/`SessionStats`/`SlashCommandInfo`/`ExtUi*`/
   `AskUserQuestion*`/`ProviderStatus*`); `@thinkrail/shared/jbcentral` (the proxy-URL predicate); Node.
 - **Forbidden:** `host`; sibling features (the `cwd` is passed in, not looked up via `persistence`).

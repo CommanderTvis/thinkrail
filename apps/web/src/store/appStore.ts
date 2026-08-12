@@ -520,6 +520,9 @@ function reduceExtUi(
 
 interface AppState {
 	status: ConnectionStatus;
+	/** Monotonic connection-open generation. Advances with every `connected` status so consumers can
+	 * distinguish a reconnect from the previous open socket even though both settle on the same status. */
+	connectionGeneration: number;
 	protocolVersion: number | null;
 	/** Open projects shown in the left rail, newest first. */
 	projects: Project[];
@@ -558,6 +561,9 @@ interface AppState {
 	navTickByWorkspace: Record<string, number>;
 	/** Chat tabs the user closed, per workspace (most-recent-first) — reopenable while their runtime lives. */
 	closedChatsByWorkspace: Record<string, ClosedChat[]>;
+	/** Page-lifetime deletion tombstones. They order async session reads behind `session.deleted`, preventing
+	 * an older list/transcript response from restoring a permanently removed chat. */
+	deletedSessionsByWorkspace: Record<string, Record<string, true>>;
 	/** Terminals are workspace-scoped too; their instances stay mounted (hidden) to preserve buffers. */
 	terminalsByWorkspace: Record<string, TerminalTab[]>;
 	activeTerminalByWorkspace: Record<string, string | null>;
@@ -811,6 +817,18 @@ interface AppState {
 	closeChatRuntime: (sessionId: string) => void;
 	/** Close a chat tab to history: remove the tab but keep its runtime + session alive for reopening. */
 	closeChatToHistory: (sessionId: string) => void;
+	/** Tombstone a server-deleted chat and drop every client-side surface/state bucket in one write. */
+	deleteChat: (workspaceId: string, sessionId: string) => void;
+	/**
+	 * Reconcile a `session.list` result against the local membership captured when that read began. Only
+	 * baseline ids absent from the authoritative result are deleted, so a session created while the read
+	 * was in flight cannot be removed by its older response.
+	 */
+	reconcileWorkspaceSessions: (
+		workspaceId: string,
+		baselineSessionIds: readonly string[],
+		authoritativeSessionIds: readonly string[],
+	) => void;
 	/** Reopen a chat from history (its runtime is still live, so the full transcript returns instantly). */
 	reopenChat: (sessionId: string) => void;
 	/**
@@ -954,6 +972,15 @@ function omitKey<T>(record: Record<string, T>, key: string): Record<string, T> {
 	return rest;
 }
 
+/** Whether this page has already observed permanent deletion of a workspace chat. */
+function isSessionDeleted(
+	state: Pick<AppState, "deletedSessionsByWorkspace">,
+	workspaceId: string,
+	sessionId: string,
+): boolean {
+	return state.deletedSessionsByWorkspace[workspaceId]?.[sessionId] === true;
+}
+
 /**
  * Merge a partial into one diff tab of the **active** workspace — the shared body of every per-tab diff
  * view toggle (layout, rendered, hide-whitespace), so adding a toggle is one line instead of another copy
@@ -1005,6 +1032,67 @@ function sameSpecNode(a: SpecGraphNode, b: SpecGraphNode): boolean {
  */
 function bumpNav(s: AppState, workspaceId: string): Record<string, number> {
 	return { ...s.navTickByWorkspace, [workspaceId]: selectWorkspaceNavTick(s, workspaceId) + 1 };
+}
+
+/**
+ * The immutable chat-deletion fold shared by a direct `session.deleted` event and reconnect membership
+ * reconciliation. Returning the original state makes both paths idempotent without duplicating cleanup.
+ */
+function withoutChat(s: AppState, workspaceId: string, sessionId: string): AppState {
+	const alreadyDeleted = isSessionDeleted(s, workspaceId, sessionId);
+	const tabs = s.tabsByWorkspace[workspaceId] ?? [];
+	const tab = tabs.find(
+		(candidate) => candidate.kind === "chat" && candidate.sessionId === sessionId,
+	);
+	const closed = s.closedChatsByWorkspace[workspaceId] ?? [];
+	const inHistory = closed.some((chat) => chat.sessionId === sessionId);
+	const hasRuntime = s.sessions[sessionId] !== undefined;
+	const hasSkillBaseline = Object.hasOwn(s.skillsSyncedTickBySession, sessionId);
+	const targetsLocation =
+		s.chatLocationRequest?.workspaceId === workspaceId &&
+		s.chatLocationRequest.sessionId === sessionId;
+	if (alreadyDeleted && !tab && !inHistory && !hasRuntime && !hasSkillBaseline && !targetsLocation)
+		return s;
+
+	const remaining = tab ? tabs.filter((candidate) => candidate.id !== tab.id) : tabs;
+	const wasActive = !!tab && s.activeTabByWorkspace[workspaceId] === tab.id;
+	return {
+		...s,
+		...(!alreadyDeleted
+			? {
+					deletedSessionsByWorkspace: {
+						...s.deletedSessionsByWorkspace,
+						[workspaceId]: {
+							...(s.deletedSessionsByWorkspace[workspaceId] ?? {}),
+							[sessionId]: true as const,
+						},
+					},
+				}
+			: {}),
+		...(tab ? { tabsByWorkspace: { ...s.tabsByWorkspace, [workspaceId]: remaining } } : {}),
+		...(wasActive
+			? {
+					activeTabByWorkspace: {
+						...s.activeTabByWorkspace,
+						[workspaceId]: remaining.at(-1)?.id ?? null,
+					},
+					navTickByWorkspace: bumpNav(s, workspaceId),
+				}
+			: {}),
+		...(inHistory
+			? {
+					closedChatsByWorkspace: {
+						...s.closedChatsByWorkspace,
+						[workspaceId]: closed.filter((chat) => chat.sessionId !== sessionId),
+					},
+				}
+			: {}),
+		...(hasRuntime ? { sessions: omitKey(s.sessions, sessionId) } : {}),
+		...(hasSkillBaseline
+			? { skillsSyncedTickBySession: omitKey(s.skillsSyncedTickBySession, sessionId) }
+			: {}),
+		...(targetsLocation ? { chatLocationRequest: null } : {}),
+	};
 }
 
 function sameSpecGraph(prev: SpecGraphNode[] | undefined, next: SpecGraphNode[]): boolean {
@@ -1110,6 +1198,7 @@ function nextTerminalTitle(list: TerminalTab[]): string {
 
 export const useAppStore = create<AppState>((set, get) => ({
 	status: "connecting",
+	connectionGeneration: 0,
 	protocolVersion: null,
 	projects: [],
 	recentProjects: [],
@@ -1121,6 +1210,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	previewTabByWorkspace: {},
 	navTickByWorkspace: {},
 	closedChatsByWorkspace: {},
+	deletedSessionsByWorkspace: {},
 	terminalsByWorkspace: {},
 	activeTerminalByWorkspace: {},
 	sessions: {},
@@ -1148,7 +1238,12 @@ export const useAppStore = create<AppState>((set, get) => ({
 	analyticsEnabled: DEFAULT_CONFIG.analyticsEnabled,
 	terminalReplayKb: DEFAULT_CONFIG.terminalReplayKb,
 	toasts: [],
-	setStatus: (status) => set({ status }),
+	setStatus: (status) =>
+		set((state) => ({
+			status,
+			connectionGeneration:
+				status === "connected" ? state.connectionGeneration + 1 : state.connectionGeneration,
+		})),
 	setWelcome: (protocolVersion) => set({ protocolVersion }),
 	installProjectSnapshot: (projects, recentProjects) =>
 		set((state) => {
@@ -1425,6 +1520,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 				previewTabByWorkspace: omitKey(s.previewTabByWorkspace, workspaceId),
 				navTickByWorkspace: omitKey(s.navTickByWorkspace, workspaceId),
 				closedChatsByWorkspace: omitKey(s.closedChatsByWorkspace, workspaceId),
+				// Deletion tombstones deliberately survive: an older read can still settle after teardown.
 				// Dropping the terminals unmounts their instances, which close the PTYs server-side.
 				terminalsByWorkspace: omitKey(s.terminalsByWorkspace, workspaceId),
 				activeTerminalByWorkspace: omitKey(s.activeTerminalByWorkspace, workspaceId),
@@ -1605,6 +1701,16 @@ export const useAppStore = create<AppState>((set, get) => ({
 				},
 			};
 		}),
+	deleteChat: (workspaceId, sessionId) => set((s) => withoutChat(s, workspaceId, sessionId)),
+	reconcileWorkspaceSessions: (workspaceId, baselineSessionIds, authoritativeSessionIds) =>
+		set((s) => {
+			const authoritative = new Set(authoritativeSessionIds);
+			let next = s;
+			for (const sessionId of baselineSessionIds) {
+				if (!authoritative.has(sessionId)) next = withoutChat(next, workspaceId, sessionId);
+			}
+			return next;
+		}),
 	reopenChat: (sessionId) =>
 		set((s) => {
 			const wsId = s.activeWorkspaceId;
@@ -1637,7 +1743,12 @@ export const useAppStore = create<AppState>((set, get) => ({
 					.filter((t): t is ChatTab => t.kind === "chat")
 					.map((t) => t.sessionId),
 			]);
-			const fresh = entries.filter((e) => !known.has(e.sessionId) && !s.sessions[e.sessionId]);
+			const fresh = entries.filter(
+				(e) =>
+					!isSessionDeleted(s, workspaceId, e.sessionId) &&
+					!known.has(e.sessionId) &&
+					!s.sessions[e.sessionId],
+			);
 			if (fresh.length === 0) return {};
 			return {
 				closedChatsByWorkspace: {
@@ -1649,6 +1760,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 		}),
 	hydrateSession: (summary, hydrated, activate = false, syncedTick) =>
 		set((s) => {
+			if (isSessionDeleted(s, summary.workspaceId, summary.sessionId)) return {};
 			if (s.sessions[summary.sessionId]) return {}; // a live/ahead runtime wins — never clobber it
 			const wsId = summary.workspaceId;
 			const runtime: SessionRuntime = {

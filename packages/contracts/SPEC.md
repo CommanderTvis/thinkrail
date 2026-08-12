@@ -242,7 +242,7 @@ of the host.
   per-skill `decision` + `group` — for a `workspaceId`) / **`project.skills`** (the same, project-scoped, for
   the pre-session manager) / **`session.reloadResources`** (re-scan skills + rebuild the system prompt for one
   running session; rejected while streaming) /
-  `session.*` — `create`/`prompt`/`steer`/`followUp`/`abort`/`dispose`/`setModel`/
+  `session.*` — `create`/`prompt`/`steer`/`followUp`/`abort`/`dispose`/**`delete`**/`setModel`/
   `setThinkingLevel`/`compact`/`getStats`/`getCommands`/`extUiReply`/**`answerQuestion`** (the inline
   `ask_user_question` reply, correlated by tool call id)/**`list`**/**`getMessages`** (the
   read side) / **`settings.update`** (merge + persist a partial `AppConfig`, returns the merged
@@ -263,7 +263,9 @@ of the host.
   since review state and pi transcripts both outlive the host — so it must be HYDRATED, not opened as
   new; opening it as new shows a blank conversation for comments already marked sent / **`fileDone`**
   (mark a fully-resolved file's review finished; rejected while anything is unresolved — a new
-  comment re-opens the file) / **`close`** — plus
+  comment re-opens the file) / **`close`** (the atomic Clear: archive the current review's non-draft
+  records, discard drafts, replace the active review, and publish the fresh open snapshot to every client)
+  — plus
   **`template.*`** — prompt-template CRUD
   (**`template.list`**, **`template.get`**
   — `scope` optional, project wins over global, **`template.save`**, **`template.delete`**) — all
@@ -272,6 +274,8 @@ of the host.
   (open records) and **`recentProjects`** (all known records, open + closed) / **`project.updated`** — the
   full persisted `Project` snapshot after open/reopen/close, including `closed` membership, so every client
   atomically converges its rail + Recents without optimistic removal / `pi.event` / `pi.extensionUi` /
+  **`session.deleted`** (workspace + session id; a non-replayable domain event broadcast after permanent
+  deletion so every client removes the chat and blocks stale hydration) /
   **`settings.changed`** (the full `AppConfig`, broadcast so every client
   converges) / **`provider.login`** — the session-less in-app login stream (a `LoginPush`
   per frame, keyed by `loginId`; the sibling of `pi.extensionUi`, since a login runs on the Welcome screen

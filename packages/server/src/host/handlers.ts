@@ -24,6 +24,7 @@ import {
 	clampThinkingForModel,
 	compactSession,
 	createSession,
+	deleteSession,
 	ensureSessionAttached,
 	followUpSession,
 	getDefaultModel,
@@ -78,7 +79,7 @@ import {
 import {
 	addComment,
 	buildSendPackage,
-	closeReview,
+	clearReview,
 	deleteComment,
 	fileReviewSession,
 	getReviewSnapshot,
@@ -568,6 +569,11 @@ const handlers: Record<string, Handler> = {
 		removeSession((params as { sessionId: string }).sessionId);
 		return { ok: true } as const;
 	},
+	"session.delete": async (params) => {
+		const p = params as { workspaceId: string; sessionId: string };
+		await deleteSession(p.sessionId, p.workspaceId, getWorkspace(p.workspaceId).worktreePath);
+		return { ok: true } as const;
+	},
 	"session.setModel": async (params) => {
 		const p = params as { sessionId: string; model: WireModel };
 		await setSessionModel(p.sessionId, p.model);
@@ -741,7 +747,7 @@ const handlers: Record<string, Handler> = {
 	"review.close": (params) => {
 		const p = params as { workspaceId: string };
 		return withReviewLock(p.workspaceId, async () => {
-			closeReview(p.workspaceId);
+			clearReview(p.workspaceId);
 			return { ok: true } as const;
 		});
 	},
