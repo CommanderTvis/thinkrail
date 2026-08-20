@@ -823,7 +823,7 @@ export function AskUserQuestionCard({
 									data-ask-page-focus={onReview && canSubmit ? "true" : undefined}
 									onClick={() => reply({ answers, cancelled: false })}
 									disabled={!canSubmit}
-									className="shrink-0 whitespace-nowrap rounded-[var(--radius-sm)] bg-control-primary-bg px-md py-1.5 tr-text-action text-control-primary-text outline-none hover:bg-control-primary-bg-hovered focus-visible:ring-2 focus-visible:ring-primary-soft disabled:cursor-not-allowed disabled:bg-control-disabled-bg disabled:text-control-disabled-text"
+									className="shrink-0 whitespace-nowrap rounded-[var(--radius-sm)] bg-control-primary-bg px-md py-1.5 tr-text-action text-control-primary-text outline-none hover:bg-control-primary-bg-hovered focus-visible:ring-2 focus-visible:ring-primary-soft disabled:cursor-not-allowed disabled:bg-control-primary-disabled-bg disabled:text-control-primary-disabled-text"
 								>
 									Submit
 								</button>
@@ -1200,7 +1200,7 @@ function QuestionBody({
 										event.preventDefault();
 										finishNote(noteIndex);
 									}}
-									className="w-full resize-none rounded-[var(--radius-sm)] border border-control-border-default bg-control-bg px-sm py-xs text-text-default tr-text-metadata outline-none focus-visible:border-control-border-active focus-visible:ring-2 focus-visible:ring-primary-soft"
+									className="w-full resize-none rounded-[var(--radius-sm)] border border-control-border-default bg-control-bg px-sm py-xs text-text-default tr-text-metadata outline-none focus-visible:border-control-border-active"
 								/>
 							) : (
 								<button

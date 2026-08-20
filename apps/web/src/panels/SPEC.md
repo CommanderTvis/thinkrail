@@ -106,7 +106,11 @@ arrangement (so the mobile shell is an additive layer, not a rewrite).
   `MonacoDiff`), plus lazy `TerminalInstance`. The Monaco plumbing both editors share —
   worker wiring, the local loader, the token-driven `thinkrail` theme + the `[data-theme]` re-theme
   observer — lives once in `monacoSetup.ts`; the slim header view-toggle segment (`Preview|Source`,
-  `Split|Inline`, `List|Tree`) is the shared `ToggleSegment`. The **file-style tree row** (chevron/spacer
+  `Split|Inline`, `List|Tree`) is the shared `ToggleSegment` — whose active segment reuses the tab
+  grammar's `control-bg-selected` (below), never a container surface, so the selected fill survives the
+  high-contrast themes where `container-elevated-bg` collapses onto the toolbar surface.
+  The `ChangesPanel` secondary toolbar paints **no surface of its own**: like the right-panel tab strip
+  it shows the panel's `container-sidebar-bg`, so the two chrome rows read as one continuous surface. The **file-style tree row** (chevron/spacer
   lead, folder/file icon, truncated label, trailing slot; `min-w-0` so a row can shrink when it shares a
   flex line with a trailing control) is the shared **`TreeRow`**, used by both
   `FileTree` and `ChangesTree` so the two trees stay identical. Both trees **compact a single-directory
@@ -435,10 +439,17 @@ a project picker, the prompt hero, and the reused
 ## Get right
 
 - **Workbench tab chrome is not a feature panel.** The shell layout module supplies one selected-tab
-  grammar to every group: semantic selected/hover/focus tokens, a shape cue at the content edge, bounded
-  one-row overflow, and the complete WAI-ARIA tabs pattern with roving focus and labelled tabpanels. Panel
-  renderers provide title/icon/status/close metadata and fill the selected tabpanel; they never read group
-  order or draw their own docking strip.
+  grammar to every group: `control-bg-selected` behind the whole selectable tab, `text-default`, and a
+  **2px `primary` marker spanning the tab's full width** on the bottom edge (`after:inset-x-0`, flush
+  with the selected fill — no horizontal inset). Inactive tabs stay transparent with muted text; hover
+  uses `control-bg-hovered`; keyboard focus keeps its separate focus ring. The marker is a shape cue, not
+  merely a text-colour change, so selection remains obvious when a high-contrast theme makes neighbouring
+  surfaces equal. The grammar also supplies bounded one-row overflow and the complete WAI-ARIA tabs
+  pattern with roving focus and labelled tabpanels. Panel renderers provide title/icon/status/close
+  metadata and fill the selected tabpanel; they never read group order or draw their own docking strip.
+  The shared `ToggleSegment` (List|Tree, Split|Inline, Preview|Source) borrows the same
+  `control-bg-selected` fill + `text-default` for its active segment (no bottom marker — a slim toggle,
+  not a tab), so "selected" reads the same everywhere and never derives a parallel surface token.
 - The singleton side-tool renderers are **Projects | Specs | All files | Changes | Review**. Their current
   location and local selection are supplied by the shell; Review exposes its store-derived pending-draft
   count as tab metadata. A renderer remains the same when its singleton moves to the opposite side.
@@ -957,7 +968,22 @@ a project picker, the prompt hero, and the reused
   genuinely live frames; replies xterm synthesizes for recorded terminal queries can therefore never enter the
   live shell. PTY sizing distinguishes desired, in-flight, and
   host-acknowledged grids; only a successful `terminal.resize` advances the acknowledgement, so reconnect
-  replay cannot leave a full-screen app permanently sized to a request the host never applied.
+  replay cannot leave a full-screen app permanently sized to a request the host never applied. The 16 ANSI
+  slots come from the theme's `--ansi-*` domain palette (never the semantic UI text tokens); on top of it
+  xterm runs a **`minimumContrastRatio` legibility floor** driven by the theme's contrast metadata (normal
+  `4.5`, high `7`, in `panels/terminalContrast.ts`). xterm's default of `1` disables correction, which
+  left colours close to the terminal background (`black` on the near-black dark canvas) with no floor; the
+  ratio lifts the resolved foreground against the live background without editing the palette — all 16 HC
+  ANSI colours render ≥ 7:1 with hue preserved. The floor **cannot** fix ANSI **dim** (SGR 2): xterm renders
+  dim as the foreground at 50% opacity, correction never fires for the already-high-contrast default
+  foreground (Vite's `(client)` tag is dim over the *default foreground*, not an ansi colour), and 50%
+  over a light canvas caps ≈ 3.3:1. So in **high-contrast themes the dim attribute is stripped from
+  terminal output** (`stripAnsiDim`), rendering that text at full foreground contrast (≥ AA). The
+  `terminalContrast.test.ts` gate reproduces xterm's colour maths to hold both HC themes at the threshold. The **12px
+  content inset** lives on the xterm **mount host's own box** (absolutely positioned, `inset-md` on every
+  side) rather than as padding on it — FitAddon derives cols/rows from that host's measured size, so
+  padding would overcount the grid and clip the last row/column; insetting the box keeps the measured
+  area equal to the visible content area.
 - Heavy deps (Monaco / shiki / xterm) load via `React.lazy(() => import())` to stay out of the eager bundle.
   A lazy chunk that fails to load (or a render throw) is contained by the `components/ErrorBoundary` the
   **shell** wraps each region in (see `shell/SPEC.md`), so a single panel degrades instead of blanking the

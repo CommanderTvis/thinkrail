@@ -858,7 +858,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 							aria-label={isStreaming ? "Steer" : "Send"}
 							onClick={() => submit(isStreaming ? "steer" : "send")}
 							disabled={!value.trim() && images.length === 0}
-							className="flex size-8 shrink-0 items-center justify-center rounded-[var(--radius-sm)] bg-control-primary-bg text-control-primary-text hover:bg-control-primary-bg-hovered disabled:pointer-events-none disabled:bg-control-disabled-bg disabled:text-control-disabled-text"
+							className="flex size-8 shrink-0 items-center justify-center rounded-[var(--radius-sm)] bg-control-primary-bg text-control-primary-text hover:bg-control-primary-bg-hovered disabled:pointer-events-none disabled:bg-control-primary-disabled-bg disabled:text-control-primary-disabled-text"
 						>
 							<ArrowUp className="size-4" />
 						</button>
