@@ -268,8 +268,12 @@ test("a compaction summary becomes its own turn without claiming a jump anchor",
 
 	expect(turns.map((t) => t.kind)).toEqual(["user", "compaction", "assistant"]);
 	const compaction = turns[1];
-	expect(compaction?.kind === "compaction" && compaction.summary).toBe("## Goal\nship it");
-	expect(compaction?.kind === "compaction" && compaction.tokensBefore).toBe(148_000);
+	expect(compaction).toMatchObject({
+		kind: "compaction",
+		status: "done",
+		summary: "## Goal\nship it",
+		tokensBefore: 148_000,
+	});
 	// The slot is consumed but unanchored — history search indexes user/assistant text only.
 	expect(turnIdByMessageIndex).toEqual([turns[0]?.id ?? null, null, turns[2]?.id ?? null]);
 });

@@ -231,7 +231,9 @@ export interface TerminalTabsPush {
 // v43: configured Central status reports the closed proxy-stopped observation and exposes Start proxy.
 // v44: `workspace.list.includeDiffStats` can skip only the synchronous per-workspace diff-stat fan-out while
 // preserving complete authoritative membership/order for cold client-local navigation restoration.
-export const PROTOCOL_VERSION = 44;
+// v45: `compaction_end.result` is a host-projected allowlist containing only token counts; pi's summary,
+// entry id, usage, and extension details never cross in the live event.
+export const PROTOCOL_VERSION = 45;
 
 /**
  * The `server.welcome` push payload (the first message on every WS connect). `protocolVersion` lets a

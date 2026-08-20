@@ -94,12 +94,14 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     with a per-session `SessionManager` **and a `buildSessionSettings(cwd)` settings manager** (the user's
     real settings + an in-memory `images.autoResize:false` override — never persisted — so the `read` tool
     sends image files **raw**, bypassing pi's photon/WASM resizer that the single-file binary can't bundle;
-    the web UI downsizes user-attached images itself); a shared `registerSession` forwards each event
+    the web UI downsizes user-attached images itself); a shared `registerSession` publishes each event
     tagged with its id + `bindExtensions({ mode:'rpc', uiContext })`. The event projection retains the
     final `agent_end` assistant's reported terminal metadata and attaches it to `agent_settled`, so the
     wire has one authoritative automatic-work terminal even when compaction/retry happens between those
-    events; it forwards rather than re-derives pi's result. The live entry retains that settlement in
-    `SessionSummary.lastSettlement` for reconnect after Pi removed a failed attempt from its rebuilt
+    events; it forwards rather than re-derives pi's result. A `compaction_end` is separately projected to
+    a **fresh allowlisted event**: its `result` carries only `tokensBefore` and optional
+    `estimatedTokensAfter`, never pi's summary, entry id, usage, or extension details. The live entry retains
+    that settlement in `SessionSummary.lastSettlement` for reconnect after Pi removed a failed attempt from its rebuilt
     context; a new `agent_start` exposes explicit `null` (no current terminal) so an older persisted failure
     cannot reappear mid-run, while disk sessions remain transcript-authoritative.
     New-session and pre-session entrypoints capture the current generation; operations on a live session use
@@ -140,11 +142,11 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     configured default—then returns `{ summary, messages }` —
     `TranscriptMessage[]`: the pi-canonical subset **plus
     `custom` messages**, which carry the `ask-user-answers` replies the questionnaire card pairs by tool
-    call id, **plus `compactionSummary`**, pi's marker for the messages compaction summarized away — kept
-    precisely because pi's resolved transcript is all that survives, so dropping it would hand the client
-    a chat that starts mid-conversation with nothing to explain the gap. Which roles those are is **not
-    decided here**: the filter is contracts' `isTranscriptMessageRole`, shared with `history`'s index so the
-    two cannot drift and shift `messageIndex`), plus **`ensureSessionAttached(sessionId, workspaceId, cwd)`** — the same single-flighted
+    call id, **plus `compactionSummary`**, pi's durable marker for the messages compaction summarized away —
+    kept precisely because pi's resolved transcript is all that survives, so dropping it would hand the
+    client a chat that starts mid-conversation with nothing to explain the gap. Which roles those are is
+    **not decided here**: the filter is contracts' `isTranscriptMessageRole`, shared with `history`'s index
+    so the two cannot drift and shift `messageIndex`), plus **`ensureSessionAttached(sessionId, workspaceId, cwd)`** — the same single-flighted
     re-open with no transcript read, for a caller that only needs the session *promptable* again (the
     review send's follow-up into an existing chat). It answers **`false` only when the id names no transcript
     in that cwd** — the sole case a caller may recover from by starting a new chat — and **throws** on

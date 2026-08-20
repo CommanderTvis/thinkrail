@@ -18,14 +18,10 @@ export type ChatTurn =
 	| { kind: "user"; id: string; message: UserMessage }
 	| { kind: "assistant"; id: string; message: AssistantMessage; streaming: boolean }
 	| { kind: "system"; id: string; text: string; endedAt?: number }
+	/** The live or hydrated compaction record (see SPEC §Rendering model). */
+	| ({ kind: "compaction"; id: string } & CompactionState)
 	/** A failure notice: the run ended in an error, or the host rejected a send. `text` is the reason. */
 	| { kind: "error"; id: string; text: string }
-	/**
-	 * Where compaction replaced earlier messages with `summary` (pi's `compactionSummary`). Hydration-only:
-	 * a live transcript still holds every message it streamed, so there is no gap to mark until a reload
-	 * rebuilds the chat from what pi kept.
-	 */
-	| { kind: "compaction"; id: string; summary: string; tokensBefore: number }
 	/**
 	 * A live retry countdown (shown during the back-off, cleared when the retry resolves). `source`
 	 * separates the two flows that can overlap — a `turn` retry (pi `auto_retry_*`) and a `summarization`
@@ -40,6 +36,18 @@ export type ChatTurn =
 			maxAttempts: number;
 			delayMs: number;
 	  };
+
+/** One compaction's visible state: `running` → `done` (`resuming` when pi retries the run) /
+ * `failed` (`detail` = the error) / `cancelled`. */
+export interface CompactionState {
+	status: "running" | "done" | "failed" | "cancelled";
+	detail?: string;
+	/** Pi's durable summary of replaced messages. Present only when hydrating a compaction record. */
+	summary?: string;
+	tokensBefore?: number;
+	tokensAfter?: number;
+	resuming?: boolean;
+}
 
 export type ToolStatus = "running" | "done" | "error";
 

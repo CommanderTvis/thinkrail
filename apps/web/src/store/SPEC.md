@@ -160,8 +160,18 @@ snapshots plus device-local attention, terminal catalogs, and one **per-session 
   through **`reduceSessionEvent`** at `agent_settled`, using the host-projected final terminal metadata:
   `stopReason: "error"` carries Pi's `errorMessage`, and `stopReason: "length"` becomes an actionable
   truncation error — neither may become "✓ Done". `agent_end` is attempt-level and never clears
-  `isStreaming`; settlement alone finishes retries, compaction, and queued continuations. Closed
-  chats are reopenable: the workbench close command first publishes the shared placement removal and only
+  `isStreaming`; settlement alone finishes retries, compaction, and queued continuations. The
+  **compaction lifecycle is a first-class turn**: `compaction_start` appends a `compaction` turn
+  (`running`), `compaction_end` settles the trailing running one in place (success → `done` +
+  tokens-before/after from the typed `CompactionEndResult`, guarded — wire data is untrusted; `aborted`
+  → `cancelled`; `errorMessage` → `failed` carrying the message, e.g. pi's one-shot overflow-recovery
+  cap — a failed compaction must be visible, never swallowed) or appends the settled turn when no
+  running one exists (reconnect mid-compaction). A successful `compaction_end` with `willRetry: true`
+  additionally marks the turn `resuming` (pi continues the same run; settlement clears the flag — a
+  settled transcript never claims ongoing work) and still removes the superseded assistant attempt. The
+  reducer relies on pi's guarantee that every emitted `compaction_start` is paired with a
+  `compaction_end` (both success and failure paths emit it), the same trust every other event pair gets.
+  Closed chats are reopenable: the workbench close command first publishes the shared placement removal and only
   after host acceptance invokes **`closeChatToHistory`**, which **keeps the runtime + session alive** and
   records it in **`closedChatsByWorkspace`** (`ClosedChat[]`, per workspace, most-recent-first) and clears
   any pending jump/history-open request for that session. File, diff, and registered-document render caches

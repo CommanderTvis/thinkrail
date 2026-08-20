@@ -18,7 +18,6 @@ import type {
 	AskUserQuestionResult,
 	ImageContent,
 	Model,
-	PiEvent,
 	RefreshedModels,
 	SessionDeletedPayload,
 	SessionEventPayload,
@@ -39,6 +38,7 @@ import {
 	refreshCatalogs,
 	settledAvailableModels,
 } from "./piRuntime";
+import { projectSessionEvent } from "./sessionEventProjection";
 import { repairDanglingToolCalls } from "./sessionRepair";
 import type { SkillAdmissionContext } from "./skillAdmission";
 import { trashFile } from "./trash";
@@ -276,8 +276,7 @@ async function prepareSessionEntry(
 					}
 				: null;
 		}
-		const projected: PiEvent =
-			event.type === "agent_settled" ? { type: "agent_settled", terminal } : (event as PiEvent);
+		const projected = projectSessionEvent(event, terminal);
 		if (event.type === "agent_settled") entry.lastSettlement = terminal;
 		if (sessions.get(sessionId) === entry) publish({ sessionId, event: projected });
 		if (event.type === "agent_settled") terminal = null;
@@ -654,7 +653,7 @@ async function getSessionMessagesInternal(
 	// Which roles travel is the wire's policy, not this function's: `history`'s search index counts
 	// positions by the same guard, and a set restated here could drift from it by one role and shift every
 	// later jump anchor (see `isTranscriptMessageRole`). `custom` carries the ask-user-answers pairing;
-	// `compactionSummary` is pi's marker for what compaction summarized away.
+	// `compactionSummary` is pi's durable marker for what compaction summarized away.
 	const messages = entry.session.messages.filter((m) =>
 		isTranscriptMessageRole(m.role),
 	) as TranscriptMessage[];

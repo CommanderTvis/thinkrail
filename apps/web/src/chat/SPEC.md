@@ -22,16 +22,13 @@ a future `packages/chat-ui`). Built-in tool renderers live in the child
 ## Rendering model — rows and progressive disclosure
 
 The transcript is pi-canonical turns (`ChatTurn` in `types.ts`: user/assistant are pi messages; `system`,
-`error`, `retry` are web-local notices; `compaction` marks where pi replaced earlier messages with a
-summary — hydration-only, since a live transcript still holds everything it streamed), but the list renders
-**derived rows, not raw turns** — folding
+`error`, `retry` are web-local notices; `compaction` carries both the live lifecycle and the durable summary
+record pi leaves where it replaced earlier messages), but the list renders **derived rows, not raw turns** — folding
 spans assistant-message boundaries (pi emits one assistant message per tool round), so a per-turn item
 model can't group. The pure **`deriveRows(turns, toolResults, isStreaming, isSpec?)`** (`rows.ts`) walks
 blocks in order into rows; `ChatTurnView` dispatches on row kind:
 
-- `user` / `system` / `retry` / `compaction` — 1:1 renderers (`CompactionTurn` is a labelled rule that
-  opens pi's summary on click, so a reloaded long chat explains its gap instead of starting mid-conversation).
-  A user message that is Pi's canonical expanded skill block (`<skill name="…" location="…">`) renders
+- `user` / `system` / `retry` — 1:1 renderers. A user message that is Pi's canonical expanded skill block (`<skill name="…" location="…">`) renders
   as one **collapsed skill-invocation card** rather than exposing the full `SKILL.md`: the skill name is
   always visible, any request supplied after `/skill:<name>` stays visible as ordinary user text beneath
   it, and disclosure reveals the exact persisted instructions as Markdown. Parsing comes from `lib`'s
@@ -56,6 +53,15 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   a failed turn can't look like nothing happened. Live settlement and transcript hydration share the
   same assistant-failure classifier, so reload cannot turn the latest unresolved failure into success;
   recovered historical `length` attempts followed by later work are not re-labeled as current failures.
+- `compaction` — a 1:1, fold-breaking row with two sources. Live `compaction_start` / `compaction_end`
+  events produce `CompactionNotice` (see the store SPEC): running "Compacting context…" (spinner), done
+  "Context compacted" (+ "— resuming…" while pi's overflow retry continues the run, + tokens before→after
+  when the result carried them), failed with the actionable error text, or cancelled as a muted notice.
+  These states are assertable via `data-testid="compaction-notice"` +
+  `data-status="running|done|failed|cancelled"`. Hydration turns the persisted `compactionSummary` into the
+  same `compaction` state (`done`) at its canonical position, plus the durable `summary`; that richer record
+  renders as `CompactionTurn`, a labelled rule whose summary opens on click (`data-testid="chat-compaction"`).
+  Thus a live run exposes every beat, while reload preserves main's explanation of the messages pi replaced.
 - `markdown` — a non-empty assistant text block (react-markdown + remark-gfm + shiki). A fenced
   ```mermaid block renders as a themed diagram via `tools/visualize`'s `MermaidView` (fullscreen
   pan-zoom, error → source fallback) — uniform across every `Markdown` surface (chat, file/specs
@@ -646,8 +652,11 @@ indexed by `toolCallId` in `toolResults`; `ask-user-answers` custom messages ind
 the per-message `streaming` flag on new-message start and the final `agent_settled` (at most one turn is
 ever flagged). The session remains live across attempt-level `agent_end` events. The loader
 is a **single footer** (`StreamIndicator`: typing-dots + a phase label from the pure `streamStatus`
-deriver — `working` → `thinking` → `running-tool` → `writing`) — not a per-turn cursor — so it can't
-duplicate and it fills the post-send gap. The activity fold's live ticker is a *status* line (spinner,
+deriver — `working` → `thinking` → `running-tool` → `writing`, plus `compacting` while the transcript's
+trailing turn is a running compaction) — not a per-turn cursor — so it can't
+duplicate and it fills the post-send gap. Outside the streaming window (a manual compact, or the
+pre-prompt compaction pi runs inside `prompt()` before `agent_start`) the footer is absent by design —
+the running `CompactionNotice` row itself carries the spinner, so the beat is never dead air. The activity fold's live ticker is a *status* line (spinner,
 like a running card header), not a second loader. `data-testid="stream-indicator"` + `data-phase` make
 the lifecycle assertable.
 
