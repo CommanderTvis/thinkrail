@@ -32,7 +32,13 @@ import { create } from "zustand";
 import type { LoginState } from "../auth";
 import { assistantFailureText } from "../chat/assistantFailure";
 import type { HydratedRuntime } from "../chat/hydrate";
-import type { ChatTurn, CompactionState, ExtUiDialogRequest, ToolResultState } from "../chat/types";
+import type {
+	ChatAttachment,
+	ChatTurn,
+	CompactionState,
+	ExtUiDialogRequest,
+	ToolResultState,
+} from "../chat/types";
 import {
 	type LayoutAttention,
 	layoutResourceIdentity,
@@ -664,10 +670,24 @@ export function reduceSessionEvent(rt: SessionRuntime, event: PiEvent): SessionR
 				: { ...rt, turns: settled };
 		}
 		case "auto_retry_start":
+			// pi's `_prepareRetry` trims the failed attempt's assistant message from the LIVE context before
+			// re-running the turn (the retry re-streams it as a brand-new message) — while KEEPING it in the
+			// session file for history. Mirror the trim (same superseded-attempt rule as the overflow-
+			// compaction path above), or the client renders the reply twice: the frozen failed partial plus
+			// the retried copy. Hydration applies the same presentation rule to the persisted copy
+			// (`chat/hydrate.ts` `isRetriedAttempt`), so live and reloaded clients agree.
 			// Show a live countdown over the back-off; cleared on auto_retry_end (or final settlement).
 			// Replace-or-append per source: the event fires once per attempt, and the two retry flows
 			// (turn vs summarization) may overlap — each keeps exactly one indicator.
-			return appendRetryTurn(rt, "turn", event);
+			return appendRetryTurn(
+				{
+					...rt,
+					turns: removeSupersededAssistant(rt.turns, rt.attemptAssistantId),
+					attemptAssistantId: null,
+				},
+				"turn",
+				event,
+			);
 		case "auto_retry_end":
 			// The retry resolved → normal streaming/answer rendering replaces the indicator.
 			return clearRetryTurns(rt, "turn");
@@ -1124,7 +1144,7 @@ interface AppState {
 		syncedTick?: number,
 		options?: LayoutOpenOptions,
 	) => void;
-	appendUserMessage: (sessionId: string, text: string) => void;
+	appendUserMessage: (sessionId: string, text: string, attachments?: ChatAttachment[]) => void;
 	/**
 	 * Surface a failed send as a visible error turn. The turn-driving wire calls (`session.prompt`/`steer`/
 	 * `followUp`/`create`) can reject before any pi event streams — e.g. `prompt()` throws "no API key" /
@@ -2908,7 +2928,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 					: s.closedChatsByWorkspace,
 			};
 		}),
-	appendUserMessage: (sessionId, text) =>
+	appendUserMessage: (sessionId, text, attachments) =>
 		set((s) =>
 			withRuntime(s, sessionId, (rt) => ({
 				...rt,
@@ -2917,7 +2937,24 @@ export const useAppStore = create<AppState>((set, get) => ({
 					{
 						kind: "user",
 						id: crypto.randomUUID(),
-						message: { role: "user", content: text, timestamp: Date.now() },
+						message: {
+							role: "user",
+							// Mirror pi's own persisted shape: plain string when text-only, content blocks
+							// when images ride along — so the optimistic echo renders like a re-fetch would.
+							content:
+								attachments && attachments.length > 0
+									? [
+											...(text ? [{ type: "text" as const, text }] : []),
+											...attachments.map((a) => a.content),
+										]
+									: text,
+							timestamp: Date.now(),
+						},
+						// pi's ImageContent has no filename, so the picked names live on the echo turn only —
+						// a hydrated (re-fetched) turn falls back to mime-type chips.
+						...(attachments && attachments.length > 0
+							? { attachmentNames: attachments.map((a) => a.name) }
+							: {}),
 					},
 				],
 			})),

@@ -744,6 +744,68 @@ export function isControlMessage(text: string): boolean {
 	return text.startsWith(TODO_NUDGE_PREFIX);
 }
 
+/**
+ * The provider's per-image payload ceiling, measured in ENCODED base64 bytes: pi's own resizer caps
+ * `Buffer.byteLength(base64)` at 4.5MB as headroom below Anthropic's 5MB API limit — the wire carries
+ * base64, which inflates raw bytes by 4/3, so an image whose *decoded* size looks fine can still
+ * overflow the request. Shared contract: the web composer re-encodes an attachment down under it at
+ * attach time, and the host's `imageGuard` strips any historical image block still over it
+ * (self-healing a session poisoned before the composer-side fix, or via another route). Both layers
+ * compare `data.length` directly — base64 is ASCII, so string length IS the encoded byte length.
+ */
+export const IMAGE_MAX_BASE64_BYTES = 4.5 * 1024 * 1024;
+
+/**
+ * Encoded base64 length of a payload of `byteLength` raw bytes (4 chars per 3-byte quantum, padded):
+ * the composer's raw pass-through path sizes a File against IMAGE_MAX_BASE64_BYTES with this same
+ * reading before it ever encodes.
+ */
+export function base64EncodedLength(byteLength: number): number {
+	return Math.ceil(byteLength / 3) * 4;
+}
+
+/**
+ * The image media types the provider accepts verbatim. pi forwards an attachment's media type as-is,
+ * so anything else (BMP, AVIF, HEIC…) 400s the request outright — and once persisted, every later
+ * turn. Shared contract: the composer re-encodes (or refuses) anything outside this set at attach
+ * time, and the host's `imageGuard` strips legacy blocks that predate that rule.
+ */
+export const ACCEPTED_IMAGE_TYPES: readonly string[] = [
+	"image/png",
+	"image/jpeg",
+	"image/gif",
+	"image/webp",
+];
+
+/**
+ * The request-wide budget for encoded image payload, in base64 bytes. Anthropic caps a whole Messages
+ * request at 32MB, and history is re-sent every turn — several images each under the per-image ceiling
+ * can still push the request past the limit *permanently*. 24MB keeps ~25% headroom for text, tool
+ * results, and JSON framing. Shared contract: the composer bounds one message's batch at attach time,
+ * and the host's `imageGuard` strips history largest-first until the whole request fits.
+ */
+export const REQUEST_IMAGE_BASE64_BUDGET = 24 * 1024 * 1024;
+
+/**
+ * True when the message at `index` is a superseded auto-retry attempt: an assistant message that ended
+ * in `stopReason: "error"` with the retried assistant message *immediately* following — exactly the
+ * shape pi's `_prepareRetry` produces (it trims the failed attempt from the live context and re-runs
+ * the turn straight away, so nothing can land between the two). pi's
+ * `_prepareRetry` persists the failed attempt ("keep in session for history") while trimming it from
+ * the live context, so every presenter of the persisted transcript needs the same reading — the
+ * client's hydration hides its turn, and the host's history indexer must not surface its text as a
+ * searchable/jumpable hit (its jump anchor is null). A failed attempt followed by a user message (or
+ * nothing) is the run's terminal failure and stays visible. Ambiguity resolves toward showing.
+ */
+export function isRetriedAttempt(
+	messages: readonly { role: string; stopReason?: string }[],
+	index: number,
+): boolean {
+	const message = messages[index];
+	if (message?.role !== "assistant" || message.stopReason !== "error") return false;
+	return messages[index + 1]?.role === "assistant";
+}
+
 /** History-search scope — the overlay's cycle: this chat → workspace → project → everywhere. */
 export type HistoryScope =
 	| { kind: "chat"; sessionId: string }

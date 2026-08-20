@@ -163,7 +163,13 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   persisted transcript so a reconnecting/second client renders identically to the live path (same `raw`
   result shape). When supplied, the live summary's `lastSettlement` is authoritative; otherwise only the
   final conversational assistant can synthesize an error/length turn. Compacted historical length attempts
-  followed by later messages remain history, not a stale current warning. It also
+  followed by later messages remain history, not a stale current warning. One retry-presentation rule on
+  both paths: pi persists a superseded auto-retry attempt ("keep in session for history") that the live
+  reducer dropped on `auto_retry_start`, so hydration hides an errored assistant message immediately
+  followed by another assistant message — exactly the adjacent shape `_prepareRetry` produces
+  (`isRetriedAttempt`); a terminal failure — errored
+  assistant followed by a user message or nothing — stays visible, its failure reported by the trailing
+  settlement-derived error turn. It also
   returns `turnIdByMessageIndex` (message-position → minted turn id) — the jump anchor map a
   history-search "jump to message" deep link (`chatLocationRequest`, see `store/SPEC.md`) resolves
   against; entries are `null` for a `toolResult`/`custom` message (never its own turn) and for a
@@ -196,7 +202,39 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   transcript's last message is in view without scrolling.
 - **Composer & chrome** — `Composer` (prompt field + send/steer/followUp/abort, `@`-mentions, `/`
   commands + template **slot sessions** (Tab-through placeholders — see the Template slots bullet
-  below), image paste/drop, `openHistory` on its imperative handle → `onHistoryOpen`) plus its props-driven **slash-completion
+  below), image paste/drop — routed through **`imageAttachment.ts`**: `fileToAttachedImage` decodes in
+  the browser and downscales anything over a **1568px long edge** (`fitWithin`; Claude's standard-tier
+  edge — an oversized image in history 400s every later turn once the provider's >20-image 2000px cap
+  kicks in, and pi's own resizer is deliberately off server-side). An image passes through
+  byte-identical only when within pixel bounds **and** a provider-accepted type (png/jpeg/gif/webp)
+  **and** under the provider's **4.5MB encoded-base64 ceiling** (`IMAGE_MAX_BASE64_BYTES`, shared via
+  `contracts` — pi's own headroom under Anthropic's 5MB API limit; the wire carries base64, so the
+  ceiling is measured on `data.length`, with `base64EncodedLength` sizing a raw File before encoding);
+  anything else re-encodes through canvas, walking a **JPEG quality ladder** while the encoding
+  exceeds the ceiling (a within-bounds multi-MB GIF or a small BMP would 400 the request just like an
+  oversized side). An undecodable file falls back to raw **only when its media type is
+  provider-accepted** (`ACCEPTED_IMAGE_TYPES`, shared via `contracts`); undecodable + unsupported
+  (HEIC…) is **refused** (`fileToAttachedImage` → `null`) — raw pass-through would 400 every later
+  turn — and surfaced as a dismissible error chip (`composer-image-error` testid) in the attachment
+  strip, cleared on send. One message's batch is also bounded by the request-wide
+  **`REQUEST_IMAGE_BASE64_BUDGET`** (24MB of base64, headroom under Anthropic's 32MB per-request cap):
+  files that would push the batch over it are refused with the same error-chip surface. The server's
+  `imageGuard` extension is the second line of defense for history. While files are still decoding, a placeholder chip renders
+  (`composer-image-pending` testid) and sends are held (`canSubmit` is the one reading — `submitText`
+  refuses, the send button disables) — a send mid-decode would otherwise go without the image and strand
+  it on the next message. A held send keeps its text: the composer's own gestures leave the draft in
+  place, and `insertAndSubmit` (the overlay's ⌘/Ctrl+Enter, whose text is not in the draft yet) parks it
+  there instead of dropping it. The pending chip shows `filename · W×H` (the picked file's name; mime text appears only in the
+  hydrated-turn fallback when no name survived) (`composer-image` testid +
+  `data-width`/`data-height`/`data-mime` — the `e2e/composer-images.spec.ts` hooks; both chip skins
+  share `FileChip.tsx`). **Chips are bounded, and the label is the only part that gives way**: a chip is
+  `max-w-full` and truncates its `label`, while the icon, the `meta` suffix and the trailing action are
+  shrink-free — filenames are user-controlled, and an unbounded chip would push its own Remove button
+  off a phone viewport (and be clipped by the transcript scroller's `overflow-x-hidden`). So whatever
+  must stay readable at any width goes in `meta`, not `label`: the `· W×H` size, and an attach error's
+  reason (its filename truncates — the reason is what the user can act on, and a phone has no tooltip
+  to fall back to) — and `openHistory` on its
+  imperative handle → `onHistoryOpen`) plus its props-driven **slash-completion
   primitive** (filter/menu/caret + Up/Down, Enter/Tab, Escape), reused by `panels/NewWorkspaceDialog` so
   the two inputs cannot drift; `HistoryOverlay` (the history-recall/search overlay `Composer` opens —
   presentational, driven entirely by `useHistorySearch.ts`'s state + callbacks, plus **Save as template**
@@ -330,7 +368,12 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   `AgentSession.prompt()` substitutes args into `expandedText` before persisting the `role: "user"`
   message, so a `session.getMessages` re-fetch (a reload, or reopening from history) shows the expanded
   text. The one nuance: the web client's own immediate bubble is an **optimistic echo**
-  (`ChatView.onSubmit` → `appendUserMessage`, store-only, appended *before* the transport call resolves) —
+  (`ChatView.onSubmit` → `appendUserMessage`, store-only, appended *before* the transport call resolves;
+  attached images ride along as content blocks so the bubble shows them — `UserTurn` renders image blocks
+  as compact "attached file" chips above the text (no inline preview; click opens the image in a dialog,
+  the diagram-fullscreen pattern). The chip label is the picked file's name, carried on the echo turn as
+  `attachmentNames` (UI-side only — pi's `ImageContent` has no filename), index-aligned with the image
+  blocks; a hydrated turn has no names and falls back to mime-type labels) —
   it shows exactly what was typed (the raw command) until a re-fetch replaces it with pi's real persisted
   record. **The `/` menu merge**
   (`ChatView`): pi's `commands` snapshot (`session.getCommands`, frozen at session-create time) minus its

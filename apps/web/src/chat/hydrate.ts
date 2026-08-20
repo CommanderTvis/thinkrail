@@ -3,7 +3,7 @@ import type {
 	AskUserAnswersDetails,
 	TranscriptMessage,
 } from "@thinkrail/contracts";
-import { isAskUserAnswersMessage, isControlMessage } from "@thinkrail/contracts";
+import { isAskUserAnswersMessage, isControlMessage, isRetriedAttempt } from "@thinkrail/contracts";
 import { userText } from "../lib";
 import { assistantFailureText } from "./assistantFailure";
 import type { ChatTurn, ToolResultState } from "./types";
@@ -20,7 +20,8 @@ export interface HydratedRuntime {
 	 * which becomes a visible turn but is never a search hit) — the jump anchor map a
 	 * history-search "jump to message" deep link (`chatLocationRequest`) resolves against. A message that
 	 * ended in `stopReason: "error"` maps to its own assistant turn's id, never the synthesized error
-	 * turn's (the error turn has no message index of its own).
+	 * turn's (the error turn has no message index of its own). A retried (superseded) failed attempt
+	 * renders no turn at all, so its slot is `null` like a control message's.
 	 */
 	turnIdByMessageIndex: (string | null)[];
 }
@@ -41,7 +42,7 @@ export function messagesToRuntime(
 	const toolResults: Record<string, ToolResultState> = {};
 	const askAnswers: HydratedRuntime["askAnswers"] = {};
 	const turnIdByMessageIndex: HydratedRuntime["turnIdByMessageIndex"] = [];
-	for (const message of messages) {
+	for (const [index, message] of messages.entries()) {
 		// Exactly one push per message, in order — keeps the map aligned to `messages` regardless of which
 		// branch below fires (a user/assistant message sets it to its own turn's id; every other message
 		// leaves it `null`).
@@ -54,8 +55,16 @@ export function messagesToRuntime(
 				turns.push({ kind: "user", id: turnId, message });
 			}
 		} else if (message.role === "assistant") {
-			turnId = crypto.randomUUID();
-			turns.push({ kind: "assistant", id: turnId, message, streaming: false });
+			if (isRetriedAttempt(messages, index)) {
+				// A superseded auto-retry attempt: pi keeps it in the session file for history but removed it
+				// from the live context (`_prepareRetry`), and the live reducer drops its turn on
+				// `auto_retry_start`. Hide it here too — same presentation rule on both paths — or a reload
+				// would resurrect the failed partial next to the retried reply (turnId stays null). Its
+				// failure text never surfaces either: only the trailing terminal below reports a failure.
+			} else {
+				turnId = crypto.randomUUID();
+				turns.push({ kind: "assistant", id: turnId, message, streaming: false });
+			}
 		} else if (message.role === "compactionSummary") {
 			// Only successful compactions persist an entry. It becomes a visible done record, but no jump
 			// anchor: history search indexes user/assistant text only, so this slot remains `null`.

@@ -94,7 +94,9 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     with a per-session `SessionManager` **and a `buildSessionSettings(cwd)` settings manager** (the user's
     real settings + an in-memory `images.autoResize:false` override — never persisted — so the `read` tool
     sends image files **raw**, bypassing pi's photon/WASM resizer that the single-file binary can't bundle;
-    the web UI downsizes user-attached images itself); a shared `registerSession` publishes each event
+    the web UI downsizes user-attached images itself at attach time — `apps/web`'s `chat/imageAttachment`
+    caps the long edge at 1568px — and the `imageGuard` extension below is the in-context second line of
+    defense); a shared `registerSession` publishes each event
     tagged with its id + `bindExtensions({ mode:'rpc', uiContext })`. The event projection retains the
     final `agent_end` assistant's reported terminal metadata and attaches it to `agent_settled`, so the
     wire has one authoritative automatic-work terminal even when compaction/retry happens between those
@@ -241,6 +243,34 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     the manager bullet above). Pure over pi's `SessionManager` (compaction-aware via
     `buildSessionContext`; idempotent; appends at the leaf, where orphans sit by construction) —
     unit-tested against `SessionManager.inMemory`.
+  - `imageGuard` — the oversized-image guard: an inline extension (`oversizedImageGuard`, one of
+    `buildResourceLoader`'s shared factories) hooked on pi's **`context` event** (fired before every LLM
+    call, live sessions included). **Anthropic-family only**: the caps are Anthropic's model-level rules,
+    so the handler gates on the context's active model (`isAnthropicFamilyModel` — native
+    `anthropic`/`anthropic-messages`, or a Claude model id through Bedrock/Vertex/aggregators; unknown
+    model ⇒ no-op) and every other provider's image context passes through untouched. It sniffs each image block's pixel dimensions straight from the base64
+    header bytes (PNG/JPEG/GIF/WebP — no codec, never strips what it can't sniff; **bounded work per
+    pass**: only a 256KiB decoded prefix is ever materialized — a JPEG whose SOF lies beyond it sniffs as
+    unknown, not stripped — and each block is sniffed exactly once per pass) and replaces any block
+    violating a provider rule with a text note naming the violated rule plus a re-attach hint. Five
+    rules, in order: the **provider-accepted media types** (`ACCEPTED_IMAGE_TYPES`, shared with the
+    composer via `contracts` — pi forwards an image's media type verbatim, so a legacy `image/heic`
+    block 400s the whole request; stripping it heals sessions poisoned before the composer refused such
+    files); the **4.5MB encoded-base64 payload ceiling** (`IMAGE_MAX_BASE64_BYTES`, shared
+    with the composer via `contracts` — pi's own headroom under Anthropic's 5MB API limit, compared
+    against `data.length` since the wire carries base64, so it applies even to unsniffable formats); the **8000px per-side hard cap**; the **count-aware 2000px cap** once the
+    whole context carries more than 20 images — stripping changes the very count that selects that cap,
+    so 2000px violators are stripped **largest-first only until the survivors fit back under the
+    threshold** (18 small + 3 at 2500px ⇒ one stripped, the other two stay legal under 8000px); and the
+    **request-wide `REQUEST_IMAGE_BASE64_BUDGET`** (24MB of base64, headroom under Anthropic's 32MB
+    per-request cap — several per-image-legal blocks can still overflow the whole request), enforced by
+    stripping survivors **largest-first until the aggregate fits**. This is what un-bricks a session poisoned by an oversized image
+    (history is re-sent every turn, so one bad image 400s forever): sessions are append-only and the host
+    has no image codec (the autoResize tradeoff above), so the guard transforms the **outgoing context
+    only** — session file and transcript stay untouched, and a stuck chat recovers on its very next
+    message. The count-aware cap also degrades a raw >2000px `read`-tool image to a note instead of a
+    brick once a session crosses 21 images. Pure core (`guardOversizedImages`, `imageDimensions`)
+    unit-tested with hand-built header bytes.
   - `extensions` — Pi resource wiring. Candidate generation loads the reviewed external Central path once
     through a headless `DefaultResourceLoader` to apply provider registrations, without inspecting it.
     `buildResourceLoader(cwd, settingsManager, excludedPaths)` then resolves Pi's normal settings/package +
@@ -327,7 +357,8 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     binary-capable Jiti seam; it is never bundled, staged, or copied into ThinkRail. Both modes append
     `extensionFactories`: a **headless-search policy** (a `tool_call` hook defaulting
     `web_search`'s `workflow` to `"none"`, since pi-web-access would otherwise open a browser curator our
-    `rpc` host can't render) **and** `askUserQuestionExtension` (registers the `ask_user_question` tool).
+    `rpc` host can't render), `askUserQuestionExtension` (registers the `ask_user_question` tool), **and**
+    `oversizedImageGuard` (the context-level image-size guard, see the `imageGuard` bullet).
     Both session paths pass it as `resourceLoader`. `buildResourceLoader` stays internal; the seam +
     its types are on the barrel.
 - **Public surface (barrel):** the manager operations (incl. `answerQuestion` +

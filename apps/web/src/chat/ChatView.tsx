@@ -1,6 +1,5 @@
 import type {
 	AskUserQuestionResult,
-	ImageContent,
 	PromptHit,
 	SlashCommandInfo,
 	TemplateInfo,
@@ -45,7 +44,7 @@ import { stripFrontmatter } from "./templateText";
 import { useModelCatalog } from "./useModelCatalog";
 import "./tools/register"; // side-effect: register the built-in pi tool renderers (bash/read/edit/write)
 import { ChatTurnView } from "./turns";
-import type { ChatTurn } from "./types";
+import type { ChatAttachment, ChatTurn } from "./types";
 import { useChatScroll } from "./useChatScroll";
 import { useChatTodos } from "./useChatTodos";
 import { useHistorySearch } from "./useHistorySearch";
@@ -362,8 +361,10 @@ export default function ChatView({
 			.catch(() => {});
 	};
 
-	const onSubmit = (text: string, images: ImageContent[], behavior: SubmitBehavior) => {
-		if (text) useAppStore.getState().appendUserMessage(sessionId, text);
+	const onSubmit = (text: string, attachments: ChatAttachment[], behavior: SubmitBehavior) => {
+		if (text || attachments.length > 0)
+			useAppStore.getState().appendUserMessage(sessionId, text, attachments);
+		const images = attachments.map((a) => a.content);
 		const params = { sessionId, text, ...(images.length > 0 ? { images } : {}) };
 		const method =
 			behavior === "steer"
@@ -658,7 +659,10 @@ export default function ChatView({
 							data={rows}
 							context={listContext}
 							components={CHAT_LIST_COMPONENTS}
-							className="min-h-0 flex-1"
+							// `overflow-x-hidden` on the scroller: the chat only ever scrolls vertically — wide
+							// content (code, diffs, GFM tables — see Markdown's `Table` wrapper) scrolls inside its
+							// own block, never the whole transcript.
+							className="min-h-0 flex-1 overflow-x-hidden"
 							// Any chat opens at the latest message (a fresh mount would otherwise land mid-transcript);
 							// the jump-to-message deep link overrides post-mount with its centered scrollToIndex.
 							initialTopMostItemIndex={{ index: Math.max(rows.length - 1, 0), align: "end" }}
