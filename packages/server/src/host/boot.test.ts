@@ -103,6 +103,10 @@ test("serves the SPA from staticDir with index.html fallback", async () => {
 	const deep = await fetch(`http://localhost:${b.port}/some/client/route`);
 	expect(deep.status).toBe(200);
 	expect(await deep.text()).toContain("<title>spa</title>");
+
+	const staleChunk = await fetch(`http://localhost:${b.port}/assets/panel-abc123.js`);
+	expect(staleChunk.status).toBe(404);
+	expect(staleChunk.headers.get("content-type") ?? "").not.toContain("text/html");
 });
 
 test("stop() releases the port", async () => {

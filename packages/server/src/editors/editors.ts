@@ -1,3 +1,4 @@
+import { dirname } from "node:path";
 import type { EditorInfo } from "@thinkrail/contracts";
 
 interface GuiCandidate {
@@ -85,6 +86,29 @@ export function revealInFileManager(
 			: platform === "win32"
 				? ["explorer", worktreePath]
 				: ["xdg-open", worktreePath];
+	try {
+		spawn(cmd);
+	} catch {
+		throw new Error(`No file manager launcher available on this host (${platform}).`);
+	}
+}
+
+/**
+ * Reveals a *file* — the file manager opens its folder with the entry selected, rather than opening the
+ * file itself in whatever app owns the extension. Linux has no portable "select this one" verb, so it
+ * falls back to opening the containing folder. See SPEC.md.
+ */
+export function revealPathInFileManager(
+	target: string,
+	spawn: SpawnFn = defaultSpawn,
+	platform: NodeJS.Platform = process.platform,
+): void {
+	const cmd =
+		platform === "darwin"
+			? ["open", "-R", target]
+			: platform === "win32"
+				? ["explorer", `/select,${target}`]
+				: ["xdg-open", dirname(target)];
 	try {
 		spawn(cmd);
 	} catch {

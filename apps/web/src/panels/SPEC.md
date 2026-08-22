@@ -718,6 +718,21 @@ own section. The kebab menu (`plan-menu`, a
   `@xterm/*`) loaded via `import()`.
 - **Forbidden:** `server`/`shared`/`pi`; importing `shell`; reaching across unrelated panels.
 
+## File rows own their context menu
+
+A right-click on an All-files row opens `file-node-actions` (Reveal in Finder, Copy path). The menu
+exists mostly so the *webview's* does not: with no handler, WebKit shows its own Look Up / Translate /
+Share / **Show in Finder** menu, whose reveal item is about downloaded files and does nothing for a
+workspace path — it reads as a broken feature rather than an absent one.
+
+- **Reveal selects the file, it does not open it.** `fs.revealPath` resolves through the same worktree
+  gate as every other read (so a path cannot walk out of the workspace it names) and calls
+  `editors.revealPathInFileManager`, which uses `open -R` on macOS and `explorer /select,` on Windows.
+  The pre-existing `revealInFileManager` stays as-is for *workspace* reveal, where opening the folder is
+  the right verb. Linux has no portable "select this entry", so it opens the containing folder.
+- The label follows the platform's own name for its file manager; "Show in Finder" on Linux would read
+  as a bug.
+
 ## Get right
 
 - **Workbench tab chrome is not a feature panel.** The shell layout module supplies one selected-tab

@@ -20,8 +20,10 @@ channel fan-out, and the process-boot wrapper both launchers share.
   `Bun.serve` with `/health`, `/ws` upgrade, a
   **`GET /files/<workspaceId>/<relpath>`** route streaming a worktree file's raw bytes (via `fs`'s
   `resolveWorktreeFile` — path-contained; bad id/escape/miss → 404; Bun infers the content-type) so the
-  markdown viewer's relative `<img>`s resolve, static serving with
-  `index.html` fallback, the `server.welcome` push, the **`?client=` page identity** read off the socket URL at
+  markdown viewer's relative `<img>`s resolve, static serving whose
+  `index.html` fallback is **for routes only** — a miss whose path carries a file extension is a plain 404,
+  because answering a stale code-split chunk with HTML surfaces as `'text/html' is not a valid JavaScript
+  MIME type` inside a lazy panel's error boundary rather than as the missing file it is, the `server.welcome` push, the **`?client=` page identity** read off the socket URL at
   upgrade (threaded to every handler as `RequestContext`; it addresses terminal output but no longer *owns*
   PTYs — see [[submodule-server-terminal]]) plus the `clientKey → socket` registry and the **replay-namespace
   retention timer** that outlives a reconnect (terminals are deliberately untouched by it); the

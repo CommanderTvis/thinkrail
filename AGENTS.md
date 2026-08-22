@@ -46,6 +46,7 @@ only alternative if fault isolation ever becomes worth the complexity.
 - **Engine host** — `packages/server` (+ `packages/shared`), launched in-process by `apps/cli` or
   `apps/desktop` (Electrobun). `createServer()` = `Bun.serve` HTTP+WS + `AgentSessionManager`
   (one in-process `AgentSession` per tab) + handlers + persistence.
+
 - **The wire** — `packages/contracts`: the typed, versioned protocol. Types-only.
 - **UI client** — `apps/web`: mobile-first React, ships independently, dials a host over the wire.
 
@@ -68,6 +69,7 @@ apps/
   cli/        V1 entrypoint: boot host + open browser   (SPEC.md)
   web/        mobile-first UI client                    (SPEC.md)
   desktop/    Electrobun local-host launcher             (SPEC.md)
+
   website/    public landing + blog + vibecoding (Cloudflare Pages) (SPEC.md)
 packages/
   server/     createServer(): Bun.serve + AgentSessionManager  (SPEC.md)

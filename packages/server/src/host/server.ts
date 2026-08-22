@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { join, normalize } from "node:path";
+import { extname, join, normalize } from "node:path";
 import type {
 	HostPlatform,
 	ServerWelcome,
@@ -571,6 +571,7 @@ async function serveStatic(pathname: string, staticDir: string): Promise<Respons
 	const requested = safe === "/" || safe === "" ? "index.html" : safe;
 	const file = Bun.file(join(staticDir, requested));
 	if (await file.exists()) return new Response(file);
+	if (extname(requested)) return new Response("not found", { status: 404 });
 	const index = Bun.file(join(staticDir, "index.html"));
 	if (await index.exists()) return new Response(index);
 	return new Response("not found", { status: 404 });

@@ -50,15 +50,43 @@ export async function registerBundledRuntime(extensions: BundledExtensions): Pro
 	setBedrockProviderModule(bedrockProviderModule);
 }
 
+const PI_EXTENSION_PACKAGES = [
+	"pi-web-access",
+	"pi-visualize",
+	"pi-spec-graph",
+	"pi-thinkrail-workflow",
+	"pi-todos",
+] as const;
+
+type PiExtensionPackage = (typeof PI_EXTENSION_PACKAGES)[number];
+
+/**
+ * `require.resolve` from this module's own URL, unless a host that flattened us into a single file has
+ * already resolved these against the real node_modules and passed them down — see apps/desktop/SPEC.md.
+ */
+function piExtensionResolver(): (name: PiExtensionPackage) => string {
+	const handed = process.env.THINKRAIL_PI_EXTENSION_PATHS;
+	if (handed) {
+		try {
+			const parsed = JSON.parse(handed) as Partial<Record<PiExtensionPackage, unknown>>;
+			if (PI_EXTENSION_PACKAGES.every((name) => typeof parsed[name] === "string")) {
+				return (name) => parsed[name] as string;
+			}
+		} catch {}
+	}
+	const require = createRequire(import.meta.url);
+	return (name) => require.resolve(`${name}/index.ts`);
+}
+
 let devPaths: { extensionPaths: string[]; skillPaths: string[] } | undefined;
 function resolveDevPaths(): { extensionPaths: string[]; skillPaths: string[] } {
 	if (devPaths) return devPaths;
-	const require = createRequire(import.meta.url);
-	const webAccessPath = require.resolve("pi-web-access/index.ts");
-	const visualizePath = require.resolve("pi-visualize/index.ts");
-	const specGraphPath = require.resolve("pi-spec-graph/index.ts");
-	const workflowPath = require.resolve("pi-thinkrail-workflow/index.ts");
-	const todosPath = require.resolve("pi-todos/index.ts");
+	const resolveEntry = piExtensionResolver();
+	const webAccessPath = resolveEntry("pi-web-access");
+	const visualizePath = resolveEntry("pi-visualize");
+	const specGraphPath = resolveEntry("pi-spec-graph");
+	const workflowPath = resolveEntry("pi-thinkrail-workflow");
+	const todosPath = resolveEntry("pi-todos");
 	devPaths = {
 		extensionPaths: [webAccessPath, visualizePath, specGraphPath, workflowPath, todosPath],
 		skillPaths: [

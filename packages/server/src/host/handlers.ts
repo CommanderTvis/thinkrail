@@ -72,9 +72,14 @@ import {
 } from "../auth";
 import { findOpenBranchReview } from "../branch-review";
 import { selectDirectory } from "../dialog";
-import { listAvailableEditors, openEditor, revealInFileManager } from "../editors";
+import {
+	listAvailableEditors,
+	openEditor,
+	revealInFileManager,
+	revealPathInFileManager,
+} from "../editors";
 import { recordAcceptedMessage, respondToInterview } from "../feedback";
-import { readDir, readFile } from "../fs";
+import { readDir, readFile, resolveWorktreeFile } from "../fs";
 import {
 	countUnpushedCommits,
 	gitDiffFile,
@@ -393,6 +398,12 @@ const handlers: Record<string, Handler> = {
 		const p = params as { workspaceId: string; path: string };
 		void ensureWatch(p.workspaceId);
 		return readDir(p.workspaceId, p.path);
+	},
+	"fs.revealPath": (params) => {
+		const p = params as { workspaceId: string; path: string };
+		// Resolved through the worktree gate, so a path cannot walk out of the workspace it claims.
+		revealPathInFileManager(resolveWorktreeFile(p.workspaceId, p.path));
+		return {};
 	},
 	"fs.readFile": (params) => {
 		const p = params as { workspaceId: string; path: string };

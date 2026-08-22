@@ -1,5 +1,13 @@
 import type { FileNode } from "@thinkrail/contracts";
+import { Clipboard, FolderOpen } from "lucide-react";
 import { useRef, useState } from "react";
+import {
+	ContextMenu,
+	ContextMenuContent,
+	ContextMenuItem,
+	ContextMenuTrigger,
+} from "@/components/ui/context-menu";
+import { copyText } from "@/lib/utils";
 import { LoadingRegion } from "../components/Skeleton";
 import type { TabIntent } from "../store";
 import { getTransport } from "../transport";
@@ -9,6 +17,14 @@ import { TreeRow } from "./TreeRow";
 import { useWorkspaceRead } from "./useWorkspaceRead";
 
 type SetPathsExpanded = (paths: readonly string[], expanded: boolean) => void;
+
+/** Each platform's file manager has its own name, and the wrong one reads as a bug. */
+const REVEAL_LABEL =
+	typeof navigator !== "undefined" && /Mac/i.test(navigator.platform)
+		? "Reveal in Finder"
+		: /Win/i.test(navigator.platform)
+			? "Show in Explorer"
+			: "Show in file manager";
 
 export function FileTree({ workspaceId }: { workspaceId: string }) {
 	const [nodes, setNodes] = useState<FileNode[] | null>(null);
@@ -102,14 +118,44 @@ function FileNodeRow({
 
 	return (
 		<li>
-			<TreeRow
-				testid="file-node"
-				kind={isDir ? "dir" : "file"}
-				expanded={expanded}
-				label={label}
-				onClick={isDir ? toggleDirectory : () => open("preview")}
-				onDoubleClick={isDir ? undefined : () => open("keep")}
-			/>
+			{/* Without a menu of our own the webview shows its native one, whose "Show in Finder" is about
+			    downloads and does nothing for a workspace file. See panels/SPEC.md. */}
+			<ContextMenu>
+				<ContextMenuTrigger asChild>
+					<div>
+						<TreeRow
+							testid="file-node"
+							kind={isDir ? "dir" : "file"}
+							expanded={expanded}
+							label={label}
+							onClick={isDir ? toggleDirectory : () => open("preview")}
+							onDoubleClick={isDir ? undefined : () => open("keep")}
+						/>
+					</div>
+				</ContextMenuTrigger>
+				<ContextMenuContent data-testid="file-node-actions">
+					<ContextMenuItem
+						data-testid="file-node-reveal"
+						onSelect={() => {
+							void getTransport()
+								.request("fs.revealPath", { workspaceId, path: node.path })
+								.catch(() => {});
+						}}
+					>
+						<FolderOpen />
+						{REVEAL_LABEL}
+					</ContextMenuItem>
+					<ContextMenuItem
+						data-testid="file-node-copy-path"
+						onSelect={() => {
+							void copyText(node.path);
+						}}
+					>
+						<Clipboard />
+						Copy path
+					</ContextMenuItem>
+				</ContextMenuContent>
+			</ContextMenu>
 			{isDir && expanded && children && (
 				<ul className="flex flex-col pl-12">
 					{children.map((child) => (

@@ -1,7 +1,12 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, test } from "@playwright/test";
-import { createWorkspaceViaDialog, openFixtureProject, worktreeRows } from "./fixtures/app";
+import {
+	createWorkspaceViaDialog,
+	enterDefaultWorkspace,
+	openFixtureProject,
+	worktreeRows,
+} from "./fixtures/app";
 
 test("shows files and compacts single-directory runs in the Files tree", async ({ page }) => {
 	await openFixtureProject(page);
@@ -27,4 +32,22 @@ test("shows files and compacts single-directory runs in the Files tree", async (
 	await expect(folderRows.filter({ hasText: /^compact\/only$/ })).toBeVisible({ timeout: 10_000 });
 	await expect(folderRows.filter({ hasText: /^here$/ })).toBeVisible();
 	await expect(leaf).toBeVisible();
+});
+
+test("a file row has our own context menu, not the webview's", async ({ page }) => {
+	await openFixtureProject(page);
+	await enterDefaultWorkspace(page);
+	await page.getByTestId("tab-files").click();
+
+	const notes = page.getByTestId("file-node").filter({ hasText: "notes.txt" });
+	await expect(notes).toBeVisible();
+	await notes.click({ button: "right" });
+
+	const menu = page.getByTestId("file-node-actions");
+	await expect(menu).toBeVisible();
+	await expect(menu.getByTestId("file-node-reveal")).toBeVisible();
+	await expect(menu.getByTestId("file-node-copy-path")).toBeVisible();
+
+	await page.keyboard.press("Escape");
+	await expect(menu).toHaveCount(0);
 });
