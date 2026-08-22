@@ -1,8 +1,6 @@
 import {
 	type AppConfig,
 	type AppConfigUpdate,
-	COMPOSER_GROWTH_LIMITS,
-	isComposerGrowthLimit,
 	isJbcentralQuotaRefreshSeconds,
 	isLineWidth,
 	isSystemThemePair,
@@ -22,44 +20,6 @@ type RuntimeAppConfigUpdate = AppConfigUpdate & {
 	layout?: unknown;
 	recentModels?: unknown;
 };
-
-const ACCEPTED_UPDATE_KEYS = {
-	theme: true,
-	themeMode: true,
-	systemThemePair: true,
-	analyticsEnabled: true,
-	analyticsConsentConfirmed: true,
-	notificationsEnabled: true,
-	terminalReplayKb: true,
-	terminalWindowsShell: true,
-	composerGrowthLimit: true,
-	chatLineWidth: true,
-	fileLineWidth: true,
-	chatLineWidthBounded: true,
-	fileLineWidthBounded: true,
-	customLayoutPresets: true,
-	favoriteModels: true,
-	defaultModel: true,
-	defaultEffort: true,
-	reviewModel: true,
-	reviewEffort: true,
-	reviewAutoFix: true,
-	agentReviewEnabled: true,
-	subagentsEnabled: true,
-	jbcentralQuotaEnabled: true,
-	jbcentralQuotaRefreshSeconds: true,
-	chatMessageOrder: true,
-	layout: true,
-	recentModels: true,
-} satisfies Record<keyof RuntimeAppConfigUpdate, true>;
-
-function assertUpdateShape(update: unknown): void {
-	if (typeof update !== "object" || update === null || Array.isArray(update)) {
-		throw new Error("settings update must be an object");
-	}
-	const unknownKey = Object.keys(update).find((key) => !Object.hasOwn(ACCEPTED_UPDATE_KEYS, key));
-	if (unknownKey !== undefined) throw new Error(`Unknown setting: ${unknownKey}`);
-}
 
 function isWireModelRef(value: unknown): value is WireModel {
 	if (!value || typeof value !== "object" || Array.isArray(value)) return false;
@@ -101,7 +61,6 @@ export function getConfig(): AppConfig {
 }
 
 export function updateConfig(partial: AppConfigUpdate): AppConfig {
-	assertUpdateShape(partial);
 	const runtimeUpdate: RuntimeAppConfigUpdate = { ...partial };
 	delete runtimeUpdate.chatMessageOrder;
 	delete runtimeUpdate.layout;
@@ -150,14 +109,6 @@ export function updateConfig(partial: AppConfigUpdate): AppConfig {
 		jbcentralQuotaRefreshSeconds,
 		...rest
 	} = runtimeUpdate;
-	for (const [name, value] of [
-		["defaultModel", defaultModel],
-		["reviewModel", reviewModel],
-	] as const) {
-		if (value !== undefined && value !== null && !isWireModelRef(value)) {
-			throw new Error(`${name} must be a model or null`);
-		}
-	}
 	if (subagentsEnabled !== undefined && typeof subagentsEnabled !== "boolean") {
 		throw new Error("subagentsEnabled must be a boolean");
 	}
@@ -169,18 +120,6 @@ export function updateConfig(partial: AppConfigUpdate): AppConfig {
 		!isTerminalWindowsShell(runtimeUpdate.terminalWindowsShell)
 	) {
 		throw new Error("terminalWindowsShell must be auto, pwsh, powershell, or cmd");
-	}
-	if (
-		runtimeUpdate.terminalReplayKb !== undefined &&
-		!Number.isFinite(runtimeUpdate.terminalReplayKb)
-	) {
-		throw new Error("terminalReplayKb must be a finite number");
-	}
-	if (
-		runtimeUpdate.composerGrowthLimit !== undefined &&
-		!isComposerGrowthLimit(runtimeUpdate.composerGrowthLimit)
-	) {
-		throw new Error(`composerGrowthLimit must be one of ${COMPOSER_GROWTH_LIMITS.join(", ")}`);
 	}
 	if (
 		jbcentralQuotaRefreshSeconds !== undefined &&

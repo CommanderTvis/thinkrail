@@ -1,19 +1,13 @@
-import { delimiter } from "node:path";
+const USER_PATH_MARKERS = ["/.nvm/", "/homebrew/", "/usr/local/bin", "/.bun/"];
 
-const PROBE_BASE_PATH = "/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin";
-
-export function mergePath(current: string, login: string): string {
-	const loginEntries = login.split(delimiter).filter(Boolean);
-	const known = new Set(loginEntries);
-	const extras = current.split(delimiter).filter((entry) => entry && !known.has(entry));
-	return [...extras, ...loginEntries].join(delimiter);
+export function pathLooksComplete(path: string): boolean {
+	return USER_PATH_MARKERS.some((marker) => path.includes(marker));
 }
 
 function probeLoginShellPath(shell: string, interactive: boolean): string | null {
 	const args = interactive ? ["-l", "-i", "-c", "env -0"] : ["-l", "-c", "env -0"];
 	try {
 		const result = Bun.spawnSync([shell, ...args], {
-			env: { ...process.env, PATH: PROBE_BASE_PATH },
 			timeout: 5000,
 			stdout: "pipe",
 			stderr: "ignore",
@@ -44,9 +38,11 @@ function resolveLocale(): void {
 }
 
 function resolvePath(): void {
+	if (pathLooksComplete(process.env.PATH ?? "")) return;
+
 	const shell = process.env.SHELL ?? "/bin/zsh";
-	const login = probeLoginShellPath(shell, true) ?? probeLoginShellPath(shell, false);
-	if (login) process.env.PATH = mergePath(process.env.PATH ?? "", login);
+	const path = probeLoginShellPath(shell, true) ?? probeLoginShellPath(shell, false);
+	if (path) process.env.PATH = path;
 }
 
 function resolveSshAgentSock(): void {

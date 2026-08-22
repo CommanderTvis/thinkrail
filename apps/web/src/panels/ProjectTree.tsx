@@ -39,7 +39,14 @@ import {
 } from "@thinkrail/ui/dropdown-menu";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { cn } from "@thinkrail/ui/utils";
-import { type MouseEvent, useCallback, useEffect, useRef, useState } from "react";
+import {
+	type KeyboardEvent,
+	type MouseEvent,
+	useCallback,
+	useEffect,
+	useRef,
+	useState,
+} from "react";
 import { AttentionDot } from "@/components/AttentionDot";
 import { RunningIcon } from "@/components/RunningIcon";
 import { copyText, platformShortcutLabel } from "@/lib";
@@ -55,23 +62,15 @@ import {
 	toast,
 	useAppStore,
 } from "../store";
-import { errorText, getTransport } from "../transport";
+import { errorText, getTransport, prewarmWorkspaceSkillLoad } from "../transport";
 import { AddProjectMenu } from "./AddProjectMenu";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { ExistingWorktreeDialog } from "./ExistingWorktreeDialog";
 import { NewWorkspaceDialog } from "./NewWorkspaceDialog";
-import { RemoveWorkspaceDialog } from "./RemoveWorkspaceDialog";
 import { useOpenProject } from "./useOpenProject";
-import {
-	canRenameWorkspace,
-	loadProjectWorkspaces,
-	openWorkspaceIn,
-	renameWorkspace,
-	revealWorkspace,
-	useEditors,
-	useWorkspaceRename,
-} from "./workspaceActions";
+import { canRenameWorkspace, workspaceRenameValue } from "./workspaceActions";
 
+const PREWARM_WORKSPACE_LIMIT = 8;
 const CREATE_WORKSPACE_LABEL = `Create workspace (${platformShortcutLabel("N")} or ${platformShortcutLabel("N", { alt: true })})`;
 
 export function ProjectTree() {
@@ -84,7 +83,13 @@ export function ProjectTree() {
 	const protocolVersion = useAppStore((s) => s.protocolVersion);
 	const sessionStateByWorkspace = useAppStore((s) => s.sessionStateByWorkspace);
 
-	const editors = useEditors();
+	const [editors, setEditors] = useState<EditorInfo[]>([]);
+	useEffect(() => {
+		void getTransport()
+			.request("editor.list", {})
+			.then(setEditors)
+			.catch(() => {});
+	}, []);
 
 	const expandedProjectIds = useAppStore((s) => s.expandedProjectIds);
 	const [dialogProjectId, setDialogProjectId] = useState<string | null>(null);
@@ -126,7 +131,13 @@ export function ProjectTree() {
 	}, [activeProjectId]);
 
 	const loadWorkspaces = useCallback(async (projectId: string) => {
-		await loadProjectWorkspaces(projectId);
+		const rows = await getTransport().request("workspace.list", { projectId });
+		const store = useAppStore.getState();
+		store.setWorkspaces(projectId, rows);
+		if (store.selectedProjectId !== projectId) return;
+		for (const workspace of rows.slice(0, PREWARM_WORKSPACE_LIMIT)) {
+			void prewarmWorkspaceSkillLoad(workspace.id).catch(() => {});
+		}
 	}, []);
 
 	const pendingListLoadsRef = useRef(new Set<string>());
@@ -171,6 +182,35 @@ export function ProjectTree() {
 		store.expandProject(workspace.projectId);
 		store.setWorkspaces(workspace.projectId, rows);
 		store.activateWorkspace(attached);
+	};
+
+	const removeWorkspace = (workspaceId: string) => {
+		void getTransport()
+			.request("workspace.remove", { id: workspaceId })
+			.catch((err) => toast.error(errorText(err, "Failed to remove workspace")));
+	};
+
+	const openWorkspaceIn = (workspace: Workspace, editor: EditorInfo) => {
+		if (editor.kind === "terminal") {
+			useAppStore.getState().activateWorkspace(workspace);
+			useAppStore.getState().addTerminal(workspace.id, `${editor.id} .`);
+			return;
+		}
+		void getTransport()
+			.request("workspace.openIn", { id: workspace.id, editor: editor.id })
+			.catch((err) => toast.error(errorText(err, `Failed to open in ${editor.label}`)));
+	};
+
+	const revealWorkspace = (workspace: Workspace) => {
+		void getTransport()
+			.request("workspace.reveal", { id: workspace.id })
+			.catch((err) => toast.error(errorText(err, "Failed to reveal workspace")));
+	};
+
+	const renameWorkspace = (workspace: Workspace, name: string) => {
+		void getTransport()
+			.request("workspace.rename", { id: workspace.id, name })
+			.catch((err) => toast.error(errorText(err, "Failed to rename workspace")));
 	};
 
 	const closeProject = (project: Project) => {
@@ -262,6 +302,7 @@ export function ProjectTree() {
 											onCopyPath={() => void copyText(ws.worktreePath)}
 											onReveal={() => revealWorkspace(ws)}
 											onRename={(name) => renameWorkspace(ws, name)}
+											onRemove={() => removeWorkspace(ws.id)}
 										/>
 									))}
 								</ul>
@@ -512,6 +553,7 @@ function WorkspaceRow({
 	onCopyPath,
 	onReveal,
 	onRename,
+	onRemove,
 }: {
 	workspace: Workspace;
 	isActive: boolean;
@@ -524,6 +566,7 @@ function WorkspaceRow({
 	onCopyPath: () => void;
 	onReveal: () => void;
 	onRename: (name: string) => void;
+	onRemove: () => void;
 }) {
 	const isDefault = isDefaultWorkspace(workspace);
 	const isExternal = isExternalWorkspace(workspace);
@@ -545,17 +588,63 @@ function WorkspaceRow({
 		setMenuOpen(true);
 	};
 	const [confirmOpen, setConfirmOpen] = useState(false);
-	const {
-		editing,
-		nameRef,
-		start: startRename,
-		inputProps: renameInputProps,
-		onMenuCloseAutoFocus,
-	} = useWorkspaceRename({
-		workspace,
-		canRename,
-		onRename: (_target, name) => onRename(name),
-	});
+	const nameRef = useRef<HTMLInputElement>(null);
+	const editStartNameRef = useRef(workspace.name);
+	const pendingNameRef = useRef<string | null>(null);
+	const cancelNextBlurRef = useRef(false);
+	const enterRenameRef = useRef(false);
+	const [editing, setEditing] = useState(false);
+
+	useEffect(() => {
+		if (!editing) return;
+		const frame = requestAnimationFrame(() => {
+			nameRef.current?.focus();
+			nameRef.current?.select();
+		});
+		return () => cancelAnimationFrame(frame);
+	}, [editing]);
+
+	useEffect(() => {
+		const name = pendingNameRef.current;
+		if (!editing || !canRename || !name) return;
+		pendingNameRef.current = null;
+		setEditing(false);
+		onRename(name);
+	}, [canRename, editing, onRename]);
+
+	const commitRename = () => {
+		if (cancelNextBlurRef.current) {
+			cancelNextBlurRef.current = false;
+			pendingNameRef.current = null;
+			setEditing(false);
+			return;
+		}
+		const name = workspaceRenameValue(editStartNameRef.current, nameRef.current?.value ?? "");
+		if (!name) {
+			pendingNameRef.current = null;
+			setEditing(false);
+			return;
+		}
+		if (!canRename) {
+			pendingNameRef.current = name;
+			return;
+		}
+		setEditing(false);
+		onRename(name);
+	};
+
+	const onNameKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+		if (event.key === "Enter") {
+			event.preventDefault();
+			nameRef.current?.blur();
+			return;
+		}
+		if (event.key === "Escape") {
+			event.preventDefault();
+			cancelNextBlurRef.current = true;
+			nameRef.current?.blur();
+		}
+	};
 
 	const identityClass = `flex min-w-0 flex-1 gap-4 text-left ${isTwoLine ? "items-start" : "items-center"}`;
 	const identityIcon = isRunning ? (
@@ -602,7 +691,8 @@ function WorkspaceRow({
 								spellCheck={false}
 								aria-label="Workspace name"
 								defaultValue={workspace.name}
-								{...renameInputProps}
+								onKeyDown={onNameKeyDown}
+								onBlur={commitRename}
 								className={`w-full min-w-0 truncate border-0 bg-transparent p-0 tr-text-ui leading-tight outline-none ${isActive ? "text-primary" : "text-text-muted"}`}
 							/>
 							{branchLabel}
@@ -634,7 +724,11 @@ function WorkspaceRow({
 					<DropdownMenuContent
 						align="end"
 						data-testid="workspace-actions"
-						onCloseAutoFocus={onMenuCloseAutoFocus}
+						onCloseAutoFocus={(event) => {
+							if (!enterRenameRef.current) return;
+							enterRenameRef.current = false;
+							event.preventDefault();
+						}}
 					>
 						{editors.length > 0 && (
 							<DropdownMenuSub>
@@ -656,7 +750,16 @@ function WorkspaceRow({
 							</DropdownMenuSub>
 						)}
 						{canRename ? (
-							<DropdownMenuItem data-testid="workspace-rename" onSelect={startRename}>
+							<DropdownMenuItem
+								data-testid="workspace-rename"
+								onSelect={() => {
+									editStartNameRef.current = workspace.name;
+									pendingNameRef.current = null;
+									cancelNextBlurRef.current = false;
+									enterRenameRef.current = true;
+									setEditing(true);
+								}}
+							>
 								<Pencil />
 								Rename
 							</DropdownMenuItem>
@@ -690,10 +793,34 @@ function WorkspaceRow({
 			</fieldset>
 
 			{!isDefault && (
-				<RemoveWorkspaceDialog
-					workspace={workspace}
+				<ConfirmDialog
 					open={confirmOpen}
 					onOpenChange={setConfirmOpen}
+					title={
+						isExternal
+							? `Remove ${workspace.name} from ThinkRail?`
+							: `Remove ${workspace.name} workspace`
+					}
+					description={
+						isExternal ? (
+							<>
+								Removes this workspace's ThinkRail chats and terminals. The existing checkout,
+								files, and branch{" "}
+								<span className="tr-text-emphasis text-text-default">{workspace.branch}</span> stay
+								untouched.
+							</>
+						) : (
+							<>
+								Deletes this workspace's chats, terminals, and its worktree. The git branch{" "}
+								<span className="tr-text-emphasis text-text-default">{workspace.branch}</span> is
+								kept.
+							</>
+						)
+					}
+					confirmLabel={isExternal ? "Remove from ThinkRail" : "Remove"}
+					destructive
+					confirmTestId="confirm-remove"
+					onConfirm={onRemove}
 				/>
 			)}
 		</li>
