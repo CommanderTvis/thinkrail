@@ -137,11 +137,11 @@ async function createRuntimeWithExtensions(
 		else process.env.JITI_TRY_NATIVE = priorJitiTryNative;
 	}
 	const extensionErrors = services.resourceLoader.getExtensions().errors;
-	if (
-		extensionErrors.length > 0 ||
-		services.diagnostics.some((diagnostic) => diagnostic.type === "error")
-	) {
-		throw new Error("PI runtime extension loading failed");
+	const errorDiagnostics = services.diagnostics.filter((diagnostic) => diagnostic.type === "error");
+	if (extensionErrors.length > 0 || errorDiagnostics.length > 0) {
+		throw new Error("PI runtime extension loading failed", {
+			cause: { extensionErrors, errorDiagnostics },
+		});
 	}
 	return { runtime, providerStatusIds };
 }
@@ -179,7 +179,8 @@ export async function preparePiRuntimeGeneration(
 ): Promise<PreparePiRuntimeGenerationResult> {
 	try {
 		return { outcome: "prepared", generation: await createGeneration(additionalExtensionPaths) };
-	} catch {
+	} catch (error) {
+		console.error("preparePiRuntimeGeneration failed:", error);
 		return { outcome: "failed", reason: "candidate-failed" };
 	}
 }

@@ -170,6 +170,7 @@ export const WS_METHODS = {
 	workspaceWatchReady: "workspace.watchReady",
 	workspaceOpenIn: "workspace.openIn",
 	workspaceReveal: "workspace.reveal",
+	fsRevealPath: "fs.revealPath",
 	editorList: "editor.list",
 	gitListBranches: "git.listBranches",
 	gitPrefetch: "git.prefetch",
@@ -418,6 +419,7 @@ export interface WsMethodMap {
 	};
 	"fs.readDir": { params: { workspaceId: string; path: string }; result: FileNode[] };
 	"fs.readFile": { params: { workspaceId: string; path: string }; result: { content: string } };
+	"fs.revealPath": { params: { workspaceId: string; path: string }; result: Ack };
 	"spec.graph": { params: { workspaceId: string }; result: SpecGraphSnapshot };
 	"todo.list": {
 		params: { workspaceId: string; sessionId: string };
