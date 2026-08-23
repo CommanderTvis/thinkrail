@@ -76,6 +76,7 @@ import {
 } from "../../components/ui/resizable";
 import { IconTooltip } from "../../components/ui/tooltip";
 import {
+	abbreviateHomePath,
 	DOUBLE_CLICK_SETTLE_MS,
 	type LayoutAttention,
 	readLayoutNavigationClock,
@@ -97,6 +98,7 @@ import {
 	findCenterGroup,
 	findPlacedResource,
 	findTabLocation,
+	groupTabs,
 	hideBottom,
 	hideSide,
 	isLayoutUnavailable,
@@ -108,8 +110,10 @@ import {
 	type LayoutSide,
 	layoutTabName,
 	moveTabToGroup,
+	paneForTab,
 	reconcileAttention,
 	removeLayoutGroup,
+	reorderPaneMember,
 	resizeAuxiliaryGroups,
 	resizeBottomRegion,
 	resizeCenterSplit,
@@ -119,10 +123,13 @@ import {
 	selectTab,
 	setAuxiliaryGroupFolded,
 	setBottomAlignment,
+	setPaneDirection,
+	setPaneWeights,
 	setSideGroupFolded,
 	showSide,
 	splitCenterGroup,
 	toolTab,
+	ungroupTab,
 	unplacedTools,
 	unplacedToolsForSide,
 } from "./model";
@@ -137,9 +144,11 @@ import type {
 	LayoutSideGroup,
 	LayoutSideTab,
 	LayoutTab,
+	LayoutTabPane,
 	LayoutToolId,
 	WorkspaceLayoutDocument,
 } from "./types";
+import { VERTICAL_TABS_WIDTH } from "./types";
 
 export interface LayoutTabFocusRequest {
 	key: string;
@@ -158,9 +167,14 @@ export interface WorkbenchProps {
 	maxSideGroups: number;
 	maxBottomGroups: number;
 	projectionEpoch: number;
+	verticalCenterTabs: boolean;
+	verticalCenterTabsWidth: number;
+	defaultPaneDirection: LayoutTabPane["direction"];
+	onVerticalCenterTabsWidthChange: (width: number) => void;
 	focusRequest?: LayoutTabFocusRequest;
 	renderTabBody: (tab: LayoutCenterTab | Extract<LayoutSideTab, { kind: "terminal" }>) => ReactNode;
 	renderTabAdornment: (tab: LayoutTab) => ReactNode;
+	renderTabIcon: (tab: LayoutTab) => ReactNode | null;
 	renderToolBody: (tool: LayoutToolId) => ReactNode;
 	renderEmptyCenter: (groupId: string) => ReactNode;
 	renderCenterActions: (groupId: string) => ReactNode;
@@ -181,6 +195,12 @@ export interface WorkbenchProps {
 type DropTarget =
 	| { kind: "group"; location: LayoutGroupLocation }
 	| { kind: "insert"; location: LayoutGroupLocation; index: number }
+	| {
+			kind: "pane";
+			location: LayoutGroupLocation;
+			tabId: string;
+			direction: "horizontal" | "vertical";
+	  }
 	| { kind: "split"; groupId: string; direction: CenterSplitDirection }
 	| { kind: "auxiliary-edge"; region: LayoutAuxiliaryRegion; index: number };
 
@@ -381,10 +401,17 @@ function useHorizontalOverflow(ref: React.RefObject<HTMLDivElement | null>): Hor
 	return overflow;
 }
 
+/** A basename alone cannot say which `settings.json` this is, so an out-of-worktree tab names its path. */
+function tabTitle(tab: LayoutTab): string {
+	const name = layoutTabName(tab);
+	return tab.kind === "external-file" ? `${name} — ${tab.path}` : name;
+}
+
 function tabSearchKeywords(tab: LayoutTab): string[] {
 	const name = layoutTabName(tab);
 	switch (tab.kind) {
 		case "file":
+		case "external-file":
 		case "diff":
 			return [name, tab.kind, tab.path];
 		case "chat":
@@ -398,7 +425,13 @@ function tabSearchKeywords(tab: LayoutTab): string[] {
 	}
 }
 
-function tabIcon(tab: LayoutTab, active = false): ReactNode {
+function tabIcon(
+	tab: LayoutTab,
+	renderTabIcon: WorkbenchProps["renderTabIcon"],
+	active = false,
+): ReactNode {
+	const custom = renderTabIcon(tab);
+	if (custom) return custom;
 	const cls = "size-14 shrink-0";
 	switch (tab.kind) {
 		case "file":
@@ -575,6 +608,40 @@ function CenterSplitTarget({
 	);
 }
 
+/** How many terminals a centre group keeps alive behind the active one. */
+const KEPT_TERMINALS = 8;
+
+type TabStripOrientation = "horizontal" | "vertical";
+
+interface VerticalTabsColumn {
+	width: number;
+	onWidthChange: (width: number) => void;
+}
+
+/**
+ * Vertical rows have room for a folder, but showing one on every row is noise. A basename shared by two
+ * open tabs is exactly when the name alone stops identifying the file, so that is when the folder appears.
+ */
+function ambiguousTabSubtitles(tabs: readonly LayoutTab[]): Map<string, string> {
+	const byName = new Map<string, LayoutTab[]>();
+	for (const tab of tabs) {
+		const sharing = byName.get(tab.name);
+		if (sharing) sharing.push(tab);
+		else byName.set(tab.name, [tab]);
+	}
+	const subtitles = new Map<string, string>();
+	for (const sharing of byName.values()) {
+		if (sharing.length < 2) continue;
+		for (const tab of sharing) {
+			const path = "path" in tab ? tab.path : undefined;
+			if (!path) continue;
+			const folder = path.slice(0, path.lastIndexOf("/"));
+			if (folder) subtitles.set(tab.id, abbreviateHomePath(folder));
+		}
+	}
+	return subtitles;
+}
+
 interface TabStripProps {
 	document: WorkspaceLayoutDocument;
 	attention: LayoutAttention;
@@ -594,8 +661,11 @@ interface TabStripProps {
 	onRevealTool: (tool: LayoutToolId) => void;
 	canFocusAdjacentGroup: boolean;
 	renderTabAdornment: WorkbenchProps["renderTabAdornment"];
+	renderTabIcon: WorkbenchProps["renderTabIcon"];
 	splitGeometry?: { horizontal: boolean; vertical: boolean };
 	trailing?: ReactNode;
+	orientation?: TabStripOrientation;
+	defaultPaneDirection: LayoutTabPane["direction"];
 }
 
 function TabStrip({
@@ -617,9 +687,14 @@ function TabStrip({
 	onRevealTool,
 	canFocusAdjacentGroup,
 	renderTabAdornment,
+	renderTabIcon,
 	splitGeometry,
 	trailing,
+	orientation = "horizontal",
+	defaultPaneDirection,
 }: TabStripProps) {
+	const vertical = orientation === "vertical";
+	const subtitles = vertical ? ambiguousTabSubtitles(tabs) : null;
 	const scroller = useRef<HTMLDivElement>(null);
 	const scrollOverflow = useHorizontalOverflow(scroller);
 	const tabRefs = useRef(new Map<string, HTMLButtonElement>());
@@ -679,15 +754,31 @@ function TabStrip({
 			data-group-id={location.groupId}
 			data-drop-active={groupDrop.isOver || undefined}
 			data-drop-hint={(acceptsAppend && !groupDrop.isOver) || undefined}
-			className="relative flex h-panel-header-row shrink-0 items-stretch border-border-default border-b bg-container-workspace-bg data-[drop-hint]:ring-1 data-[drop-hint]:ring-inset data-[drop-hint]:ring-primary-soft data-[drop-active]:bg-primary-subtle data-[drop-active]:ring-2 data-[drop-active]:ring-inset data-[drop-active]:ring-primary"
+			className={
+				vertical
+					? "relative flex h-full min-h-0 w-full flex-col items-stretch border-border-default border-r bg-container-workspace-bg data-[drop-hint]:ring-1 data-[drop-hint]:ring-inset data-[drop-hint]:ring-primary-soft data-[drop-active]:bg-primary-subtle data-[drop-active]:ring-2 data-[drop-active]:ring-inset data-[drop-active]:ring-primary"
+					: "relative flex h-panel-header-row shrink-0 items-stretch border-border-default border-b bg-container-workspace-bg data-[drop-hint]:ring-1 data-[drop-hint]:ring-inset data-[drop-hint]:ring-primary-soft data-[drop-active]:bg-primary-subtle data-[drop-active]:ring-2 data-[drop-active]:ring-inset data-[drop-active]:ring-primary"
+			}
 		>
-			<div className="relative min-w-0 flex-1 overflow-hidden">
+			<div
+				className={
+					vertical
+						? "relative flex min-h-0 flex-1 flex-col overflow-hidden"
+						: "relative min-w-0 flex-1 overflow-hidden"
+				}
+			>
 				<div
 					ref={scroller}
 					role="tablist"
 					aria-label={`${location.area} group tabs`}
-					className="flex h-full w-full min-w-0 items-stretch overflow-x-auto overflow-y-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+					aria-orientation={vertical ? "vertical" : undefined}
+					className={
+						vertical
+							? "flex min-h-0 flex-1 flex-col items-stretch overflow-x-hidden overflow-y-auto [scrollbar-width:thin]"
+							: "flex h-full w-full min-w-0 items-stretch overflow-x-auto overflow-y-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+					}
 					onWheel={(event) => {
+						if (vertical) return;
 						if (!scroller.current || Math.abs(event.deltaY) <= Math.abs(event.deltaX)) return;
 						scroller.current.scrollLeft += event.deltaY;
 					}}
@@ -705,6 +796,9 @@ function TabStrip({
 							document={document}
 							maxSideGroups={maxSideGroups}
 							maxBottomGroups={maxBottomGroups}
+							orientation={orientation}
+							defaultPaneDirection={defaultPaneDirection}
+							subtitle={subtitles?.get(tab.id)}
 							register={(node) => {
 								if (node) tabRefs.current.set(tab.id, node);
 								else tabRefs.current.delete(tab.id);
@@ -717,6 +811,7 @@ function TabStrip({
 							onRevealTool={onRevealTool}
 							canFocusAdjacentGroup={canFocusAdjacentGroup}
 							renderTabAdornment={renderTabAdornment}
+							renderTabIcon={renderTabIcon}
 							draggingTab={draggingTab}
 							panelId={panelId}
 							{...(splitGeometry ? { splitGeometry } : {})}
@@ -767,14 +862,14 @@ function TabStrip({
 						/>
 					) : null}
 				</div>
-				{scrollOverflow.before ? (
+				{!vertical && scrollOverflow.before ? (
 					<div
 						aria-hidden="true"
 						data-testid="tab-overflow-before"
 						className="pointer-events-none absolute inset-y-0 left-0 z-20 w-16 bg-[linear-gradient(to_right,var(--color-container-workspace-bg),transparent)]"
 					/>
 				) : null}
-				{scrollOverflow.after ? (
+				{!vertical && scrollOverflow.after ? (
 					<div
 						aria-hidden="true"
 						data-testid="tab-overflow-after"
@@ -782,52 +877,60 @@ function TabStrip({
 					/>
 				) : null}
 			</div>
-			{trailing}
-			{overflowing ? (
-				<Popover open={overflowOpen} onOpenChange={setOverflowOpen}>
-					<IconTooltip label="Search open tabs" wrapTrigger>
-						<PopoverTrigger
-							aria-label="Search open tabs"
-							className="flex w-32 shrink-0 items-center justify-center border-border-muted border-l text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
+			<div
+				className={
+					vertical
+						? "flex h-panel-header-row shrink-0 items-stretch border-border-default border-t"
+						: "contents"
+				}
+			>
+				{trailing}
+				{overflowing ? (
+					<Popover open={overflowOpen} onOpenChange={setOverflowOpen}>
+						<IconTooltip label="Search open tabs" wrapTrigger>
+							<PopoverTrigger
+								aria-label="Search open tabs"
+								className="flex w-32 shrink-0 items-center justify-center border-border-muted border-l text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
+							>
+								<Search className="size-14" />
+							</PopoverTrigger>
+						</IconTooltip>
+						<PopoverContent
+							align="end"
+							className="w-288 p-0"
+							onCloseAutoFocus={(event) => {
+								const targetId = overflowFocusTarget.current;
+								if (!targetId) return;
+								overflowFocusTarget.current = null;
+								event.preventDefault();
+								tabRefs.current.get(targetId)?.focus();
+							}}
 						>
-							<Search className="size-14" />
-						</PopoverTrigger>
-					</IconTooltip>
-					<PopoverContent
-						align="end"
-						className="w-288 p-0"
-						onCloseAutoFocus={(event) => {
-							const targetId = overflowFocusTarget.current;
-							if (!targetId) return;
-							overflowFocusTarget.current = null;
-							event.preventDefault();
-							tabRefs.current.get(targetId)?.focus();
-						}}
-					>
-						<Command>
-							<CommandInput placeholder="Find an open tab…" />
-							<CommandList>
-								<CommandEmpty>No matching tabs.</CommandEmpty>
-								{tabs.map((tab) => (
-									<CommandItem
-										key={tab.id}
-										value={tab.id}
-										keywords={tabSearchKeywords(tab)}
-										onSelect={() => {
-											overflowFocusTarget.current = tab.id;
-											selectTab(tab.id);
-											setOverflowOpen(false);
-										}}
-									>
-										{tabIcon(tab)}
-										<span className="truncate">{layoutTabName(tab)}</span>
-									</CommandItem>
-								))}
-							</CommandList>
-						</Command>
-					</PopoverContent>
-				</Popover>
-			) : null}
+							<Command>
+								<CommandInput placeholder="Find an open tab…" />
+								<CommandList>
+									<CommandEmpty>No matching tabs.</CommandEmpty>
+									{tabs.map((tab) => (
+										<CommandItem
+											key={tab.id}
+											value={tab.id}
+											keywords={tabSearchKeywords(tab)}
+											onSelect={() => {
+												overflowFocusTarget.current = tab.id;
+												selectTab(tab.id);
+												setOverflowOpen(false);
+											}}
+										>
+											{tabIcon(tab, renderTabIcon)}
+											<span className="truncate">{layoutTabName(tab)}</span>
+										</CommandItem>
+									))}
+								</CommandList>
+							</Command>
+						</PopoverContent>
+					</Popover>
+				) : null}
+			</div>
 		</div>
 	);
 }
@@ -852,10 +955,14 @@ interface WorkbenchTabProps {
 	onRevealTool: (tool: LayoutToolId) => void;
 	canFocusAdjacentGroup: boolean;
 	renderTabAdornment: WorkbenchProps["renderTabAdornment"];
+	renderTabIcon: WorkbenchProps["renderTabIcon"];
 	draggingTab: LayoutTab | null;
 	panelId: string;
 	splitGeometry?: { horizontal: boolean; vertical: boolean };
 	onKeyDown: (event: React.KeyboardEvent<HTMLButtonElement>) => void;
+	orientation: TabStripOrientation;
+	subtitle?: string | undefined;
+	defaultPaneDirection: LayoutTabPane["direction"];
 }
 
 function WorkbenchTab({
@@ -878,11 +985,16 @@ function WorkbenchTab({
 	onRevealTool,
 	canFocusAdjacentGroup,
 	renderTabAdornment,
+	renderTabIcon,
 	draggingTab,
 	panelId,
 	splitGeometry,
 	onKeyDown,
+	orientation,
+	subtitle,
+	defaultPaneDirection,
 }: WorkbenchTabProps) {
+	const vertical = orientation === "vertical";
 	const drag = useDraggable({ id: tupleKey("dnd-tab", tab.id), data: { tab } satisfies DragData });
 	const attentionRef = useRef(attention);
 	attentionRef.current = attention;
@@ -921,6 +1033,63 @@ function WorkbenchTab({
 		draggingTab !== null && canInsertDraggedTab(document, draggingTab, location, index);
 	const acceptsAfter =
 		draggingTab !== null && canInsertDraggedTab(document, draggingTab, location, index + 1);
+	const ownGroup =
+		location.area === "center" ? findCenterGroup(document.center, location.groupId) : undefined;
+	const ownPane = ownGroup ? paneForTab(ownGroup, tab.id) : undefined;
+	const inPane = ownPane !== undefined;
+	// Only inside one group and only in the vertical strip: grouping is what that layout is for, and
+	// `groupTabs` is expressible precisely because both tabs already belong to the same group. A tab this
+	// pane already holds is not offered it again — that drop has nothing to do.
+	const acceptsPane =
+		vertical &&
+		location.area === "center" &&
+		draggingTab !== null &&
+		draggingTab.id !== tab.id &&
+		!ownPane?.tabIds.includes(draggingTab.id) &&
+		(findLayoutGroupTabs(document, location) ?? []).some(
+			(candidate) => candidate.id === draggingTab.id,
+		);
+	// A tab already in a pane is joined, not re-arranged: one band, and it says which arrangement the
+	// newcomer is joining. See shell/layout/SPEC.md.
+	const paneWith = useDroppable({
+		id: tupleKey("dnd-pane", location.groupId, tab.id, "with"),
+		data: {
+			target: {
+				kind: "pane",
+				location,
+				tabId: tab.id,
+				direction: defaultPaneDirection,
+			} satisfies DropTarget,
+		},
+		disabled: !acceptsPane || inPane,
+	});
+	const paneJoin = useDroppable({
+		id: tupleKey("dnd-pane", location.groupId, tab.id, "join"),
+		data: {
+			target: {
+				kind: "pane",
+				location,
+				tabId: tab.id,
+				direction: ownPane?.direction ?? "horizontal",
+			} satisfies DropTarget,
+		},
+		disabled: !acceptsPane || !inPane,
+	});
+	// The neighbours rather than every tab in the group: a flat list of "show beside <name>" for twenty
+	// terminals is a menu nobody reads, and dragging covers the arbitrary pairing.
+	const paneNeighbours =
+		vertical && location.area === "center" && ownGroup
+			? [ownGroup.tabs[index - 1], ownGroup.tabs[index + 1]].flatMap((candidate) =>
+					candidate && candidate.id !== tab.id
+						? [
+								{
+									tab: candidate,
+									direction: paneForTab(ownGroup, candidate.id)?.direction ?? defaultPaneDirection,
+								},
+							]
+						: [],
+				)
+			: [];
 	const before = useDroppable({
 		id: tupleKey("dnd-insert", location.area, location.groupId, String(index), "before"),
 		data: { target: { kind: "insert", location, index } satisfies DropTarget },
@@ -966,7 +1135,21 @@ function WorkbenchTab({
 		const result = moveTabToGroup(document, tab, target, targetIndex);
 		if (!isLayoutUnavailable(result)) onApply(result);
 	};
-	const reorder = (nextIndex: number) => move(location, nextIndex);
+	// Inside a pane the two orders are one order, so the menu moves the member rather than the strip row:
+	// a strip placement is what takes a tab *out* of its pane. See shell/layout/SPEC.md.
+	const reorder = (nextIndex: number) => {
+		if (ownPane && location.area === "center") {
+			const result = reorderPaneMember(
+				document,
+				location.groupId,
+				tab.id,
+				nextIndex > index ? 1 : -1,
+			);
+			if (!isLayoutUnavailable(result)) onApply(result);
+			return;
+		}
+		move(location, nextIndex);
+	};
 	const focusTab = (keep?: boolean) => {
 		onSelect(tab.id, keep);
 		requestAnimationFrame(() =>
@@ -992,41 +1175,81 @@ function WorkbenchTab({
 					data-kind={tab.kind === "document" ? "plan" : tab.kind}
 					data-session-id={tab.kind === "chat" ? tab.sessionId : undefined}
 					data-dragging={drag.isDragging || undefined}
-					className="group relative flex min-w-96 max-w-192 shrink-0 items-center border-border-default border-r text-text-muted after:pointer-events-none after:absolute after:inset-x-0 after:bottom-0 after:z-10 after:h-[2px] after:rounded-full after:content-[''] data-[active=true]:bg-control-bg-selected data-[active=true]:text-text-default data-[active=true]:after:bg-primary data-[dragging]:opacity-40"
+					data-paned={inPane || undefined}
+					className={
+						vertical
+							? "group relative flex w-full shrink-0 items-center border-border-muted border-b text-text-muted after:pointer-events-none after:absolute after:inset-y-0 after:left-0 after:z-10 after:w-[2px] after:content-[''] data-[active=true]:bg-control-bg-selected data-[active=true]:text-text-default data-[active=true]:after:bg-primary data-[dragging]:opacity-40 data-[paned]:border-primary data-[paned]:border-l-2"
+							: "group relative flex min-w-96 max-w-192 shrink-0 items-center border-border-default border-r text-text-muted after:pointer-events-none after:absolute after:inset-x-0 after:bottom-0 after:z-10 after:h-[2px] after:rounded-full after:content-[''] data-[active=true]:bg-control-bg-selected data-[active=true]:text-text-default data-[active=true]:after:bg-primary data-[dragging]:opacity-40"
+					}
 				>
 					<div
 						ref={before.setNodeRef}
 						aria-hidden="true"
 						data-drop-label={acceptsBefore ? `Insert before ${name}` : undefined}
 						data-drop-active={before.isOver || undefined}
-						className="pointer-events-none absolute inset-y-0 left-0 z-10 w-1/2 border-primary data-[drop-active]:border-l-2"
+						className={
+							vertical
+								? "pointer-events-none absolute inset-x-0 top-0 z-10 h-1/4 border-primary data-[drop-active]:border-t-2"
+								: "pointer-events-none absolute inset-y-0 left-0 z-10 w-1/2 border-primary data-[drop-active]:border-l-2"
+						}
 					/>
 					<div
 						ref={after.setNodeRef}
 						aria-hidden="true"
 						data-drop-label={acceptsAfter ? `Insert after ${name}` : undefined}
 						data-drop-active={after.isOver || undefined}
-						className="pointer-events-none absolute inset-y-0 right-0 z-10 w-1/2 border-primary data-[drop-active]:border-r-2"
+						className={
+							vertical
+								? "pointer-events-none absolute inset-x-0 bottom-0 z-10 h-1/4 border-primary data-[drop-active]:border-b-2"
+								: "pointer-events-none absolute inset-y-0 right-0 z-10 w-1/2 border-primary data-[drop-active]:border-r-2"
+						}
 					/>
-					<button
-						ref={register}
-						type="button"
-						id={tabDomId(location, tab.id)}
-						role="tab"
-						aria-selected={active}
-						aria-keyshortcuts="Delete Home End ArrowLeft ArrowRight Alt+Shift+ArrowLeft Alt+Shift+ArrowRight Control+F6 Control+Shift+F6"
-						aria-controls={panelId}
-						data-layout-tab-id={tab.id}
-						tabIndex={active ? 0 : -1}
-						{...drag.listeners}
-						title={preview ? "Preview — double-click to keep" : name}
-						onClick={selectFromClick}
-						onDoubleClick={selectFromDoubleClick}
-						onKeyDown={onKeyDown}
-						className={`flex min-w-0 flex-1 items-center gap-4 py-4 pl-8 text-left outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary ${tab.kind === "tool" ? "pr-8" : ""}`}
-					>
-						{tabIcon(tab, active)}
-						<span className={`truncate ${preview ? "italic" : ""}`}>{name}</span>
+						{acceptsPane && inPane ? (
+							<div
+								ref={paneJoin.setNodeRef}
+								aria-hidden="true"
+								data-drop-label={`${ownPane?.direction === "vertical" ? "Show under" : "Show beside"} ${name}`}
+								data-drop-active={paneJoin.isOver || undefined}
+								className="pointer-events-none absolute inset-x-0 inset-y-1/4 z-20 border-primary data-[drop-active]:border-2 data-[drop-active]:bg-primary-subtle"
+							/>
+						) : null}
+						{/* The band between the insertion edges means "share the pane with this tab". The
+						    arrangement is the setting's, not the drop's: two halves made every drag a lottery
+						    the setting never entered. The menu changes an arrangement afterwards. */}
+						{acceptsPane && !inPane ? (
+							<div
+								ref={paneWith.setNodeRef}
+								aria-hidden="true"
+								data-drop-label={`${defaultPaneDirection === "vertical" ? "Show under" : "Show beside"} ${name}`}
+								data-drop-active={paneWith.isOver || undefined}
+								className="pointer-events-none absolute inset-x-0 inset-y-1/4 z-20 border-primary data-[drop-active]:border-2 data-[drop-active]:bg-primary-subtle"
+							/>
+						) : null}
+						<button
+							ref={register}
+							type="button"
+							id={tabDomId(location, tab.id)}
+							role="tab"
+							aria-selected={active}
+							aria-keyshortcuts="Delete Home End ArrowLeft ArrowRight Alt+Shift+ArrowLeft Alt+Shift+ArrowRight Control+F6 Control+Shift+F6"
+							aria-controls={panelId}
+							data-layout-tab-id={tab.id}
+							tabIndex={active ? 0 : -1}
+							{...drag.listeners}
+							onClick={selectFromClick}
+							onDoubleClick={selectFromDoubleClick}
+							onKeyDown={onKeyDown}
+							className={`flex min-w-0 flex-1 items-center gap-4 pl-8 text-left outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary ${vertical ? "py-8" : "py-4"} ${tab.kind === "tool" ? "pr-8" : ""}`}
+						>
+							{tabIcon(tab, renderTabIcon, active)}
+							{subtitle ? (
+								<span className="flex min-w-0 flex-1 flex-col">
+									<span className={`truncate ${preview ? "italic" : ""}`}>{name}</span>
+									<span className="truncate tr-text-metadata text-text-subtle">{subtitle}</span>
+								</span>
+							) : (
+								<span className={`truncate ${preview ? "italic" : ""}`}>{name}</span>
+							)}
 						{renderTabAdornment(tab)}
 					</button>
 					{tab.kind !== "tool" ? (
@@ -1062,19 +1285,91 @@ function WorkbenchTab({
 				<ContextMenuItem disabled={!preview} onSelect={() => focusTab(true)}>
 					{preview ? "Keep preview" : "Keep preview — already kept"}
 				</ContextMenuItem>
-				<ContextMenuItem disabled={index === 0} onSelect={() => reorder(index - 1)}>
-					{index === 0 ? "Move left — already first" : "Move left"}
-				</ContextMenuItem>
-				<ContextMenuItem
-					disabled={index === (findLayoutGroupTabs(document, location)?.length ?? 0) - 1}
-					onSelect={() => reorder(index + 1)}
-				>
-					{index === (findLayoutGroupTabs(document, location)?.length ?? 0) - 1
-						? "Move right — already last"
-						: "Move right"}
-				</ContextMenuItem>
-				<ContextMenuSeparator />
-				{(["left", "right", "up", "down"] as const).map((direction) => {
+				{(ownPane ? ownPane.tabIds.indexOf(tab.id) > 0 : index > 0) ? (
+					<ContextMenuItem onSelect={() => reorder(index - 1)}>
+						{inPane
+							? ownPane?.direction === "vertical"
+								? "Move up in this group"
+								: "Move left in this group"
+							: vertical
+								? "Move up"
+								: "Move left"}
+					</ContextMenuItem>
+				) : null}
+				{(
+					ownPane
+						? ownPane.tabIds.indexOf(tab.id) < ownPane.tabIds.length - 1
+						: index < (findLayoutGroupTabs(document, location)?.length ?? 0) - 1
+				) ? (
+					<ContextMenuItem onSelect={() => reorder(index + 1)}>
+						{inPane
+							? ownPane?.direction === "vertical"
+								? "Move down in this group"
+								: "Move right in this group"
+							: vertical
+								? "Move down"
+								: "Move right"}
+					</ContextMenuItem>
+				) : null}
+				{/* Making a pane is a vertical-strip gesture; managing one you are in works in either
+				    orientation, since a pane made by intent (the blueprint pair) exists there too. */}
+				{location.area === "center" && (vertical || inPane) ? (
+					<>
+						<ContextMenuSeparator />
+						{paneNeighbours.map((neighbour) => (
+							<ContextMenuItem
+								key={neighbour.tab.id}
+								onSelect={() => {
+									const result = groupTabs(
+										document,
+										location.groupId,
+										tab.id,
+										neighbour.tab.id,
+										neighbour.direction,
+									);
+									if (!isLayoutUnavailable(result)) onApply(result);
+								}}
+							>
+								{`${neighbour.direction === "vertical" ? "Show under" : "Show beside"} ${neighbour.tab.name}`}
+							</ContextMenuItem>
+						))}
+						{ownPane ? (
+							<ContextMenuItem
+								onSelect={() => {
+									const result = setPaneDirection(
+										document,
+										location.groupId,
+										ownPane.id,
+										ownPane.direction === "horizontal" ? "vertical" : "horizontal",
+									);
+									if (!isLayoutUnavailable(result)) onApply(result);
+								}}
+							>
+								{ownPane.direction === "horizontal"
+									? "Stack this group"
+									: "Put this group in columns"}
+							</ContextMenuItem>
+						) : null}
+						<ContextMenuItem
+							disabled={!inPane}
+							onSelect={() => {
+								const result = ungroupTab(document, location.groupId, tab.id);
+								if (!isLayoutUnavailable(result)) onApply(result);
+							}}
+						>
+							{inPane ? "Show on its own" : "Show on its own — not grouped"}
+						</ContextMenuItem>
+					</>
+				) : null}
+				{/* With vertical tabs on, splitting is not a thing this layout does — grouping is. A verb the
+				    mode removed is hidden; a verb a *limit* blocks stays, disabled, with its reason. */}
+				{location.area === "center" && tab.kind !== "tool" && !vertical ? (
+					<ContextMenuSeparator />
+				) : null}
+				{(location.area === "center" && tab.kind !== "tool" && !vertical
+					? (["left", "right", "up", "down"] as const)
+					: []
+				).map((direction) => {
 					const unavailable = splitReason(direction);
 					return (
 						<ContextMenuItem
@@ -1255,6 +1550,7 @@ interface SharedGroupProps {
 	renderTabBody: WorkbenchProps["renderTabBody"];
 	renderTabAdornment: WorkbenchProps["renderTabAdornment"];
 	renderToolBody: WorkbenchProps["renderToolBody"];
+	renderTabIcon: WorkbenchProps["renderTabIcon"];
 	renderSideMenuActions: WorkbenchProps["renderSideMenuActions"];
 	onAttentionChange: WorkbenchProps["onAttentionChange"];
 	onUserNavigation: WorkbenchProps["onUserNavigation"];
@@ -1265,16 +1561,20 @@ interface SharedGroupProps {
 	onHideSide: (region: LayoutAuxiliaryRegion) => void;
 	onRevealTool: (tool: LayoutToolId) => void;
 	canFocusAdjacentGroup: boolean;
+	verticalTabs: VerticalTabsColumn | null;
+	defaultPaneDirection: LayoutTabPane["direction"];
 }
 
 function CenterGroupView({
 	group,
+	projectionEpoch,
 	onNewChat,
 	renderEmptyCenter,
 	renderCenterActions,
 	...shared
 }: SharedGroupProps & {
 	group: LayoutCenterGroup;
+	projectionEpoch: number;
 	onNewChat: WorkbenchProps["onNewChat"];
 	renderEmptyCenter: WorkbenchProps["renderEmptyCenter"];
 	renderCenterActions: WorkbenchProps["renderCenterActions"];
@@ -1300,6 +1600,186 @@ function CenterGroupView({
 		}
 		shared.onAttentionChange(selectTab(shared.attention, location, tabId, true, true));
 	};
+	// Switching away used to unmount the terminal: xterm and its addons torn down, then rebuilt on the way
+	// back, re-attached, and fed the whole replay again — the dominant cost of a tab switch. Recently used
+	// terminals stay mounted instead, bounded so a workspace with dozens of them cannot grow without limit.
+	const selectedTerminalId = selected?.kind === "terminal" ? selected.id : null;
+	const [terminalMru, setTerminalMru] = useState<string[]>([]);
+	useEffect(() => {
+		if (!selectedTerminalId) return;
+		setTerminalMru((previous) =>
+			previous[0] === selectedTerminalId
+				? previous
+				: [selectedTerminalId, ...previous.filter((id) => id !== selectedTerminalId)].slice(
+						0,
+						KEPT_TERMINALS,
+					),
+		);
+	}, [selectedTerminalId]);
+	// Creation is a vertical-strip gesture, but a pane that EXISTS renders in either orientation: the
+	// blueprint pair is made by intent, and horizontal tabs must not quietly unsplit it. See SPEC.md.
+	const activePane = selected ? paneForTab(group, selected.id) : undefined;
+	const paneTabs = activePane
+		? activePane.tabIds.flatMap((id) => group.tabs.find((tab) => tab.id === id) ?? [])
+		: [];
+	const paneIds = new Set(paneTabs.map((tab) => tab.id));
+	const showPanes = activePane !== undefined && paneTabs.length > 1;
+
+	const keptTerminals = group.tabs.filter(
+		(tab) => tab.kind === "terminal" && terminalMru.includes(tab.id),
+	);
+
+	const groupWidth = size.width;
+	const toStripPercent = (px: number) => (groupWidth > 0 ? (px / groupWidth) * 100 : 20);
+	const verticalStripPercent = toStripPercent(shared.verticalTabs?.width ?? 0);
+	const verticalMinPercent = Math.min(50, toStripPercent(VERTICAL_TABS_WIDTH.min));
+	const verticalMaxPercent = Math.max(verticalMinPercent, toStripPercent(VERTICAL_TABS_WIDTH.max));
+	const onVerticalWidthChange = shared.verticalTabs?.onWidthChange;
+	// The panel group speaks percentages; the setting is px, so it survives a window resize unchanged.
+	const onVerticalLayout = (sizes: number[]) => {
+		if (!onVerticalWidthChange || groupWidth <= 0) return;
+		onVerticalWidthChange(Math.round(((sizes[0] ?? 0) / 100) * groupWidth));
+	};
+
+	const strip = (
+		<TabStrip
+			document={shared.document}
+			defaultPaneDirection={shared.defaultPaneDirection}
+			attention={shared.attention}
+			selectionEpoch={shared.selectionEpoch}
+			location={location}
+			tabs={group.tabs}
+			selectedId={selected?.id}
+			previewId={group.previewTabId}
+			maxSideGroups={shared.maxSideGroups}
+			maxBottomGroups={shared.maxBottomGroups}
+			draggingTab={shared.draggingTab}
+			splitGeometry={splitGeometry}
+			orientation={shared.verticalTabs ? "vertical" : "horizontal"}
+			onSelect={applySelect}
+			onClose={shared.onClose}
+			onApply={shared.onApply}
+			onFocusAdjacentGroup={shared.onFocusAdjacentGroup}
+			onHideSide={shared.onHideSide}
+			onRevealTool={shared.onRevealTool}
+			canFocusAdjacentGroup={shared.canFocusAdjacentGroup}
+			renderTabAdornment={shared.renderTabAdornment}
+			renderTabIcon={shared.renderTabIcon}
+			trailing={
+				<>
+					{renderCenterActions(group.id)}
+					{group.tabs.length === 0 ? (
+						<IconTooltip
+							label={isLayoutUnavailable(groupRemoval) ? groupRemoval.reason : "Remove group"}
+						>
+							<button
+								type="button"
+								data-testid="remove-layout-group"
+								aria-label="Remove group"
+								disabled={isLayoutUnavailable(groupRemoval)}
+								onClick={() => {
+									if (!isLayoutUnavailable(groupRemoval)) shared.onApply(groupRemoval);
+								}}
+								className="flex w-32 shrink-0 items-center justify-center text-text-muted hover:bg-control-bg-hovered hover:text-text-default disabled:text-control-disabled-text"
+							>
+								<X className="size-16" />
+							</button>
+						</IconTooltip>
+					) : null}
+					<IconTooltip label="New chat">
+						<button
+							type="button"
+							data-testid="new-chat"
+							aria-label="New chat"
+							onClick={() => onNewChat(group.id)}
+							className="flex w-7 shrink-0 items-center justify-center text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
+						>
+							<MessageSquarePlus className="size-4" />
+						</button>
+					</IconTooltip>
+				</>
+			}
+		/>
+	);
+	const paneResize = useCommittedSizes(
+		activePane ? activePane.weights.map((weight) => weight * 100) : [],
+		projectionEpoch,
+		(sizes) => {
+			if (!activePane) return;
+			const weights = sizes.map((size) => size / 100);
+			if (!weights.every((weight) => weight > 0 && weight < 1)) return;
+			const result = setPaneWeights(shared.document, group.id, activePane.id, weights);
+			if (!isLayoutUnavailable(result)) shared.onApply(result);
+		},
+		shared.onGestureCanceled,
+	);
+
+	const panel = (
+		<div
+			id={groupPanelId(location)}
+			data-testid="editor-pane"
+			role="tabpanel"
+			aria-labelledby={selected ? tabDomId(location, selected.id) : undefined}
+			className="relative min-h-0 min-w-0 flex-1 overflow-hidden"
+		>
+			{keptTerminals
+				.filter((terminal) => !paneIds.has(terminal.id))
+				.map((terminal) => (
+					<div
+						key={terminal.id}
+						// `invisible` rather than `hidden`: a terminal measured at zero size re-fits to a 1x1 grid
+						// and loses its wrap, so an inactive one has to keep occupying real layout space.
+						className={
+							terminal.id === selected?.id && !showPanes
+								? "absolute inset-0"
+								: "pointer-events-none invisible absolute inset-0"
+						}
+						aria-hidden={terminal.id !== selected?.id || showPanes}
+					>
+						{shared.renderTabBody(terminal)}
+					</div>
+				))}
+			{showPanes && activePane ? (
+				<ResizablePanelGroup
+					key={tupleKey("pane", activePane.id, String(paneTabs.length))}
+					direction={activePane.direction}
+					onLayout={paneResize.onLayout}
+					className="absolute inset-0"
+				>
+					{paneTabs.map((tab, index) => (
+						<Fragment key={tab.id}>
+							{index > 0 ? (
+								<ResizableHandle
+									direction={activePane.direction}
+									onDragging={paneResize.onDragging}
+									onKeyDownCapture={paneResize.onKeyboard}
+									onKeyUpCapture={paneResize.onKeyboardEnd}
+								/>
+							) : null}
+							<ResizablePanel
+								id={tupleKey("pane-panel", activePane.id, tab.id)}
+								order={index + 1}
+								defaultSize={(activePane.weights[index] ?? 1 / paneTabs.length) * 100}
+								minSize={10}
+							>
+								<div
+									data-testid="pane-member"
+									data-tab-id={tab.id}
+									className="relative h-full min-h-0 min-w-0 overflow-hidden"
+								>
+									{shared.renderTabBody(tab)}
+								</div>
+							</ResizablePanel>
+						</Fragment>
+					))}
+				</ResizablePanelGroup>
+			) : null}
+			{!showPanes && selected && selected.kind !== "terminal" ? (
+				<Fragment key={selected.id}>{shared.renderTabBody(selected)}</Fragment>
+			) : null}
+			{selected ? null : renderEmptyCenter(group.id)}
+		</div>
+	);
 	return (
 		<section
 			ref={size.ref}
@@ -1314,75 +1794,39 @@ function CenterGroupView({
 					shared.onAttentionChange(selectTab(shared.attention, location, selected.id, false));
 			}}
 		>
-			<TabStrip
-				document={shared.document}
-				attention={shared.attention}
-				selectionEpoch={shared.selectionEpoch}
-				location={location}
-				tabs={group.tabs}
-				selectedId={selected?.id}
-				previewId={group.previewTabId}
-				maxSideGroups={shared.maxSideGroups}
-				maxBottomGroups={shared.maxBottomGroups}
-				draggingTab={shared.draggingTab}
-				splitGeometry={splitGeometry}
-				onSelect={applySelect}
-				onClose={shared.onClose}
-				onApply={shared.onApply}
-				onFocusAdjacentGroup={shared.onFocusAdjacentGroup}
-				onHideSide={shared.onHideSide}
-				onRevealTool={shared.onRevealTool}
-				canFocusAdjacentGroup={shared.canFocusAdjacentGroup}
-				renderTabAdornment={shared.renderTabAdornment}
-				trailing={
-					<>
-						{renderCenterActions(group.id)}
-						{group.tabs.length === 0 ? (
-							<IconTooltip
-								label={isLayoutUnavailable(groupRemoval) ? groupRemoval.reason : "Remove group"}
-							>
-								<button
-									type="button"
-									data-testid="remove-layout-group"
-									aria-label="Remove group"
-									disabled={isLayoutUnavailable(groupRemoval)}
-									onClick={() => {
-										if (!isLayoutUnavailable(groupRemoval)) shared.onApply(groupRemoval);
-									}}
-									className="flex w-32 shrink-0 items-center justify-center text-text-muted hover:bg-control-bg-hovered hover:text-text-default disabled:text-control-disabled-text"
-								>
-									<X className="size-14" />
-								</button>
-							</IconTooltip>
-						) : null}
-						<IconTooltip label="New chat">
-							<button
-								type="button"
-								data-testid="new-chat"
-								aria-label="New chat"
-								onClick={() => onNewChat(group.id)}
-								className="flex w-32 shrink-0 items-center justify-center text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
-							>
-								<MessageSquarePlus className="size-14" />
-							</button>
-						</IconTooltip>
-					</>
-				}
-			/>
-			<div
-				id={groupPanelId(location)}
-				data-testid="editor-pane"
-				role="tabpanel"
-				aria-labelledby={selected ? tabDomId(location, selected.id) : undefined}
-				className="relative min-h-0 flex-1 overflow-hidden"
-			>
-				{selected ? (
-					<Fragment key={selected.id}>{shared.renderTabBody(selected)}</Fragment>
-				) : (
-					renderEmptyCenter(group.id)
-				)}
-			</div>
-			{shared.draggingTab &&
+			{shared.verticalTabs ? (
+				<ResizablePanelGroup
+					key={tupleKey("vertical-tabs", group.id)}
+					direction="horizontal"
+					onLayout={onVerticalLayout}
+					className="min-h-0 min-w-0 flex-1"
+				>
+					<ResizablePanel
+						id={tupleKey("vertical-tabs-panel", group.id, "strip")}
+						order={1}
+						defaultSize={verticalStripPercent}
+						minSize={verticalMinPercent}
+						maxSize={verticalMaxPercent}
+					>
+						{strip}
+					</ResizablePanel>
+					<ResizableHandle direction="horizontal" data-testid="vertical-tabs-resize" />
+					<ResizablePanel
+						id={tupleKey("vertical-tabs-panel", group.id, "editor")}
+						order={2}
+						minSize={20}
+					>
+						<div className="flex h-full min-h-0 min-w-0 flex-col">{panel}</div>
+					</ResizablePanel>
+				</ResizablePanelGroup>
+			) : (
+				<>
+					{strip}
+					{panel}
+				</>
+			)}
+			{!shared.verticalTabs &&
+			shared.draggingTab &&
 			canPlaceLayoutTab(shared.draggingTab, "center") &&
 			collectCenterGroups(shared.document.center).length < LAYOUT_LIMITS.maxCenterGroups ? (
 				<div className="pointer-events-none absolute inset-0 z-30">
@@ -1448,6 +1892,7 @@ function CenterNodeView({
 		<CenterGroupView
 			key={tupleKey("center-node", node.id)}
 			group={node}
+			projectionEpoch={projectionEpoch}
 			onNewChat={onNewChat}
 			{...shared}
 		/>
@@ -1615,6 +2060,7 @@ function SideGroupView({
 				<div className="min-w-0 flex-1">
 					<TabStrip
 						document={shared.document}
+						defaultPaneDirection={shared.defaultPaneDirection}
 						attention={shared.attention}
 						selectionEpoch={shared.selectionEpoch}
 						location={location}
@@ -1633,6 +2079,7 @@ function SideGroupView({
 						onRevealTool={shared.onRevealTool}
 						canFocusAdjacentGroup={shared.canFocusAdjacentGroup}
 						renderTabAdornment={shared.renderTabAdornment}
+						renderTabIcon={shared.renderTabIcon}
 						trailing={
 							<SideGroupMenu
 								document={shared.document}
@@ -2012,6 +2459,7 @@ function BottomGroupView({
 				<div className="min-w-0 flex-1">
 					<TabStrip
 						document={shared.document}
+						defaultPaneDirection={shared.defaultPaneDirection}
 						attention={shared.attention}
 						selectionEpoch={shared.selectionEpoch}
 						location={location}
@@ -2030,6 +2478,7 @@ function BottomGroupView({
 						onRevealTool={shared.onRevealTool}
 						canFocusAdjacentGroup={shared.canFocusAdjacentGroup}
 						renderTabAdornment={shared.renderTabAdornment}
+						renderTabIcon={shared.renderTabIcon}
 						trailing={
 							showAlignmentMenu ? (
 								<BottomAlignmentMenu
@@ -2450,9 +2899,14 @@ export function Workbench({
 	maxSideGroups,
 	maxBottomGroups,
 	projectionEpoch,
+	verticalCenterTabs,
+	verticalCenterTabsWidth,
+	defaultPaneDirection,
+	onVerticalCenterTabsWidthChange,
 	focusRequest,
 	renderTabBody,
 	renderTabAdornment,
+	renderTabIcon,
 	renderToolBody,
 	renderEmptyCenter,
 	renderCenterActions,
@@ -2701,6 +3155,15 @@ export function Workbench({
 				result = moveTabToGroup(document, tab, target.location, insertionIndex);
 				break;
 			}
+			case "pane":
+				result = groupTabs(
+					document,
+					target.location.groupId,
+					tab.id,
+					target.tabId,
+					target.direction,
+				);
+				break;
 			case "split":
 				result =
 					tab.kind === "tool"
@@ -2988,15 +3451,24 @@ export function Workbench({
 		},
 		[apply, document, maxBottomGroups, maxSideGroups],
 	);
+	// Every centre group, including the halves of a pre-existing split. Falling back to horizontal strips
+	// there would flip the layout out from under the setting — the one thing this mode must never do — and
+	// a split can no longer be created while it is on, so this is a state the user is leaving, not entering.
+	const verticalTabs: VerticalTabsColumn | null = verticalCenterTabs
+		? { width: verticalCenterTabsWidth, onWidthChange: onVerticalCenterTabsWidthChange }
+		: null;
 	const shared: SharedGroupProps = {
 		document,
 		attention,
 		selectionEpoch: tabSelectionEpoch,
+		defaultPaneDirection,
 		maxSideGroups,
 		maxBottomGroups,
+		verticalTabs,
 		draggingTab,
 		renderTabBody,
 		renderTabAdornment,
+		renderTabIcon,
 		renderToolBody,
 		renderSideMenuActions,
 		onAttentionChange,
@@ -3293,7 +3765,7 @@ export function Workbench({
 			<DragOverlay dropAnimation={null}>
 				{draggingTab ? (
 					<div className="flex max-w-224 items-center gap-4 rounded-[var(--radius-sm)] border border-primary bg-container-elevated-bg px-8 py-4 tr-text-ui text-text-default shadow-lg">
-						{tabIcon(draggingTab)}
+						{tabIcon(draggingTab, renderTabIcon)}
 						<span className="truncate">{layoutTabName(draggingTab)}</span>
 					</div>
 				) : null}

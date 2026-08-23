@@ -14,6 +14,7 @@ export function tupleKey(namespace: string, ...parts: string[]): string {
 
 type LayoutResourceIdentityInput =
 	| { kind: "file"; path: string }
+	| { kind: "external-file"; path: string }
 	| {
 			kind: "diff";
 			path: string;
@@ -31,6 +32,8 @@ export function layoutResourceIdentity<T extends LayoutResourceIdentityInput>(ta
 	switch (tab.kind) {
 		case "file":
 			return tupleKey("layout-resource", "file", tab.path);
+		case "external-file":
+			return tupleKey("layout-resource", "external-file", tab.path);
 		case "diff": {
 			const reference =
 				tab.scope.kind === "commit"

@@ -22,6 +22,7 @@ import {
 	minimumSideGroupLimit,
 	projectWorkspaceLayout,
 	reconcileAttention,
+	VERTICAL_TABS_WIDTH,
 	validateLayoutDocument,
 	type WorkbenchFrame,
 	type WorkspaceLayoutDocument,
@@ -396,7 +397,12 @@ function parsePreferences(value: unknown): LocalLayoutPreferences | undefined {
 		Number(value.maxSideGroups) > 32 ||
 		!Number.isInteger(value.maxBottomGroups) ||
 		Number(value.maxBottomGroups) < 1 ||
-		Number(value.maxBottomGroups) > 32
+		Number(value.maxBottomGroups) > 32 ||
+		typeof value.verticalCenterTabs !== "boolean" ||
+		!Number.isFinite(value.verticalCenterTabsWidth) ||
+		Number(value.verticalCenterTabsWidth) < VERTICAL_TABS_WIDTH.min ||
+		Number(value.verticalCenterTabsWidth) > VERTICAL_TABS_WIDTH.max ||
+		(value.defaultPaneDirection !== "horizontal" && value.defaultPaneDirection !== "vertical")
 	) {
 		return undefined;
 	}
@@ -404,6 +410,9 @@ function parsePreferences(value: unknown): LocalLayoutPreferences | undefined {
 		defaultPresetId: value.defaultPresetId,
 		maxSideGroups: Number(value.maxSideGroups),
 		maxBottomGroups: Number(value.maxBottomGroups),
+		verticalCenterTabs: value.verticalCenterTabs,
+		verticalCenterTabsWidth: Number(value.verticalCenterTabsWidth),
+		defaultPaneDirection: value.defaultPaneDirection,
 	};
 }
 

@@ -10,6 +10,14 @@ export interface LayoutFileTab {
 	path: string;
 }
 
+/** A file outside the worktree (Claude's user/managed-scope configuration), addressed absolutely. */
+export interface LayoutExternalFileTab {
+	kind: "external-file";
+	id: string;
+	name: string;
+	path: string;
+}
+
 export interface LayoutDiffTab {
 	kind: "diff";
 	id: string;
@@ -50,6 +58,7 @@ export interface LayoutToolTab {
 
 export type LayoutCenterTab =
 	| LayoutFileTab
+	| LayoutExternalFileTab
 	| LayoutDiffTab
 	| LayoutChatTab
 	| LayoutDocumentTab
@@ -58,11 +67,32 @@ export type LayoutAuxiliaryTab = LayoutToolTab | LayoutTerminalTab;
 export type LayoutSideTab = LayoutAuxiliaryTab;
 export type LayoutTab = LayoutCenterTab | LayoutAuxiliaryTab;
 
+/**
+ * Tabs of one group shown together as resizable panes instead of one at a time.
+ *
+ * Deliberately metadata on the group rather than a node in the center tree: with vertical tabs off, a
+ * grouped entry shows one ordinary tab per member, so the tab list has to stay flat. A `LayoutCenterSplit`
+ * means "both at once, always"; this means "these are one entry in the strip".
+ */
+export interface LayoutTabPane {
+	id: string;
+	/** At least two tabs of the owning group; a tab belongs to at most one pane. */
+	tabIds: string[];
+	direction: "horizontal" | "vertical";
+	/** One weight per member, in the same order, each in (0, 1). */
+	weights: number[];
+}
+
+export const LAYOUT_PANE_LIMITS = { minMembers: 2, maxMembers: 4 } as const;
+
+export const VERTICAL_TABS_WIDTH = { min: 120, max: 480, default: 200 } as const;
+
 export interface LayoutCenterGroup {
 	kind: "group";
 	id: string;
 	tabs: LayoutCenterTab[];
 	previewTabId?: string;
+	panes?: LayoutTabPane[];
 }
 
 export interface LayoutCenterSplit {

@@ -62,11 +62,13 @@ import {
 } from "../lib";
 import type {
 	LayoutAuxiliaryRegion,
+	LayoutTabPane,
 	LayoutToolId,
 	WorkbenchFrame,
 	WorkspaceLayoutDocument,
 	WorkspaceViewState,
 } from "../shell/layout";
+import { VERTICAL_TABS_WIDTH } from "../shell/layout";
 import type { ConnectionStatus } from "../transport";
 import {
 	type HistoryTarget,
@@ -174,12 +176,21 @@ export interface LocalLayoutPreferences {
 	defaultPresetId: string;
 	maxSideGroups: number;
 	maxBottomGroups: number;
+	/** Center tabs as a column beside the editor instead of a strip above it. */
+	verticalCenterTabs: boolean;
+	/** Width of that column, in px. Ignored while `verticalCenterTabs` is off. */
+	verticalCenterTabsWidth: number;
+	/** How a pane is arranged when one is first made; joining an existing pane follows that pane. */
+	defaultPaneDirection: LayoutTabPane["direction"];
 }
 
 export const DEFAULT_LOCAL_LAYOUT_PREFERENCES: LocalLayoutPreferences = {
 	defaultPresetId: "balanced",
 	maxSideGroups: 6,
 	maxBottomGroups: 3,
+	verticalCenterTabs: false,
+	verticalCenterTabsWidth: VERTICAL_TABS_WIDTH.default,
+	defaultPaneDirection: "horizontal",
 };
 
 export interface LocalLayoutStatePayload {

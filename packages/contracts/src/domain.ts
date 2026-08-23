@@ -430,6 +430,7 @@ export function isSystemThemePair(value: unknown): value is SystemThemePair {
 }
 
 export type LayoutToolId = "projects" | "specs" | "files" | "changes" | "review";
+export type LayoutToolId = "projects" | "specs" | "files" | "changes" | "review" | "claude";
 
 export type LayoutBottomAlignment = "center" | "center-left" | "center-right" | "full";
 
@@ -489,6 +490,13 @@ export function isComposerGrowthLimit(value: unknown): value is ComposerGrowthLi
 }
 
 export interface AppConfig extends ThemePreference {
+	/**
+	 * Everything that reads or writes Claude Code's own configuration, watches for it in a terminal, or
+	 * offers its plugin. Off until asked for: it inspects files outside the worktree, polls the process
+	 * table, and offers to write to `~/.claude` — none of which a user who does not run Claude Code
+	 * should get by default.
+	 */
+	claudeCodeEnabled: boolean;
 	analyticsEnabled: boolean;
 	terminalReplayKb: number;
 	composerGrowthLimit: ComposerGrowthLimit;
@@ -527,6 +535,7 @@ export function isJbcentralQuotaRefreshSeconds(value: unknown): value is number 
 export const DEFAULT_CONFIG: AppConfig = {
 	theme: "dark",
 	themeMode: "fixed",
+	claudeCodeEnabled: false,
 	analyticsEnabled: true,
 	terminalReplayKb: TERMINAL_REPLAY_KB.default,
 	composerGrowthLimit: "half-chat",

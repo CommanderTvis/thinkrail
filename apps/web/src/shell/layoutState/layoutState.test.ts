@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, test } from "bun:test";
-import { useAppStore } from "../../store";
+import { DEFAULT_LOCAL_LAYOUT_PREFERENCES, useAppStore } from "../../store";
 import {
 	BUILTIN_LAYOUT_PRESETS,
 	closeLayoutTab,
@@ -57,11 +57,7 @@ function resetStore(): void {
 		workbenchFrame: null,
 		workspaceViewsByWorkspace: {},
 		layoutStateReady: false,
-		localLayoutPreferences: {
-			defaultPresetId: "balanced",
-			maxSideGroups: 6,
-			maxBottomGroups: 3,
-		},
+		localLayoutPreferences: { ...DEFAULT_LOCAL_LAYOUT_PREFERENCES },
 		layoutDocumentsByWorkspace: {},
 		layoutAttentionByWorkspace: {},
 		layoutProjectionEpochByWorkspace: {},
@@ -98,9 +94,11 @@ describe("frontend-local layout state", () => {
 		setLayoutStateStorageForTests({ local, session }, endpoint);
 		await initializeLocalLayoutState();
 		useAppStore.getState().setLocalLayoutPreferences({
+			...DEFAULT_LOCAL_LAYOUT_PREFERENCES,
 			defaultPresetId: "focused",
 			maxSideGroups: 8,
 			maxBottomGroups: 4,
+			verticalCenterTabs: true,
 		});
 
 		resetLayoutStateForTests();
@@ -108,9 +106,11 @@ describe("frontend-local layout state", () => {
 		setLayoutStateStorageForTests({ local, session }, endpoint);
 		await initializeLocalLayoutState();
 		expect(useAppStore.getState().localLayoutPreferences).toEqual({
+			...DEFAULT_LOCAL_LAYOUT_PREFERENCES,
 			defaultPresetId: "focused",
 			maxSideGroups: 8,
 			maxBottomGroups: 4,
+			verticalCenterTabs: true,
 		});
 	});
 

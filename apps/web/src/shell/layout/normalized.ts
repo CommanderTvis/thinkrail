@@ -5,6 +5,7 @@ import type {
 	LayoutCenterNode,
 	LayoutCenterTab,
 	LayoutTab,
+	LayoutTabPane,
 	LayoutTerminalTab,
 	LayoutToolId,
 	LayoutToolRestoreTarget,
@@ -59,6 +60,8 @@ export interface WorkbenchFrame {
 export interface WorkspaceGroupView {
 	tabs: LayoutCenterTab[];
 	previewTabId?: string;
+	/** Center panes reference this workspace's tabs, so they are view state, not frame state. */
+	panes?: LayoutTabPane[];
 	beforeToolByTabId?: Record<string, LayoutToolId>;
 }
 
@@ -154,6 +157,7 @@ export function workspaceViewFromDocument(document: WorkspaceLayoutDocument): Wo
 			groups[node.id] = {
 				tabs: [...node.tabs],
 				...(node.previewTabId ? { previewTabId: node.previewTabId } : {}),
+				...(node.panes && node.panes.length > 0 ? { panes: node.panes } : {}),
 			};
 		}
 	};
@@ -196,12 +200,38 @@ function projectedCenter(
 				(tab) => tab.id === group.previewTabId && (tab.kind === "file" || tab.kind === "diff"),
 			)
 		: undefined;
+	const panes = viablePanes(group?.panes, tabs);
 	return {
 		kind: "group",
 		id: node.id,
 		tabs,
 		...(preview ? { previewTabId: preview.id } : {}),
+		...(panes ? { panes } : {}),
 	};
+}
+
+/** A pane survives only while at least two of its members are still in the group's tabs. */
+function viablePanes(
+	panes: LayoutTabPane[] | undefined,
+	tabs: readonly LayoutCenterTab[],
+): LayoutTabPane[] | undefined {
+	if (!panes || panes.length === 0) return undefined;
+	const present = new Set(tabs.map((tab) => tab.id));
+	const kept: LayoutTabPane[] = [];
+	for (const pane of panes) {
+		const members = pane.tabIds.filter((id) => present.has(id));
+		if (members.length < 2) continue;
+		kept.push(
+			members.length === pane.tabIds.length
+				? pane
+				: {
+						...pane,
+						tabIds: members,
+						weights: members.map(() => 1 / members.length),
+					},
+		);
+	}
+	return kept.length > 0 ? kept : undefined;
 }
 
 function projectedAuxiliaryTabs(
@@ -370,6 +400,16 @@ export function reconcileWorkspaceView(
 	for (const [groupId, source] of Object.entries(view.groups)) {
 		if (previousById.has(groupId)) continue;
 		for (const tab of source.tabs) append(tab, source, undefined);
+	}
+	for (const source of Object.values(view.groups)) {
+		for (const pane of source.panes ?? []) {
+			for (const [groupId, destination] of Object.entries(groups)) {
+				const kept = viablePanes([pane], destination.tabs);
+				if (!kept) continue;
+				groups[groupId] = { ...destination, panes: [...(destination.panes ?? []), ...kept] };
+				break;
+			}
+		}
 	}
 	return { groups };
 }
