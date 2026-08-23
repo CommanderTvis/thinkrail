@@ -566,6 +566,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 				attention={attention}
 				maxSideGroups={layoutPreferences.maxSideGroups}
 				maxBottomGroups={layoutPreferences.maxBottomGroups}
+				defaultPaneDirection={layoutPreferences.defaultPaneDirection}
 				projectionEpoch={projectionEpoch}
 				{...(focusRequest ? { focusRequest } : {})}
 				renderTabBody={renderTabBody}

@@ -108,6 +108,114 @@ and center resources retain their direct control.
 
 Each auxiliary strip trails an add-to-this-group menu. It offers shell-injected actions plus unplaced tools valid for that region; two rails never offer the same singleton. Center tab menus offer no singleton tools. A terminal created from an auxiliary group lands in that workspace's matching group; a vanished target reroutes through the current local focus rule.
 
+### Keeping terminals alive across a switch
+
+A centre group renders only the selected tab's body, which for a terminal meant tearing down xterm and its
+addons on the way out and rebuilding them on the way back — re-attaching and replaying the whole scrollback
+to arrive at the screen the user had just been looking at. That teardown/rebuild, not rendering, was the
+dominant cost of switching tabs. The **`KEPT_TERMINALS` most recently selected terminals stay mounted**,
+stacked in the panel with the inactive ones `invisible`. The bound matters (a workspace can hold dozens of
+terminals), and so does `invisible` over `hidden`: a terminal measured at zero size re-fits to a degenerate
+grid and loses its wrap, so an inactive one must keep occupying real layout space. Only terminals are kept
+— they are the stateful, expensive-to-rebuild body; every other kind still mounts on demand.
+
+### Tab panes (grouping)
+
+Two tabs of one group can be shown **together** as resizable panes instead of one at a time. Reached two
+ways in the vertical strip: dropping a tab on the band between another tab's insertion edges (left half
+side by side, right half stacked), or that tab's context menu, which offers its immediate neighbours —
+a flat "show beside …" list of twenty terminals is a menu nobody reads, and dragging covers arbitrary
+pairings. Members carry a left accent so the pairing is visible in the list.
+
+Rows are taller in this strip than in a horizontal one, and the insertion edges take a quarter each: three
+targets on a ~30px row is a lottery, and the grouping band is the one in the middle.
+
+Direction is chosen on drop and changeable afterwards from the context menu ("stack this group" / "put
+this group in columns") — a drop lands in one of two halves and being stuck with a guess is not a layout.
+
+**Which arrangement a *new* pane gets is a setting** (`defaultPaneDirection`, a local layout preference
+under Settings → Layout: columns or rows), because the answer is a habit rather than a per-pair decision —
+and both roads into a pane honour it. The context menu names it ("Show beside …" / "Show under …") so the
+menu never promises one thing and does another, and the drop band is **one** target whose label says the
+same. It used to be two halves, beside on the left and under on the right — an explicit gesture in theory,
+a lottery in practice: nothing marked the boundary mid-drag, so half of all drops landed the arrangement
+the setting had ruled out. Changing an arrangement afterwards is the pane's menu ("Stack this group" /
+"Put this group in columns").
+
+**A pane never offers a drop to a tab it already holds.** The join band exists to bring a newcomer in;
+for a member it could only re-add what is there, so over a fellow member the band does not paint and the
+insertion edges — the leave-the-pane gesture — are all a drag can mean.
+
+**Joining an existing pane joins its arrangement.** The two halves and their two directions are offered
+only over a tab that is still on its own; over a member, the whole band is one target that says which
+arrangement the newcomer is joining, and `groupTabs` keeps the pane's own direction whatever a caller
+asks for. Two columns plus one is three columns: a third member arriving used to flip the pane to
+whatever the drop said, which reads as the split forgetting itself, and re-drawing a pane is what
+`setPaneDirection` is for. The members already there keep their proportions to each other too — the
+newcomer takes an equal share, the rest are scaled into what is left, rather than everyone being reset
+to even.
+
+**A preview opened over a member replaces that member inside the pane.** The preview slot is a tab like
+any other and can be a pane's; when it was, opening the next file dropped the old id from the pane,
+which then fell below two members and dissolved — clicking a file in the tree made a split vanish. The
+newcomer now takes its place in `tabIds`, so the split survives with a new file in that column.
+
+**A pane's members are one contiguous run of `group.tabs`.** They draw as one entry with a shared accent,
+so an unrelated tab sitting between them reads as two broken entries rather than one — and both grouping
+and an in-group drag used to allow exactly that, since neither reordered the strip. Grouping now pulls
+the members together, anchored where the pane's first member already sat and in `tabIds` order (the order
+the panes and their weights render in), and every rebuild re-establishes it. An *unrelated* tab dropped
+between members is therefore pulled to one side of the block rather than splitting it.
+
+**Where a member's drag lands decides what it means.** A drop inside its own pane's run — on a fellow
+member's edge — reorders the pane: the strip order and the split order are one order, so moving the row
+moves the column, and weights travel with their member. A drop past the run takes the member out; a pane
+below two members dissolves, which is how a pair is broken up by hand. It used to be refused as a no-op
+either way, so neither reordering nor leaving was possible by drag at all. The tab's own menu carries the
+same two verbs for the keyboard: "Move left/up in this group" (`reorderPaneMember`) and "Show on its own".
+
+Panes ride the **workspace view**, not the frame (`WorkspaceGroupView.panes`): their members are workspace
+tabs, and carrying them on the frame would have let a resize or a side-fold — any frame round-trip —
+rebuild the centre without them, silently dissolving every pane.
+
+Selecting any member shows the whole pane, so a pane is one entry in the strip without being one row.
+The divider is the same `ResizablePanelGroup` every other region uses, and it commits through the same
+gesture accumulator every other resize does — writing straight from `onLayout` would persist a document per
+frame of the drag, with no way to abandon the gesture — landing its weights through `setPaneWeights`. Terminals in the active pane leave the keep-alive stack, which assumes one visible at
+a time, and render inside their pane box instead.
+
+**The mode never flips.** With vertical tabs on, the centre cannot be split: the drag zones are gone and
+the Split items leave the context menu — a verb the mode removed is hidden, where a verb a *limit* blocks
+stays disabled with its reason, because only the second is something the user can do anything about. A split would give each half its own horizontal strip, which is precisely the
+layout the setting exists to replace. A split that already existed keeps its vertical strips — one per
+group — rather than falling back to horizontal, because falling back would flip the layout out from
+under the setting; it is a state the user is leaving, not one they can enter.
+
+**Making a pane is a vertical-strip gesture; an existing pane renders in either orientation.** The drop
+band and the "show beside" neighbours appear only in the vertical strip, but a pane that already exists —
+dragged together there, or made by intent, as the blueprint pair is — keeps rendering its members together
+when the setting is off: turning vertical tabs off must not quietly unsplit a layout the user (or the
+blueprint flow) deliberately paired. The horizontal strip lists members as ordinary tabs, selecting any
+member shows the pane, and the in-pane management verbs (reorder, stack/columns, "Show on its own") stay
+in the tab menu in both orientations. That creation/render split is what makes panes group metadata
+rather than a node in the center tree.
+
+### Vertical center tabs
+
+Center tabs optionally render as a column beside the editor instead of a strip above it, toggled by the
+local `verticalCenterTabs` layout preference. It applies **only when the centre is a single group**: a split
+would put two columns side by side and leave neither editor enough width, so a split keeps the strip
+regardless of the setting. The column is drag-resizable through the same `ResizablePanelGroup` every other
+region uses; that group speaks percentages while the preference stores **px** (`verticalCenterTabsWidth`,
+clamped on hydration), so the column keeps its chosen size when the window resizes rather than scaling with
+it. Dragging emits a width per frame and only the resting value is persisted.
+
+The column earns its width by disambiguating: a basename shared by two open tabs gets a second, dimmed line
+naming its folder, and only then — a folder on every row is noise, and the horizontal strip has no room for
+one at all. Orientation also flips what the tab chrome means: the active marker moves from a bottom rule to
+a left one, insertion targets from left/right halves to top/bottom, and the horizontal scroll affordances
+give way to ordinary vertical scrolling.
+
 ## Presets and local persistence
 
 Balanced, Focus, and Review are web-owned resource-free frame definitions with a below-center bottom slot:

@@ -9,6 +9,7 @@ import {
 	createAuxiliaryGroup,
 	createSideGroup,
 	findTabLocation,
+	groupTabs,
 	hideBottom,
 	hideSide,
 	isLayoutUnavailable,
@@ -16,9 +17,11 @@ import {
 	layoutTabName,
 	moveTabToGroup,
 	openCenterTab,
+	paneForTab,
 	reconcileAttention,
 	removeLayoutGroup,
 	removeSessionLayoutTabs,
+	reorderPaneMember,
 	resizeAuxiliaryGroups,
 	resizeBottomRegion,
 	resizeSideGroups,
@@ -27,12 +30,14 @@ import {
 	selectTab,
 	setAuxiliaryGroupFolded,
 	setBottomAlignment,
+	setPaneWeights,
 	setSideGroupFolded,
 	setSideVisibility,
 	showBottom,
 	showSide,
 	splitCenterGroup,
 	toolTab,
+	ungroupTab,
 	unplacedTools,
 	unplacedToolsForSide,
 	validateLayoutDocument,
@@ -71,6 +76,154 @@ function mutation<T extends { document: WorkspaceLayoutDocument } | { reason: st
 	if ("reason" in result) throw new Error(result.reason);
 	return result;
 }
+
+describe("tab panes", () => {
+	const withTabs = () => baseDocument([file("a"), file("b"), file("c")]);
+	const paneOf = (doc: WorkspaceLayoutDocument, tabId: string) => {
+		if (doc.center.kind !== "group") throw new Error("expected group");
+		return paneForTab(doc.center, tabId);
+	};
+
+	test("grouping a tab with a lone tab creates a pane holding both", () => {
+		const doc = mutation(groupTabs(withTabs(), "center-a", "a", "b", "horizontal")).document;
+		const pane = paneOf(doc, "a");
+		expect(pane?.tabIds).toEqual(["b", "a"]);
+		expect(pane?.weights).toEqual([0.5, 0.5]);
+		expect(paneOf(doc, "c")).toBeUndefined();
+	});
+
+	test("grouping pulls the members together, so a pane is one run of the strip", () => {
+		const doc = mutation(groupTabs(withTabs(), "center-a", "c", "a", "horizontal")).document;
+		if (doc.center.kind !== "group") throw new Error("expected group");
+		expect(doc.center.tabs.map((tab) => tab.id)).toEqual(["a", "c", "b"]);
+		expect(paneOf(doc, "c")?.tabIds).toEqual(["a", "c"]);
+	});
+
+	test("a drop between a pane's members is refused rather than splitting the block", () => {
+		const doc = mutation(groupTabs(withTabs(), "center-a", "c", "a", "horizontal")).document;
+		expect(moveTabToGroup(doc, file("b"), { area: "center", groupId: "center-a" }, 1)).toEqual({
+			reason: "That tab is already at this position.",
+		});
+	});
+
+	test("a drop on either side of the block still moves the tab", () => {
+		const doc = mutation(groupTabs(withTabs(), "center-a", "c", "a", "horizontal")).document;
+		const moved = mutation(
+			moveTabToGroup(doc, file("b"), { area: "center", groupId: "center-a" }, 0),
+		).document;
+		if (moved.center.kind !== "group") throw new Error("expected group");
+		expect(moved.center.tabs.map((tab) => tab.id)).toEqual(["b", "a", "c"]);
+	});
+
+	test("a member dropped inside its own run reorders the pane; dropped past it, leaves", () => {
+		const doc = mutation(groupTabs(withTabs(), "center-a", "c", "a", "horizontal")).document;
+		// Strip is [a, c, b] with {a, c} paned. Dropping c before a stays inside the run: reorder.
+		const reordered = mutation(
+			moveTabToGroup(doc, file("c"), { area: "center", groupId: "center-a" }, 0),
+		).document;
+		if (reordered.center.kind !== "group") throw new Error("expected group");
+		expect(paneOf(reordered, "c")?.tabIds).toEqual(["c", "a"]);
+		expect(reordered.center.tabs.map((tab) => tab.id)).toEqual(["c", "a", "b"]);
+
+		// Dropping c past b is outside the run: c leaves and its pane dissolves below two members.
+		const left = mutation(
+			moveTabToGroup(doc, file("c"), { area: "center", groupId: "center-a" }, 2),
+		).document;
+		if (left.center.kind !== "group") throw new Error("expected group");
+		expect(left.center.panes).toBeUndefined();
+		expect(left.center.tabs.map((tab) => tab.id)).toEqual(["a", "b", "c"]);
+	});
+
+	test("a member reordered from its menu stays in the pane, weights following their tabs", () => {
+		let doc = mutation(groupTabs(withTabs(), "center-a", "c", "a", "horizontal")).document;
+		doc = mutation(
+			setPaneWeights(doc, "center-a", paneOf(doc, "a")?.id ?? "", [0.7, 0.3]),
+		).document;
+
+		const reordered = mutation(reorderPaneMember(doc, "center-a", "c", -1)).document;
+
+		if (reordered.center.kind !== "group") throw new Error("expected group");
+		expect(reordered.center.tabs.map((tab) => tab.id)).toEqual(["c", "a", "b"]);
+		expect(paneOf(reordered, "c")?.tabIds).toEqual(["c", "a"]);
+		expect(paneOf(reordered, "c")?.weights).toEqual([0.3, 0.7]);
+	});
+
+	test("grouping onto a member joins that pane rather than starting another", () => {
+		let doc = mutation(groupTabs(withTabs(), "center-a", "a", "b", "horizontal")).document;
+		doc = mutation(groupTabs(doc, "center-a", "c", "a", "horizontal")).document;
+		if (doc.center.kind !== "group") throw new Error("expected group");
+		expect(doc.center.panes).toHaveLength(1);
+		expect(paneOf(doc, "c")?.tabIds).toEqual(["b", "a", "c"]);
+	});
+
+	test("a newcomer joins the arrangement rather than redrawing it", () => {
+		let doc = mutation(groupTabs(withTabs(), "center-a", "a", "b", "horizontal")).document;
+		const pane = paneOf(doc, "a");
+		if (!pane) throw new Error("expected a pane");
+		doc = mutation(setPaneWeights(doc, "center-a", pane.id, [0.7, 0.3])).document;
+
+		// The drop said "under", but two columns plus one is three columns — flipping the pane is what
+		// setPaneDirection is for.
+		doc = mutation(groupTabs(doc, "center-a", "c", "a", "vertical")).document;
+		const joined = paneOf(doc, "c");
+		expect(joined?.direction).toBe("horizontal");
+		expect(joined?.tabIds).toEqual(["b", "a", "c"]);
+		expect(joined?.weights.map((weight) => Number(weight.toFixed(4)))).toEqual([
+			0.4667, 0.2, 0.3333,
+		]);
+	});
+
+	test("a preview opened over a pane member takes its place instead of emptying the pane", () => {
+		// A previewed file put beside another one: the preview slot now belongs to a pane member.
+		let doc = mutation(
+			openCenterTab(baseDocument([file("a")]), file("d"), "center-a", "preview"),
+		).document;
+		doc = mutation(groupTabs(doc, "center-a", "d", "a", "horizontal")).document;
+		expect(paneOf(doc, "d")?.tabIds).toEqual(["a", "d"]);
+
+		doc = mutation(openCenterTab(doc, file("e"), "center-a", "preview")).document;
+		if (doc.center.kind !== "group") throw new Error("expected group");
+		expect(doc.center.tabs.map((tab) => tab.id)).toEqual(["a", "e"]);
+		const pane = paneOf(doc, "e");
+		expect(pane?.tabIds).toEqual(["a", "e"]);
+		expect(pane?.direction).toBe("horizontal");
+		expect(pane?.weights).toEqual([0.5, 0.5]);
+	});
+
+	test("membership is exclusive — joining a second pane leaves the first", () => {
+		let doc = baseDocument([file("a"), file("b"), file("c"), file("d")]);
+		doc = mutation(groupTabs(doc, "center-a", "a", "b", "horizontal")).document;
+		doc = mutation(groupTabs(doc, "center-a", "c", "d", "horizontal")).document;
+		doc = mutation(groupTabs(doc, "center-a", "a", "c", "horizontal")).document;
+		// The first pane held exactly two, so losing one dissolves it entirely.
+		if (doc.center.kind !== "group") throw new Error("expected group");
+		expect(doc.center.panes).toHaveLength(1);
+		expect(paneOf(doc, "a")?.tabIds).toEqual(["d", "c", "a"]);
+		expect(paneOf(doc, "b")).toBeUndefined();
+	});
+
+	test("refuses a tab from another group, and itself", () => {
+		const doc = withTabs();
+		expect(groupTabs(doc, "center-a", "a", "a", "horizontal")).toHaveProperty("reason");
+		expect(groupTabs(doc, "center-a", "a", "missing", "horizontal")).toHaveProperty("reason");
+	});
+
+	test("ungrouping dissolves a pane that falls below two members", () => {
+		let doc = mutation(groupTabs(withTabs(), "center-a", "a", "b", "horizontal")).document;
+		doc = mutation(ungroupTab(doc, "center-a", "a")).document;
+		if (doc.center.kind !== "group") throw new Error("expected group");
+		expect(doc.center.panes).toBeUndefined();
+	});
+
+	test("closing a tab takes its membership with it", () => {
+		let doc = baseDocument([file("a"), file("b"), file("c")]);
+		doc = mutation(groupTabs(doc, "center-a", "a", "b", "horizontal")).document;
+		doc = mutation(groupTabs(doc, "center-a", "c", "a", "horizontal")).document;
+		doc = mutation(closeLayoutTab(doc, "c")).document;
+		expect(paneOf(doc, "c")).toBeUndefined();
+		expect(paneOf(doc, "a")?.tabIds).toEqual(["b", "a"]);
+	});
+});
 
 describe("workspace layout model", () => {
 	test("canonical tool labels override stale persisted display copy", () => {

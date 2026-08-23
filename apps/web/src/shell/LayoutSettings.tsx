@@ -36,6 +36,11 @@ async function updateCustomPresets(customLayoutPresets: LayoutPreset[]): Promise
 	}
 }
 
+const PANE_DIRECTIONS = [
+	{ direction: "horizontal", label: "Columns" },
+	{ direction: "vertical", label: "Rows" },
+] as const;
+
 export function LayoutSettings() {
 	const customLayoutPresets = useAppStore((state) => state.customLayoutPresets);
 	const preferences = useAppStore((state) => state.localLayoutPreferences);
@@ -384,6 +389,68 @@ export function LayoutSettings() {
 							</button>
 						</div>
 					</div>
+				</div>
+			</section>
+
+			<section className="space-y-sm border-border-default border-t pt-lg">
+				<div>
+					<h3 className="tr-title-section text-text-default">Editor tabs</h3>
+					<p className="tr-text-metadata text-text-muted">
+						A column beside the editor instead of a strip above it. Drag its edge to resize. A split
+						centre keeps the strip, since two columns leave too little room for the editors.
+					</p>
+				</div>
+				<label className="flex w-full items-center gap-sm tr-text-ui text-text-default">
+					<input
+						type="checkbox"
+						data-testid="vertical-center-tabs"
+						checked={preferences.verticalCenterTabs}
+						onChange={(event) =>
+							useAppStore.getState().setLocalLayoutPreferences({
+								...preferences,
+								verticalCenterTabs: event.target.checked,
+							})
+						}
+						className="size-4 shrink-0 accent-primary"
+					/>
+					<span className="min-w-0 flex-1">Show editor tabs vertically</span>
+				</label>
+
+				<div className="flex flex-col gap-4">
+					<span
+						className={
+							preferences.verticalCenterTabs
+								? "tr-text-ui text-text-default"
+								: "tr-text-ui text-text-disabled"
+						}
+					>
+						Tabs shown together open as
+					</span>
+					<div className="flex items-center gap-4">
+						{PANE_DIRECTIONS.map((option) => (
+							<button
+								key={option.direction}
+								type="button"
+								data-testid={`default-pane-${option.direction}`}
+								data-active={preferences.defaultPaneDirection === option.direction}
+								disabled={!preferences.verticalCenterTabs}
+								onClick={() =>
+									useAppStore.getState().setLocalLayoutPreferences({
+										...preferences,
+										defaultPaneDirection: option.direction,
+									})
+								}
+								className="rounded-[var(--radius-sm)] border border-border-default px-12 py-4 tr-text-ui text-text-muted data-[active=true]:border-primary-muted data-[active=true]:bg-primary-subtle data-[active=true]:text-text-default hover:bg-control-bg-hovered disabled:border-control-disabled-border disabled:bg-control-disabled-bg disabled:text-control-disabled-text"
+							>
+								{option.label}
+							</button>
+						))}
+					</div>
+					<span className="tr-text-metadata text-text-muted">
+						{preferences.verticalCenterTabs
+							? "What a new pair looks like when two tabs are first shown together, from a tab's menu. A tab joining a pane that already exists follows that pane, and a drop says which arrangement it means by which half of the row it lands on."
+							: "Tabs are shown together only in the vertical strip, so this waits on the setting above."}
+					</span>
 				</div>
 			</section>
 
