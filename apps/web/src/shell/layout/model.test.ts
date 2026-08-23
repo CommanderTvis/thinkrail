@@ -17,6 +17,7 @@ import {
 	layoutTabName,
 	moveTabToGroup,
 	openCenterTab,
+	openCenterTabBeside,
 	paneForTab,
 	reconcileAttention,
 	removeLayoutGroup,
@@ -71,6 +72,111 @@ function baseDocument(tabs: LayoutCenterTab[] = []): WorkspaceLayoutDocument {
 		toolRestoreTargets: {},
 	};
 }
+
+describe("openCenterTabBeside", () => {
+	const terminal: LayoutTerminalTab = {
+		kind: "terminal",
+		id: "term",
+		name: "Claude Code",
+		tabKey: "claude-1",
+	};
+	const attentionOn = (groupId: string, tabId: string): LayoutAttention => ({
+		selectedByGroup: { [groupId]: tabId },
+		lastFocusedCenterGroupId: groupId,
+		lastFocusedSideGroupId: {},
+		navigationClockByGroup: {},
+	});
+	const runsAgent = (tab: { kind: string }) => tab.kind === "terminal";
+
+	test("a file opened over an agent terminal splits a new column to the right", () => {
+		const doc = baseDocument([terminal]);
+		const result = mutation(
+			openCenterTabBeside(
+				doc,
+				attentionOn("center-a", "term"),
+				file("a"),
+				"center-a",
+				"preview",
+				false,
+				runsAgent,
+			),
+		);
+		const groups = collectCenterGroups(result.document.center);
+		expect(groups.map((group) => group.tabs.map((tab) => tab.id))).toEqual([["term"], ["a"]]);
+		expect(result.focusGroupId).toBe(groups[1]?.id);
+		expect(result.focusTabId).toBe("a");
+	});
+
+	test("with a column already to the right, the file goes there instead of splitting again", () => {
+		const doc = mutation(
+			openCenterTabBeside(
+				baseDocument([terminal]),
+				attentionOn("center-a", "term"),
+				file("a"),
+				"center-a",
+				"keep",
+				false,
+				runsAgent,
+			),
+		).document;
+		const [left, right] = collectCenterGroups(doc.center);
+		if (!left || !right) throw new Error("expected two groups");
+		const result = mutation(
+			openCenterTabBeside(
+				doc,
+				attentionOn(left.id, "term"),
+				file("b"),
+				left.id,
+				"keep",
+				false,
+				runsAgent,
+			),
+		);
+		expect(collectCenterGroups(result.document.center)).toHaveLength(2);
+		expect(findTabLocation(result.document, "b")).toEqual({ area: "center", groupId: right.id });
+	});
+
+	test("a group not showing an agent, a placed resource, or a non-file resource keep the plain rule", () => {
+		const docWithFile = baseDocument([terminal, file("a")]);
+		const overFile = mutation(
+			openCenterTabBeside(
+				docWithFile,
+				attentionOn("center-a", "a"),
+				file("b"),
+				"center-a",
+				"keep",
+				false,
+				runsAgent,
+			),
+		);
+		expect(collectCenterGroups(overFile.document.center)).toHaveLength(1);
+		const reselect = mutation(
+			openCenterTabBeside(
+				docWithFile,
+				attentionOn("center-a", "term"),
+				file("a"),
+				"center-a",
+				"keep",
+				false,
+				runsAgent,
+			),
+		);
+		expect(collectCenterGroups(reselect.document.center)).toHaveLength(1);
+		const chat: LayoutCenterTab = { kind: "chat", id: "chat-1", name: "Chat", sessionId: "s1" };
+		const overAgentChat = mutation(
+			openCenterTabBeside(
+				baseDocument([terminal]),
+				attentionOn("center-a", "term"),
+				chat,
+				"center-a",
+				"keep",
+				false,
+				runsAgent,
+			),
+		);
+		expect(collectCenterGroups(overAgentChat.document.center)).toHaveLength(1);
+	});
+});
 
 function mutation<T extends { document: WorkspaceLayoutDocument } | { reason: string }>(result: T) {
 	if ("reason" in result) throw new Error(result.reason);

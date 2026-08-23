@@ -2,6 +2,7 @@ import { spawnSync } from "node:child_process";
 import {
 	chmodSync,
 	copyFileSync,
+	cpSync,
 	mkdirSync,
 	readdirSync,
 	rmSync,
@@ -11,6 +12,7 @@ import {
 import { basename, join, relative, resolve, sep } from "node:path";
 import type { BundledExtensions } from "@thinkrail/server";
 import { resolveBuildRuntimeSources } from "@thinkrail/server/build-support";
+import { stagedClaudePlugin } from "@thinkrail/shared/claudePlugin";
 import { ptyLibraryName, runtimeTarget } from "./src/runtimeTarget";
 
 const desktopDir = import.meta.dir;
@@ -65,6 +67,11 @@ for (const helper of Object.values(sources.trashHelpers)) {
 	copyFileSync(helper, join(runtimeDir, basename(helper)));
 }
 if (process.platform !== "win32") chmodSync(join(runtimeDir, "macos-trash"), 0o755);
+// The marketplace and its plugin, in the relationship the manifest names — see SPEC.md.
+const claudePlugin = stagedClaudePlugin(runtimeDir);
+mkdirSync(join(claudePlugin.manifest, ".."), { recursive: true });
+copyFileSync(join(repoRoot, ".claude-plugin", "marketplace.json"), claudePlugin.manifest);
+cpSync(join(repoRoot, "packages", "claude-plugin"), claudePlugin.pluginDir, { recursive: true });
 
 try {
 	writeFileSync(

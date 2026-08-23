@@ -531,7 +531,14 @@ branch's review — a commit sha means nothing in another worktree — and dropp
   and the intent carries the chat resource so a cache/placement id alias (including an id collision resolved
   by placement-only minting) still selects semantically. That selection deliberately does not focus the tab,
   because the mounted history query owns focus. The shell updates the group's local attention so the target
-  body mounts and consumes the request without publishing a structural snapshot. The `EditorTab` (`FileTab`
+  body mounts and consumes the request without publishing a structural snapshot.
+  A third transient in the same family is **`fileFocusRequest { workspaceId, path, keyPath }`** — set by
+  **`requestFileFocus`** when the Claude configuration pane opens a file at one of its entries, cleared by
+  **`clearFileFocus(path?)`** once the editor has revealed it. It carries a *key path*, never a line: the
+  line is resolved in `FilePane` against the text the editor holds, so nothing here can go stale against
+  an edited file (`panels/SPEC.md`). Like its siblings it stays out of the tab and the layout document —
+  an already-open tab is reused rather than rebuilt, and a caret position is not something a restored
+  layout should re-assert — and it is dropped with its workspace in `applyWorkspaceRemoved`. The `EditorTab` (`FileTab`
   | `ChatTab` | `DocTab` | `DiffTab` | `PlanTab`) + `TerminalTab` + `ClosedChat` + `SessionRuntime` types.
   (Chat *render* types + renderers live in the `chat` module.) The pure context
   selectors in `selectors.ts` resolve the active `Workspace`, its owning project id, and the shell's context
@@ -545,6 +552,9 @@ branch's review — a commit sha means nothing in another worktree — and dropp
   target: the locally selected chat resource, or the workspace's newest chat otherwise),
   `selectContextProject`, the layout placement selectors (recursive center plus left/right/bottom auxiliary
   groups), `selectAttentionCenterTab` (the selected resource in local last center focus),
+  `selectTerminalRunsClaude` (Claude Code is what runs in a terminal, by either witness — the host's
+  process-table `agent` or a status the plugin already reported — because the poll is a tick behind the
+  plugin and a placement decision cannot wait for it),
   `selectCurrentRouteChatTarget` (exact-chat intent only while its workspace and stamped navigation remain
   current), `selectSkillsStale`, **`selectDiffScope` + `BRANCH_SCOPE`** (what a workspace's
   Changes panel is diffing, defaulting to the shared branch-scope constant), **`selectDiffBaseRef`** (the ref

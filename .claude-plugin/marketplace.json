@@ -1,0 +1,18 @@
+{
+	"name": "thinkrail",
+	"description": "Official ThinkRail integrations for Claude Code",
+	"owner": {
+		"name": "ThinkRail",
+		"url": "https://github.com/CommanderTvis/thinkrail"
+	},
+	"plugins": [
+		{
+			"name": "thinkrail",
+			"description": "Terminal status tracking and native notifications when Claude Code runs inside ThinkRail",
+			"source": "./packages/claude-plugin",
+			"version": "0.1.3",
+			"category": "productivity",
+			"tags": ["notifications", "terminal", "thinkrail"]
+		}
+	]
+}

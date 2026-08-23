@@ -434,7 +434,6 @@ export function isSystemThemePair(value: unknown): value is SystemThemePair {
 	);
 }
 
-export type LayoutToolId = "projects" | "specs" | "files" | "changes" | "review";
 export type LayoutToolId = "projects" | "specs" | "files" | "changes" | "review" | "claude";
 
 export type LayoutBottomAlignment = "center" | "center-left" | "center-right" | "full";
@@ -513,6 +512,12 @@ export interface AppConfig extends ThemePreference {
 	 * should get by default.
 	 */
 	claudeCodeEnabled: boolean;
+	/**
+	 * The shell command line the Claude Code launcher types into a new terminal. A command line, not a
+	 * path: the picker shell-quotes what it returns, so a bare `claude` on PATH, an absolute path with
+	 * spaces, and `claude --model opus` are all the same kind of value.
+	 */
+	claudeCommand: string;
 	analyticsEnabled: boolean;
 	terminalReplayKb: number;
 	composerGrowthLimit: ComposerGrowthLimit;
@@ -532,6 +537,11 @@ export interface AppConfig extends ThemePreference {
 	jbcentralQuotaRefreshSeconds: number;
 	/** Which shell new workspace terminals start on Windows; ignored on other platforms. */
 	terminalWindowsShell: TerminalWindowsShell;
+	/**
+	 * Start Claude Code with its own background-agent view off: ThinkRail is where parallel sessions are
+	 * managed here. Off leaves the CLI to its own devices — see shell/SPEC.md.
+	 */
+	claudeDisableAgentView: boolean;
 }
 
 /** The `settings.update` payload: `null` clears an optional override back to unset (⇒ the default). */
@@ -566,6 +576,9 @@ export const DEFAULT_CONFIG: AppConfig = {
 	theme: "dark",
 	themeMode: "fixed",
 	claudeCodeEnabled: false,
+	claudeCommand: "claude",
+	claudeDisableAgentView: true,
+	discord: DEFAULT_DISCORD_SETTINGS,
 	analyticsEnabled: true,
 	terminalReplayKb: TERMINAL_REPLAY_KB.default,
 	terminalWindowsShell: "auto",

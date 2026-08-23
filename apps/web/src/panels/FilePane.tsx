@@ -1,9 +1,11 @@
-import { lazy, Suspense, useMemo } from "react";
-import { isMarkdownPath } from "@/lib/utils";
+import { FileSymlink } from "lucide-react";
+import { lazy, Suspense, useCallback, useMemo } from "react";
+import { abbreviateHomePath, isMarkdownPath } from "@/lib/utils";
 import { LoadingRegion } from "../components/Skeleton";
-import type { FileTab } from "../store";
+import type { ExternalFileTab, FileTab } from "../store";
 import { useAppStore } from "../store";
 import { getTransport } from "../transport";
+import { jsonKeyLine } from "./jsonKeyLine";
 import { reviewFlagFor } from "./reviewModel";
 import { SendReviewButton } from "./SendReviewButton";
 import { ToggleSegment } from "./ToggleSegment";
@@ -15,7 +17,7 @@ const MarkdownPreview = lazy(() => import("./MarkdownPreview"));
 
 const loading = <LoadingRegion rows={12} className="h-full p-12" />;
 
-export function FilePane({ tab }: { tab: FileTab }) {
+export function FilePane({ tab }: { tab: FileTab | ExternalFileTab }) {
 	const setFileTabView = useAppStore((s) => s.setFileTabView);
 	const review = useFileReview(tab.workspaceId, tab.path, "inline");
 	const reviewComments = useAppStore((s) => s.reviewsByWorkspace[tab.workspaceId]?.comments);
@@ -24,9 +26,25 @@ export function FilePane({ tab }: { tab: FileTab }) {
 		[reviewComments, tab.path],
 	);
 
+	const external = tab.kind === "external-file";
+	const clearFocus = useCallback(() => useAppStore.getState().clearFileFocus(tab.path), [tab.path]);
+
+	// Resolved against the text the editor holds, never sent as a line by the host — see panels/SPEC.md.
+	const focusKeyPath = useAppStore((s) =>
+		s.fileFocusRequest?.path === tab.path ? s.fileFocusRequest.keyPath : undefined,
+	);
+	const focusLine = useMemo(
+		() => (focusKeyPath ? (jsonKeyLine(tab.content, focusKeyPath) ?? undefined) : undefined),
+		[focusKeyPath, tab.content],
+	);
+
 	useLiveTabContent(tab, {
+		// An external tab's path is outside the worktree, so the worktree-scoped read cannot refresh it.
 		read: () =>
-			getTransport().request("fs.readFile", { workspaceId: tab.workspaceId, path: tab.path }),
+			getTransport().request(external ? "claudeConfig.readFile" : "fs.readFile", {
+				workspaceId: tab.workspaceId,
+				path: tab.path,
+			}),
 		applyFresh: ({ content }, tick) =>
 			useAppStore.getState().updateFileTabContent(tab.workspaceId, tab.id, content, tick),
 		keepCurrent: (tick) =>
@@ -35,9 +53,43 @@ export function FilePane({ tab }: { tab: FileTab }) {
 
 	const editor = (
 		<Suspense fallback={loading}>
-			<MonacoEditor path={tab.path} content={tab.content} review={review} />
+			<MonacoEditor
+				path={tab.path}
+				content={tab.content}
+				review={review}
+				focusLine={focusLine}
+				onFocusHandled={clearFocus}
+				workspaceId={tab.workspaceId}
+			/>
 		</Suspense>
 	);
+
+	// The tab strip can only show a basename, which is ambiguous across scopes — three files here are all
+	// called settings.json. The full path is the only thing that says which one this is.
+	const externalBar = external ? (
+		<div
+			data-testid="external-file-path"
+			className="flex h-8 shrink-0 items-center gap-xs border-border-default border-b bg-container-header-bg px-sm"
+		>
+			<FileSymlink className="size-3.5 shrink-0 text-agent-claude" />
+			<span className="shrink-0 tr-text-label-pill text-text-subtle uppercase">
+				outside worktree
+			</span>
+			<span title={tab.path} className="min-w-0 truncate tr-code-text text-text-muted">
+				{abbreviateHomePath(tab.path)}
+			</span>
+			<span className="ml-auto shrink-0 tr-text-metadata text-text-subtle">read-only</span>
+		</div>
+	) : null;
+
+	if (externalBar) {
+		return (
+			<div className="flex h-full min-h-0 flex-col">
+				{externalBar}
+				<div className="min-h-0 flex-1">{editor}</div>
+			</div>
+		);
+	}
 
 	if (!isMarkdownPath(tab.path)) {
 		if (!fileHasDraft) return editor;

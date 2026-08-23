@@ -1,3 +1,21 @@
+export type * from "./agentStatus";
+export {
+	agentEventKnown,
+	parseAgentStatusReport,
+	parseAgentTodos,
+	statusForAgentEvent,
+} from "./agentStatus";
+export type * from "./claudeConfig";
+export {
+	CLAUDE_CONFIG_SCOPE_ORDER,
+	CLAUDE_HOOK_EVENTS,
+	CLAUDE_PLUGIN_SCOPE_WORDING,
+	CLAUDE_SCOPE_WORDING,
+	CLAUDE_SKILL_SCOPES,
+	CLAUDE_TEMPLATE_SCOPE,
+	CLAUDE_WRITABLE_SCOPES,
+	claudeEditScopes,
+} from "./claudeConfig";
 export type * from "./domain";
 export {
 	ACCEPTED_IMAGE_TYPES,
@@ -26,6 +44,7 @@ export {
 	THEME_MODES,
 	TODO_NUDGE_PREFIX,
 } from "./domain";
+export type * from "./ideBridge";
 export type * from "./nativeClient";
 export type * from "./piProtocol";
 export { isTranscriptMessageRole } from "./piProtocol";

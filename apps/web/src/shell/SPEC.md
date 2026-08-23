@@ -33,7 +33,12 @@ The sibling dependency graph is: `layoutState → layout`; `chatReconciliation �
 
 ## Composition
 
-The topbar keeps ThinkRail identity, connection state, Settings, and compact location context. When the
+The topbar keeps ThinkRail identity, connection state, Settings, and compact location context.
+**In the desktop shell the connection pill is hidden while connected**: the host is a child of the app
+itself, so a permanent "Connected" reports on a localhost socket the user never chose and cannot act on —
+it reads as status where there is none. A *problem* state still shows, in every shell: a host that died
+under the desktop app is exactly the case the indicator exists for. The element keeps its `data-status`
+hook in the browser, which is what the e2e suite waits on. When the
 optional application updater reports a native `ready` package or CLI-host `available` release, a compact Update
 affordance remains beside the settings and connection chrome; it opens the injected Update section and remains
 after native Later or until capability state changes. Browsers connected to a host without the advisory render
@@ -71,6 +76,20 @@ The durable frame grammar and pure operations belong to [[submodule-web-shell-la
 
 Resource opens route to that workspace's last-focused surviving center group. Reopening a canonical resource selects its local placement rather than duplicating it. Resource close does not remove the frame group when it becomes empty. Explicit split/add/remove/merge commands own topology; group removal deterministically rehomes resources from every locally retained workspace view before one state commit. Applying a preset follows the same all-views rule. Moving a singleton tool or resizing/folding/showing a region changes the one frame; moving a file/chat/diff/document/terminal among existing groups changes only the active workspace view. Pointer/resize drafts stay runtime-local and publish one local transition on completion.
 
+The Claude Code surface adds two things here, both gated on `claudeCodeEnabled`. `useReportedActiveFile`
+keeps a connected CLI told which file the user is in — the selected tab of the focused center group,
+whatever renders it, derived in a store selector rather than read out of the layout tree by hand — so
+presence follows a tab switch and not only a Monaco selection. `ClaudeLauncher` sits in the centre tab
+strip's actions beside New chat and New terminal, and starts the agent in a terminal of *that* group: left
+click runs the configured command line, right click offers the flags that choose what this particular run
+is (continue, resume, model — never a permission mode: which prompts an agent may skip is a standing
+decision about this machine, not a per-run convenience one click away in a launcher). Those live in a context menu rather than in settings
+because they are per-run answers, while the command line itself — a name on PATH or a picked executable —
+is the setting. A tab that *is* Claude — the Claude Code tool pane, a terminal running the agent — wears
+`ClaudeMark` instead of the generic tool or terminal glyph, but in Claude's colour **only while the tab is
+active**: at rest it is drawn in the strip's own ink like every neighbour, so an idle side strip does not
+carry one permanently lit orange mark (`renderTabIcon` receives the tab's active flag for exactly this).
+
 The layout persistence boundary is `layoutState`, not the store. Browsers qualify state by backend endpoint and frontend-surface identity; native windows use the injected stable string adapter's profile/window scope with a fixed key independent of the host's dynamic port. Both paths persist and decode the same bounded document. State is schema-validated on load and restored on reload or supported window-session restoration. Simultaneous windows do not observe each other's storage writes. A surface with no valid local document starts from the Balanced frame; old host snapshots and old browser attention keys are never read.
 
 Project/file/change/review/chat/terminal views receive only resource identity, visibility, and container bounds. Moving a view cannot change module dependencies or make it inspect the frame. A terminal body mounts only while that terminal is locally selected in a visible, unfolded group; hidden terminal tabs stay unmounted while their host PTYs continue running.
@@ -94,6 +113,19 @@ renders as a pending row under the project — the list stays put and the new wo
 row was. Consumers show it as an inline pending state where the result will appear: the empty-center button flips to a disabled
 spinner ("Starting chat…", also the double-click guard), and the chat-history trigger spins while a
 reopened chat hydrates. Workspace removal drops the counter with the rest of the per-workspace state.
+
+## What ThinkRail starts, ThinkRail manages
+
+The launcher's menu carries **Teleport a session here…** beside Continue and Resume: `--teleport` picks
+up a session started somewhere else, which is the same kind of choice about *what this run is* as the
+other two, and belongs in the same group rather than in a settings field.
+
+Every session ThinkRail starts is prefixed with `CLAUDE_CODE_DISABLE_AGENT_VIEW=true`, because parallel
+sessions are what this app's workspaces and terminals are for — a second view of them inside the CLI is
+one manager too many. It is a **prefix on the command line, not a host-wide environment**: it applies to
+what ThinkRail launched and to nothing a person types themselves, and it is visible in the terminal
+rather than being an invisible difference between running Claude here and running it anywhere else. The
+setting turns it off for anyone who wants the CLI's own view back.
 
 ## Error resilience
 

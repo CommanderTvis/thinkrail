@@ -79,6 +79,16 @@ Packaged resources remain physical and unpacked: web assets and skills are read 
 the PTY uses FFI, trash helpers are executable sidecars, and the preload is read as source text. ASAR is
 not part of this design.
 
+**The Claude Code marketplace is staged too, and its shape is load-bearing.** Claude Code loads a plugin
+from a marketplace *directory*, and that marketplace's manifest names the plugin by a path relative to
+itself — so the build stages both, in that relationship, and the app hands the host the staged plugin's
+path through `THINKRAIL_CLAUDE_PLUGIN_DIR`. Without it the host derives the directory from its own module
+location, which inside the bundle is a path that does not exist, and the plugin offer would register a
+marketplace Claude Code then reports as an error. `stagedClaudePlugin()` is the one definition of that
+layout — it lives in `@thinkrail/shared/claudePlugin`, shared by `preBuild.ts` that writes it, the app that
+points at it, and the artifact smoke that proves it shipped; its test pins the parent relationship the host
+relies on.
+
 ## Native application menu
 
 The shell installs Electrobun's native application menu before creating the main window. Native roles,

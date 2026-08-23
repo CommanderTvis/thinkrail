@@ -7,6 +7,7 @@ import type {
 } from "@thinkrail/contracts";
 import { TERMINAL_REPLAY_KB, WS_CHANNELS } from "@thinkrail/contracts";
 import { type IPty, spawn } from "bun-pty";
+import { ideBridgePort, SSE_PORT_ENV } from "../ideBridge";
 import {
 	loadConfig,
 	loadTerminalSessions,
@@ -14,7 +15,8 @@ import {
 	type PersistedTerminalSessions,
 	saveTerminalSessions,
 } from "../persistence";
-import { agentSessionExists, resumeCommand } from "./agentResume";
+import { agentSessionExists, continueCommand, resumeCommand } from "./agentResume";
+import { agentStatusUrl, forgetAgentStatusTokens } from "./agentStatus";
 import { type AgentWatch, createAgentWatch } from "./agentWatch";
 import { createTerminalCompletionQueue } from "./completionQueue";
 import { createMouseModeGuard, type MouseModeGuard } from "./mouseModeGuard";
@@ -24,10 +26,11 @@ import {
 	type TerminalDeliveryResult,
 } from "./outputBatcher";
 import { createOutputRecorder, type OutputRecorder } from "./outputRecorder";
-import { captureProcessCommand } from "./processTree";
+import { captureProcessCommand, captureProcessSnapshot } from "./processTree";
 import { nudgePtyRedraw, type PtyGrid, resizePtyIfChanged } from "./ptyGrid";
 import { terminalShell, terminalShellArgs } from "./shellArgs";
 import { hasChildProcesses } from "./shellBusy";
+import { adoptedTitle } from "./terminalTitle";
 
 type PushToClient = (clientKey: string, channel: string, data: unknown) => TerminalDeliveryResult;
 
@@ -66,7 +69,7 @@ const tabsByWorkspace = new Map<string, TabRecord[]>();
 const pendingReplay = new Map<string, string>();
 const pendingPrefill = new Map<string, string>();
 /** The session an un-taken offer names, kept so a restart still has one to make. See SPEC.md. */
-const carriedAgent = new Map<string, { command: string; sessionId: string }>();
+const carriedAgent = new Map<string, { command: string; sessionId?: string }>();
 
 const TAB_INDEX_SEP = "\u0000";
 
@@ -99,7 +102,13 @@ const agentWatch: AgentWatch = createAgentWatch({
 			pid: entry.pty.pid,
 		})),
 	// Snapshot only: an agent change is not membership, so it must not persist — see SPEC.md.
-	onWorkspaceChanged: (workspaceId) => broadcastTabs(workspaceId, listTerminals(workspaceId)),
+	onWorkspaceChanged: (workspaceId) => {
+		for (const tab of tabsFor(workspaceId)) {
+			const title = adoptedTitle(tab.title, agentWatch.agentFor(workspaceId, tab.tabKey));
+			if (title !== "" && title !== tab.title) tab.title = title;
+		}
+		broadcastTabs(workspaceId, listTerminals(workspaceId));
+	},
 	// Claude Code runs inline (no alt screen), so mouseModeGuard.transform never sees a trigger for
 	// it — this is the fallback: the poller noticing the process is gone is the only signal we get.
 	// The command is read once, when the agent appears — the poll itself stays name-only.
@@ -111,10 +120,8 @@ const agentWatch: AgentWatch = createAgentWatch({
 		entry.agentCommand = command;
 		// Something is running here now: whatever the restore offered is answered, one way or the other.
 		carriedAgent.delete(tabIndex(workspaceId, tabKey));
-		// The two halves arrive independently: the plugin reports its session id within milliseconds of
-		// starting, while this poll can be a tick behind it. Whichever lands second has to write, or a pair
-		// only completed after the first write never reaches disk at all.
-		if (entry.agentSessionId) persistTerminalSessions();
+		// The command alone is worth writing: without the plugin's id a revive still has `--continue`.
+		persistTerminalSessions();
 	},
 	onAgentCleared: (workspaceId, tabKey) => {
 		const entry = terminals.get(ptyByTab.get(tabIndex(workspaceId, tabKey)) ?? "");
@@ -129,17 +136,55 @@ const agentWatch: AgentWatch = createAgentWatch({
 	},
 });
 
+/** A pty, its shell, and the agent under it: three hops is already generous. */
+const MAX_ANCESTOR_DEPTH = 6;
+
+/**
+ * The workspace a process belongs to, or null for one ThinkRail did not spawn. A `claude` connecting to
+ * the IDE bridge names its own pid; walking up to a pty we own is what says which workspace is talking.
+ * See ideBridge/SPEC.md.
+ */
+export function workspaceForProcess(pid: number): string | null {
+	if (!Number.isInteger(pid) || pid <= 0) return null;
+	const owners = new Map<number, string>();
+	for (const entry of terminals.values()) owners.set(entry.pty.pid, entry.workspaceId);
+	if (owners.size === 0) return null;
+	const direct = owners.get(pid);
+	if (direct !== undefined) return direct;
+	const snapshot = captureProcessSnapshot();
+	if (!snapshot) return null;
+	let cursor = pid;
+	for (let step = 0; step < MAX_ANCESTOR_DEPTH; step += 1) {
+		const parent = snapshot.parentOf(cursor);
+		if (parent === null || parent <= 1) return null;
+		const owner = owners.get(parent);
+		if (owner !== undefined) return owner;
+		cursor = parent;
+	}
+	return null;
+}
+
 const completions = createTerminalCompletionQueue((clientKey, channel, data) =>
 	pushToClient(clientKey, channel, data),
 );
 
-function ptyEnv(): Record<string, string> {
+function ptyEnv(workspaceId: string, tabKey: string): Record<string, string> {
 	const env: Record<string, string> = {};
 	for (const [key, value] of Object.entries(process.env)) {
 		if (typeof value === "string") env[key] = value;
 	}
 	env.TERM = "xterm-256color";
 	env.COLORTERM = "truecolor";
+	env.THINKRAIL_TERMINAL = "1";
+	// Where an agent in this terminal reports what it is doing. A URL rather than a flag, because the
+	// report goes straight to the host now — nothing is written into the terminal for some other
+	// terminal to render. See SPEC.md.
+	const statusUrl = agentStatusUrl(workspaceId, tabKey);
+	if (statusUrl !== null) env.THINKRAIL_AGENT_STATUS_URL = statusUrl;
+	// A `claude` started in this terminal finds the IDE bridge from its own environment, skipping the
+	// lock-file scan entirely — the same handoff the official VS Code extension does. See ideBridge/SPEC.md.
+	const bridgePort = ideBridgePort();
+	if (bridgePort !== null) env[SSE_PORT_ENV] = String(bridgePort);
 	return env;
 }
 
@@ -207,7 +252,7 @@ function spawnForTab(
 		name: "xterm-256color",
 		cwd: ws.worktreePath,
 		...grid,
-		env: ptyEnv(),
+		env: ptyEnv(workspaceId, tabKey),
 	});
 
 	const id = randomUUID();
@@ -248,6 +293,13 @@ function spawnForTab(
 		ptyByTab.delete(index);
 		const finalScreen = recorder.snapshot();
 		if (finalScreen) pendingReplay.set(index, finalScreen);
+		// A pair still set here died with the shell, not by the user's hand — carried like the screen. See SPEC.md.
+		if (entry.agentCommand) {
+			carriedAgent.set(index, {
+				command: entry.agentCommand,
+				...(entry.agentSessionId ? { sessionId: entry.agentSessionId } : {}),
+			});
+		}
 		recorder.dispose();
 		const finalBatch = output.finish();
 		const data: TerminalDataPush | undefined = finalBatch
@@ -425,6 +477,7 @@ export function closeTerminalTab(
 	pendingReplay.delete(index);
 	pendingPrefill.delete(index);
 	carriedAgent.delete(index);
+	forgetAgentStatusTokens(workspaceId, tabKey);
 	if (entry && id) disposeTerminalEntry(id, entry);
 	membershipChanged(workspaceId);
 	return { closed: true, busy: false };
@@ -442,6 +495,7 @@ export function closeWorkspaceTerminals(workspaceId: string): void {
 		if (entry.workspaceId === workspaceId) disposeTerminalEntry(id, entry);
 	}
 	tabsByWorkspace.delete(workspaceId);
+	forgetAgentStatusTokens(workspaceId);
 	for (const key of pendingReplay.keys()) {
 		if (key.startsWith(`${workspaceId}${TAB_INDEX_SEP}`)) pendingReplay.delete(key);
 	}
@@ -471,7 +525,10 @@ export function renameTerminal(workspaceId: string, tabKey: string, title: strin
 	const tabs = tabsByWorkspace.get(workspaceId);
 	const tab = tabs?.find((candidate) => candidate.tabKey === tabKey);
 	if (!tabs || !tab) return;
-	const cleaned = title.replaceAll("\u0000", "").trim().slice(0, MAX_TAB_TITLE);
+	const cleaned = adoptedTitle(title, agentWatch.agentFor(workspaceId, tabKey)).slice(
+		0,
+		MAX_TAB_TITLE,
+	);
 	const next = cleaned === "" ? (tab.defaultTitle ?? tab.title) : cleaned;
 	if (next === tab.title) return;
 	tab.title = next;
@@ -500,10 +557,11 @@ export function persistTerminalSessions(): void {
 			// Only a session still running when we shut down: one the user already ended is not something
 			// to bring back — see SPEC.md.
 			const live =
-				entry?.agentCommand &&
-				entry.agentSessionId &&
-				agentWatch.agentFor(workspaceId, tabKey) !== undefined
-					? { command: entry.agentCommand, sessionId: entry.agentSessionId }
+				entry?.agentCommand && agentWatch.agentFor(workspaceId, tabKey) !== undefined
+					? {
+							command: entry.agentCommand,
+							...(entry.agentSessionId ? { sessionId: entry.agentSessionId } : {}),
+						}
 					: undefined;
 			// An offer nobody took is still worth making: the user closed the app without answering it, and
 			// a shell that was handed the invocation and never ran it kept nothing. See SPEC.md.
@@ -531,16 +589,20 @@ export function reviveTerminalSessions(): void {
 				pendingReplay.set(tabIndex(workspaceId, tab.tabKey), tab.recorded);
 			}
 			const agent = tab.agent;
-			if (typeof agent?.command === "string" && typeof agent.sessionId === "string") {
+			if (typeof agent?.command === "string") {
 				const cwd = loadWorkspaces().find((w) => w.id === workspaceId)?.worktreePath ?? "";
-				const resume = agentSessionExists(cwd, agent.sessionId)
-					? resumeCommand(agent.command, agent.sessionId)
-					: null;
-				if (resume) {
-					pendingPrefill.set(tabIndex(workspaceId, tab.tabKey), resume);
+				const sessionId =
+					typeof agent.sessionId === "string" && agentSessionExists(cwd, agent.sessionId)
+						? agent.sessionId
+						: undefined;
+				const offer = sessionId
+					? resumeCommand(agent.command, sessionId)
+					: continueCommand(agent.command);
+				if (offer) {
+					pendingPrefill.set(tabIndex(workspaceId, tab.tabKey), offer);
 					carriedAgent.set(tabIndex(workspaceId, tab.tabKey), {
 						command: agent.command,
-						sessionId: agent.sessionId,
+						...(sessionId ? { sessionId } : {}),
 					});
 				}
 			}

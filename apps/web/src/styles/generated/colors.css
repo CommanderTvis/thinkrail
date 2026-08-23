@@ -118,6 +118,7 @@
 	--color-feedback-error-muted: var(--feedback-error-muted);
 	--color-feedback-warning: var(--feedback-warning);
 	--color-feedback-warning-subtle: var(--feedback-warning-subtle);
+	--color-agent-claude: var(--agent-claude);
 	--color-bubble-user-bg: var(--bubble-user-bg);
 	--color-bubble-user-border: var(--bubble-user-border);
 	--color-sunken: var(--sunken);

@@ -240,7 +240,7 @@ of the host.
   latest protocol; **`JBCENTRAL_QUOTA_PROTOCOL_VERSION`** likewise pins the v59 quota read + settings;
   **`WINDOWS_SHELL_SETTINGS_PROTOCOL_VERSION`** pins the v62 Windows-shell setting so a later web client
   hides it against a host that can preserve but cannot apply that config field;
-  **`AppConfig`** (`{ theme, themeMode, systemThemePair?, analyticsEnabled, terminalReplayKb,
+  **`AppConfig`** (`{ theme, themeMode, systemThemePair?, claudeCommand, analyticsEnabled, terminalReplayKb,
   terminalWindowsShell, composerGrowthLimit, chatLineWidth, fileLineWidth, chatLineWidthBounded,
   fileLineWidthBounded, customLayoutPresets, reviewModel?, reviewEffort?, reviewAutoFix, subagentsEnabled,
   jbcentralQuotaEnabled, jbcentralQuotaRefreshSeconds }` — an extensible bag; the line-width fields join
@@ -252,7 +252,9 @@ of the host.
   `template.get` reads, allowing Create Workspace to preview global plus current-checkout project templates
   without sending host paths; older hosts retain a global-only fallback. `themeMode` defaults to `"fixed"`
   and no pair, preserving both legacy configs
-  and the explicit Dark default; `subagentsEnabled` is the host-wide subagent default (`true` for current
+  and the explicit Dark default; `claudeCommand` is the shell command line the Claude Code launcher
+  types into a new terminal, default `claude`, normalised host-side so a blank value can never reach a
+  shell; `subagentsEnabled` is the host-wide subagent default (`true` for current
   behavior), overridden only by `Workspace.subagentsOverride`; `customLayoutPresets` is the bounded
   resource-free catalog and is the **only** layout value synchronized by the host; current/default preset
   and group limits are web-local); `analyticsEnabled` is the anonymous usage-analytics switch, default
