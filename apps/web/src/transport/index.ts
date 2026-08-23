@@ -1,4 +1,6 @@
 export { errorText } from "./errorText";
+export { reportIdeActiveFile, reportIdeDocumentClosed, reportIdeSelection } from "./ideBridge";
+export { setIdeActionHandler } from "./ideBridgeActions";
 export { RequestError, wsErrorCode } from "./requestError";
 export {
 	createSessionWithSkillBaseline,

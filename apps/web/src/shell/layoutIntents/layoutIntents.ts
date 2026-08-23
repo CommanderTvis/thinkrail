@@ -3,6 +3,7 @@ import type { LayoutAttention } from "../../lib";
 import {
 	type EditorTab,
 	layoutOpenOptionsForNavigation,
+	selectTerminalRunsClaude,
 	shouldAdvanceAcceptedNavigation,
 	toast,
 	useAppStore,
@@ -29,6 +30,7 @@ import {
 	type LayoutTerminalTab,
 	moveTabToGroup,
 	openCenterTab,
+	openCenterTabBeside,
 	primaryCenterGroupId,
 	reconcileAttention,
 	removeSessionLayoutTabs,
@@ -243,13 +245,20 @@ export function useLayoutIntentProcessing(
 						: findCenterGroup(document.center, attention.lastFocusedCenterGroupId)
 							? attention.lastFocusedCenterGroupId
 							: primaryCenterGroupId(document);
-				const opened = openCenterTab(
-					document,
-					tab,
-					groupId,
-					layoutIntent.intent,
-					layoutIntent.claimPreview,
-				);
+				const state = useAppStore.getState();
+				const opened = state.localLayoutPreferences.verticalCenterTabs
+					? openCenterTab(document, tab, groupId, layoutIntent.intent, layoutIntent.claimPreview)
+					: openCenterTabBeside(
+							document,
+							attention,
+							tab,
+							groupId,
+							layoutIntent.intent,
+							layoutIntent.claimPreview ?? false,
+							(selected) =>
+								selected.kind === "terminal" &&
+								selectTerminalRunsClaude(state, workspaceId, selected.tabKey),
+						);
 				if (!isLayoutUnavailable(opened)) result = opened;
 				break;
 			}

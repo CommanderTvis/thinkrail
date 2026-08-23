@@ -1,4 +1,14 @@
 import type {
+	ClaudeAccount,
+	ClaudeCapability,
+	ClaudeConfigSnapshot,
+	ClaudeEditPlan,
+	ClaudeEditRequest,
+	ClaudeMarketplaceAction,
+	ClaudeWritableScope,
+	ThinkrailPluginStatus,
+} from "./claudeConfig";
+import type {
 	ActivityStatus,
 	AppConfig,
 	AppConfigUpdate,
@@ -44,6 +54,7 @@ import type {
 	Workspace,
 } from "./domain";
 import { isDelegationRunDetails } from "./domain";
+import type { IdeActionReply, IdeDocumentClosed, IdeSelectionChanged } from "./ideBridge";
 import type {
 	AskUserAnswersDetails,
 	AskUserQuestionResult,
@@ -81,9 +92,12 @@ export interface TerminalDetachedPush {
 
 export const INITIAL_TERMINAL_TAB_KEY = "thinkrail-initial";
 
+export type TerminalAgentKind = "claude" | "pi";
+
 export interface TerminalTabInfo {
 	tabKey: string;
 	title: string;
+	agent?: TerminalAgentKind;
 }
 
 export interface TerminalTabsPush {
@@ -181,6 +195,25 @@ export const WS_METHODS = {
 	fsReadDir: "fs.readDir",
 	fsReadFile: "fs.readFile",
 	specGraph: "spec.graph",
+	claudeConfigGet: "claudeConfig.get",
+	claudeConfigAccount: "claudeConfig.account",
+	claudeConfigPluginStatus: "claudeConfig.pluginStatus",
+	claudeConfigInstallPlugin: "claudeConfig.installPlugin",
+	claudeConfigPluginUninstallPlan: "claudeConfig.pluginUninstallPlan",
+	claudeConfigPluginUninstall: "claudeConfig.pluginUninstall",
+	claudeConfigPluginMovePlan: "claudeConfig.pluginMovePlan",
+	claudeConfigPluginMove: "claudeConfig.pluginMove",
+	claudeConfigMarketplacePlan: "claudeConfig.marketplacePlan",
+	claudeConfigMarketplaceRun: "claudeConfig.marketplaceRun",
+	claudeConfigMcpList: "claudeConfig.mcpList",
+	claudeConfigReadFile: "claudeConfig.readFile",
+	claudeConfigPlanEdit: "claudeConfig.planEdit",
+	claudeConfigApplyEdit: "claudeConfig.applyEdit",
+	ideBridgeSelectionChanged: "ideBridge.selectionChanged",
+	ideBridgeDocumentClosed: "ideBridge.documentClosed",
+	ideBridgeActionReply: "ideBridge.actionReply",
+	terminalRememberAgent: "terminal.rememberAgent",
+	terminalRename: "terminal.rename",
 	todoList: "todo.list",
 	todoAdd: "todo.add",
 	todoUpdate: "todo.update",
@@ -199,6 +232,7 @@ export const WS_METHODS = {
 	terminalResize: "terminal.resize",
 	terminalClose: "terminal.close",
 	dialogSelectDirectory: "dialog.selectDirectory",
+	dialogSelectFile: "dialog.selectFile",
 	skillList: "skill.list",
 	skillsState: "skills.state",
 	sessionCreate: "session.create",
@@ -268,6 +302,7 @@ export const WS_CHANNELS = {
 	terminalExit: "terminal.exit",
 	terminalDetached: "terminal.detached",
 	terminalTabs: "terminal.tabs",
+	claudeCodeStatus: "claudeCode.status",
 	workspaceCreated: "workspace.created",
 	workspaceUpdated: "workspace.updated",
 	workspaceRemoved: "workspace.removed",
@@ -276,6 +311,7 @@ export const WS_CHANNELS = {
 	hostUpdateAvailable: "host.updateAvailable",
 	feedbackInterview: "feedback.interview",
 	reviewChanged: "review.changed",
+	ideBridgeAction: "ideBridge.action",
 } as const;
 
 export type WsMethod = (typeof WS_METHODS)[keyof typeof WS_METHODS];
@@ -421,6 +457,67 @@ export interface WsMethodMap {
 	"fs.readFile": { params: { workspaceId: string; path: string }; result: { content: string } };
 	"fs.revealPath": { params: { workspaceId: string; path: string }; result: Ack };
 	"spec.graph": { params: { workspaceId: string }; result: SpecGraphSnapshot };
+	"claudeConfig.get": { params: { workspaceId: string }; result: ClaudeConfigSnapshot };
+	"claudeConfig.account": { params: Record<string, never>; result: ClaudeAccount };
+	"claudeConfig.planEdit": { params: ClaudeEditRequest; result: ClaudeEditPlan };
+	"claudeConfig.pluginUninstallPlan": {
+		params: { workspaceId: string; name: string; scope: ClaudeWritableScope };
+		result: { command: string[] };
+	};
+	"claudeConfig.pluginUninstall": {
+		params: { workspaceId: string; name: string; scope: ClaudeWritableScope };
+		result: { output: string };
+	};
+	"claudeConfig.pluginMovePlan": {
+		params: {
+			workspaceId: string;
+			name: string;
+			from: ClaudeWritableScope;
+			to: ClaudeWritableScope;
+		};
+		result: { commands: string[][] };
+	};
+	"claudeConfig.pluginMove": {
+		params: {
+			workspaceId: string;
+			name: string;
+			from: ClaudeWritableScope;
+			to: ClaudeWritableScope;
+		};
+		result: { output: string };
+	};
+	"claudeConfig.marketplacePlan": {
+		params: { workspaceId: string; action: ClaudeMarketplaceAction };
+		result: { command: string[] };
+	};
+	/** The servers Claude itself reaches — claude.ai connectors, plugin servers — that no file declares. */
+	"claudeConfig.mcpList": {
+		params: { workspaceId: string };
+		result: { capabilities: ClaudeCapability[] };
+	};
+	"claudeConfig.marketplaceRun": {
+		params: { workspaceId: string; action: ClaudeMarketplaceAction };
+		result: { output: string };
+	};
+	"claudeConfig.applyEdit": {
+		params: ClaudeEditRequest & { baseHash: string };
+		result: ClaudeEditPlan;
+	};
+	"claudeConfig.readFile": {
+		params: { workspaceId: string; path: string };
+		result: { content: string };
+	};
+	"claudeConfig.pluginStatus": {
+		params: Record<string, never>;
+		result: ThinkrailPluginStatus;
+	};
+	"claudeConfig.installPlugin": {
+		params: Record<string, never>;
+		result: ThinkrailPluginStatus;
+	};
+	"ideBridge.selectionChanged": { params: IdeSelectionChanged; result: Ack };
+	"ideBridge.documentClosed": { params: IdeDocumentClosed; result: Ack };
+	"ideBridge.actionReply": { params: IdeActionReply; result: Ack };
 	"todo.list": {
 		params: { workspaceId: string; sessionId: string };
 		result: TodoPlan;
@@ -466,7 +563,15 @@ export interface WsMethodMap {
 	};
 	"terminal.attach": {
 		params: { workspaceId: string; tabKey: string; title?: string; cols?: number; rows?: number };
-		result: { id: string; created: boolean; replay?: string };
+		result: { id: string; created: boolean; replay?: string; prefill?: string };
+	};
+	"terminal.rename": {
+		params: { workspaceId: string; tabKey: string; title: string };
+		result: Record<string, never>;
+	};
+	"terminal.rememberAgent": {
+		params: { workspaceId: string; tabKey: string; sessionId: string };
+		result: Record<string, never>;
 	};
 	"terminal.list": {
 		params: { workspaceId: string };
@@ -479,6 +584,7 @@ export interface WsMethodMap {
 		result: { closed: boolean; busy: boolean };
 	};
 	"dialog.selectDirectory": { params: Record<string, never>; result: { path: string | null } };
+	"dialog.selectFile": { params: Record<string, never>; result: { path: string | null } };
 	"skill.list": { params: { projectId: string }; result: SlashCommandInfo[] };
 	"skills.state": { params: { workspaceId: string }; result: SkillCatalogEntry[] };
 	"session.create": {

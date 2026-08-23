@@ -53,7 +53,7 @@ export interface PersistedTerminalTab {
 	title: string;
 	recorded?: string;
 	/** The agent invocation live in this tab at shutdown, so reopening can offer to resume it. */
-	agent?: { command: string; sessionId: string };
+	agent?: { command: string; sessionId?: string };
 }
 
 export type PersistedTerminalSessions = Record<string, PersistedTerminalTab[]>;
@@ -64,6 +64,11 @@ export function loadTerminalSessions(): PersistedTerminalSessions {
 
 export function saveTerminalSessions(sessions: PersistedTerminalSessions): void {
 	writeJson("terminals.json", sessions);
+}
+
+export function normalizeClaudeCommand(value: unknown): string {
+	const trimmed = typeof value === "string" ? value.trim() : "";
+	return trimmed || DEFAULT_CONFIG.claudeCommand;
 }
 
 export function loadConfig(): AppConfig {
@@ -83,6 +88,7 @@ export function loadConfig(): AppConfig {
 				? value.analyticsEnabled
 				: DEFAULT_CONFIG.analyticsEnabled,
 		claudeCodeEnabled: value.claudeCodeEnabled === true,
+		claudeCommand: normalizeClaudeCommand(value.claudeCommand),
 		terminalReplayKb:
 			typeof value.terminalReplayKb === "number" && Number.isFinite(value.terminalReplayKb)
 				? value.terminalReplayKb

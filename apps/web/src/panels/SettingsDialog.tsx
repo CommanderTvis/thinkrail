@@ -20,6 +20,7 @@ import { cn } from "@/lib";
 import { SettingsSection, useAppStore } from "@/store";
 import { AppearanceSettings } from "./AppearanceSettings";
 import { ChatSettings } from "./ChatSettings";
+import { ClaudeCodeSettings } from "./ClaudeCodeSettings";
 import { FeedbackSettings } from "./FeedbackSettings";
 import { GithubSettings } from "./GithubSettings";
 import { LineWidthSettings } from "./LineWidthSettings";
@@ -48,6 +49,7 @@ const SECTIONS: {
 		requiresInjectedContent: true,
 	},
 	{ id: SettingsSection.Terminal, label: "Terminal", icon: SquareTerminal },
+	{ id: SettingsSection.ClaudeCode, label: "Claude Code", icon: Bot },
 	{ id: SettingsSection.Templates, label: "Templates", icon: LayoutTemplate },
 	{ id: SettingsSection.Review, label: "Review", icon: ScanEye },
 	{ id: SettingsSection.Privacy, label: "Privacy", icon: ShieldCheck },
@@ -149,6 +151,8 @@ export function SettingsDialog({
 							updateSettings
 						) : selectedSection === SettingsSection.Terminal ? (
 							<TerminalSettings />
+						) : selectedSection === SettingsSection.ClaudeCode ? (
+							<ClaudeCodeSettings />
 						) : selectedSection === SettingsSection.Templates ? (
 							<TemplatesSettings />
 						) : selectedSection === SettingsSection.Review ? (

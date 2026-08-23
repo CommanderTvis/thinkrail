@@ -174,7 +174,7 @@ export interface WorkbenchProps {
 	focusRequest?: LayoutTabFocusRequest;
 	renderTabBody: (tab: LayoutCenterTab | Extract<LayoutSideTab, { kind: "terminal" }>) => ReactNode;
 	renderTabAdornment: (tab: LayoutTab) => ReactNode;
-	renderTabIcon: (tab: LayoutTab) => ReactNode | null;
+	renderTabIcon: (tab: LayoutTab, active: boolean) => ReactNode | null;
 	renderToolBody: (tool: LayoutToolId) => ReactNode;
 	renderEmptyCenter: (groupId: string) => ReactNode;
 	renderCenterActions: (groupId: string) => ReactNode;
@@ -430,7 +430,7 @@ function tabIcon(
 	renderTabIcon: WorkbenchProps["renderTabIcon"],
 	active = false,
 ): ReactNode {
-	const custom = renderTabIcon(tab);
+	const custom = renderTabIcon(tab, active);
 	if (custom) return custom;
 	const cls = "size-14 shrink-0";
 	switch (tab.kind) {

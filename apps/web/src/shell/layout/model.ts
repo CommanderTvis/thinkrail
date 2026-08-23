@@ -1012,6 +1012,38 @@ export function moveTabToGroup(
 	};
 }
 
+/**
+ * A file opened over a group whose selected tab runs an agent goes beside that group instead: the next
+ * center group in reading order, or a new column split off to the right. See SPEC.md.
+ */
+export function openCenterTabBeside(
+	document: WorkspaceLayoutDocument,
+	attention: LayoutAttention,
+	tab: LayoutCenterTab,
+	groupId: string,
+	intent: "preview" | "keep",
+	claimPreview: boolean,
+	runsAgent: (selected: LayoutTab) => boolean,
+): LayoutOperationResult {
+	const fileLike = tab.kind === "file" || tab.kind === "external-file" || tab.kind === "diff";
+	const plain = () => openCenterTab(document, tab, groupId, intent, claimPreview);
+	if (!fileLike || findPlacedResource(document, tab)) return plain();
+	const selectedId = attention.selectedByGroup[groupId];
+	const selected = findCenterGroup(document.center, groupId)?.tabs.find(
+		(candidate) => candidate.id === selectedId,
+	);
+	if (!selected || !runsAgent(selected)) return plain();
+	const groups = collectCenterGroups(document.center);
+	const neighbour = groups[groups.findIndex((group) => group.id === groupId) + 1];
+	if (neighbour) return openCenterTab(document, tab, neighbour.id, intent, claimPreview);
+	const opened = plain();
+	if (isLayoutUnavailable(opened) || !opened.focusTabId) return opened;
+	const placed = findLayoutTab(opened.document, opened.focusTabId);
+	if (!placed || placed.kind === "tool") return opened;
+	const split = splitCenterGroup(opened.document, groupId, "right", placed);
+	return isLayoutUnavailable(split) ? opened : split;
+}
+
 export function splitCenterGroup(
 	document: WorkspaceLayoutDocument,
 	groupId: string,

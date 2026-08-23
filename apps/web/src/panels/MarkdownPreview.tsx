@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { stripFrontmatter } from "@/lib/utils";
 import { Markdown, type MarkdownRehypePlugins } from "../chat/Markdown";
+import { reportIdeSelection } from "../transport";
 import { alertComponents, remarkGithubAlerts } from "./markdownAlerts";
 import { documentComponents, remarkHeadingIds } from "./markdownLinks";
 import { type ComposerInsert, PreviewCommenting } from "./PreviewCommenting";
@@ -10,6 +11,7 @@ import {
 	indivisibleSpans,
 	snapSplitLine,
 	sourceLineRehype,
+	stampedSelectionLines,
 } from "./sourceLines";
 import type { EditorReview } from "./useReviewCommenting";
 
@@ -103,6 +105,54 @@ function splicedSegments(
 		nodes: tail,
 	});
 	return segments;
+}
+
+/**
+ * Reports a selection made in the *rendered* document to the Claude Code bridge, so selecting a passage
+ * here reaches a running agent exactly as selecting code in the editor does. The line span comes from the
+ * same `data-md-line-*` stamps the review comments use, which are **block-level**: the reported range is
+ * the enclosing block's, while the text is the exact selection. That mismatch is why the transport's
+ * de-dupe keys on the text as well as the range. No-ops unless Claude Code is enabled. See panels/SPEC.md.
+ */
+function useReportedPreviewSelection(
+	container: React.RefObject<HTMLElement | null>,
+	workspaceId: string,
+	path: string,
+): void {
+	useEffect(() => {
+		const onSelectionChange = () => {
+			const root = container.current;
+			const selection = document.getSelection();
+			if (!root || !selection || selection.isCollapsed || selection.rangeCount === 0) return;
+			if (!root.contains(selection.getRangeAt(0).commonAncestorContainer)) return;
+			const text = selection.toString();
+			if (text.trim() === "") return;
+			const lines = stampedSelectionLines(root);
+			if (!lines) return;
+			const lastLine = text.slice(text.lastIndexOf("\n") + 1);
+			reportIdeSelection({
+				workspaceId,
+				path,
+				text,
+				selection: {
+					startLine: lines.startLine,
+					startColumn: 1,
+					endLine: lines.endLine,
+					endColumn: lastLine.length + 1,
+				},
+			});
+		};
+		document.addEventListener("selectionchange", onSelectionChange);
+		return () => document.removeEventListener("selectionchange", onSelectionChange);
+	}, [container, workspaceId, path]);
+}
+
+function OutlineColumn({ headings }: { headings: readonly HeadingEntry[] }) {
+	return (
+		<div className="w-56 shrink-0 overflow-y-auto border-border-default border-r bg-container-header-bg">
+			<Outline headings={headings} />
+		</div>
+	);
 }
 
 export default function MarkdownPreview({

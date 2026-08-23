@@ -23,6 +23,7 @@ import {
 	E2E_PI_AGENT_DIR,
 	E2E_PI_MODELS_SEED,
 	E2E_PICK_DIR_POINTER,
+	E2E_PICK_FILE_POINTER,
 } from "./fixtures/paths";
 import { seedFixtureRepo } from "./fixtures/repo";
 import { seedExternalCwdSessions } from "./fixtures/sessions";
@@ -92,6 +93,8 @@ export default function globalSetup(): void | Promise<void> {
 		seedAgentDefinitionFixtures();
 		seedFixtureRepo();
 		writeFileSync(E2E_PICK_DIR_POINTER, E2E_FIXTURE_REPO);
+		writeFileSync(E2E_PICK_FILE_POINTER, join(E2E_DATA_DIR, "outside.md"));
+		writeFileSync(join(E2E_DATA_DIR, "outside.md"), "# outside any worktree\n");
 	} catch (error) {
 		if (!centralMode) throw error;
 		removeTree(E2E_DATA_DIR);

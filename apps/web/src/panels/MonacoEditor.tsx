@@ -3,6 +3,7 @@ import type { editor } from "monaco-editor";
 import { useCallback, useEffect, useRef } from "react";
 import { LoadingRegion } from "../components/Skeleton";
 import { useAppStore } from "../store";
+import { reportIdeDocumentClosed, reportIdeSelection } from "../transport";
 import { decorateEditorContextMenus } from "./monacoMenuIcons";
 import {
 	defineThinkrailTheme,
@@ -16,14 +17,25 @@ import type { EditorReview } from "./useReviewCommenting";
 
 const beforeMount: BeforeMount = (m) => defineThinkrailTheme(m);
 
+function revealAt(codeEditor: editor.IStandaloneCodeEditor, line: number): void {
+	codeEditor.setPosition({ lineNumber: line, column: 1 });
+	codeEditor.revealLineInCenter(line);
+}
+
 export default function MonacoEditor({
 	path,
 	content,
 	review,
+	focusLine,
+	onFocusHandled,
+	workspaceId,
 }: {
 	path: string;
 	content: string;
 	review?: EditorReview;
+	focusLine?: number | undefined;
+	onFocusHandled?: (() => void) | undefined;
+	workspaceId?: string | undefined;
 }) {
 	const fileLineWidth = useAppStore((state) => state.fileLineWidth);
 	const fileLineWidthBounded = useAppStore((state) => state.fileLineWidthBounded);
@@ -35,6 +47,15 @@ export default function MonacoEditor({
 	const decorationsRef = useRef<string[]>([]);
 	const reviewRef = useRef(review);
 	reviewRef.current = review;
+	const focusLineRef = useRef(focusLine);
+	focusLineRef.current = focusLine;
+	const focusHandledRef = useRef(onFocusHandled);
+	focusHandledRef.current = onFocusHandled;
+	const workspaceIdRef = useRef(workspaceId);
+	workspaceIdRef.current = workspaceId;
+	const pathRef = useRef(path);
+	pathRef.current = path;
+	const selectionRef = useRef<{ dispose(): void } | null>(null);
 
 	const syncThreads = useCallback((target: EditorReview) => {
 		if (!editorRef.current) return;
@@ -50,6 +71,29 @@ export default function MonacoEditor({
 		stopThemeWatchRef.current = watchThemeSwap(m, EDITOR_THEME);
 		editorRef.current = codeEditor;
 		menuIconsRef.current = decorateEditorContextMenus(codeEditor);
+		// A link-opened tab already has its line when the loader resolves, after the effect below ran.
+		if (focusLineRef.current !== undefined) {
+			revealAt(codeEditor, focusLineRef.current);
+			focusHandledRef.current?.();
+		}
+		selectionRef.current = codeEditor.onDidChangeCursorSelection((event) => {
+			const ws = workspaceIdRef.current;
+			if (!ws) return;
+			const model = codeEditor.getModel();
+			if (!model) return;
+			const range = event.selection;
+			reportIdeSelection({
+				workspaceId: ws,
+				path: pathRef.current,
+				text: model.getValueInRange(range),
+				selection: {
+					startLine: range.startLineNumber,
+					startColumn: range.startColumn,
+					endLine: range.endLineNumber,
+					endColumn: range.endColumn,
+				},
+			});
+		});
 		if (review) {
 			detachRef.current = attachReviewCommenting(codeEditor, {
 				onSave: (s, t) => reviewRef.current?.commenting.onSave(s, t) ?? Promise.resolve(),
@@ -81,12 +125,21 @@ export default function MonacoEditor({
 		review.onFocusHandled();
 	}, [review]);
 
+	useEffect(() => {
+		if (focusLine === undefined || !editorRef.current) return;
+		revealAt(editorRef.current, focusLine);
+		onFocusHandled?.();
+	}, [focusLine, onFocusHandled]);
+
 	useEffect(
 		() => () => {
 			stopThemeWatchRef.current?.();
 			menuIconsRef.current?.dispose();
 			detachRef.current?.();
 			threadsRef.current?.dispose();
+			selectionRef.current?.dispose();
+			const ws = workspaceIdRef.current;
+			if (ws) reportIdeDocumentClosed(ws, pathRef.current);
 		},
 		[],
 	);

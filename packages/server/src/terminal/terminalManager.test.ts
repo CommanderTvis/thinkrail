@@ -1,20 +1,29 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync } from "node:fs";
+import {
+	chmodSync,
+	copyFileSync,
+	mkdirSync,
+	mkdtempSync,
+	rmSync,
+	writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { type Workspace, WS_CHANNELS } from "@thinkrail/contracts";
 import { removeTree } from "@thinkrail/shared/removeTree";
-import { saveTerminalSessions, saveWorkspaces } from "../persistence";
+import { loadConfig, saveConfig, saveTerminalSessions, saveWorkspaces } from "../persistence";
 import {
 	attachTerminal,
 	closeTerminalTab,
 	closeWorkspaceTerminals,
 	listTerminals,
 	persistTerminalSessions,
+	rememberAgentSession,
 	reserveTerminal,
 	resetTerminalState,
 	resizeTerminal,
 	reviveTerminalSessions,
+	setResumeRunPolicy,
 	setTerminalPublisher,
 	setTerminalTabsPublisher,
 	writeTerminal,
@@ -536,10 +545,70 @@ describe("resuming an agent a surface promised to bring back", () => {
 		expect(attachTerminal(WS, "plain", "client-2").prefill).toBe(`claude --resume ${SESSION}`);
 	});
 
+	test("a command the plugin never named a session for comes back as --continue", () => {
+		saveTerminalSessions({
+			[WS]: [{ tabKey: "quiet", title: "claude", agent: { command: "claude solve the bug" } }],
+		});
+		reviveTerminalSessions();
+		expect(attachTerminal(WS, "quiet", "client-1").prefill).toBe("claude --continue");
+	});
+
+	test("an id whose conversation is not on disk falls back to --continue, never to nothing", () => {
+		const unwritten = "00000000-0000-4000-8000-000000000001";
+		saveTerminalSessions({
+			[WS]: [
+				{ tabKey: "gone", title: "claude", agent: { command: "claude", sessionId: unwritten } },
+			],
+		});
+		reviveTerminalSessions();
+		expect(attachTerminal(WS, "gone", "client-1").prefill).toBe("claude --continue");
+	});
+
 	test("a claimed tab in another workspace is still only an offer", () => {
 		persistAgentTab("blueprint-author");
 		setResumeRunPolicy((workspaceId) => workspaceId === "some-other-workspace");
 		reviveTerminalSessions();
 		expect(attachTerminal(WS, "blueprint-author", "client-1").prefillSubmit).toBeUndefined();
 	});
+
+	test(
+		"a shell that dies out from under a live agent still leaves the pair to offer",
+		async () => {
+			const home = join(dataDir, "home");
+			const project = join(home, ".claude", "projects", "fixture");
+			mkdirSync(project, { recursive: true });
+			writeFileSync(join(project, `${SESSION}.jsonl`), "{}\n");
+			process.env.HOME = home;
+			saveConfig({ ...loadConfig(), claudeCodeEnabled: true });
+
+			// A real binary named `claude` (a copy of bun), so the name-only poll finds it under the shell.
+			const fake = join(dataDir, "claude");
+			copyFileSync(process.execPath, fake);
+			chmodSync(fake, 0o755);
+			const attached = attachTerminal(WS, "plain", "client-1");
+			await waitForTerminalOutput(attached.id);
+			writeTerminal(attached.id, `'${fake}' -e 'Bun.sleepSync(60000)' & disown\r`, "client-1");
+			try {
+				const deadline = Date.now() + TERMINAL_CONDITION_TIMEOUT_MS;
+				while (listTerminals(WS)[0]?.agent !== "claude") {
+					if (Date.now() > deadline) throw new Error("the poll never saw the agent");
+					await Bun.sleep(250);
+				}
+				rememberAgentSession(WS, "plain", SESSION);
+
+				writeTerminal(attached.id, "exit\r", "client-1");
+				await waitForTerminalExit(attached.id);
+
+				persistTerminalSessions();
+				resetTerminalState();
+				reviveTerminalSessions();
+				expect(attachTerminal(WS, "plain", "client-2").prefill).toBe(
+					`${fake} -e Bun.sleepSync(60000) --resume ${SESSION}`,
+				);
+			} finally {
+				Bun.spawnSync(["pkill", "-f", fake]);
+			}
+		},
+		TERMINAL_TEST_TIMEOUT_MS,
+	);
 });

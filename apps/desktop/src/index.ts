@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
+import { stagedClaudePlugin } from "@thinkrail/shared/claudePlugin";
 import { channel, version } from "@thinkrail/shared/version";
 import Electrobun, {
 	ApplicationMenu,
@@ -36,6 +37,8 @@ function writeReady(path: string, payload: unknown): void {
 async function start(): Promise<void> {
 	const applicationMenuInstalled = installDesktopApplicationMenu(ApplicationMenu, process.platform);
 	const runtimeDir = join(PATHS.RESOURCES_FOLDER, "app", "runtime");
+	// The staged marketplace, not this bundle's own module path — see apps/desktop/SPEC.md.
+	process.env.THINKRAIL_CLAUDE_PLUGIN_DIR = stagedClaudePlugin(runtimeDir).pluginDir;
 	process.env.BUN_PTY_LIB = join(
 		runtimeDir,
 		ptyLibraryName(runtimeTarget(process.platform, process.arch)),

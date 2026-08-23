@@ -13,6 +13,7 @@ import {
 	selectActiveWorkspace,
 	selectActiveWorkspaceProjectId,
 	selectAgentReviewCommentCount,
+	selectAttentionCenterFilePath,
 	selectAttentionCenterResourceCacheKey,
 	selectAttentionCenterResourceReady,
 	selectAttentionCenterTab,
@@ -553,4 +554,59 @@ test("a project rolls up with NO workspace list loaded — the collapsed, never-
 
 test("a project with only quiet workspaces rolls up to null", () => {
 	expect(projectActivityRollup({}, "p1")).toBeNull();
+test("the file the user is in is whatever the focused group shows, and nothing for a chat", () => {
+	const document = (tab: Record<string, unknown>): WorkspaceLayoutDocument => ({
+		version: 1,
+		center: { kind: "group", id: "c", tabs: [tab as never] },
+		left: { visible: false, width: 0.2, groups: [] },
+		right: { visible: false, width: 0.2, groups: [] },
+		toolRestoreTargets: {},
+	});
+	const stateFor = (tab: Record<string, unknown>) => ({
+		layoutDocumentsByWorkspace: { ws: document(tab) },
+		layoutAttentionByWorkspace: {
+			ws: {
+				selectedByGroup: { c: String(tab.id) },
+				lastFocusedCenterGroupId: "c",
+				lastFocusedSideGroupId: {},
+				navigationClockByGroup: { c: 0 },
+			},
+		},
+	});
+
+	expect(
+		selectAttentionCenterFilePath(
+			stateFor({ kind: "file", id: "f", name: "README.md", path: "README.md" }),
+			"ws",
+		),
+	).toBe("README.md");
+	expect(
+		selectAttentionCenterFilePath(
+			stateFor({
+				kind: "external-file",
+				id: "x",
+				name: "settings.json",
+				path: "/home/me/.claude/settings.json",
+			}),
+			"ws",
+		),
+	).toBe("/home/me/.claude/settings.json");
+	expect(
+		selectAttentionCenterFilePath(
+			stateFor({ kind: "diff", id: "d", name: "a.ts", path: "src/a.ts", scope: "worktree" }),
+			"ws",
+		),
+	).toBe("src/a.ts");
+	expect(
+		selectAttentionCenterFilePath(
+			stateFor({ kind: "chat", id: "ch", name: "Chat", sessionId: "s" }),
+			"ws",
+		),
+	).toBeNull();
+	expect(
+		selectAttentionCenterFilePath(
+			stateFor({ kind: "terminal", id: "t", name: "Terminal", tabKey: "k" }),
+			"ws",
+		),
+	).toBeNull();
 });

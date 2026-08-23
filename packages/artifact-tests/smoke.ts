@@ -3,6 +3,7 @@
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, relative } from "node:path";
+import { stagedClaudePlugin } from "@thinkrail/shared/claudePlugin";
 import { removeTree } from "@thinkrail/shared/removeTree";
 import { locateDesktopLauncher, repoRoot } from "./src/artifact";
 import {
@@ -144,6 +145,7 @@ async function launchDesktop(
 			applicationMenuInstalled: ready.applicationMenuInstalled,
 			resources: {
 				skillsDir: join(ready.runtimeDir, "skills"),
+				claudePlugin: stagedClaudePlugin(ready.runtimeDir),
 				trashHelpers: {
 					macos: join(ready.runtimeDir, "macos-trash"),
 					windows: join(ready.runtimeDir, "windows-trash.exe"),
