@@ -7,6 +7,7 @@ import type {
 } from "@thinkrail/contracts";
 import { TERMINAL_REPLAY_KB, WS_CHANNELS } from "@thinkrail/contracts";
 import { type IPty, spawn } from "bun-pty";
+import { ideBridgePort, SSE_PORT_ENV } from "../ideBridge";
 import {
 	loadConfig,
 	loadTerminalSessions,
@@ -15,6 +16,7 @@ import {
 	saveTerminalSessions,
 } from "../persistence";
 import { agentSessionExists, resumeCommand } from "./agentResume";
+import { agentStatusUrl, forgetAgentStatusTokens } from "./agentStatus";
 import { type AgentWatch, createAgentWatch } from "./agentWatch";
 import { createTerminalCompletionQueue } from "./completionQueue";
 import { createMouseModeGuard, type MouseModeGuard } from "./mouseModeGuard";
@@ -133,13 +135,23 @@ const completions = createTerminalCompletionQueue((clientKey, channel, data) =>
 	pushToClient(clientKey, channel, data),
 );
 
-function ptyEnv(): Record<string, string> {
+function ptyEnv(workspaceId: string, tabKey: string): Record<string, string> {
 	const env: Record<string, string> = {};
 	for (const [key, value] of Object.entries(process.env)) {
 		if (typeof value === "string") env[key] = value;
 	}
 	env.TERM = "xterm-256color";
 	env.COLORTERM = "truecolor";
+	env.THINKRAIL_TERMINAL = "1";
+	// Where an agent in this terminal reports what it is doing. A URL rather than a flag, because the
+	// report goes straight to the host now — nothing is written into the terminal for some other
+	// terminal to render. See SPEC.md.
+	const statusUrl = agentStatusUrl(workspaceId, tabKey);
+	if (statusUrl !== null) env.THINKRAIL_AGENT_STATUS_URL = statusUrl;
+	// A `claude` started in this terminal finds the IDE bridge from its own environment, skipping the
+	// lock-file scan entirely — the same handoff the official VS Code extension does. See ideBridge/SPEC.md.
+	const bridgePort = ideBridgePort();
+	if (bridgePort !== null) env[SSE_PORT_ENV] = String(bridgePort);
 	return env;
 }
 
@@ -207,7 +219,7 @@ function spawnForTab(
 		name: "xterm-256color",
 		cwd: ws.worktreePath,
 		...grid,
-		env: ptyEnv(),
+		env: ptyEnv(workspaceId, tabKey),
 	});
 
 	const id = randomUUID();
@@ -248,6 +260,10 @@ function spawnForTab(
 		ptyByTab.delete(index);
 		const finalScreen = recorder.snapshot();
 		if (finalScreen) pendingReplay.set(index, finalScreen);
+		// A pair still set here died with the shell, not by the user's hand — carried like the screen. See SPEC.md.
+		if (entry.agentCommand && entry.agentSessionId) {
+			carriedAgent.set(index, { command: entry.agentCommand, sessionId: entry.agentSessionId });
+		}
 		recorder.dispose();
 		const finalBatch = output.finish();
 		const data: TerminalDataPush | undefined = finalBatch
@@ -425,6 +441,7 @@ export function closeTerminalTab(
 	pendingReplay.delete(index);
 	pendingPrefill.delete(index);
 	carriedAgent.delete(index);
+	forgetAgentStatusTokens(workspaceId, tabKey);
 	if (entry && id) disposeTerminalEntry(id, entry);
 	membershipChanged(workspaceId);
 	return { closed: true, busy: false };
@@ -442,6 +459,7 @@ export function closeWorkspaceTerminals(workspaceId: string): void {
 		if (entry.workspaceId === workspaceId) disposeTerminalEntry(id, entry);
 	}
 	tabsByWorkspace.delete(workspaceId);
+	forgetAgentStatusTokens(workspaceId);
 	for (const key of pendingReplay.keys()) {
 		if (key.startsWith(`${workspaceId}${TAB_INDEX_SEP}`)) pendingReplay.delete(key);
 	}

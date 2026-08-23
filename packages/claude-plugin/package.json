@@ -1,0 +1,9 @@
+{
+	"name": "@thinkrail/claude-plugin",
+	"version": "0.0.0",
+	"private": true,
+	"description": "Claude Code plugin: terminal status tracking and native notifications for ThinkRail",
+	"scripts": {
+		"test": "bash tests/test-hooks.sh"
+	}
+}

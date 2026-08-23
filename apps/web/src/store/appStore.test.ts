@@ -199,6 +199,21 @@ test("selectLastOpenChatSession: active chat tab first, then the most recent cha
 	expect(selectLastOpenChatSession(useAppStore.getState(), "ws1")).toBe("s2");
 });
 
+test("a facts-only report updates the chips and leaves the badge where it was", () => {
+	const store = useAppStore.getState();
+	store.setClaudeCodeStatus("ws1", "t1", "running", { model: "claude-sonnet-5", effort: "low" });
+
+	store.setClaudeCodeStatus("ws1", "t1", null, { model: "claude-opus-5" });
+	const held = useAppStore.getState().claudeCodeByTerminal.ws1?.t1;
+	expect(held?.status).toBe("running");
+	expect(held?.model).toBe("claude-opus-5");
+	expect(held?.effort).toBe("low");
+
+	// Nothing has said what this terminal is doing, so facts alone are not a badge.
+	store.setClaudeCodeStatus("ws1", "t2", null, { model: "claude-opus-5" });
+	expect(useAppStore.getState().claudeCodeByTerminal.ws1?.t2).toBeUndefined();
+});
+
 test("pi events route to the right session runtime; chats stay independent", () => {
 	const store = useAppStore.getState();
 	store.openChatSession("ws1", "a", null, "medium");
@@ -3801,4 +3816,47 @@ test("authority can be given up without replacing the list (a consumer activatin
 	s().dropModelsFreshness();
 	expect(s().modelsFresh).toBe(false);
 	expect(s().models).toBe(refreshed);
+});
+
+test("what a Claude terminal runs on survives the events that do not carry it", () => {
+	const store = useAppStore.getState();
+	store.setClaudeCodeStatus("w1", "t1", "running", { model: "claude-opus-5", effort: "high" });
+	// A tool_complete says nothing about model or effort; it must not read as "no longer known".
+	useAppStore.getState().setClaudeCodeStatus("w1", "t1", "running", {});
+	expect(useAppStore.getState().claudeCodeByTerminal.w1?.t1).toMatchObject({
+		model: "claude-opus-5",
+		effort: "high",
+	});
+
+	// A switch mid-chat replaces it, and each terminal answers for its own session.
+	useAppStore
+		.getState()
+		.setClaudeCodeStatus("w1", "t1", "done", { model: "claude-sonnet-5", effort: "medium" });
+	useAppStore.getState().setClaudeCodeStatus("w1", "t2", "running", { model: "claude-haiku-4-5" });
+	const statuses = useAppStore.getState().claudeCodeByTerminal.w1 ?? {};
+	expect(statuses.t1?.model).toBe("claude-sonnet-5");
+	expect(statuses.t1?.effort).toBe("medium");
+	expect(statuses.t2?.model).toBe("claude-haiku-4-5");
+	expect(statuses.t2?.effort).toBeUndefined();
+});
+
+test("losing the agent process clears a stuck Claude status, but a status set before the first sweep survives", () => {
+	const store = useAppStore.getState();
+	store.setWorkspaceTerminals("w1", [
+		{ tabKey: "t1", title: "Terminal 1", agent: "claude" },
+		{ tabKey: "t2", title: "Terminal 2" },
+	]);
+	store.setClaudeCodeStatus("w1", "t1", "running");
+	store.setClaudeCodeStatus("w1", "t2", "running");
+
+	// t2's agent was never observed, so its status predates the sweep and must not be cleared; t1's agent
+	// went away, which is what makes a still-"running" badge wrong.
+	useAppStore.getState().setWorkspaceTerminals("w1", [
+		{ tabKey: "t1", title: "Terminal 1" },
+		{ tabKey: "t2", title: "Terminal 2" },
+	]);
+
+	const statuses = useAppStore.getState().claudeCodeByTerminal.w1 ?? {};
+	expect(statuses.t1).toBeUndefined();
+	expect(statuses.t2?.status).toBe("running");
 });

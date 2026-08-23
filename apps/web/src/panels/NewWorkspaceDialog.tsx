@@ -21,6 +21,7 @@ import {
 } from "@/chat/SlashCommandCompletion";
 import { ThinkingSelector } from "@/chat/ThinkingSelector";
 import { useModelCatalog } from "@/chat/useModelCatalog";
+import { ClaudeMark } from "@/components/ClaudeMark";
 import { Button } from "@/components/ui/button";
 import {
 	Command,
@@ -37,13 +38,22 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from "@/components/ui/dialog";
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Textarea } from "@/components/ui/textarea";
+import { CLAUDE_MODELS, claudeLaunchCommand, shellQuotePath } from "@/lib";
 import { cn } from "@/lib/utils";
+import { collectWorkbenchCenterGroups } from "@/shell/layout";
 import { selectCatalogModel, toast, useAppStore } from "@/store";
 import { createSessionWithSkillBaseline, errorText, getTransport } from "@/transport";
 import { BranchPicker } from "./BranchPicker";
 import { useBranchList } from "./branches";
+import { CHIP, CHIP_DISABLED, CHIP_OFF, CHIP_ON } from "./chips";
 import { enterDefaultWorkspace } from "./defaultWorkspace";
 
 type WorkspaceTarget = "worktree" | "default";
@@ -57,6 +67,11 @@ export function reconcileModel(
 	if (found) return found;
 	return catalogFresh && models.length > 0 ? "unavailable" : null;
 }
+
+const AGENTS = [
+	{ id: "pi" as const, label: "Bundled agent" },
+	{ id: "claude" as const, label: "Claude Code" },
+];
 
 const PILL =
 	"flex h-32 min-w-0 items-center gap-8 rounded-[var(--radius-sm)] border border-control-border-default bg-clip-padding bg-control-bg px-8 tr-text-ui text-text-default outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary data-[open=true]:border-control-border-active data-[open=true]:bg-control-bg-selected";
@@ -86,6 +101,10 @@ export function NewWorkspaceDialog({
 	const [aliasSkills, setAliasSkills] = useState<string[]>([]);
 	const [model, setModel] = useState<WireModel | null>(null);
 	const [thinkingLevel, setThinkingLevel] = useState<ThinkingLevel>("medium");
+	const [agent, setAgent] = useState<"pi" | "claude">("pi");
+	const [claudeModel, setClaudeModel] = useState<string | null>(null);
+	const claudeEnabled = useAppStore((s) => s.claudeCodeEnabled);
+	const claudeCommand = useAppStore((s) => s.claudeCommand);
 	const [creating, setCreating] = useState(false);
 	const [trusting, setTrusting] = useState(false);
 	const [manageSkills, setManageSkills] = useState(false);
@@ -118,6 +137,7 @@ export function NewWorkspaceDialog({
 		setSelectedProjectId(projectId);
 		setPrompt(initialPrompt ?? "");
 		setTarget("worktree");
+		setAgent("pi");
 		setCreating(false);
 		hostDefaultAsked.current = false;
 	}, [open, projectId, initialPrompt]);
@@ -273,6 +293,21 @@ export function NewWorkspaceDialog({
 		onOpenChange(false);
 
 		const text = prompt.trim();
+		if (agent === "claude") {
+			const args = [claudeModel ? `--model ${claudeModel}` : "", text ? shellQuotePath(text) : ""]
+				.filter(Boolean)
+				.join(" ");
+			const frame = store.workbenchFrame;
+			const centre = frame ? collectWorkbenchCenterGroups(frame.center)[0]?.id : undefined;
+			store.addTerminal(
+				workspace.id,
+				claudeLaunchCommand(claudeCommand, args),
+				centre,
+				"center",
+				true,
+			);
+			return;
+		}
 		store.beginChatStart(workspace.id);
 		try {
 			const { result: session, syncedTick } = await createSessionWithSkillBaseline({
@@ -453,7 +488,7 @@ export function NewWorkspaceDialog({
 							onSelect={slashCompletion.pick}
 							className="absolute top-full left-8 z-50 mt-4"
 						/>
-					) : prompt.trim() && isolated ? (
+					) : prompt.trim() && isolated && agent === "pi" ? (
 						<p
 							data-testid="workspace-naming-hint"
 							className="px-4 text-text-muted tr-text-metadata"
@@ -470,23 +505,70 @@ export function NewWorkspaceDialog({
 
 				<div className="flex flex-wrap items-center gap-8">
 					<div className="flex min-w-0 flex-1 flex-wrap items-center gap-8">
-						<ModelSelector
-							models={models}
-							current={model}
-							refreshing={modelsRefreshing}
-							onRefresh={onRefreshModels}
-							container={dialogEl}
-							placeholder="Default model"
-							onSelect={(m) => {
-								setModel(m);
-							}}
-						/>
-						<ThinkingSelector
-							level={thinkingLevel}
-							levels={model?.thinkingLevels ?? []}
-							container={dialogEl}
-							onSelect={setThinkingLevel}
-						/>
+						{AGENTS.map((option) => {
+							const available = option.id === "pi" || claudeEnabled;
+							return (
+								<button
+									key={option.id}
+									type="button"
+									data-testid="ws-agent"
+									data-agent={option.id}
+									data-selected={option.id === agent || undefined}
+									disabled={!available}
+									title={available ? undefined : "Turn Claude Code on in Settings."}
+									onClick={() => setAgent(option.id)}
+									className={cn(
+										CHIP,
+										option.id === agent ? CHIP_ON : CHIP_OFF,
+										!available && CHIP_DISABLED,
+									)}
+								>
+									{option.id === "claude" ? <ClaudeMark className="size-14 shrink-0" /> : null}
+									{option.label}
+								</button>
+							);
+						})}
+						{agent === "claude" ? (
+							<DropdownMenu>
+								<DropdownMenuTrigger data-testid="ws-claude-model" className={PILL}>
+									{CLAUDE_MODELS.find((m) => m.id === claudeModel)?.label ?? "Default model"}
+								</DropdownMenuTrigger>
+								<DropdownMenuContent align="start">
+									<DropdownMenuItem onSelect={() => setClaudeModel(null)}>
+										Default model
+									</DropdownMenuItem>
+									{CLAUDE_MODELS.map((m) => (
+										<DropdownMenuItem
+											key={m.id}
+											data-testid={`ws-claude-model-${m.id}`}
+											onSelect={() => setClaudeModel(m.id)}
+										>
+											{m.label}
+										</DropdownMenuItem>
+									))}
+								</DropdownMenuContent>
+							</DropdownMenu>
+						) : (
+							<>
+								<ModelSelector
+									models={models}
+									current={model}
+									refreshing={modelsRefreshing}
+									onRefresh={onRefreshModels}
+									container={dialogEl}
+									placeholder="Default model"
+									onSelect={(m) => {
+										setModel(m);
+									}}
+								/>
+								<ThinkingSelector
+									level={thinkingLevel}
+									levels={model?.thinkingLevels ?? []}
+									container={dialogEl}
+									onSelect={setThinkingLevel}
+								/>
+							</>
+						)}
 					</div>
 					<button
 						type="button"

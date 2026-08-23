@@ -95,13 +95,24 @@ batches high-frequency Pi events without allowing later wire messages to overtak
   than a caller convention).
 - **Public surface (barrel):** `initTransport`, `getTransport`, `prewarmWorkspaceSkillLoad`, the three
   skill-load-safe session request wrappers, `errorText`, `RequestError`, `wsErrorCode`, `ConnectionStatus`,
-  `TransportOptions`.
+  `TransportOptions`, `reportIdeSelection`/`reportIdeActiveFile`/`reportIdeDocumentClosed`,
+  `setIdeActionHandler`.
+- **The Claude Code IDE bridge's client half lives here, in two halves of its own.** `ideBridge.ts` pushes
+  the editor's selection to the host (`ideBridge.selectionChanged`) — fire-and-forget and de-duplicated by
+  `workspace+path+range`, because Monaco fires a cursor event per keystroke and a request per keystroke
+  would be pure noise; both reports no-op unless `claudeCodeEnabled`. `reportIdeActiveFile` is the same
+  push with no selection in it: presence is not a second message type on the wire, because the CLI has no
+  concept of one — an empty selection in a file *is* how an IDE says the user is in that file. Inbound is the mirror:
+  `ideBridgeActions.ts` is a **registration seam** (`setIdeActionHandler`), because an inbound action has
+  to reach `panels` to act on a tab and this module may not import `panels` — the same injected-publisher
+  shape the host uses in the other direction. `main.tsx` registers the real handler at startup.
 - **Allowed deps:** `contracts` (method maps, `WS_CHANNELS`, `Project` for welcome + `project.updated`, `SessionEventPayload`
   for `pi.event`, `ExtUiRequest` for `pi.extensionUi`, `Workspace` for `workspace.created`/`updated`,
   `WorkspaceRemoved` for `workspace.removed`, `SessionCreatedPayload` for `session.created`,
   `SessionDeletedPayload` for `session.deleted`, `provider.changed`, the empty addressed
-  `feedback.interview` invitation, `WorkspaceFsChangedPayload` for `workspace.fsChanged`, and `AppConfig` for
-  `server.welcome`'s config + `settings.changed`); `store`
+  `feedback.interview` invitation, `WorkspaceFsChangedPayload` for `workspace.fsChanged`, `AppConfig` for
+  `server.welcome`'s config + `settings.changed`, and `IdeActionRequest` for
+  `ideBridge.action` + `IdeSelection` for the selection push); `store`
   (welcome + event routing — a runtime edge owned by the parent graph); `lib` (plain-HTTP-safe random page
   identity); the browser `WebSocket`.
 - **Forbidden:** `server`/`shared`/any `pi` package; importing `panels`/`shell`; or requesting, subscribing to, or folding current-layout state. Layout persistence uses only `httpBase()` as part of its frontend-local storage identity.

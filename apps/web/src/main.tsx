@@ -5,15 +5,17 @@ import { initChatPreferencesPersistence } from "./chat/chatPreferences";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { TooltipProvider } from "./components/ui/tooltip";
 import { initNavigation } from "./navigation";
+import { handleIdeAction } from "./panels/ideActions";
 import { initProjectExpansionPersistence } from "./panels/projectExpansion";
 import { Shell } from "./shell/Shell";
 import { applyThemePreference, initializeBundledThemes, readThemeHint } from "./themes";
-import { initTransport } from "./transport";
+import { initTransport, setIdeActionHandler } from "./transport";
 
 initializeBundledThemes();
 applyThemePreference(readThemeHint());
 initTransport();
 initChatPreferencesPersistence();
+setIdeActionHandler((request) => void handleIdeAction(request));
 initProjectExpansionPersistence();
 initNavigation();
 

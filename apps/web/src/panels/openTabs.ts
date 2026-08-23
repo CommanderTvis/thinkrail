@@ -1,6 +1,7 @@
 import type { GitDiffScope } from "@thinkrail/contracts";
 import {
 	DOUBLE_CLICK_SETTLE_MS,
+	isAbsolutePath,
 	layoutResourceIdentity,
 	projectRelativePath,
 	tupleKey,
@@ -153,15 +154,22 @@ export function openFileInTab(
 		reported,
 		selectWorkspaceById(useAppStore.getState(), workspaceId)?.worktreePath,
 	);
-	const id = tupleKey("file", workspaceId, path);
+	// An absolute path here is one that fell outside the worktree: the worktree-relative form cannot name
+	// it, so it becomes its own tab kind rather than an invalid file tab — see contracts' LayoutExternalFileTab.
+	const external = isAbsolutePath(path);
+	const kind = external ? ("external-file" as const) : ("file" as const);
+	const id = tupleKey(kind, workspaceId, path);
 	return openReadTab(
 		workspaceId,
 		id,
-		layoutResourceIdentity({ kind: "file", id, name: baseName(path), path }),
+		layoutResourceIdentity({ kind, id, name: baseName(path), path }),
 		intent,
-		() => getTransport().request("fs.readFile", { workspaceId, path }),
+		() =>
+			external
+				? getTransport().request("claudeConfig.readFile", { workspaceId, path })
+				: getTransport().request("fs.readFile", { workspaceId, path }),
 		({ content }, loadedTick) => ({
-			kind: "file",
+			kind,
 			id,
 			workspaceId,
 			path,

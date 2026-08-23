@@ -10,6 +10,7 @@ import {
 } from "@thinkrail/server/artifact-probes";
 import { removeTree } from "@thinkrail/shared/removeTree";
 import { locateDesktopLauncher } from "./src/artifact";
+import { stagedClaudePlugin } from "./src/claudePlugin";
 
 const desktopDir = import.meta.dir;
 const repoRoot = resolve(desktopDir, "..", "..");
@@ -115,6 +116,7 @@ async function launchDesktop(
 			applicationMenuInstalled: ready.applicationMenuInstalled,
 			resources: {
 				skillsDir: join(ready.runtimeDir, "skills"),
+				claudePlugin: stagedClaudePlugin(ready.runtimeDir),
 				trashHelpers: {
 					macos: join(ready.runtimeDir, "macos-trash"),
 					windows: join(ready.runtimeDir, "windows-trash.exe"),

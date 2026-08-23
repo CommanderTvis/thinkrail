@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { extname, join, normalize } from "node:path";
 import type {
+	ClaudeCodeStatusPush,
 	HostPlatform,
 	ServerWelcome,
 	SessionCreatedPayload,
@@ -45,6 +46,12 @@ import {
 } from "../auth";
 import { redeliverInterview, releaseInterview, setFeedbackPublisher } from "../feedback";
 import { resolveWorktreeFile } from "../fs";
+import {
+	refreshIdeBridgeWorkspaces,
+	setIdeBridgeDeps,
+	startIdeBridge,
+	stopIdeBridge,
+} from "../ideBridge";
 import { logger } from "../log";
 import { loadWorkspaces } from "../persistence";
 import {
@@ -59,8 +66,11 @@ import { getConfig, setSettingsPublisher } from "../settings";
 import {
 	closeAllTerminals,
 	persistTerminalSessions,
+	readAgentStatusRequest,
+	rememberAgentSession,
 	resumeClientTerminals,
 	reviveTerminalSessions,
+	setAgentStatusEndpoint,
 	setTerminalPublisher,
 	setTerminalTabsPublisher,
 } from "../terminal";
@@ -177,6 +187,30 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 			if (url.pathname === "/health") {
 				return new Response("ok");
 			}
+			// An agent in one of our terminals reporting what it is doing. The token in the path is what
+			// says which tab; see terminal/SPEC.md.
+			if (url.pathname.startsWith("/agent-status/")) {
+				if (req.method !== "POST") return new Response("method not allowed", { status: 405 });
+				const body: unknown = await req.json().catch(() => null);
+				const delivery = readAgentStatusRequest(url.pathname, body);
+				if (delivery === null) return new Response("not found", { status: 404 });
+				if (delivery === "unknown-token") return new Response("unknown terminal", { status: 404 });
+				if (delivery === "unreadable") return new Response("ignored");
+				if (delivery.report.session_id) {
+					rememberAgentSession(delivery.workspaceId, delivery.tabKey, delivery.report.session_id);
+				}
+				const push: ClaudeCodeStatusPush = {
+					workspaceId: delivery.workspaceId,
+					tabKey: delivery.tabKey,
+					status: delivery.status,
+					report: delivery.report,
+				};
+				server.publish(
+					WS_CHANNELS.claudeCodeStatus,
+					JSON.stringify({ channel: WS_CHANNELS.claudeCodeStatus, data: push }),
+				);
+				return new Response("ok");
+			}
 			if (url.pathname.startsWith("/files/")) {
 				return serveWorktreeFile(url.pathname);
 			}
@@ -204,12 +238,14 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 				ws.subscribe(WS_CHANNELS.providerChanged);
 				ws.subscribe(WS_CHANNELS.projectUpdated);
 				ws.subscribe(WS_CHANNELS.terminalTabs);
+				ws.subscribe(WS_CHANNELS.claudeCodeStatus);
 				ws.subscribe(WS_CHANNELS.workspaceCreated);
 				ws.subscribe(WS_CHANNELS.workspaceUpdated);
 				ws.subscribe(WS_CHANNELS.workspaceRemoved);
 				ws.subscribe(WS_CHANNELS.workspaceFsChanged);
 				ws.subscribe(WS_CHANNELS.settingsChanged);
 				ws.subscribe(WS_CHANNELS.reviewChanged);
+				ws.subscribe(WS_CHANNELS.ideBridgeAction);
 				const hostPlatform: HostPlatform =
 					process.platform === "darwin" || process.platform === "win32"
 						? process.platform
@@ -318,6 +354,11 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		},
 	});
 
+	// The address a terminal on this machine can actually dial: the interface the server bound, unless
+	// that is a wildcard, which nothing can connect to. Only set once the port is real.
+	const statusHost = host === "0.0.0.0" || host === "::" ? "localhost" : host;
+	setAgentStatusEndpoint(`http://${statusHost}:${server.port ?? port}`);
+
 	setTerminalPublisher((clientKey, channel, data) => {
 		if (terminalBackpressured.has(clientKey)) return "unavailable";
 		const ws = sockets.get(clientKey);
@@ -393,6 +434,9 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		const data =
 			event.kind === "removed" ? { projectId: event.projectId, id: event.id } : event.workspace;
 		server.publish(channel, JSON.stringify({ channel, data }));
+		// The lock file advertises which folders this IDE has open; a CLI started in a workspace we never
+		// published would fall through to its own discovery scan and match nothing.
+		if (event.kind !== "updated") refreshIdeBridgeWorkspaces();
 	});
 
 	const publishFsChanged = (payload: WorkspaceFsChangedPayload) => {
@@ -472,6 +516,25 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		}
 	});
 
+	setIdeBridgeDeps({
+		dispatch: (request) => {
+			server.publish(
+				WS_CHANNELS.ideBridgeAction,
+				JSON.stringify({ channel: WS_CHANNELS.ideBridgeAction, data: request }),
+			);
+		},
+		listWorkspaceFolders: () => [...new Set(loadWorkspaces().map((ws) => ws.worktreePath))],
+	});
+	if (getConfig().claudeCodeEnabled) {
+		try {
+			await startIdeBridge();
+		} catch (err) {
+			console.warn(
+				`Could not start the Claude Code IDE bridge: ${err instanceof Error ? err.message : err}`,
+			);
+		}
+	}
+
 	setExtUiPublisher((request) => {
 		server.publish(
 			WS_CHANNELS.piExtensionUi,
@@ -517,6 +580,8 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		if (stopping) return;
 		stopping = true;
 		void shutdownAnalytics();
+		void stopIdeBridge();
+		setIdeBridgeDeps(null);
 		cancelAllLogins();
 		stopJbcentralRuntime();
 		stopAllWatches();

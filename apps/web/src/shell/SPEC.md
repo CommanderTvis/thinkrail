@@ -33,7 +33,12 @@ The sibling dependency graph is: `layoutState → layout`; `chatReconciliation �
 
 ## Composition
 
-The topbar keeps ThinkRail identity, connection state, Settings, and compact location context. The identity
+The topbar keeps ThinkRail identity, connection state, Settings, and compact location context.
+**In the desktop shell the connection pill is hidden while connected**: the host is a child of the app
+itself, so a permanent "Connected" reports on a localhost socket the user never chose and cannot act on —
+it reads as status where there is none. A *problem* state still shows, in every shell: a host that died
+under the desktop app is exactly the case the indicator exists for. The element keeps its `data-status`
+hook in the browser, which is what the e2e suite waits on. The identity
 is the icon-only ThinkRail mark—the same vector served as `public/favicon.svg`, inlined at 32×32 and rendered
 through semantic `text-primary`—with no divider before location. An active workspace shows one line of
 `project / workspace  branch · from baseBranch` plus optional review metadata on `tr-text-ui`; project and
@@ -64,6 +69,20 @@ After `main.tsx`'s synchronous first-paint apply, Shell is the sole mounted them
 The durable frame grammar and pure operations belong to [[submodule-web-shell-layout]]. Zustand carries one `WorkbenchFrame`, local layout preferences, and keyed `WorkspaceViewState` values; the mounted document is derived and never persisted as a second authority. Frame-plus-view transitions commit atomically through `layoutState`.
 
 Resource opens route to that workspace's last-focused surviving center group. Reopening a canonical resource selects its local placement rather than duplicating it. Resource close does not remove the frame group when it becomes empty. Explicit split/add/remove/merge commands own topology; group removal deterministically rehomes resources from every locally retained workspace view before one state commit. Applying a preset follows the same all-views rule. Moving a singleton tool or resizing/folding/showing a region changes the one frame; moving a file/chat/diff/document/terminal among existing groups changes only the active workspace view. Pointer/resize drafts stay runtime-local and publish one local transition on completion.
+
+The Claude Code surface adds two things here, both gated on `claudeCodeEnabled`. `useReportedActiveFile`
+keeps a connected CLI told which file the user is in — the selected tab of the focused center group,
+whatever renders it, derived in a store selector rather than read out of the layout tree by hand — so
+presence follows a tab switch and not only a Monaco selection. `ClaudeLauncher` sits in the centre tab
+strip's actions beside New chat and New terminal, and starts the agent in a terminal of *that* group: left
+click runs the configured command line, right click offers the flags that choose what this particular run
+is (continue, resume, model — never a permission mode: which prompts an agent may skip is a standing
+decision about this machine, not a per-run convenience one click away in a launcher). Those live in a context menu rather than in settings
+because they are per-run answers, while the command line itself — a name on PATH or a picked executable —
+is the setting. A tab that *is* Claude — the Claude Code tool pane, a terminal running the agent — wears
+`ClaudeMark` instead of the generic tool or terminal glyph, but in Claude's colour **only while the tab is
+active**: at rest it is drawn in the strip's own ink like every neighbour, so an idle side strip does not
+carry one permanently lit orange mark (`renderTabIcon` receives the tab's active flag for exactly this).
 
 The browser persistence boundary is `layoutState`, not the store. State is qualified by backend endpoint and frontend-surface identity, schema-validated on load, and restored on reload or supported window-session restoration. Simultaneous windows do not observe each other's storage writes. A surface with no valid local document starts from the Balanced frame; old host snapshots and old browser attention keys are never read.
 

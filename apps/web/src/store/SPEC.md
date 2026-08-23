@@ -475,7 +475,14 @@ branch's review — a commit sha means nothing in another worktree — and dropp
   and the intent carries the chat resource so a cache/placement id alias (including an id collision resolved
   by placement-only minting) still selects semantically. That selection deliberately does not focus the tab,
   because the mounted history query owns focus. The shell updates the group's local attention so the target
-  body mounts and consumes the request without publishing a structural snapshot. The `EditorTab` (`FileTab`
+  body mounts and consumes the request without publishing a structural snapshot.
+  A third transient in the same family is **`fileFocusRequest { workspaceId, path, keyPath }`** — set by
+  **`requestFileFocus`** when the Claude configuration pane opens a file at one of its entries, cleared by
+  **`clearFileFocus(path?)`** once the editor has revealed it. It carries a *key path*, never a line: the
+  line is resolved in `FilePane` against the text the editor holds, so nothing here can go stale against
+  an edited file (`panels/SPEC.md`). Like its siblings it stays out of the tab and the layout document —
+  an already-open tab is reused rather than rebuilt, and a caret position is not something a restored
+  layout should re-assert — and it is dropped with its workspace in `applyWorkspaceRemoved`. The `EditorTab` (`FileTab`
   | `ChatTab` | `DocTab` | `DiffTab` | `PlanTab`) + `TerminalTab` + `ClosedChat` + `SessionRuntime` types.
   (Chat *render* types + renderers live in the `chat` module.) The pure context
   selectors in `selectors.ts` resolve the active `Workspace`, its owning project id, and the shell's context

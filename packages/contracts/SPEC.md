@@ -219,11 +219,13 @@ of the host.
   **`SUBAGENT_SETTINGS_PROTOCOL_VERSION`** pins the global/workspace controls to their v57 wire
   introduction so a later web client hides them against an older host without comparing against the moving
   latest protocol; **`JBCENTRAL_QUOTA_PROTOCOL_VERSION`** likewise pins the v59 quota read + settings;
-  **`AppConfig`** (`{ theme, themeMode, systemThemePair?, analyticsEnabled, terminalReplayKb,
-  composerGrowthLimit, customLayoutPresets, reviewModel?, reviewEffort?, reviewAutoFix, subagentsEnabled,
-  jbcentralQuotaEnabled, jbcentralQuotaRefreshSeconds }` — an extensible bag; `themeMode` defaults to
-  `"fixed"` and no pair, preserving both legacy configs and the explicit Dark default;
-  `subagentsEnabled` is the host-wide subagent default (`true` for current behavior), overridden only by
+  **`AppConfig`** (`{ theme, themeMode, systemThemePair?, claudeCommand, analyticsEnabled,
+  terminalReplayKb, composerGrowthLimit, customLayoutPresets, reviewModel?, reviewEffort?, reviewAutoFix,
+  subagentsEnabled, jbcentralQuotaEnabled, jbcentralQuotaRefreshSeconds }` — an extensible bag;
+  `themeMode` defaults to `"fixed"` and no pair, preserving both legacy configs and the explicit Dark
+  default; `claudeCommand` is the shell command line the Claude Code launcher types into a new terminal,
+  default `claude`, normalised host-side so a blank value can never reach a shell; `subagentsEnabled` is
+  the host-wide subagent default (`true` for current behavior), overridden only by
   `Workspace.subagentsOverride`; `customLayoutPresets` is the bounded resource-free catalog and is the
   **only** layout value synchronized by the host; current/default preset and group limits are web-local);
   `analyticsEnabled` is the anonymous usage-analytics switch, default `true` — it is the **only** analytics

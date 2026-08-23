@@ -60,28 +60,9 @@ export const PI_EXTENSION_PACKAGES = [
 
 export type PiExtensionPackage = (typeof PI_EXTENSION_PACKAGES)[number];
 
-/**
- * `require.resolve` from this module's own URL, unless a host that flattened us into a single file has
- * already resolved these against the real node_modules and passed them down — see apps/desktop/SPEC.md.
- */
 function piExtensionResolver(): (name: PiExtensionPackage) => string {
 	const require = createRequire(import.meta.url);
-	const fallback = (name: PiExtensionPackage) => require.resolve(`${name}/index.ts`);
-	const handed = process.env.THINKRAIL_PI_EXTENSION_PATHS;
-	if (!handed) return fallback;
-	let parsed: Partial<Record<PiExtensionPackage, unknown>>;
-	try {
-		parsed = JSON.parse(handed) as Partial<Record<PiExtensionPackage, unknown>>;
-	} catch {
-		return fallback;
-	}
-	// Per name, not all-or-nothing: a host that hands down four of five paths should still spare us the
-	// four, and a package added here but not yet in the map degrades to one broken resolve rather than
-	// silently dropping every path back onto the resolver this exists to avoid.
-	return (name) => {
-		const handedPath = parsed[name];
-		return typeof handedPath === "string" ? handedPath : fallback(name);
-	};
+	return (name) => require.resolve(`${name}/index.ts`);
 }
 
 let devPaths: { extensionPaths: string[]; skillPaths: string[] } | undefined;

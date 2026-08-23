@@ -10,6 +10,11 @@ export interface ArtifactResources {
 		readonly macos: string;
 		readonly windows: string;
 	};
+	/** Present for an artifact that stages the Claude Code marketplace; the compiled binary does not. */
+	readonly claudePlugin?: {
+		readonly manifest: string;
+		readonly pluginDir: string;
+	};
 }
 
 export interface RunningArtifactHost {
@@ -424,6 +429,20 @@ export default function syntheticExternalExtension(pi) {
 			);
 		}
 		assert(existsSync(join(customHost.resources.skillsDir, "SPEC.md")), "workflow SPEC is missing");
+		const claudePlugin = customHost.resources.claudePlugin;
+		if (claudePlugin) {
+			// A marketplace whose manifest or plugin is missing registers a path that is not there, which
+			// Claude Code reports as a plugin error rather than ignoring — see claudeConfig/SPEC.md.
+			assert(existsSync(claudePlugin.manifest), "staged Claude marketplace manifest is missing");
+			assert(
+				existsSync(join(claudePlugin.pluginDir, ".claude-plugin", "plugin.json")),
+				"staged Claude plugin manifest is missing",
+			);
+			assert(
+				existsSync(join(claudePlugin.pluginDir, "hooks", "hooks.json")),
+				"staged Claude plugin hooks are missing",
+			);
+		}
 		socket.close();
 		socket = undefined;
 		await customHost.stop();

@@ -64,6 +64,11 @@ export function saveTerminalSessions(sessions: PersistedTerminalSessions): void 
 	writeJson("terminals.json", sessions);
 }
 
+export function normalizeClaudeCommand(value: unknown): string {
+	const trimmed = typeof value === "string" ? value.trim() : "";
+	return trimmed || DEFAULT_CONFIG.claudeCommand;
+}
+
 export function loadConfig(): AppConfig {
 	const raw = readJson<unknown>("config.json", {});
 	if (!raw || typeof raw !== "object" || Array.isArray(raw)) return structuredClone(DEFAULT_CONFIG);
@@ -81,6 +86,7 @@ export function loadConfig(): AppConfig {
 				? value.analyticsEnabled
 				: DEFAULT_CONFIG.analyticsEnabled,
 		claudeCodeEnabled: value.claudeCodeEnabled === true,
+		claudeCommand: normalizeClaudeCommand(value.claudeCommand),
 		terminalReplayKb:
 			typeof value.terminalReplayKb === "number" && Number.isFinite(value.terminalReplayKb)
 				? value.terminalReplayKb

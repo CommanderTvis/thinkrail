@@ -1,6 +1,8 @@
 import type {
+	AgentTodoItem,
 	AppConfig,
 	AskUserQuestionResult,
+	ClaudeCodeStatus,
 	ComposerGrowthLimit,
 	ExtUiRequest,
 	GitDiffScope,
@@ -20,6 +22,7 @@ import type {
 	SlashCommandInfo,
 	SpecGraphNode,
 	SystemThemePair,
+	TerminalAgentKind,
 	TerminalTabInfo,
 	ThemeId,
 	ThemeMode,
@@ -100,6 +103,17 @@ export interface FileTab {
 	view?: "rendered" | "source";
 	loadedTick?: number;
 }
+/** Same payload as a FileTab, but addressed by absolute path — see contracts' LayoutExternalFileTab. */
+export interface ExternalFileTab {
+	kind: "external-file";
+	id: string;
+	workspaceId: string;
+	name: string;
+	path: string;
+	content: string;
+	view?: "rendered" | "source";
+	loadedTick?: number;
+}
 export interface ChatTab {
 	kind: "chat";
 	id: string;
@@ -139,7 +153,7 @@ export interface PlanTab {
 	name: string;
 	sessionId: string;
 }
-export type EditorTab = FileTab | ChatTab | DocTab | DiffTab | PlanTab;
+export type EditorTab = FileTab | ExternalFileTab | ChatTab | DocTab | DiffTab | PlanTab;
 
 export function chatTabId(workspaceId: string, sessionId: string): string {
 	return tupleKey("chat", workspaceId, sessionId);
@@ -279,6 +293,7 @@ export const SettingsSection = {
 	Chat: "chat",
 	Layout: "layout",
 	Terminal: "terminal",
+	ClaudeCode: "claude-code",
 	Templates: "templates",
 	Review: "review",
 	Privacy: "privacy",
@@ -301,6 +316,19 @@ export interface TerminalTab {
 	title: string;
 	initialCommand?: string;
 	reservationPending?: true;
+	attachPending?: true;
+	agent?: TerminalAgentKind;
+}
+
+export interface ClaudeCodeSessionState {
+	status: ClaudeCodeStatus;
+	summary?: string;
+	updatedAt: number;
+	/** Last reported, not last known: a payload that omits these leaves the previous answer standing. */
+	model?: string;
+	effort?: string;
+	cwd?: string;
+	todos?: AgentTodoItem[];
 }
 
 export interface ClosedChat {
@@ -754,6 +782,7 @@ interface AppState {
 	deletedSessionsByWorkspace: Record<string, Record<string, true>>;
 	terminalsByWorkspace: Record<string, TerminalTab[]>;
 	activeTerminalByWorkspace: Record<string, string | null>;
+	claudeCodeByTerminal: Record<string, Record<string, ClaudeCodeSessionState>>;
 	sessions: Record<string, SessionRuntime>;
 	extUiOrphans: ExtUiRequest[];
 	models: WireModel[];
@@ -777,6 +806,7 @@ interface AppState {
 	specsByWorkspace: Record<string, SpecGraphNode[]>;
 	reviewsByWorkspace: Record<string, ReviewSnapshot>;
 	reviewFocusRequest: { workspaceId: string; commentId: string } | null;
+	fileFocusRequest: { workspaceId: string; path: string; keyPath: readonly string[] } | null;
 	fsChangesByWorkspace: Record<string, { tick: number; paths: string[]; truncated: boolean }>;
 	skillChangeTickByWorkspace: Record<string, number>;
 	skillsSyncedTickBySession: Record<string, number>;
@@ -787,6 +817,8 @@ interface AppState {
 	theme: ThemeId;
 	themeMode: ThemeMode;
 	systemThemePair: SystemThemePair | undefined;
+	claudeCodeEnabled: boolean;
+	claudeCommand: string;
 	analyticsEnabled: boolean;
 	subagentsEnabled: boolean;
 	jbcentralQuotaEnabled: boolean;
@@ -892,6 +924,18 @@ interface AppState {
 	confirmTerminalReservation: (workspaceId: string, tabKey: string) => void;
 	rejectTerminalReservation: (workspaceId: string, tabKey: string) => void;
 	consumeTerminalInitialCommand: (workspaceId: string, tabKey: string) => void;
+	setClaudeCodeStatus: (
+		workspaceId: string,
+		tabKey: string,
+		status: ClaudeCodeStatus | null,
+		facts?: {
+			summary?: string | undefined;
+			model?: string | undefined;
+			effort?: string | undefined;
+			cwd?: string | undefined;
+			todos?: AgentTodoItem[] | undefined;
+		},
+	) => void;
 	closeTerminalTab: (workspaceId: string, tabKey: string, syncLayout?: boolean) => void;
 	setActiveTerminalTab: (workspaceId: string, tabKey: string, syncLayout?: boolean) => void;
 	beginChatStart: (workspaceId: string) => void;
@@ -988,6 +1032,8 @@ interface AppState {
 	setWorkspaceReview: (workspaceId: string, snapshot: ReviewSnapshot) => void;
 	requestReviewFocus: (workspaceId: string, commentId: string) => void;
 	clearReviewFocus: (commentId?: string) => void;
+	requestFileFocus: (workspaceId: string, path: string, keyPath: readonly string[]) => void;
+	clearFileFocus: (path?: string) => void;
 	applyReviewChanged: (payload: ReviewChangedPayload) => void;
 	pushToast: (toast: Omit<Toast, "id">) => string;
 	dismissToast: (id: string) => void;
@@ -1002,6 +1048,8 @@ function configPatch(config: AppConfig) {
 	return {
 		...themePreference,
 		systemThemePair: themePreference.systemThemePair,
+		claudeCodeEnabled: config.claudeCodeEnabled,
+		claudeCommand: config.claudeCommand ?? DEFAULT_CONFIG.claudeCommand,
 		analyticsEnabled: config.analyticsEnabled,
 		subagentsEnabled: config.subagentsEnabled ?? DEFAULT_CONFIG.subagentsEnabled,
 		jbcentralQuotaEnabled: config.jbcentralQuotaEnabled ?? DEFAULT_CONFIG.jbcentralQuotaEnabled,
@@ -1577,6 +1625,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	deletedSessionsByWorkspace: Object.create(null) as Record<string, Record<string, true>>,
 	terminalsByWorkspace: {},
 	activeTerminalByWorkspace: {},
+	claudeCodeByTerminal: {},
 	sessions: {},
 	extUiOrphans: [],
 	models: [],
@@ -1589,6 +1638,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	specsByWorkspace: {},
 	reviewsByWorkspace: {},
 	reviewFocusRequest: null,
+	fileFocusRequest: null,
 	changesView: "list",
 	diffScopeByWorkspace: {},
 	chatLocationRequest: null,
@@ -1603,6 +1653,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 	theme: DEFAULT_CONFIG.theme,
 	themeMode: DEFAULT_CONFIG.themeMode,
 	systemThemePair: DEFAULT_CONFIG.systemThemePair,
+	claudeCodeEnabled: DEFAULT_CONFIG.claudeCodeEnabled,
+	claudeCommand: DEFAULT_CONFIG.claudeCommand,
 	analyticsEnabled: DEFAULT_CONFIG.analyticsEnabled,
 	subagentsEnabled: DEFAULT_CONFIG.subagentsEnabled,
 	jbcentralQuotaEnabled: DEFAULT_CONFIG.jbcentralQuotaEnabled,
@@ -1736,6 +1788,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 						: state.historyOpenRequest,
 				reviewFocusRequest:
 					state.reviewFocusRequest?.workspaceId === workspaceId ? null : state.reviewFocusRequest,
+				fileFocusRequest:
+					state.fileFocusRequest?.workspaceId === workspaceId ? null : state.fileFocusRequest,
 			};
 		});
 		s.removeWorkspace(projectId, workspaceId);
@@ -2271,14 +2325,45 @@ export const useAppStore = create<AppState>((set, get) => ({
 						workspaceId,
 						title: tab.title,
 						...(existing?.initialCommand ? { initialCommand: existing.initialCommand } : {}),
+						...(tab.agent ? { agent: tab.agent } : {}),
 					};
 				}),
 				...pending,
 			];
 			const active = s.activeTerminalByWorkspace[workspaceId] ?? null;
 			const activeSurvives = merged.some((tab) => tab.tabKey === active);
+			// A status describes a *running* agent, and only an explicit `stop` clears it — so an agent that
+			// is interrupted, crashes, or is replaced leaves the badge spinning forever. The host's
+			// process-tree sweep is the authority on "still there"; losing the agent clears the badge. Keyed
+			// on the transition, never on absence alone: a freshly reported status can arrive before the
+			// first sweep has noticed the process. See panels/SPEC.md.
+			const statuses = s.claudeCodeByTerminal[workspaceId];
+			const stale =
+				statuses &&
+				tabs.filter(
+					(tab) =>
+						!tab.agent &&
+						statuses[tab.tabKey] !== undefined &&
+						local.some((candidate) => candidate.tabKey === tab.tabKey && candidate.agent),
+				);
+			const clearedStatuses =
+				stale && stale.length > 0
+					? Object.fromEntries(
+							Object.entries(statuses).filter(
+								([tabKey]) => !stale.some((tab) => tab.tabKey === tabKey),
+							),
+						)
+					: null;
 			return {
 				terminalsByWorkspace: { ...s.terminalsByWorkspace, [workspaceId]: merged },
+				...(clearedStatuses
+					? {
+							claudeCodeByTerminal: {
+								...s.claudeCodeByTerminal,
+								[workspaceId]: clearedStatuses,
+							},
+						}
+					: {}),
 				activeTerminalByWorkspace: {
 					...s.activeTerminalByWorkspace,
 					[workspaceId]: activeSurvives ? active : (merged.at(-1)?.tabKey ?? null),
@@ -2359,6 +2444,46 @@ export const useAppStore = create<AppState>((set, get) => ({
 					[workspaceId]: wasActive
 						? (list.at(-1)?.tabKey ?? null)
 						: (s.activeTerminalByWorkspace[workspaceId] ?? null),
+				},
+				claudeCodeByTerminal: {
+					...s.claudeCodeByTerminal,
+					[workspaceId]: Object.fromEntries(
+						Object.entries(s.claudeCodeByTerminal[workspaceId] ?? {}).filter(
+							([key]) => key !== tabKey,
+						),
+					),
+				},
+			};
+		}),
+	setClaudeCodeStatus: (workspaceId, tabKey, status, facts) =>
+		set((s) => {
+			if (s.removedWorkspaceIds[workspaceId]) return {};
+			// Model and effort ride events that carry them and are absent from the rest, so the last
+			// reported answer stands until a newer one arrives rather than blinking out between turns.
+			const previous = s.claudeCodeByTerminal[workspaceId]?.[tabKey];
+			// A facts-only report says what the session runs on, not what it is doing: a badge with nothing
+			// behind it would be a guess, so it waits for an event that knows. See contracts/agentStatus.ts.
+			const settled = status ?? previous?.status;
+			if (!settled) return {};
+			const model = facts?.model ?? previous?.model;
+			const effort = facts?.effort ?? previous?.effort;
+			const cwd = facts?.cwd ?? previous?.cwd;
+			const todos = facts?.todos ?? previous?.todos;
+			return {
+				claudeCodeByTerminal: {
+					...s.claudeCodeByTerminal,
+					[workspaceId]: {
+						...s.claudeCodeByTerminal[workspaceId],
+						[tabKey]: {
+							status: settled,
+							updatedAt: Date.now(),
+							...(facts?.summary ? { summary: facts.summary } : {}),
+							...(model ? { model } : {}),
+							...(effort ? { effort } : {}),
+							...(cwd ? { cwd } : {}),
+							...(todos ? { todos } : {}),
+						},
+					},
 				},
 			};
 		}),
@@ -3088,6 +3213,16 @@ export const useAppStore = create<AppState>((set, get) => ({
 			commentId !== undefined && state.reviewFocusRequest?.commentId !== commentId
 				? {}
 				: { reviewFocusRequest: null },
+		),
+	requestFileFocus: (workspaceId, path, keyPath) =>
+		set((state) =>
+			state.removedWorkspaceIds[workspaceId]
+				? {}
+				: { fileFocusRequest: { workspaceId, path, keyPath } },
+		),
+	clearFileFocus: (path) =>
+		set((state) =>
+			path !== undefined && state.fileFocusRequest?.path !== path ? {} : { fileFocusRequest: null },
 		),
 	setWorkspaceReview: (workspaceId, snapshot) =>
 		set((s) =>

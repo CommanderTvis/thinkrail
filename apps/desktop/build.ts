@@ -14,6 +14,7 @@ import { basename, join, relative, resolve, sep } from "node:path";
 import type { BundledExtensions } from "@thinkrail/server";
 import { resolveBuildRuntimeSources } from "@thinkrail/server/build-support";
 import { version } from "@thinkrail/shared/version";
+import { stagedClaudePlugin } from "./src/claudePlugin";
 import { ptyLibraryName, runtimeTarget } from "./src/runtimeTarget";
 
 const desktopDir = import.meta.dir;
@@ -59,6 +60,19 @@ function stageSkills(roots: string[]): void {
 			copyFileSync(source, target);
 		}
 	}
+}
+
+/**
+ * The Claude Code plugin is loaded from a marketplace *directory*, and that marketplace's manifest names
+ * the plugin by a path relative to itself — so both are staged, keeping that relationship, and the app
+ * hands the host the staged plugin's path. Without this the host derives its own module location inside
+ * the bundle and registers a marketplace that is not there. See apps/desktop/SPEC.md.
+ */
+function stageClaudePlugin(): void {
+	const staged = stagedClaudePlugin(runtimeDir);
+	mkdirSync(join(staged.manifest, ".."), { recursive: true });
+	copyFileSync(join(repoRoot, ".claude-plugin", "marketplace.json"), staged.manifest);
+	cpSync(join(repoRoot, "packages", "claude-plugin"), staged.pluginDir, { recursive: true });
 }
 
 async function buildBundles(): Promise<void> {
@@ -125,6 +139,7 @@ async function stage(): Promise<void> {
 	stageSkills(
 		sources.extensions.flatMap((extension) => (extension.skills ? [extension.skills] : [])),
 	);
+	stageClaudePlugin();
 	const target = runtimeTarget(process.platform, process.arch);
 	const ptyName = ptyLibraryName(target);
 	copyFileSync(sources.ptyLibraries[target], join(runtimeDir, ptyName));

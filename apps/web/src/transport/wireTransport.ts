@@ -1,6 +1,8 @@
 import type {
 	AppConfig,
+	ClaudeCodeStatusPush,
 	ExtUiRequest,
+	IdeActionRequest,
 	LoginPush,
 	Project,
 	ReviewChangedPayload,
@@ -12,8 +14,10 @@ import type {
 	WorkspaceFsChangedPayload,
 	WorkspaceRemoved,
 } from "@thinkrail/contracts";
-import { WS_CHANNELS } from "@thinkrail/contracts";
+import { parseAgentTodos, WS_CHANNELS } from "@thinkrail/contracts";
+import { notifyClaudeCode } from "../panels/claudeCodeNotify";
 import { isConnectedGeneration, useAppStore } from "../store";
+import { dispatchIdeAction } from "./ideBridgeActions";
 import { createPiEventBatcher, shouldFlushPiEventsBefore } from "./piEventBatcher";
 import { WsTransport } from "./transport";
 
@@ -95,6 +99,25 @@ export function initTransport(): WsTransport {
 			.noteClosedChats(summary.workspaceId, [
 				{ sessionId: summary.sessionId, title: summary.title, closedAt: summary.updatedAt },
 			]);
+	});
+
+	// An agent in one of our terminals, reporting to the host, which forwards it here. The report used to
+	// arrive as an escape sequence in the terminal's own output; see contracts/agentStatus.ts.
+	transport.subscribe(WS_CHANNELS.claudeCodeStatus, (data) => {
+		const push = data as ClaudeCodeStatusPush;
+		if (!useAppStore.getState().claudeCodeEnabled) return;
+		useAppStore.getState().setClaudeCodeStatus(push.workspaceId, push.tabKey, push.status, {
+			summary: push.report.summary,
+			model: push.report.model,
+			effort: push.report.effort,
+			cwd: push.report.cwd,
+			todos: parseAgentTodos(push.report.todos) ?? undefined,
+		});
+		notifyClaudeCode(push.status, push.report);
+	});
+
+	transport.subscribe(WS_CHANNELS.ideBridgeAction, (data) => {
+		dispatchIdeAction(data as IdeActionRequest);
 	});
 
 	transport.subscribe(WS_CHANNELS.sessionDeleted, (data) => {

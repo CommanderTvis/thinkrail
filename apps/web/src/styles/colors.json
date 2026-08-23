@@ -117,6 +117,12 @@
 		"feedback-warning": { "from": "warning", "publish": true },
 		"feedback-warning-subtle": { "from": "warning", "alpha": "wash", "publish": true },
 
+		"agent-claude": {
+			"from": "agentClaude",
+			"publish": true,
+			"note": "the Claude Code brand mark on a terminal tab — a vendor identity, not a status colour, so it is its own palette entry rather than reusing feedback-* or the theme accent"
+		},
+
 		"bubble-user-bg": { "from": "bubbleAccent", "alpha": "subtle", "publish": true },
 		"bubble-user-border": { "from": "bubbleAccent", "alpha": "muted", "publish": true },
 

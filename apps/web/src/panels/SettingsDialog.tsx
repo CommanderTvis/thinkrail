@@ -18,6 +18,7 @@ import { cn } from "@/lib";
 import { SettingsSection, useAppStore } from "@/store";
 import { AppearanceSettings } from "./AppearanceSettings";
 import { ChatSettings } from "./ChatSettings";
+import { ClaudeCodeSettings } from "./ClaudeCodeSettings";
 import { FeedbackSettings } from "./FeedbackSettings";
 import { GithubSettings } from "./GithubSettings";
 import { PrivacySettings } from "./PrivacySettings";
@@ -33,6 +34,7 @@ const SECTIONS: { id: SettingsSection; label: string; icon: LucideIcon }[] = [
 	{ id: SettingsSection.Chat, label: "Chat", icon: MessageSquareText },
 	{ id: SettingsSection.Layout, label: "Layout", icon: LayoutPanelTop },
 	{ id: SettingsSection.Terminal, label: "Terminal", icon: SquareTerminal },
+	{ id: SettingsSection.ClaudeCode, label: "Claude Code", icon: Bot },
 	{ id: SettingsSection.Templates, label: "Templates", icon: LayoutTemplate },
 	{ id: SettingsSection.Review, label: "Review", icon: ScanEye },
 	{ id: SettingsSection.Privacy, label: "Privacy", icon: ShieldCheck },
@@ -110,6 +112,8 @@ export function SettingsDialog({ layoutSettings }: { layoutSettings: ReactNode }
 							layoutSettings
 						) : section === SettingsSection.Terminal ? (
 							<TerminalSettings />
+						) : section === SettingsSection.ClaudeCode ? (
+							<ClaudeCodeSettings />
 						) : section === SettingsSection.Templates ? (
 							<TemplatesSettings />
 						) : section === SettingsSection.Review ? (

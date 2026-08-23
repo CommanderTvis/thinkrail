@@ -38,7 +38,9 @@ treatment.
   ~700ms long press is its touch equivalent. With a project-name button focused, the standard Context Menu
   key or Shift+F10 opens the same menu for keyboard-only use; arrow/activate/Escape keys work normally.
   The menu is neutral: **Plus Create workspace**, **FolderOpen Open existing worktree…**, separator,
-  **X Close project**. Create is exactly the direct `+` flow. Open existing worktree opens the
+  **X Close project** — the first two only for a project with a real git repo (`project.hasGit === false`
+  hides both plus the separator, since a plain folder has nothing for `git worktree add` to attach to;
+  its Default workspace is the only workspace it will ever have). Create is exactly the direct `+` flow. Open existing worktree opens the
   `ExistingWorktreeDialog` chooser fed by `workspace.listExisting` (branch + absolute path per row;
   detached-HEAD rows stay visible but disabled); choosing one calls `workspace.openExisting`, then expands
   the project and activates the attached row without starting a chat. Close
@@ -72,9 +74,13 @@ treatment.
   and opens a centered `ConfirmDialog`; confirming fires `workspace.remove` and lets every client react to the
   host's `workspace.removed` push via the store's `applyWorkspaceRemoved`; a rejected request (no event will
   come) surfaces an error toast, leaving the row in place. Each **workspace row** is **two-line**: the display
-  `name` on top with the git **branch on a second line beneath it** (muted, monospace), rendered only when
-  it differs from the name (so pristine/legacy `workspace-N` rows stay a single compact line) — the display
-  name is decoupled from the git branch (see [[submodule-server-workspaces]]). Workspace rows deliberately
+  `name` on top with the git **branch on a second line beneath it** (muted, monospace), always rendered —
+  the display name is decoupled from the git branch (see [[submodule-server-workspaces]]), so which branch
+  a worktree is on is answerable from the rail alone rather than only when the two happen to disagree. A
+  worktree checked out off a branch carries the literal `HEAD` as its branch and reads **"detached HEAD"**
+  (`workspaceBranchLabel`, shared with the top bar's `scope-branch`); a *folder* project with no git at
+  all reports the same literal, and its Default row prints it verbatim, because there it means "this
+  folder has no branches", not "detached". Workspace rows deliberately
   show **no `+N −M` change badge**: the Projects view is for navigation and identity; change detail stays in
   the dedicated Changes views. The **Default workspace**
   (`kind === "default"` — the project folder itself) renders **pinned first** (the server pins it in
@@ -114,21 +120,21 @@ treatment.
   **`useOpenProject`** hook (reused by `ProjectTree` **and**
   `WelcomePanel`, so the flow is identical in the Projects view and the Welcome screen): `project.open` reactivates
   a closed known path under its same id (or opens a new one), then the initiating client selects Project
-  Home while every client receives `project.updated`; on failure `project.inspect` → either offers to
-  bootstrap the folder into a repo — a modal **`ConfirmDialog`**
-  (confirm → `project.init`) — when it's `initable`, or surfaces the error in a **`NoticeDialog`** — so a
-  non-git folder is never a silent no-op. The native picker remains the local fast path and keeps its raised
+  Home while every client receives `project.updated`. A git repo and a plain folder open the same way —
+  there is no init offer to accept first (`projects/SPEC.md`: `openProject`
+  no longer requires a repo, and stamps `Project.hasGit` from what it finds). On failure `project.inspect`
+  classifies *why*, so a **`NoticeDialog`** carries a specific reason (missing folder, not a folder, or
+  the raw error) rather than a silent no-op. The native picker remains the local fast path and keeps its raised
   timeout because it waits on a human; if the host cannot present it, the rejection instead opens an
   **Open project from host path** dialog carrying the reason and an autofocused path field. The dialog says
   the path belongs to the computer running ThinkRail, accepts a host-absolute path or `~` / `~/…`, and
-  submits through this same open/inspect/init flow. **Enter host path…** is also always present beside Open
+  submits through this same open/inspect flow. **Enter host path…** is also always present beside Open
   project in `AddProjectMenu`: a remote client cannot tell whether a successful native picker opened on an
   unseen host display, so recovery cannot be failure-only. Every open gesture starts one client-wide
   last-intent generation shared by both mounted `useOpenProject` instances. The flow rechecks that generation
-  after each picker, open, inspect, init, and adoption await, so a manual path or recent selection from either
+  after each picker, open, inspect, and adoption await, so a manual path or recent selection from either
   surface supersedes any older flow before it can select a project or raise a stale dialog.
-  These are modals on `components/ui/dialog` (the init offer has no on-screen anchor, unlike the Remove
-  popover); `NoticeDialog` remains the single-button
+  These are modals on `components/ui/dialog`; `NoticeDialog` remains the single-button
   surface for failures with no recovery inside that notice. The hook returns a `dialogs` node each consumer
   renders. **Selecting a
   project** (clicking its row — the chevron expands/collapses separately) **deselects any active
@@ -158,16 +164,19 @@ treatment.
   **`ChangesScopeMenu`** scope pill + the shared **`BranchPicker`** target-branch pill, plus the
   **List | Tree** toggle (`store.changesView`, app-wide) switching a flat list and a folder
   **`ChangesTree`**; clicking a file in either opens/focuses its **center Monaco diff tab**, and every file
-  row carries the shared **`ChangeRowActions`** menu. The row wrapper paints the complete hover/selected
-  band, including the trailing menu slot; its inner open-file button remains transparent so that band
-  cannot look clipped before the menu),
-  `FilePane` (+ its lazy `MonacoEditor` / `MarkdownPreview`) + `DiffPane` (+ its lazy
+  row carries the shared **`ChangeRowActions`** menu),
+  `FilePane` (+ its lazy `MonacoEditor` / `MarkdownPreview` / `PdfPreview`, plus `Outline` +
+  `outlineTree.buildOutlineTree`) + `DiffPane` (+ its lazy
   `MonacoDiff`), plus lazy `TerminalInstance`. The Monaco plumbing both editors share —
   worker wiring, the local loader, the token-driven `thinkrail` theme + the `[data-theme]` re-theme
-  observer — lives once in `monacoSetup.ts`; the slim header view-toggle segment (`Preview|Source`,
+  observer — lives once in `monacoSetup.ts`; the slim header view-toggle segment (`Preview|Source|Split`,
   `Split|Inline`, `List|Tree`) is the shared `ToggleSegment` — whose active segment reuses the tab
   grammar's `control-bg-selected` (below), never a container surface, so the selected fill survives the
   high-contrast themes where `container-elevated-bg` collapses onto the toolbar surface.
+  **A markdown tab has three views, not two**: Preview, Source, and **Split** — the buffer and its
+  preview at once, the preview riding the shared embedded-pane primitive
+  (`shell/layout/SPEC.md`) rather than a second tab. Closing the preview half returns the tab to plain
+  Source, so a fold is a mode change the toggle agrees with rather than a hidden fourth state.
   The `ChangesPanel` secondary toolbar paints **no surface of its own**: like the right-panel tab strip
   it shows the panel's `container-sidebar-bg`, so the two chrome rows read as one continuous surface. The **file-style tree row** (chevron/spacer
   lead, folder/file icon, truncated label, trailing slot; `min-w-0` so a row can shrink when it shares a
@@ -184,8 +193,15 @@ treatment.
   `onOpen`/`isActive` by `ChangesPanel`), together with the **diff-tab identity + scope vocabulary**:
   `scopeKey` / `diffTabId(workspaceId, scope, path)` / `diffTabName` / `scopeLabel` and the `splitPath`
   used by both the flat list's path rows and the diff header's path chip. The **branch combobox** is the
-  shared **`BranchPicker`** (searchable, grouped Remote/Local, current pick check-marked, refreshed on every
-  open with an explicit Refresh control as well) — one component for the New-Workspace dialog's *base* branch
+  shared **`BranchPicker`** (searchable, grouped **one heading per remote** then Local, current pick
+  check-marked, refreshed on every
+  open with an explicit Refresh control as well). The remote headings come from the pure
+  **`branchGroups.ts`** (`groupBranchesByRemote`, unit-tested): one group per remote in the order the host
+  listed them, each row carrying the branch alone. Repeating `origin/` down every row of a 320px popover
+  spends on a prefix the width the branch name needs, and it is a fork's *second* remote that the reader
+  is scanning for. The full ref stays the row's `value` and `data-branch`, so a search for `upstream/main`
+  still finds it and the trigger still names the remote it picked. It is
+  one component for the New-Workspace dialog's *base* branch
   and the Changes header's *target* branch; the whole state *around* it — the list, `refreshing`, `refresh()` —
   is the shared
   **`useBranchList(projectId, onLoaded?)`** (`branches.ts`, over the offline-degrading
@@ -197,7 +213,16 @@ treatment.
   `defaultBranch: ""`, **never the literal `HEAD`**: a sentinel that named a ref would be believed — the
   dialog would preselect it and persist it as the workspace's `baseBranch`, and that worktree would forever
   diff against its own head. Empty means "unknown", so `create` omits `baseRef` and the host resolves the
-  real branch. **`WelcomePanel`** is the first-touch surface the shell mounts (centered, left-nav beside it) whenever no
+  real branch. Worktree mode also carries a **Name** field (`ws-name`), prefilled from
+  **`workspace.suggestName`** with the host's next free `workspace-N` so the user sees the name they are
+  about to get instead of guessing it. The prefill is a **placeholder, not a choice**: while it is
+  untouched `create` omits `name` entirely — the host allocates the slot and its prompt-driven auto-rename
+  still applies (the naming hint says so, and disappears the moment the field is edited) — and once edited
+  the typed name travels with `workspace.create`, which locks it against that rename. Folder mode has no
+  base to pick, so in the picker's slot it shows the same list's
+  **`current`** as a plain "On {branch}" read-out (`ws-current-branch`) — text, not a control, so nothing
+  in that slot invites a click that folder mode cannot honour — the two modes each name the
+  branch the work will land on, one chosen, one reported. **`WelcomePanel`** is the first-touch surface the shell mounts (centered, left-nav beside it) whenever no
 workspace is active. **One hero heading** (`welcome-title`, the topbar's brand styling — accent font,
 `text-primary` — enlarged): the **shown project's name**, or `PRODUCT_NAME` when no project is shown —
 the wordmark is the empty-state identity, a project's own name is the identity once one is open (so no
@@ -208,7 +233,7 @@ hook, others quiet `welcome-action`s). Welcome is **the mode fork**: with a proj
 **"Start building"** (isolated worktree) with **"Work in project folder"** (the Default workspace) so the
 two working modes are a visible choice, not a hidden default. The cards by state: **no projects** →
 **"Open project"** (one card); **project + `hasSpecs`** → **"Start building"** (primary) + "Work in
-project folder"; **project + no specs** → a spec-first **"Set up project"** (primary) + "Start building"
+project folder"; **project + no specs** → a spec-first **"Draft a blueprint"** (primary) + "Start building"
 + "Work in project folder". **"Open project" appears only in the no-projects state** — where it's the
 only possible action; once a project is shown, opening another is the projects-rail **"+"** (the same
 dropdown), so Welcome stays the *work-in-this-project* surface. That card hangs the shared
@@ -250,6 +275,128 @@ provider is "connected" iff any `configured`) on mount and re-checks whenever th
 it disappears the moment the user connects one; a transport error degrades to *not* nagging (offline ≠ "no
 provider"). All provider **management** lives in Settings, not here (the always-on strip is gone).
 
+**`NewProjectDialog`** is the create half of the project verbs, reached from the **`AddProjectMenu`** in
+every state (the rail's `+` and Welcome's own Open-project card both carry it) and additionally as a
+Welcome **card in the no-projects state**, where there is nothing else on screen to do. It is not a card
+in the other states on purpose — the card row is a mode fork, not a command palette, and a global verb
+already reachable from the menu does not earn a permanent slot beside it.
+
+The dialog is a parent-folder picker plus a name field, and it **shows the full target path before it
+creates anything** — the one thing a "name a new project" box usually hides. `project.create` makes the
+folder and `git init`s it with no commit, so the success state says so plainly and points at the missing
+first commit rather than letting the user discover it at *Start building* (which now refuses an unborn
+HEAD by name — see [[submodule-server-workspaces]]). That success state is also where the two features
+meet: **Draft a blueprint** hands straight to `BlueprintStartDialog`. The offer is a prop, and the rail's
+copy of the dialog omits it — inside a workspace a blueprint has nowhere to render, and an affordance
+whose destination does not exist is worse than a missing one.
+
+**A blueprint lives in the project folder, beside the agent that writes it.** `BlueprintStartDialog`
+takes the brief and opens the project's **Default workspace** — not a cut worktree. A spec is written
+*before* there is anything to isolate, and a branch named after a paragraph helps nobody; the reader who
+wants isolation cuts a worktree once the spec says what to build. One project folder holds one spec, so
+starting a blueprint where one already exists reopens that pair instead of clobbering the file. From
+there: `blueprint.open`, the **`focus` preset** committed as the first layout, the chosen agent's surface, and
+two layout intents that open the blueprint tab and pane it **horizontally** with that surface — agent
+left, specification right.
+
+**The agent pill decides what the left pane *is*, and either way it is the document's author.** `pi`
+opens a chat session and sends it the opening prompt; `claude` places a centre terminal running
+`claude --append-system-prompt … "<opening prompt>"` — *interactive*, so the reader can talk to the thing
+that is writing. They are different kinds of thing, so the flow returns the layout id of whichever it
+opened and builds the pane around that rather than assuming a chat, and registers it as the author with
+`blueprint.setAuthor`.
+
+**Changing the spec from the panel talks to that author.** `blueprint.select` and `blueprint.confirmEdits`
+write the file host-side and hand back the sentence the author still needs to hear; the *client* delivers
+it, because a terminal takes writes only from its attached client. A chat gets `session.prompt`; a
+terminal gets the line queued in the store for `TerminalInstance`, the one component that holds the
+server id. There is no Keep/Discard gate any more — the file is the document, and what moved in the
+author's last rewrite is shown as a strip and highlighted rules rather than held for approval.
+
+**The author goes in the centre group, named explicitly.** `addTerminal` silently drops `targetArea`
+unless a `targetGroupId` comes with it, and its default region is the bottom — so passing `"center"`
+alone put the Claude author under the document instead of beside it. The flow therefore takes
+`primaryCenterGroupId` of the layout it just committed and names it.
+
+**The trust gate is explained, not bypassed.** Claude Code asks to trust a folder the first time it runs
+in one, and no flag skips that in interactive mode (the docs are explicit: only `--print` does). Writing
+trust into the user's `~/.claude.json` behind their back would break the rule that `claudeConfig` writes
+only on consent, so the `awaiting` state says what is being asked and that the folder is the empty
+worktree ThinkRail just cut.
+
+**Drafting a spec is not the moment for the rest of the IDE.** The `focus` preset is reused rather than
+invented: one centre group, every side tool and the bottom region hidden — no Specs, Files, Changes,
+Review or shell competing with the document. They are hidden, not deleted, so revealing one later is the
+ordinary gesture. The default-terminal seeding in `WorkspaceWorkbench` additionally **skips a workspace
+whose centre holds a blueprint**, which is a placement fact and so survives reload without a flag. There is no project-less
+blueprint: a chat and a terminal are workspace-scoped in ThinkRail, so a spec with nothing beside it was
+a spec you could not talk about. The Welcome card therefore disappears from the **no-projects** state,
+where there is no project to cut a workspace from.
+
+**The spec has exactly one surface.** `store.openTab` intercepts a file tab for `BLUEPRINT.md` — from
+Files, from Specs, from anywhere — and calls `openBlueprintPair` instead, so the reader can never end up
+with a plain markdown view of the document beside its live one. The **hatch is deliberate but
+inconvenient**: right-click the file in Files → *Open raw source*, which passes `rawBlueprintSource`
+through `openFileInTab` to opt out of the redirect. It is not on the tab's own menu — `Workbench` is
+generic layout machinery with no workspace in scope, and teaching it about blueprints to save a click
+would be the wrong coupling. If the author's half was closed it comes
+back too: a pi chat by its persisted session id, a Claude terminal by reattaching its tab, where the
+terminal module's existing resume machinery prefills `claude --resume <session>` for the reader to
+confirm. Spending a resume stays their decision, exactly as it is everywhere else in the app.
+
+**`BlueprintPane`** is the tab body, and it hydrates itself: the layout tab is persisted, so a reload
+arrives with no store entry and reads `blueprint.get` for its workspace. Until the author has written
+`BLUEPRINT.md` the pane says so plainly (`phase: "awaiting"`) instead of showing an empty document.
+
+**Blueprint is the spec-first path, and it is reachable from every state that has a project.** In a
+project **without specs** it *is* the primary **Draft a blueprint** card — that card (once titled "Set up project", a name that
+said nothing about what it opened) used to open New Workspace with
+`/skill:setting-up-a-project ` prefilled, and the blueprint replaces that route (the skill itself is
+untouched and still runs from any chat via `/skill:`). In a project **with** specs, and in the
+**no-projects** state, it is a quiet `Draft a blueprint` card; `NewProjectDialog`'s success state offers
+it too. An earlier revision confined it to the empty state on the theory that a blueprint is a pre-repo
+artefact — that was wrong in practice: a user who has just made a project is precisely the user who wants
+one, and confining it left no way back to the offer once that dialog closed. **`BlueprintStartDialog`** is the whole input —
+one pill per *source*, then whatever that source needs, then one pill per agent, the Claude pill disabled
+with its reason until Claude Code is enabled in Settings.
+
+**Three sources, one door.** An idea is the free-text field. **This project** needs no input at all — the
+worktree is the input. **A document** opens the host's native file picker (`dialog.selectFile`, the same
+one that finds a Claude binary) and shows the chosen path; the host is what decides whether that path is
+inside the project, so a file picked from somewhere else comes back as a refusal in a toast with the
+dialog still open, before a workspace has been spent on it. A separate "take over" door was rejected: the
+agent pill, the workspace it lands in and the layout it applies are identical in all three cases, and two
+dialogs would have been the same dialog twice. The submit button says what it will do — *Draft it* for an
+idea, *Take it over* for either takeover.
+
+`BlueprintView` renders the host's *parsed* document (`BlueprintDoc` — ordered prose and control blocks),
+never the format's text: `apps/web` cannot parse a format it is not allowed to depend on a parser for, and
+the tolerance a stream demands lives in the host's parser instead (see [[submodule-server-blueprint]]).
+Prose blocks go through `chat/Markdown`; a control block is **`BlueprintControlView`**, which renders a
+dropdown for `kind: "select"` and a checkbox list for `kind: "multi"` — the axis is the reason a control
+exists, so it is always visible beside its option rather than hidden behind a hover. A block keeps its own
+`id` as the React key (a control's id, prose numbered in order), so a streaming rewrite re-renders in
+place rather than remounting the document under the reader's cursor.
+
+**Every visible piece of text is editable, through one primitive.** `EditableText` is a button that
+becomes a `textarea` on click: Escape abandons, blur or Enter commits (Cmd/Ctrl+Enter for prose, which
+takes plain Enter as a newline). Prose renders as markdown until clicked and as its own source while being
+edited, so the reader edits what they wrote rather than what it compiled to. A commit does **not**
+regenerate — it stages, and a `blueprint-edits` strip appears offering **Confirm edits** (react now) and
+**Revert** (put the agent's words back). That asymmetry against controls, which react on click, is the
+recalculation policy; it lives in [[submodule-server-blueprint]]. Every control is **disabled while the
+agent is running** — `data-phase` on the root carries `generating` / `idle` / `reacting` / `proposed` /
+`failed`, and the e2e suite drives off exactly that attribute. The spec-graph frontmatter the author opens
+the file with renders as the same `FrontmatterProperties` table a markdown file gets, first in the
+document; an edit there rebuilds the block and goes over the wire as a `frontmatter` text edit, staged
+and confirmed with the prose edits rather than landing as a tab draft (a blueprint has no tab draft).
+`e2e/blueprint-watch.spec.ts` pins the table and one edit.
+
+When a reaction settles, the view shows the **proposal**, not the accepted document: a warning strip names
+how many other things moved, lists them, and offers Keep or Discard, while every control the rewrite
+touched wears a warning rule down its left edge. That is the answer to "the reader changed one thing and
+twenty moved" — they see the twenty before any of it is theirs.
+
 Beneath it, **`ProjectSkillsNotice`** is the pre-workspace trust surface (so trust is reachable with no
 workspace yet): **presence-gated** — renders nothing unless the selected project ships committed skills —
 showing a **count** ("ships N skills → *Trust project*"), a "N new → *Review & enable*" state for skills that
@@ -260,14 +407,14 @@ skills' (attacker-controlled) names before trust. The full manager (`chat/Skills
 pre-session half of the user's skill settings; the chat header opens the same dialog in workspace mode
 (with Reload).
 
-**`NewWorkspaceDialog`** is the start-working surface: **a target control** (a two-option segment — a
-native radio group, `fieldset` + sr-only `legend` over visually-hidden radio inputs, so assistive tech
-hears one mutually-exclusive choice — both always visible: the two-mode model in one glance) chooses **where** the work runs, and the header is
-**mode-aware** so it always names the operation truthfully: **Isolated workspace** → title **“Create
-workspace”**, description **“A separate checkout on its own new branch. Files, chats, changes, and
-terminals stay scoped to it.”**; **Project folder** → title **“Work in project folder”**, description
-**“Runs directly in your project folder — no isolation. Changes land on the current branch.”** In folder
-mode the base-branch picker and the naming hint are hidden (nothing is created — submit **enters** the
+**`NewWorkspaceDialog`** is the start-working surface. Its title is the **mode-independent** **“Start
+work”** — the window is one surface, so it does not rename itself under the user. Under it, **a target
+control** (a two-option segment — a native radio group, `fieldset` + sr-only `legend` over
+visually-hidden radio inputs, so assistive tech hears one mutually-exclusive choice — both always
+visible: the two-mode model in one glance) chooses **where** the work runs, and the **one-line
+description directly below it** is the only mode-aware prose, stating just the difference: **Isolated
+workspace** → **“A separate git worktree on its own new branch.”**; **Project folder** → **“Your project
+folder itself. No isolation, work lands on the current branch.”** In folder mode the base-branch picker and the naming hint are hidden (nothing is created — submit **enters** the
 project's Default workspace via the shared **`enterDefaultWorkspace`** helper (`defaultWorkspace.ts`:
 `workspace.list` → fold into the store → activate the `kind === "default"` row, one atomic entry — the
 rail's auto-expand follows activation; error toast + `null` if an older host has none — the same helper
@@ -275,8 +422,18 @@ behind the Welcome fork card, so the enter + degrade path lives once; **`onCreat
 nothing was created and the helper's list is already fresh))
 and the submit button reads **Start** instead of **Create**; the branch-list fetch + background base
 prefetch still run (fire-and-forget, keeps a toggle back to worktree instant); the chat
-kick-off tail is identical in both modes. An optional **`promptNote`** renders as a small info strip above
-the prompt (used by "Set up project" to say what the seeded skill command does). The worktree mode's
+kick-off tail is identical in both modes. **The agent is a choice too**: a chip pair (`ws-agent`, the
+shared `chips.ts` look the blueprint dialog uses — *Bundled agent* / *Claude Code*, the latter disabled
+with "Turn Claude Code on in Settings." as its title until the setting is on) sits where the model
+pickers start. With Claude Code chosen the pi model and effort pickers give way to one Claude model menu
+(`ws-claude-model`: Default model or a `CLAUDE_MODELS` alias, sent as `--model`), and create opens **a
+terminal in the centre group** running `claudeLaunchCommand(claudeCommand, …)` with the prompt as the
+CLI's positional argument (single-quoted through `shellQuotePath`; an empty prompt starts a bare
+session) instead of a chat — the same launch the tab strip's launcher performs, seeded. No pi session
+means no prompt-driven auto-rename, so the naming hint stays hidden for Claude and the worktree keeps
+its placeholder name unless the Name field was edited. `e2e/new-workspace.spec.ts` drives it against a
+stand-in `claude`. An optional **`promptNote`** renders as a small info strip above
+the prompt (used by "Draft a blueprint" to say what the seeded skill command does). The worktree mode's
 base-branch trigger reads **“From
 {base}”**, not an unexplained ref. An optional **`initialPrompt`** seeds the prompt hero (still editable;
 empty by default); while the prompt is non-empty (worktree mode), a secondary hint says ThinkRail will name the workspace
@@ -315,7 +472,7 @@ a project picker, the prompt hero, and the reused
   *Trust project* button — the repo's skills stay withheld until granted (`project.setTrust`, which folds the
   updated project back into the store and re-previews); personal + bundled skills show regardless. When the menu is closed, **Enter submits** (matching the submit button's
   `↵` affordance) and
-  **Shift+Enter** inserts a newline. Worktree-mode submit = `workspace.create({ projectId, baseRef })` → set active → **always open a
+  **Shift+Enter** inserts a newline. Worktree-mode submit = `workspace.create({ projectId, name?, baseRef })` → set active → **always open a
   fresh chat** (`session.create({ workspaceId, model?, thinkingLevel? })` — a held model + effort apply even
   without a prompt, and travel together: with none held both are omitted and pi resolves them) → a typed prompt is additionally sent as the first message (fire-and-forget
   `prompt`); an **empty prompt leaves the just-opened composer ready** — submitting the start-working
@@ -454,7 +611,13 @@ a project picker, the prompt hero, and the reused
   ever seeds global files. No server change. **`PrivacySettings`** is the **anonymous-usage-analytics
   toggle** — a switch over `store.analyticsEnabled`, fired via `settings.update { analyticsEnabled }`
   with the same converge-on-broadcast pattern as the theme, plus the what-is/isn't-collected copy; only
-  the boolean ever crosses the wire, see `submodule-server-analytics`. **`FeedbackSettings`** is the final
+  the boolean ever crosses the wire, see `submodule-server-analytics`. **`ClaudeCodeSettings`** carries the integration switch and the
+  **launch command** the tab strip's launcher runs: a free-text field, because the honest value is a
+  command *line* — a name on PATH, an absolute path, or either plus flags — with a Browse… button that
+  raises the host's native file picker (`dialog.selectFile`) and writes back a shell-quoted path, since a
+  browser cannot see a filesystem and a path with a space would otherwise read as two words. The field
+  commits on blur or Enter and the host normalises a blank one back to `claude`, so the launcher can never
+  type an empty line into a shell. **`FeedbackSettings`** is the final
   live section after Privacy: the same interview copy as the automatic prompt, stating that joining a user
   interview to discuss the participant's ThinkRail experience earns 100 bonus credits in Central
   (JetBrains AI), plus a real external anchor to the fixed Google Calendar booking page, opened in a new
@@ -473,7 +636,8 @@ a project picker, the prompt hero, and the reused
   **auto-fix toggle** (`review-autofix-toggle`, a switch over `store.reviewAutoFix` →
   `settings.update { reviewAutoFix }`) — off means a `request_changes` verdict records findings and waits
   (the host gates its auto-fix cycle on it, see `submodule-server-todos`). A single dimmed "General" nav item ("Soon") still signals the shell is
-  built to grow. `ProvidersSettings`/`AppearanceSettings`/`ChatSettings`/`TemplatesSettings`/
+  built to grow. `ProvidersSettings`/`AppearanceSettings`/`ChatSettings`/`ClaudeCodeSettings`/
+  `TemplatesSettings`/
   `PrivacySettings`/`ReviewSettings`/`FeedbackSettings` and the app-wide **`InterviewPromptDialog`** are the
   panels-owned **integration pieces** (store + transport). The prompt renders the shared incentive copy and
   fixed Calendar anchor with `Schedule an interview`, `Not now`, and `Never show again` actions. Primary and
@@ -715,10 +879,25 @@ own section. The kebab menu (`plan-menu`, a
   reused by `NewWorkspaceDialog`; `Markdown`,
   reused by `MarkdownPreview`; `TemplateEditorDialog`, reused by `TemplatesSettings`), `lib`, `themes` (catalog + generic application contract),
   `contracts`; `@remixicon/react`; and the heavy libs each lazy panel owns (`monaco-editor`, `shiki`,
-  `@xterm/*`) loaded via `import()`.
+  `@xterm/*`, `pdfjs-dist`) loaded via `import()`.
 - **Forbidden:** `server`/`shared`/`pi`; importing `shell`; reaching across unrelated panels.
 
 ## File rows own their context menu
+
+A row git ignores (`FileNode.gitignored`, decided by the host with `git check-ignore`) is dimmed by the
+shared `TreeRow` (`data-muted`, `text-text-subtle` on the label) and titled "Ignored by git" — still
+openable, still a real file, just visibly not the repository's. Pinned by `files.spec.ts`.
+
+**A Files-tree row is a drag source, and a terminal and the composer are where it lands.** Every row
+(`TreeRow` with `onDragStart`, native HTML5 drag — not the workbench's dnd-kit, which is for tabs)
+carries the entry it represents (a compacted chain drags as its deepest folder) as `lib.fileDrag`'s
+`application/x-thinkrail-file` payload plus the path as `text/plain`, so any plain text field takes the
+path too. Dropped on a terminal (`TerminalInstance` listens on its xterm host, natively — a drop has
+no keyboard path, the line itself is the accessible way in) it is handed to whatever runs there: an
+`@`-mention through the same `attach` an editor selection uses when Claude Code is running, otherwise
+the absolute path as one shell word (`shellQuotePath`), like Finder would drop it. Dropped on the chat
+composer it becomes an `@path` mention at the caret (`@dir/` for a folder), the same text `@`
+completion inserts. Pinned by `files.spec.ts`.
 
 A right-click on an All-files row opens `file-node-actions` (Reveal in Finder, Copy path). The menu
 exists mostly so the *webview's* does not: with no handler, WebKit shows its own Look Up / Translate /
@@ -732,6 +911,318 @@ workspace path — it reads as a broken feature rather than an absent one.
   the right verb. Linux has no portable "select this entry", so it opens the containing folder.
 - The label follows the platform's own name for its file manager; "Show in Finder" on Linux would read
   as a bug.
+
+## Tab labels carry our tooltip, not the browser's
+
+A center/side tab name is truncated far more often than not, so the full name has to be reachable on
+hover. It uses the shared `IconTooltip` rather than a native `title`: the native one is unstyled and
+waits about a second, which is useless for text the user is already looking at.
+
+- **It keeps the provider's delay, deliberately.** `delayDuration={0}` was tried first and is the
+  obvious reading of "instant" — it is not shipped, because it reliably wedges the tab-search popover
+  open: with an instant tooltip on every tab, widening the window past the overflow threshold leaves
+  `Find an open tab…` mounted over a strip that no longer overflows (`e2e/layout.spec.ts`'s keyboard and
+  menu commands test fails ~2 runs in 3, against a ~1 in 3 baseline for that file). The provider's
+  `skipDelayDuration` already makes every tooltip after the first instant while moving along a strip,
+  which is the case that actually matters.
+- **The tooltip wraps the tab *button*, not the label span.** Anchoring it to the name reads better on
+  paper — the label *is* the truncated name — but Radix's trigger then sits on the element a tab drag
+  starts from, and swallows the pointer events the drag needs: `e2e/layout.spec.ts`'s side-group
+  resize test fails 4 runs in 4 that way. The button is already the drag handle and the accessible
+  control, so the trigger belongs there.
+- `IconTooltip` grew an optional `delayDuration` for this, and it stays available — but nothing in the
+  tab strip may use `0` without re-checking the two tests above.
+- **A tooltip is a label, never a target.** `TooltipContent` is `pointer-events-none` app-wide: anchored
+  beside a control it inevitably covers a neighbour, and a panel that swallows the click meant for the
+  tab underneath is worse than no tooltip at all. Safe because every label in the app is plain text —
+  an interactive tooltip would need its own component, not this one. The tab tooltip additionally opens
+  **along the strip's own axis** (`right` when vertical, `bottom` when horizontal) so it lands beside the
+  strip rather than on the next tab, and is anchored to the **whole tab row**, not the name button: the
+  button's right edge is exactly where the close cross sits, so a vertical strip's tooltip opened there
+  hides the control the same hover just revealed. Anchoring the row also keeps Radix's trigger off the
+  drag handle, which is what broke dragging when it wrapped the label span. `e2e/layout.spec.ts` pins both the computed `pointer-events` and
+  that a covered neighbour is still clickable.
+
+## Selecting in the rendered document reaches Claude
+
+A selection made in the markdown preview **or the blueprint pane** is reported to the Claude Code bridge
+exactly as an editor selection is (`transport.reportIdeSelection`), so highlighting a passage of prose is
+a way to hand it to a running agent — including the spec the agent is in the middle of writing.
+
+- **The blueprint pane stamps its own blocks.** It renders `BlueprintDoc` blocks, not markdown, so no
+  rehype plugin puts the stamps there: the host sends `BlueprintState.lines` (a block-id → span map that
+  `blueprintBlockLines` derives from the *serializer*, so a layout change moves the text and the spans
+  together) and the pane writes them onto each block as the same `data-md-line-*` attributes. That is
+  what lets `stampedSelectionLines` read both views without knowing the difference between them.
+- **The range is block-level; the text is exact.** The line span comes from the `data-md-line-*` stamps
+  the review comments already rely on, which mark enclosing blocks — so selecting half a paragraph
+  reports that paragraph's lines with the selected text. That is the honest limit of what the rendered
+  view knows, and it is why the transport's de-dupe keys on the text as well as the range: two
+  selections inside one paragraph share a range and must still both be reported.
+- **Paths are absolutized by the host.** The client addresses files worktree-relative; Claude Code
+  expects a path it can open, so `ideBridge.selectionChanged`/`documentClosed` join the workspace's
+  worktree path server-side. An `external-file` path is already absolute and passes through.
+
+## Claude Code's IDE actions
+
+`ideActions.ts` answers what a `claude` CLI asks of this editor through the host's bridge
+(`packages/server/src/ideBridge/SPEC.md`): open a file, list open editors, close a tab. It is registered
+from `main.tsx` through `transport`'s `setIdeActionHandler` seam, since `transport` may not import
+`panels`.
+
+- **Every action replies, including a failed one.** A thrown error becomes the CLI's tool error rather
+  than a hang — the bridge's timeout is a backstop, not the normal failure path.
+- **Paths arrive absolute and are made worktree-relative** through the same `projectRelativePath` every
+  other open goes through, so an IDE-driven open and a user-driven one produce the identical tab identity
+  instead of a duplicate addressed the other way.
+- **`openDiff` opens the file, and says so.** The CLI proposes unsaved content; our diff tabs read both
+  sides from git and cannot represent that, so the reply carries `diffShown: false` rather than claiming
+  a diff appeared. `saveDocument`/`checkDocumentDirty` answer honestly now that the editor
+  writes: dirty is a real buffer's state, and a save runs the same path Ctrl+S does, reporting `saved`
+  only when the buffer actually settled — a save refused by a conflict says so rather than claiming
+  success.
+- **Change rows wear it too, in both views** — the tree view gets it from `TreeRow`, and the list view
+  draws it beside the path. A changed file is still a file, and a column of them is exactly where the
+  eye is scanning for one.
+- **File rows and the attach picker wear the file's own icon** (`components/FileTypeIcon`, via `TreeRow`'s
+  `iconPath`), so a tree reads as its types rather than as a column of identical glyphs. Folders keep the
+  Remix folder pair, which still has to say open/closed and selected/not — a state a type icon cannot
+  carry.
+- **`MonacoEditor` reports its selection** (`onDidChangeCursorSelection` → `transport.reportIdeSelection`)
+  and reports the document closed on unmount, which is also what makes `getLatestSelection` outlive the
+  tab. It reports only when given a `workspaceId`, so a Monaco instance rendered outside a workspace tab
+  contributes nothing.
+
+## Sending a selection to a pi chat
+
+That live selection reporting only ever reached **Claude Code**, over the IDE bridge — a pi chat had no
+way to be told what the user is looking at, and pasting was the workaround. The editor now reports what is
+highlighted to the **store** as well (`setEditorSelection`, cleared when the selection empties or the tab
+unmounts), which is what the chat composer shows as a chip and sends with the next message — see
+`chat/SPEC.md`. An attachment nobody can see is an attachment nobody trusts.
+
+**"Send selection to chat"** (`sendSelectionToChat.ts`) is the other half: it quotes the selection into the
+workspace's chat composer as text, for pinning several snippets into one message, and takes the chip off
+for that selection so the same lines are not sent twice. The quote itself is `lib/editorSelection.ts`, so
+the two paths cannot drift into two formats.
+
+- **The quote is `path:lines` above a fenced block** of the selected text, tagged with the editor's own
+  language id (`lib`'s `selectionQuote`, shared with the composer's chip). The path is the worktree-relative one the user reads in the file tree, and a single-line
+  selection says `README.md:1`, not `1-1`. A trailing line the user did not really select — a selection
+  that ends in column 1 of the next line — is trimmed off the range, matching the review composer.
+- **The text travels, not a pointer to it.** The agent can read the file itself; what it cannot recover
+  is which part of it the question is about.
+- **It targets the workspace's chat and creates one if there is none** (`selectLastOpenChatSession`, else
+  `createSessionWithSkillBaseline` + `openChatSession`) — the same escalation `reviewSend.ts` uses, since
+  both are "put this into a chat" from outside the chat.
+- **The composer keeps the caret.** The open passes `focusTab: false` and the draft write asks for the
+  composer (`store.addToChatDraft` → `composerFocusRequest`), because the app's ordinary open focuses the
+  tab button, and landing there would mean the next keystroke goes nowhere.
+- **Two ways in: the editor context menu and Ctrl/Cmd+Shift+L.** The chord is handled in the editor's own
+  `onKeyDown` beside Ctrl/Cmd+S rather than as an `addAction` keybinding — Monaco's built-in binding for
+  that chord (select all occurrences) wins the keybinding service, and this deliberately shadows it.
+
+## Editing a file
+
+An editor tab is a buffer, not a viewer. There is **no autosave**: Ctrl/Cmd+S writes, and until then
+nothing on disk moves — the tab shows an unsaved dot and closing it asks first.
+
+- **A save is a compare-and-swap** (`fileSave.ts`, `fs.writeFile` / `claudeConfig.writeFile`) against the
+  content the editor last read. A file that moved underneath is never overwritten: what is on disk comes
+  back and is merged into the buffer with `lib`'s three-way merge, leaving conflict markers where both
+  sides changed the same lines. Saving again is then an ordinary write against the newer base. The user
+  therefore always sees what is about to be written, including in the clean-merge case — the merge lands
+  in the buffer rather than being written for them.
+- **A file changing under an unsaved buffer is announced immediately**, not held until the save fails:
+  the refresh that would normally replace the tab's content parks it in `external` instead and the pane
+  shows a bar offering the same merge, or discarding the buffer for what is on disk. Its buttons
+  `preventDefault` on mousedown, so the caret stays in the editor and Ctrl+S still reaches it.
+- **The pane owns the shortcut, not the window.** Monaco handles Ctrl+S when the caret is in it, and the
+  pane handles it for everything else in the pane; a window-level listener would fire for a focused
+  terminal, where Ctrl+S means something else entirely.
+- **The wrapper around the editor is unconditional.** A bar appearing must not change the shape of the
+  tree around Monaco, or React remounts it and the caret, scroll position and undo history go with it.
+- **External files are editable too**, through the allowlist the Claude configuration pane already
+  resolves — the same compare-and-swap, the same merge.
+
+## What a Claude terminal is running on
+
+A Claude Code terminal shows two chips under it: the model, and the reasoning effort. They come over the
+same agent status protocol the badge already rides — a report the plugin POSTs to the host, which pushes
+it here (`contracts/agentStatus.ts`) — because the answer
+belongs to the session and can change inside it — `/model` mid-chat moves it, and so does a different
+effort on the next turn.
+
+- **Per terminal, never per app.** Two Claude sessions in two tabs are two chats, each on whatever it was
+  last told to use, so the state is keyed by terminal (`claudeCodeByTerminal`) exactly like the status.
+- **The last reported answer stands.** Only some events carry these fields; a `tool_complete` that omits
+  them means "nothing new to say", not "no longer known", so the store keeps the previous values rather
+  than blanking the chips between turns.
+- **A report can be facts without a status.** `/model` changes what the session runs on without changing
+  what it is doing, so the switch arrives with `status: null` and the badge keeps whatever it had. Before
+  a first status there is nothing to keep, so such a report is dropped rather than inventing one.
+- **The chips are the pane's, not the terminal program's.** They sit in the pane below the xterm host,
+  which shrinks by their height, so they never overlap what the agent is drawing — Claude Code has its own
+  footer and this is not competing with it.
+- **The model chip is also the switch — and the switch is session-only.** Clicking it opens a menu of
+  the CLI's model aliases (`lib.CLAUDE_MODELS`, the same list the launcher's context menu builds its
+  `--model` presets from) and a pick drives the session's own interactive `/model` picker
+  (`lib.driveModelPicker` over `terminal.write` + the xterm buffer): open it, arrow the `❯` highlight
+  onto the row naming the pick, press `s`. `s` is the CLI's only session-only selection — `/model
+  <alias>` typed as a command, Enter in the picker, and the picker's digit shortcuts all *save the pick
+  as the user's global default*, which a per-terminal chip must never do. The picker can't be driven
+  blind: the prompt may not be empty (a half-typed message swallows the slash command, so the draft is
+  killed with `Ctrl+U` and yanked back with `Ctrl+Y` around the whole drive), its rows vary with the
+  current default (a plain `Opus` row exists only when Opus is current,
+  otherwise only `Opus (1M context)`), the highlight opens on the current model, and arrows wrap — so
+  the driver is a feedback loop reading the rendered `❯` row between keystrokes, not a canned
+  keystroke string. If no picker renders (~3.6s) or no row ever names the pick, it presses Esc and
+  says so in a toast. It types where the attach chip already types, with the same assumption: the
+  session is at its prompt. The chip then updates the way it always has — from the plugin's
+  `model_switch` report, not from the click — so what it shows stays what the session confirmed, never
+  what the menu hoped.
+- **The effort chip is a switch too**, and the same one: `lib.driveEffortPicker` steers `/effort` to the
+  chosen rung and takes it with `s`, session-only, sharing the model chip's driver, its single-flight
+  guard, and its toasts. What differs is the picker — a slider read by its marker rather than a list read
+  by its highlight — which is `lib`'s problem, not this module's.
+- A model id is mostly prefix, so the chip shows the part that identifies it (`opus-5`) with the full id
+  on hover. Effort is shown in the agent's own words rather than translated into a scale of ours.
+- **The row itself appears with the first report**, not with the first *fact*: a session that has said
+  only `session_start` still gets the row, because the row also carries the attach chip, which is useful
+  before any model is known.
+- **`VisualizationPane`** (terminals only) and the blueprint arrive as **embedded panes** on their host
+  rather than tabs of their own (`shell/layout/SPEC.md`, Embedded panes;
+  `useEmbeddedCompanion` composes a terminal's, `shell/ChatHost` a chat's, since `chat` may not import
+  `panels`). `VisualizationPane` renders a terminal agent's live drawing — the MCP `visualize` tool's view
+  (server's visualize/SPEC.md). One pane per terminal, opened by the first push and updated in place by every rewrite: the
+  pane reads `visualizationsByTerminal` and re-renders on the `terminal.visualization` WS push, so many
+  Claude terminals each hold an independent, live view beside the terminal that drew it. It reuses the chat's `VisualizationCard`
+  verbatim — pi's visualize tool and the MCP one draw with the same schema and the same renderer. A
+  pane whose store slot is empty (reload, host restart) hydrates once through `visualization.get` and
+  otherwise shows the loading region until the agent draws again. The tab takes the first push's title;
+  it is a live surface, not a document — nothing persists but which companion the host was showing.
+- **Claude's own plan lives under Claude's terminal.** `TodoWrite` rewrites the whole plan, so the
+  plugin relays the whole plan on that one tool's `tool_complete` (`todos` on the report —
+  `contracts/agentStatus.ts`'s `AgentTodoItem`), and it rides the per-terminal state like the other
+  facts: a report that says nothing about todos leaves the last plan standing, a rewrite replaces it
+  whole. The row grows a `n/m` chip (`terminal-plan-toggle`) that toggles an overlay checklist
+  (`terminal-plan`) floating above the fact row — an overlay, not a split, so opening it never resizes
+  the PTY. Items render pending / in-progress / completed with the in-progress item speaking in its
+  `activeForm`, the same present-tense voice Claude Code's own spinner uses. This deliberately does
+  **not** touch the Plan pane: that pane is pi's, wired to `todo.*` state on a chat session, and a
+  second writer keyed by terminal would blur whose plan it shows — many Claude terminals can run at
+  once, and each carries its own list where it runs.
+- **A third chip says where the agent started.** Every report carries Claude's own `cwd` — the directory
+  `claude` was launched in, which a session cannot leave, and which is not the worktree root when the user
+  `cd`'d first. It is shown **whole**, with `$HOME` as `~`, exactly as the agent's own header prints it:
+  the first version showed it relative to the worktree, and `applications/axel-springer` on a chip reads
+  as a path to nowhere. A long one loses its middle rather than its end (`~/…/2026/spring`), since where a
+  path starts and what directory it actually is are the identifying halves; the whole of it is on hover.
+  The chip is lowercase and carries a folder mark, because a path in the pill's small caps
+  (`APPLICATIONS/AXEL-SPRINGER`) is not a path anyone recognises.
+
+### Attaching a file to what Claude is about to be asked
+
+`TerminalAttachFile` browses the worktree (`fs.readDir`, folders first) and types **`@<path> `** into the
+terminal — Claude Code's own syntax for putting a file, or a directory's listing, in front of the agent.
+It types and stops there: no newline, because the user is mid-sentence and the prompt is theirs to send.
+The worktree is where the agent works, not the limit of what it may be shown: **`elsewhere…` hands over to
+the host's own file picker** (`dialog.selectFile`, the one the launch-command field and "Open project"
+use), so a file anywhere on the machine can be attached. That picker opens on the *host*, which is why it
+is the escape hatch and not the primary way in — the browser is the client, and the client may not be
+sitting at that machine.
+
+The path is written for **the directory the agent reported**, not the worktree: relative when the file is
+under that directory, absolute otherwise — including when no `cwd` has been reported at all. Claude takes
+either ("File paths can be relative or absolute"), and an absolute path cannot be misread as relative to
+somewhere else, which is exactly what a `cd`'d session would do to a worktree-relative one. A directory is
+attached from its own header row (`attach this folder`), since clicking a folder in the list means "go
+in".
+
+## The Claude configuration pane
+
+The pane is three surfaces over one snapshot — Context, Settings, Capabilities — and each lives in its
+own file (the context surface stays in `ClaudeConfigPanel`, the other two are `ClaudeSettingsSurface`
+and `ClaudeCapabilitiesSurface`), sharing row furniture through `ClaudeConfigParts` (scope chip, source
+link, row action, the open-source hook). `ClaudeConfigPanel` owns the snapshot, the surface switch and
+the one pending edit; the surfaces never talk to the transport.
+
+**A capability row's actions live in its ⋮ menu, and the row itself only states facts.** Rows are
+grouped under one heading per kind (`claude-capability-section`, in the fixed order MCP servers, Plugins,
+Skills, Subagents, Hooks, Marketplaces). A kind Claude Code gives no switch (subagents, hooks,
+marketplaces) simply has no `Turn on` / `Turn off` in its ⋮ menu — an earlier "no switch" marker, first
+per row and then per heading, was noise that named an absence nobody asked about. A row is
+the name on its own line — the full pane width, with the scope chip, `off · user` and the ⋮ at its right
+— over its source path and detail; `Turn on` / `Turn off` and `Uninstall…` sit behind the **⋮ menu**. A
+per-row kind gutter and inline action buttons were both tried and squeezed the name out of narrow panes
+(kind + name + scope + `off · user` + `no switch` + kebab left `claude-co…` and `MARKETPLACE` overrunning
+the path beneath), and a destructive action one pixel from a switch people flip casually is a mis-click
+waiting to happen.
+
+**A plugin row can also be uninstalled, and that runs a command.** Turning a plugin off writes a settings
+key like any other capability; removing one is Claude Code's own `claude plugin uninstall`, because the
+plugin exists in three places the pane does not own ([[submodule-server-claude-config]]). Uninstall
+appears only on rows whose scope Claude's CLI accepts
+(`user` / `project` / `local`; a managed setting has no such scope, so the item is absent). Choosing it
+opens `ClaudePluginUninstallDialog`, which shows **the exact argv the host will run** and nothing else to
+decide: the host composes that line and runs that same line, so it is a preview, not a description of one.
+That is the command-shaped twin of the diff `ClaudeEditDialog` shows — every change this pane makes to
+someone's machine is seen, in its own vocabulary, before it happens.
+
+**Every change is two dialogs, and they ask different questions.** A dialog composes *what* to write —
+`ClaudeValueDialog` for a settings value, `ClaudeMcpServerDialog` for a server — and hands a complete
+`ClaudeEdit` to `ClaudeEditDialog`, which asks *where* it goes and shows the resulting diff to approve.
+Merging them would re-plan a diff on every keystroke of a half-typed value, and would blur the one
+moment that matters: the diff the user says yes to is the change that lands. Both composing dialogs are
+**remounted per invocation** (a `key`), because they seed their fields from the value they were opened
+on; carrying that state into the next row would edit one key with another's value.
+
+- **The value is the control.** Clicking the rendered value opens the editor for it (an *Edit* tooltip on
+  hover says so); a separate Change button sat away from the thing it changed, which is where the reader's
+  eye already is. **Its current type chooses that editor**: a boolean gets a switch, a number an input, a
+  list a line-per-entry textarea. A value that is none of those (a nested object) is not a control at all —
+  the row says *edit as a file* and links to it, rather than offering something that would flatten it
+  silently. Remove stays a row action: it is destructive, and destructive actions do not hide under the
+  thing they destroy.
+- **A capability row's switch is the honest one for its kind:** deny/allow for a server, `enabledPlugins`
+  for a plugin, `skillOverrides` for a skill. A subagent row offers none, because Claude Code has
+  none. When something is off, the row names the scope that turned it off and links to that file too —
+  "off" without "by whom" is the question the pane exists to answer.
+- **Adding is a first-class action on both surfaces**, not a hidden affordance: a key that appears in no
+  file yet (with the documented names as completions), and — from the capabilities header — an MCP
+  server, a skill, a hook or a plugin. Each is its own compose dialog, and each hands a finished
+  `ClaudeEdit` to the same approval step; the field furniture is shared (`ClaudeConfigParts`) so four
+  forms cannot drift into four looks. The dialogs say plainly what they are about to grant: a hook and a
+  plugin both run commands with the user's permissions, and a secret typed into a server form will appear
+  in the diff.
+
+Each row's path is a `SourceButton`, and clicking one opens that file as an ordinary
+tab — `external-file` when the path escaped the worktree, which is most of Claude's configuration.
+
+- **A link lands on the entry, not the top of the file.** `~/.claude.json` holds every project's MCP
+  servers at once and a settings file holds dozens of keys, so opening at line 1 leaves the reader
+  hunting for the row they just clicked.
+- **The host sends a key path; the line is computed here.** `ClaudeConfigOrigin.keyPath` names the value
+  as JSON object keys (`["mcpServers", "git"]`), and `FilePane` turns it into a line with `jsonKeyLine`
+  against `tab.content` — the text the editor is about to show. A line resolved host-side would be
+  measured against the file as it stood when the snapshot was built, and would be wrong for every row
+  below an edit made since. Resolving here also costs one lookup per click instead of a scan per
+  resolved key, and adds no round trip.
+- **The request is ephemeral, not part of the tab.** `store.fileFocusRequest` carries
+  `{ workspaceId, path, keyPath }`, and the editor clears it once it has revealed the line — the same
+  request/consume/clear shape as `reviewFocusRequest`. It deliberately does *not* ride on the tab or the
+  layout document: those hold durable source identity, an already-open tab is reused rather than rebuilt
+  (so a line baked in at build time would be ignored on the second click), and a caret position is not
+  something a restored layout should re-assert.
+- **A key path that does not resolve opens the file at the top.** `jsonKeyLine.ts` — a scanner, because
+  `JSON.parse` discards exactly the positions this needs — returns `null` for
+  anything it cannot walk exactly, so a malformed or restructured file degrades to the old behaviour
+  rather than pointing at a wrong line. It stays in `panels/` rather than `lib/`: the pane that produces
+  a key path and the editor that consumes one are both here, and `lib/` is for what more than one module
+  needs. Rows whose origin *is* the file — context layers, skills, agents,
+  problems — carry no key path and open at the top by design.
+- `MonacoEditor` reveals from both `onMount` and an effect: a link-opened tab already holds its line by
+  the time the lazy loader resolves, which is after the effect first ran.
 
 ## Get right
 
@@ -1174,6 +1665,11 @@ workspace path — it reads as a broken feature rather than an absent one.
   The strip and
   context/command surfaces also expose a keyboard-operable Keep Preview command.
 
+  **Previewing at all is a local layout preference** (Settings → Layout, `previewTabs`, on by default).
+  With it off `openTabs.ts` reads every open as a keep, so nothing claims a slot and no click waits out the
+  double-click window to learn whether it was one — the single choke point is where the intent enters, not
+  each of the a dozen callers that form one.
+
   A preview replaces only that group's slot at the same index, so browsing never reshuffles the strip. A
   double click composes preview then promote; `openTabs.ts` single-flights the underlying read and carries
   the leading click's slot claim into one final kept local transition, so no intermediate preview state is
@@ -1185,10 +1681,21 @@ workspace path — it reads as a broken feature rather than an absent one.
   of duplicating it. Preview placement and attention commit locally. Unit and E2E tests pin double-click
   coalescing, stale-read rejection, per-group isolation, local identity convergence, and
   promote-by-keyboard/touch.
+- **A live tab keeps its workspace watched.** `useLiveTabContent` asks the host to watch the workspace
+  for real (`transport.watchWorkspaceForLiveContent`, the non-prewarm path) while it is mounted. Freshness
+  arrives entirely through `workspace.fsChanged`, and the rail's prewarm watches are **evictable** — past
+  eight of them the oldest is dropped — so a tab could sit there promising live content over a watch
+  nobody had claimed. The call is idempotent and single-flighted by the same `skillLoad` preparation every
+  session read goes through.
 - **Row actions: one menu, two triggers.** Every **file** row (both views) is wrapped in
   **`ChangeRowActions`**: a hover/focus-revealed `⌄` button *and* right-click on the row open the same
   dropdown. The `⌄` is not garnish — it is the **touch path**, where right-click does not exist (mobile-first).
-  Items: **View** (the same action as a plain click) and **Copy path** (worktree-relative). Deliberately
+  Items: **Show diff** (the same action as a plain click), **Jump to source**, and **Copy path**
+  (worktree-relative). Jump to source opens the *file*, not the diff of it, **kept** rather than previewed —
+  leaving the changes list to edit something is not browsing — and takes IntelliJ's name for it. It is a
+  menu item and nothing else: no chord, because the app's key bindings are a shared surface and this panel
+  does not get to claim one on its own. The row's own click stays the diff: reading a change is what the
+  panel is for, and editing it is the second thing you want, not the first. Deliberately
   nothing else: the panel is **read-only** — no discard-file/-folder/-all — and no “Open in ‹external app›”,
   which a host-side `open` would make silently wrong for every remote/phone client (Copy path is the portable
   escape hatch). **Folder rows get no menu** — nothing in that list applies to a folder. Built on the existing
@@ -1232,9 +1739,105 @@ workspace path — it reads as a broken feature rather than an absent one.
   `chat/SPEC.md`; the rendered *diff* keeps the source-code degradation, like shiki) — in
   a centered reading column; strips a leading YAML frontmatter block via
   `lib.stripFrontmatter` so a spec's metadata doesn't render as a stray heading — source view still shows
-  it) and source being the lazy read-only `MonacoEditor`. The choice
+  it) and source being the lazy read-only `MonacoEditor`.
+- **Frontmatter is an editable properties table at the top of the Preview** (`FrontmatterProperties`, an
+  Obsidian-style block: key/value rows, list values as chips, add/rename/remove, collapsible per mount).
+  It sits **inside** the scrolling document — first child of the scroller on both the plain and the
+  reviewed path — so it scrolls away with the prose instead of holding a frozen band of the pane. Metadata
+  is what a reader passes on the way in, not something worth the height on every screen of a long spec.
+  Text, sequences, and one-level mappings — `frontmatter.ts` parses top-level `key: scalar`,
+  `key: [a, b]`, block lists of scalars, and one level of `sub: scalar` entries; any other YAML shape
+  (deeper nesting, duplicate sub-keys, anchors, multiline) keeps the **whole block read-only** rather
+  than risking a rewrite that drops what it did not understand; a duplicate-key rename is refused for
+  the same reason. An edit rebuilds the frontmatter through `withFrontmatter` and lands as
+  the tab's **draft** — the same lifecycle as typing in Monaco (dirty dot, save, conflict bar), which is
+  why the block only renders when `onContentEdit` is wired and why removing the last property removes the
+  fence. A `type` or `status` value carries a native `datalist` with the spec-node vocabulary (`type`
+  from `specTree`'s known roles) — suggestions, not constraints, since the properties view is for any
+  markdown and only spec nodes speak that vocabulary. Each row leads with a **value-type menu** named in
+  YAML's vocabulary — Text, Sequence, Mapping — that converts on switch, loss-visible rather than
+  lossless: a structure becomes its inline reading as text (`[a, b]` / `{k: v}`, quoted on serialize so
+  it stays a scalar), a text becomes one item, and mapping ⇄ sequence goes through `key: value` items so
+  a round trip survives (ordinal keys when items don't split). Picking the type a row already has
+  changes nothing — not even formatting.
+  `frontmatter.test.ts` pins the round-trips; `e2e/frontmatter.spec.ts` drives edit→draft→Source,
+  chips, folding, the type suggestions, and the read-only fallback. The choice
   is a per-tab `store.setFileTabView` (survives tab switches; not persisted across reload). Non-markdown
   files render Monaco directly with no header, exactly as before.
+- **PDF tabs render bytes over their own route, not tab content.** `FilePane` gates on `lib.isPdfPath`
+  (restricted to `kind === "file"` — an external-scope PDF is out of scope for v1, since `claudeConfig`'s
+  configuration is always JSON/markdown) and shows lazy `PdfPreview`, which fetches from
+  `filesUrl.worktreeFileUrl(workspaceId, path)` — the same worktree-scoped `/files/…` HTTP route
+  `markdownLinks`' `DocumentImage` already streams raw image bytes through. `serveWorktreeFile`
+  (`packages/server/src/host/server.ts`) needed no change, since it already serves arbitrary bytes with
+  Bun's inferred content-type. `openFileInTab`/`useLiveTabContent` skip the `fs.readFile` round trip for a
+  PDF path entirely rather than decoding binary as UTF-8 for a `tab.content` nothing reads — that read
+  would be lossy, wasteful for a large file, and pointless since the viewer never looks at `tab.content`.
+  A `?t={byteRevision}.{reloads}` query param is what makes it track the file: the revision advances when
+  `useLiveTabContent` decides a change could be *this* file — a PDF's "read" is empty, since the bytes
+  come over the route, and only the decision matters — so a recompile lands in the open tab rather than
+  waiting for it to be reopened. It is deliberately **not** the workspace's `loadedTick`, which advances
+  for a write anywhere in the worktree: a LaTeX build writes `.aux`, `.log`, `.fdb_latexmk` and a dozen
+  more beside the PDF, and every one of them re-fetched and re-rasterized a document that had not
+  changed. That is the whole point for a document that is *generated*: LaTeX, a diagram export, a
+  report. The `reloads` half is the toolbar's **Reload from disk**, which asks again for bytes no watch
+  reported — and the same button is what the error state offers, so a read that caught the file
+  mid-rewrite is recoverable without closing the tab.
+- **Image tabs are the same shape as PDF tabs, minus the rasterizer.** `FilePane` gates on
+  `lib.isImagePath` (png/jpe?g/gif/webp/svg/bmp/ico/avif, `kind === "file"` only) and renders
+  `ImagePreview`: one `<img>` on `worktreeFileUrl` with the shared byte-revision cache-buster, the
+  natural dimensions in a toolbar that carries the PDF viewer's zoom vocabulary (±/reset buttons, pinch
+  and ⌘/Ctrl+wheel via `lib/zoomGesture`, a percent readout) and its reload-from-disk button. Zoom
+  multiplies a fit width measured once per load (100% = natural size capped to the pane — CSS `zoom`
+  was tried and cancels against `max-width: 100%`); the fit is not re-measured on pane resize. No lazy
+  import (there is no library) and no transparency checkerboard. The tab's `fs.readFile` round trip is
+  skipped exactly as for a PDF.
+- **We render the PDF ourselves (`pdfjs-dist`) rather than handing it to an `<iframe>`.** The first
+  version did use a native `<iframe>` viewer, for a real reason — zero dependency, zero code. It was
+  replaced because that choice cannot support the macOS pinch gesture *at all*: events inside the
+  viewer's own document never reach this page, and the plugin is not scriptable, so there is no seam to
+  hook. Obsidian reaches the same conclusion and ships PDF.js for its own viewer. Owning the render
+  surface is what buys pinch-zoom, and later makes in-app search and an outline possible.
+- **Each page is re-rasterized per scale, at device pixel ratio.** Scaling a finished bitmap is what the
+  iframe already did badly; `PdfPage` instead re-renders through pdf.js at `scale × devicePixelRatio` and
+  presents at CSS size, so text is sharp at 600% and on a retina display. A render in flight is
+  **cancelled, not awaited** (`RenderTask.cancel()`): a pinch emits scales far faster than a page
+  rasterizes, and pdf.js rejects a second render onto a canvas the first still owns.
+- **The canvas is a picture; the text is a layer over it.** A rasterized page has no words, so nothing in
+  it could be selected or copied — a PDF with a perfectly good text layer read as an image. `pdfEngine`'s
+  `renderTextLayer` puts pdf.js's own `TextLayer` (transparent, absolutely positioned spans) over each
+  canvas, at the **CSS** scale rather than the device-pixel one the canvas rasterizes at, and cancels it
+  alongside the render when the scale moves again. Its geometry comes from three custom properties pdf.js
+  writes per span and multiplies by a `--total-scale-factor` the container carries, so
+  `pdfTextLayer.css` holds exactly those rules, copied from `pdfjs-dist/web/pdf_viewer.css` rather than
+  imported — that file is the entire viewer, 160KB of toolbar, sidebar and `:root` palettes we do not
+  use and would have to keep out of our own theme. A pdf.js upgrade that renames those properties breaks
+  selection silently, which is why the e2e selects real text out of the fixture rather than counting
+  spans.
+- **Zoom math is `lib/zoomGesture`, deliberately free of pdf.js.** `isZoomGesture` encodes the platform
+  fact that a macOS trackpad pinch arrives as a `wheel` event with `ctrlKey` set — *not* the platform
+  shortcut modifier, which is why this does not use `lib.hasPlatformModifier`. Keeping the math in a
+  dependency-free module is what lets it be unit-tested without loading the engine — and what lets the
+  diagram pan/zoom (`chat/tools/visualize`) answer a pinch exactly as this does, rather than growing a
+  second curve that feels subtly different in the same window.
+- **The zoom follows the size of the gesture.** A pinch is a stream of small deltas, and stepping by a
+  fixed factor on each of them made the page leap across the whole range in a flick of two fingers — the
+  complaint was that it felt nothing like Preview. The scale is exponential in the delta instead
+  (`exp(-delta / sensitivity)`), so a pinch moves it a percent or two per tick, and the delta is bounded
+  first so a *mouse* notch — a hundred pixels, or three lines, or one page, depending on the device —
+  stays one ordinary step rather than a jump to the limit.
+- **What the gesture moves and what gets redrawn are separated.** Rasterizing on every wheel event is the
+  other half of "not smooth": a pinch asks for dozens of full renders a second and gets a stutter. The
+  live scale is presented by stretching the pixels already on the canvas — the page's box takes the new
+  size and an inner element carries `scale(live / rasterized)` — and the pages are re-rendered sharp once
+  the scale has held still for `PDF_RASTER_SETTLE_MS`. The text layer rides the same transform, so
+  selection stays over its glyphs while the gesture is in flight.
+- **The worker is an emitted asset, not a bare specifier.** `pdfEngine.ts` sets `workerSrc` from
+  `pdfjs-dist/build/pdf.worker.min.mjs?url`, so Vite emits it and rewrites the reference to the built
+  path. This matters for the desktop app specifically, which serves the built bundle from disk where an
+  unresolved specifier would fail silently — the same bundling hazard `apps/desktop/SPEC.md` documents
+  for pi's dynamic imports. Verified by checking the asset lands in `dist/assets/` and the reference in
+  the lazy `PdfPreview` chunk points at it.
 - **Rendered markdown navigates.** In the preview, links + images resolve against the file's own path
   (via `markdownLinks`, passed as the `a`/`img` renderers): a **relative link** opens the target file in
   the **preview** tab through the shared **`openFileInTab`** (the same flow `FileTree` uses) — following a
@@ -1249,6 +1852,57 @@ workspace path — it reads as a broken feature rather than an absent one.
   **external** link opens a new tab, and a **relative image** rewrites to the host **`/files/…`** route
   (built from `transport.httpBase()`). A cross-file link's `#fragment` is not yet followed (opens the
   file only).
+- **The Outline toggles inline, in the same header as Preview/Source — a fourth control, not a new
+  layout region.** `LayoutToolId` is a closed set (`shell/layout/SPEC.md`); an Obsidian-style heading
+  tree earns its own panel only if it needs to outlive the tab it belongs to, and this one doesn't. The
+  toggle (`md-toggle-outline`) is per-tab state (`FileTab.outlineOpen`, `store.setFileTabOutline`) so it
+  survives a tab switch without a store migration, and shows in every view — the outline lives at the
+  *pane's* left edge, Overleaf-style, outside the Preview/Source/Split switch, so Split gets
+  `[outline | editor | preview]` and Source keeps the outline as an editor navigator.
+- **The Blueprint pane carries the same outline.** `Outline.tsx` exports the shared furniture —
+  `OutlineToggle`, the pane-edge `OutlineColumn`, and `scrollToHeading` (slug id first, the block's
+  `data-md-line-start` stamp as fallback) — and `BlueprintView` composes them the way `FilePane` does.
+  Its headings come from the passages: each prose block is scanned with `sourceHeadings` and its line
+  span folded in, so a click lands by id (passages now render through `remarkHeadingIds`) or, when two
+  passages mint the same slug, by the block's stamp. The toggle (`blueprint-toggle-outline`) is
+  pane-local state; a blueprint is one document per workspace, so there is no tab to remember it on.
+  The "things moved in the agent's last rewrite" banner is navigation too: each change naming a control
+  is a button (`blueprint-change`) that scrolls its block into view; a dropped control and "N passages
+  rewritten" stay plain text, since there is no block to land on.
+- **A blueprint passage is selectable text first and a click-to-edit second.** `EditableText`'s read
+  view was a `<button>` wrapping the rendered markdown, which broke the one thing the blueprint shares
+  with every other document — drag over a passage and the selection reaches the running agent through
+  the IDE bridge (`useReportedBlueprintSelection`, the same `data-md-line-*` stamps the file preview
+  reports from). Text inside a button is not reliably selectable, and a drag that ends over the same
+  element is also a *click*, which swapped the selection for a textarea the moment the mouse came up.
+  A passage is plain text now, and the action is its own small Edit button beside it — shown on hover,
+  always reachable by keyboard — because a paragraph announced as one button is also wrong for a screen
+  reader; the same shape serves a control's option label and axis. `e2e/blueprint-watch.spec.ts` drags over a passage with a real
+  mouse and asserts the selection survives the mouse-up with no editor opened; the report itself rides
+  the same `reportIdeSelection` call the file preview is trusted on.
+- **The outline is read from the markdown source, not the rendered DOM.** It once queried `h1[id]…h6[id]`
+  in the rendered document (an earlier revision of this section documents why AST ids can drift in the
+  review path), but the Overleaf jump needs each heading's *source line*, which only the source knows —
+  and in the Source view there is no rendered DOM at all. `outlineTree.sourceHeadings` scans ATX headings
+  (fences skipped, frontmatter offset added) and derives the same slug ids the document renders
+  (`slugify` + the `remarkHeadingIds` dedupe walk), so preview jumps still land by id; in the review
+  path's *segmented* render — where per-segment dedupe counters can shift an id — the jump falls back to
+  the `data-md-line-start` stamps that render carries. Setext headings are not scanned. Ids can differ
+  from the DOM for headings containing markdown links; both are accepted ceilings.
+  `outlineTree.buildOutlineTree` nests the flat, document-order result by level — closing every open node
+  at ≥ the incoming level — and is the only place a heading skip (h1 straight to h3) is resolved.
+- **Clicking an entry jumps both sides and selects neither.** The preview scrolls via the same
+  `getElementById` + `scrollIntoView` used for in-doc `#` links; the editor reveal rides the existing
+  `focusLine`/`onFocusHandled` seam on `MonacoEditor` through pane-local state, so an outline jump is
+  indistinguishable from a link-opened line. In views where one side is absent, the other still jumps.
+- **The outline column makes the pane body a flex row, so the view slot needs `min-w-0`.** A flex item
+  defaults to `min-width: auto` and therefore refuses to shrink below its content — the scroller grows
+  past its pane and an ancestor clips it, which looks like "horizontal scrolling is broken" (headings and
+  prose cut off at the right edge, nothing to drag). Prose is meant to *wrap*; only a wide table scrolls,
+  inside its own box. `e2e/editor.spec.ts` pins all three: the scroller fits its pane, the document does
+  not overflow sideways, and a wide table does. It also covers the toggle, asserts an entry's
+  `data-heading-id` matches a heading that actually rendered, and drives an outline click that reveals
+  the heading's line in Monaco.
 - **Code surfaces re-theme from generic tokens, resiliently.** `MonacoEditor` defines the `thinkrail`
   theme from live surface + semantic syntax variables and chooses its normal/high-contrast base from
   manifest appearance/contrast metadata—never from a known id—then redefines it after the theme module's
@@ -1258,6 +1912,41 @@ workspace path — it reads as a broken feature rather than an absent one.
   nullable editor selection-foreground override when provided. `MonacoDiff` re-themes exactly like
   `MonacoEditor` — both consume `monacoSetup.ts`'s define + observer, so a palette swap lands in the
   diff tab too.
+- **The editor speaks prose, not only source.** Word wrap is a host-synced setting
+  (`AppConfig.editorWordWrap`, Settings → Editor, off by default), read live by both `MonacoEditor` and
+  `MonacoDiff` — long Cyrillic paragraphs are unreadable behind a horizontal scrollbar. And Monaco's
+  ambiguous-Unicode highlight is off in `sharedEditorOptions`: flagging every Cyrillic с and о as a
+  homoglyph attack punishes non-Latin documents, and the editor's files are the user's own worktree, not
+  untrusted paste.
+- **The terminal is built one commit after the tab switch.** Constructing xterm (four addons, `open()`)
+  costs ~90ms before it can even send `terminal.attach`, and doing it in the commit that selects the tab
+  makes the switch itself wait on all of it — the old tab stays on screen for the duration. Mounting is
+  therefore gated behind a passive effect, which runs after that commit is painted: the new tab appears
+  first, the terminal fills in the panel already on screen. The gate must be an effect and **not**
+  `requestAnimationFrame`, which never fires while the window is occluded or minimised — a terminal opened
+  in a hidden window would then never start at all. Paired with the layout module keeping recently used
+  terminals mounted, so this cost is paid once per terminal rather than on every switch.
+- **Extended keys are negotiated, not assumed** (`extendedKeys.ts`). Enter and Shift+Enter are the same
+  byte (`\r`) in a plain terminal, so a TUI cannot offer "newline" separately from "submit". Terminals
+  answer this by letting a program *ask* to tell modified keys apart, and xterm.js implements neither
+  request — so we do: `CSI > flags u` / `CSI < u` (kitty keyboard, a stack) and `CSI > 4 ; level m`
+  (xterm modifyOtherKeys), each answered in its own encoding (`CSI 13;2u`, `CSI 27;2;13~`).
+  **Nothing unusual is sent to a program that never asked**, which is why emitting `ESC CR`
+  *unconditionally* — the binding `/terminal-setup` writes for VS Code — was wrong: outside an app
+  expecting it, an ESC-prefixed Enter is a readline meta sequence and does something unrelated. Only keys
+  a terminal genuinely cannot disambiguate are reported (Enter, Tab, Backspace) and only while modified;
+  everything else keeps meaning exactly what it meant. A key handled here calls `preventDefault` before
+  returning false: that return tells xterm not to process the key, which also skips the `preventDefault`
+  it would have done — so Tab kept moving focus through the workbench while its bytes went to the shell.
+- **An agent CLI that negotiates nothing still gets its newline.** Claude Code asks for neither protocol
+  (verified against 2.1.258: it enables bracketed paste, focus events and mouse tracking, and no keyboard
+  mode at all), so negotiation alone leaves Shift+Enter indistinguishable from Enter and its multi-line
+  input unreachable — which is exactly why `claude /terminal-setup` exists, and all it does is bind
+  Shift+Enter to `ESC CR` in iTerm2 and VS Code. A ThinkRail terminal *knows* when it is running that
+  agent (the tab's detected `agent` kind), so it installs the same convention itself, scoped to those
+  tabs: Shift+Enter sends `ESC CR` there and nothing anywhere else, so a plain shell never sees a
+  meta-Enter it did not ask for. A negotiated protocol still wins — the convention is the fallback for
+  programs that answer no question.
 - **Terminal renderer + font measurement.** `TerminalInstance` runs xterm's **default DOM renderer** on
   purpose — `addon-webgl` is *not* loaded, and loading it would be a regression (see `architecture.md`
   Decision #11: the DOM renderer is a prerequisite for touch, and `WebglAddon.dispose()` leaks its WebGL2

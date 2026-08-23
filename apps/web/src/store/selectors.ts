@@ -19,6 +19,7 @@ import type {
 	WorkspaceLayoutDocument,
 } from "../shell/layout";
 import type {
+	ClaudeCodeSessionState,
 	ClosedChat,
 	EditorTab,
 	RouteChatTarget,
@@ -135,6 +136,27 @@ export function selectAttentionCenterTab(
 		return node.tabs.find((tab) => tab.id === selectedId) ?? node.tabs[0] ?? null;
 	};
 	return find(document.center);
+}
+
+/**
+ * The file the user is *in*: the selected tab of the focused center group, whatever renders it. A path is
+ * a path — an editor, a markdown preview and a PDF all say the same thing about where the user is, and a
+ * diff tab is still a file. Null for a tab that is not a file at all (chat, terminal, a tool pane).
+ */
+export function selectAttentionCenterFilePath(
+	state: LayoutAttentionState,
+	workspaceId: string,
+): string | null {
+	const tab = selectAttentionCenterTab(state, workspaceId);
+	if (!tab) return null;
+	switch (tab.kind) {
+		case "file":
+		case "external-file":
+		case "diff":
+			return tab.path;
+		default:
+			return null;
+	}
 }
 
 export function selectAttentionCenterResourceCacheKey(
@@ -360,6 +382,14 @@ export function selectCompactionTurnIds(
 			.filter((turn) => turn.kind === "compaction")
 			.map((turn) => turn.id),
 	);
+}
+
+export function selectClaudeCodeStatus(
+	state: { claudeCodeByTerminal: Record<string, Record<string, ClaudeCodeSessionState>> },
+	workspaceId: string,
+	tabKey: string,
+): ClaudeCodeSessionState | undefined {
+	return state.claudeCodeByTerminal[workspaceId]?.[tabKey];
 }
 
 export function selectWorkspaceTick(

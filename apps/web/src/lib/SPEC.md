@@ -44,12 +44,33 @@ Tiny UI helpers shared across components.
   host-read tab opens), and the
   **`LayoutAttention`** device-local overlay shared by store, shell, and the headless layout child, with
   own-property-safe `readLayoutSelection()` / `readLayoutNavigationClock()` accessors for untrusted
-  tuple-keyed maps. **`claudeCodeSequence.ts`** decodes the OSC 777 `notify;<target>;<json>` status
-  sequence a Claude Code plugin (`packages/claude-plugin`, or Warp's own `warp://cli-agent`) writes into
-  a terminal's PTY: `parseCliAgentSequence()` (target allowlist + JSON validation) and `statusForEvent()`
-  (event name -> `ClaudeCodeStatus`). It lives here rather than `panels/` because `store`'s per-terminal
-  status map and `panels/TerminalInstance`'s xterm OSC handler both need it, and `store` may not import
-  from `panels/`. Also the shared
+  tuple-keyed maps. Also the shared
+  appends a preset's flags to the configured command *line* (so the user's own flags keep their place),
+  `shellQuotePath()` makes a picked executable one shell word, `CLAUDE_LAUNCH_MENU` is the grouped
+  preset list — data, not markup, so the flags are pinned by unit test instead of read out of JSX — and
+  `CLAUDE_MODELS` is the one model-alias list, so the launcher's `--model` presets and the
+  mid-session switch can never offer different models. **`claudeModelPicker.ts`** is that mid-session
+  switch: `driveModelPicker(io, model)` drives the CLI's interactive `/model` picker over an injected
+  io (terminal writes + a read of the rendered lines + a delay) to the row naming the model and presses
+  `s` — the session-only selection; Enter and the digit shortcuts save the pick as the user's global
+  default, which is exactly what a per-terminal switch must not do. The picker's rows vary with the
+  current default and its arrows wrap, so the driver is a feedback loop over the rendered `❯` row
+  (`pickerHighlight` parses it, `highlightNamesModel` matches label to alias — the bare row or its
+  parenthesised variant, never the `Default` row); it escapes out and reports `no-picker`/`not-found`
+  when the loop can't land. **The prompt is cleared first and restored afterwards** (`Ctrl+U` then
+  `Ctrl+Y`, Claude Code's own kill/yank): a slash command only opens the picker at the start of a line,
+  so a half-typed prompt used to swallow `/model` and produce nothing but an unhelpful toast — and every
+  exit path yanks the draft back, including the ones that give up. **A cached conversation is asked to
+  confirm** ("Switch model? … Your next response will be slower") — the chip's menu was already the
+  user's answer, so `confirmationChoice` reads which option the highlight sits on and the drive takes
+  "Yes" rather than leaving a question on screen with nobody to press it.
+  **`claudeEffortPicker.ts`** drives `/effort` the same way, and differs only in how the picker is read
+  and steered: it is a *slider*, so the choice is the rung the `▲` marker sits under (the colour that
+  marks it does not survive a terminal buffer, the marker does — `effortHighlight` answers
+  geometrically, by which label's middle is nearest), and it is walked with ←/→ by distance rather than
+  down a list. The rungs are `low … ultracode`, and a move that changes nothing means the slider
+  clamped, so the drive stops instead of pressing into the wall. The io is injected so the loop is pinned by unit test against a scripted
+  picker, keystroke for keystroke. Also the shared
   Shiki highlighter, **kept out of the barrel** so the eager `@/lib` import stays shiki-free:
   `highlighter.ts` loads the curated grammars + JS regex engine and renders with `themes`' one generic
   CSS-variable registration. It is imported per-file (`@/lib/highlighter`) from lazy chunks only; theme
@@ -62,6 +83,7 @@ Tiny UI helpers shared across components.
   collapses in-root `.`/`..` aliases but preserves an attempted leading escape for host rejection; Windows
   drive-rooted containment compares path/root case-insensitively while preserving the candidate's casing),
   `shallowEqualArrays`, `userText`, `parseSkillInvocation`, `matchesSkillInvocationCommand`,
+  `claudeLaunchCommand`, `shellQuotePath`, `CLAUDE_LAUNCH_MENU`,
   `relativeTime`, `platformShortcutLabel`, `hasPlatformModifier`, `copyText`, `randomId`,
   `DOUBLE_CLICK_SETTLE_MS`, `tupleKey`, `parseTupleKey`, `layoutResourceIdentity`,
   `readLayoutSelection`, `readLayoutNavigationClock`, the `LayoutAttention` type, `parseCliAgentSequence`,

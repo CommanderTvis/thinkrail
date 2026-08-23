@@ -27,7 +27,8 @@ identities. A tab's shell outlives every client that looks at it; each frontend 
   `setTerminalPublisher`,
   `setTerminalTabsPublisher`;
   the `TerminalDeliveryResult` type shared with the host publisher adapter.
-- **Allowed deps:** `persistence`, `contracts` (`WS_CHANNELS`), `bun-pty`, `process.env`.
+- **Allowed deps:** `persistence`, `contracts` (`WS_CHANNELS`), `bun-pty`, `process.env`, `ideBridge`
+  (`ideBridgePort`/`SSE_PORT_ENV` only — the env handoff below).
 - **Forbidden:** `host`; sibling features. No WebSocket type crosses this boundary — clients are opaque keys.
 
 ## Decisions
@@ -153,7 +154,14 @@ decision stays the user's; the tab is otherwise an ordinary shell.
   to resume is worse than none.
 - **Only a session that was still running.** Persistence records the pair only while `agentWatch` reports
   a live agent for that tab, and clears both the moment it exits. A conversation the user finished before
-  closing is not something to resurrect.
+  closing is not something to resurrect. The judgement is the poll's, not the shell's: when the app quits,
+  every pty dies *before* the shutdown persist runs, and the exit handler destroys the tab's entry — so a
+  pair still set at pty exit means the shell died out from under a live agent, and `onExit` moves it into
+  `carriedAgent` the same way it carries the final screen into the replay. Without that carry the shutdown
+  persist found no entry and wrote `agent: null` for every tab whose shell had already died — which was
+  most of them, every quit — and the session id at the moment of closing was lost. A conversation the user
+  actually ended is still not carried: the poll cleared the fields when the agent exited, so there is
+  nothing left at pty exit to carry.
 - **The prefill is consumed by the first revived shell**, like the replay, rather than held for every
   later reattach — the offer belongs to the interrupted session, and typing into a shell already in use
   would be an intrusion. **Handed over is not the same as answered**, though: a line typed at a prompt and
@@ -205,12 +213,43 @@ decision stays the user's; the tab is otherwise an ordinary shell.
     `pty.onData`. Coarser (bounded by `AGENT_POLL_MS`) and reactive rather than synchronous, but the only
     option short of shell integration (OSC 133) telling us a foreground process just returned control.
   Either path is a one-shot reset per left-on episode, never a fresh timer or poll of its own.
+- **A spawned PTY carries `CLAUDE_CODE_SSE_PORT` when the IDE bridge is up.** A `claude` started in this
+  terminal then connects to ThinkRail's editor bridge from its own environment instead of scanning
+  `~/.claude/ide/*.lock` and matching cwds — the same handoff the official VS Code extension performs.
+  `ptyEnv` reads the live port per spawn (absent when the bridge is off, which is the default), so a
+  terminal opened before the setting was turned on simply lacks the variable rather than carrying a stale
+  one. See [[submodule-server-ide-bridge]].
+- **A spawned PTY is stamped `THINKRAIL_TERMINAL=1` and `THINKRAIL_AGENT_STATUS_URL`, and the URL is how
+  an agent in it reports what it is doing.** The address is loopback, carries a token minted for that tab
+  (`agentStatus.ts`), and is what the Claude Code plugin POSTs to; the host resolves the token to a
+  workspace and tab and pushes the report to clients. The token is the identity: a report never claims a
+  tab, and a process that was never handed one cannot report as any. A closed tab's token is forgotten
+  with it.
+  **This replaced an escape sequence, and the reason is the whole point.** Status used to travel as OSC
+  777 written into the PTY, whose original meaning is "show a desktop notification". Every terminal that
+  implements it renders whatever arrives and none filter on a target string, so the plugin — installed
+  globally in `~/.claude` — turned every hook event in every other terminal into a toast carrying our raw
+  JSON. The guard was the emitter checking `THINKRAIL_TERMINAL`, a convention rather than a boundary,
+  and it silently failed for weeks. A POST cannot leak: no terminal is involved, and outside our PTYs
+  there is no address to send to.
+- **OSC 777 is never recorded, same reasoning as never recording a mode sequence: it is a one-shot event,
+  not terminal content.** ThinkRail's own agent reports no longer travel that way, but any other tool's
+  still can, and a stale `notify` sequence sitting in the recorded buffer would re-fire on every reattach
+  (tab remount, page reload, host revive) — asking for a notification about something that finished hours
+  or days earlier. `outputRecorder.consume()` strips a complete `ESC ] 777 ; … (BEL|ST)` sequence before it ever
+  reaches `append()`, covering a split across two `push()` reads at any byte offset in the escape prefix —
+  the same rigor `PARTIAL_MODE_RE` already gives CSI mode sequences. Because `restore()` runs through
+  `consume()` too, a snapshot persisted by a pre-fix host is scrubbed the same way the mouse-tracking one
+  is. Title (OSC 0/2) is untouched — it's genuinely persistent display state, and the existing
+  `reportedTitle` de-dup already makes a replayed title idempotent.
 
 ## Validation
 
 - `outputRecorder.test.ts` — bounds, line/escape-safe trimming, alt-screen exclusion (incl. a switch split
-  across reads and enter+exit in one read), mode restoration, mouse tracking never restored, and `restore()`
-  keeping mode sequences out of the body (incl. a recording persisted by a host that still replayed them).
+  across reads and enter+exit in one read), mode restoration, mouse tracking never restored, `restore()`
+  keeping mode sequences out of the body (incl. a recording persisted by a host that still replayed them),
+  and OSC 777 exclusion (incl. a split at any offset in the escape prefix, the ST terminator form, an
+  unrelated OSC left untouched, and scrubbing a notify sequence out of a pre-fix persisted recording).
 - `mouseModeGuard.test.ts` — passthrough of clean output, well-behaved apps left untouched, forced reset on
   a dirty alt-screen exit, `resetIfEnabled()` for the inline-TUI fallback, no reset when mouse tracking was
   never on, fires only once per left-on episode, a mode sequence split across chunks.

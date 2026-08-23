@@ -1,9 +1,16 @@
+import { isAbsolute, join } from "node:path";
 import type {
 	AppConfigUpdate,
 	AskUserQuestionResult,
+	ClaudeEditRequest,
+	ClaudeMarketplaceAction,
+	ClaudeWritableScope,
 	ExtUiResponse,
 	GitDiffScope,
 	HistoryScope,
+	IdeActionReply,
+	IdeDocumentClosed,
+	IdeSelectionChanged,
 	ImageContent,
 	InterviewResponse,
 	LoginReply,
@@ -71,7 +78,21 @@ import {
 	updateJbcentral,
 } from "../auth";
 import { findOpenBranchReview } from "../branch-review";
-import { selectDirectory } from "../dialog";
+import {
+	applyClaudeEdit,
+	installPlugin,
+	marketplaceCommand,
+	moveClaudePlugin,
+	planClaudeEdit,
+	pluginMoveCommands,
+	pluginStatusMaintained,
+	pluginUninstallCommand,
+	readClaudeConfigFile,
+	resolveClaudeConfig,
+	runMarketplaceAction,
+	uninstallClaudePlugin,
+} from "../claudeConfig";
+import { selectDirectory, selectFile } from "../dialog";
 import {
 	listAvailableEditors,
 	openEditor,
@@ -90,6 +111,13 @@ import {
 } from "../git";
 import { githubAuthStatus, githubRefresh } from "../github";
 import { clampLimit, getHistoryIndex } from "../history";
+import {
+	applyDocumentClosed,
+	applySelectionChanged,
+	settleAction,
+	startIdeBridge,
+	stopIdeBridge,
+} from "../ideBridge";
 import { logger } from "../log";
 import { openPr, previewPr } from "../pr";
 import {
@@ -133,6 +161,8 @@ import {
 	closeTerminalTab,
 	closeWorkspaceTerminals,
 	listTerminals,
+	rememberAgentSession,
+	renameTerminal,
 	reserveTerminal,
 	resizeTerminal,
 	writeTerminal,
@@ -295,6 +325,26 @@ async function sendToFileChat(
 	return { ...created, reused: false };
 }
 
+function absoluteInWorkspace(workspaceId: string, path: string): string {
+	if (isAbsolute(path)) return path;
+	try {
+		return join(getWorkspace(workspaceId).worktreePath, path);
+	} catch {
+		return path;
+	}
+}
+
+/**
+ * The Claude Code surface reads files outside the worktree, polls the process table and offers to write to
+ * `~/.claude`, so it stays off until asked for. Enforced here as well as hidden in the UI: a client is not
+ * a permission boundary. See claudeConfig/SPEC.md.
+ */
+function requireClaudeCode(): void {
+	if (!getConfig().claudeCodeEnabled) {
+		throw new Error("Claude Code integration is off — turn it on in Settings");
+	}
+}
+
 const handlers: Record<string, Handler> = {
 	"project.open": (params) => openProject((params as { path: string }).path),
 	"project.inspect": (params) => inspectProjectPath((params as { path: string }).path),
@@ -394,6 +444,7 @@ const handlers: Record<string, Handler> = {
 			},
 		),
 	"dialog.selectDirectory": () => selectDirectory(),
+	"dialog.selectFile": () => selectFile(),
 	"fs.readDir": (params) => {
 		const p = params as { workspaceId: string; path: string };
 		void ensureWatch(p.workspaceId);
@@ -414,6 +465,84 @@ const handlers: Record<string, Handler> = {
 		const p = params as { workspaceId: string };
 		void ensureWatch(p.workspaceId);
 		return specGraph(p.workspaceId);
+	},
+	"claudeConfig.get": (params) => {
+		requireClaudeCode();
+		const p = params as { workspaceId: string };
+		return resolveClaudeConfig(p.workspaceId, getWorkspace(p.workspaceId).worktreePath);
+	},
+	"claudeConfig.pluginUninstallPlan": (params) => {
+		requireClaudeCode();
+		const p = params as { name: string; scope: ClaudeWritableScope };
+		return { command: pluginUninstallCommand(getConfig().claudeCommand, p.name, p.scope) };
+	},
+	"claudeConfig.pluginUninstall": (params) => {
+		requireClaudeCode();
+		const p = params as { workspaceId: string; name: string; scope: ClaudeWritableScope };
+		return uninstallClaudePlugin(
+			getConfig().claudeCommand,
+			p.name,
+			p.scope,
+			getWorkspace(p.workspaceId).worktreePath,
+		);
+	},
+	"claudeConfig.marketplacePlan": (params) => {
+		requireClaudeCode();
+		const p = params as { action: ClaudeMarketplaceAction };
+		return { command: marketplaceCommand(getConfig().claudeCommand, p.action) };
+	},
+	"claudeConfig.marketplaceRun": (params) => {
+		requireClaudeCode();
+		const p = params as { workspaceId: string; action: ClaudeMarketplaceAction };
+		return runMarketplaceAction(
+			getConfig().claudeCommand,
+			p.action,
+			getWorkspace(p.workspaceId).worktreePath,
+		);
+	},
+	"claudeConfig.pluginMovePlan": (params) => {
+		requireClaudeCode();
+		const p = params as { name: string; from: ClaudeWritableScope; to: ClaudeWritableScope };
+		return { commands: pluginMoveCommands(getConfig().claudeCommand, p.name, p.from, p.to) };
+	},
+	"claudeConfig.pluginMove": (params) => {
+		requireClaudeCode();
+		const p = params as {
+			workspaceId: string;
+			name: string;
+			from: ClaudeWritableScope;
+			to: ClaudeWritableScope;
+		};
+		return moveClaudePlugin(
+			getConfig().claudeCommand,
+			p.name,
+			p.from,
+			p.to,
+			getWorkspace(p.workspaceId).worktreePath,
+		);
+	},
+	"claudeConfig.planEdit": (params) => {
+		requireClaudeCode();
+		const p = params as ClaudeEditRequest;
+		return planClaudeEdit(p, getWorkspace(p.workspaceId).worktreePath);
+	},
+	"claudeConfig.applyEdit": (params) => {
+		requireClaudeCode();
+		const p = params as ClaudeEditRequest & { baseHash: string };
+		return applyClaudeEdit(p, getWorkspace(p.workspaceId).worktreePath);
+	},
+	"claudeConfig.readFile": (params) => {
+		requireClaudeCode();
+		const p = params as { workspaceId: string; path: string };
+		return readClaudeConfigFile(p.workspaceId, getWorkspace(p.workspaceId).worktreePath, p.path);
+	},
+	"claudeConfig.pluginStatus": () => {
+		requireClaudeCode();
+		return pluginStatusMaintained();
+	},
+	"claudeConfig.installPlugin": () => {
+		requireClaudeCode();
+		return installPlugin();
 	},
 	"todo.list": (params) => listTodos(params as { workspaceId: string; sessionId: string }),
 	"todo.add": (params) =>
@@ -509,6 +638,35 @@ const handlers: Record<string, Handler> = {
 			rows?: number;
 		};
 		return attachTerminal(p.workspaceId, p.tabKey, ctx.clientKey, p);
+	},
+	"terminal.rename": (params) => {
+		const p = params as { workspaceId: string; tabKey: string; title: string };
+		renameTerminal(p.workspaceId, p.tabKey, p.title);
+		return {};
+	},
+	"terminal.rememberAgent": (params) => {
+		requireClaudeCode();
+		const p = params as { workspaceId: string; tabKey: string; sessionId: string };
+		rememberAgentSession(p.workspaceId, p.tabKey, p.sessionId);
+		return {};
+	},
+	"ideBridge.selectionChanged": (params) => {
+		requireClaudeCode();
+		const p = params as IdeSelectionChanged;
+		// The client addresses files worktree-relative; Claude Code expects a real path it can open.
+		applySelectionChanged({ ...p, path: absoluteInWorkspace(p.workspaceId, p.path) });
+		return {};
+	},
+	"ideBridge.documentClosed": (params) => {
+		requireClaudeCode();
+		const p = params as IdeDocumentClosed;
+		applyDocumentClosed({ ...p, path: absoluteInWorkspace(p.workspaceId, p.path) });
+		return {};
+	},
+	"ideBridge.actionReply": (params) => {
+		requireClaudeCode();
+		settleAction(params as IdeActionReply);
+		return {};
 	},
 	"terminal.list": (params) => ({
 		tabs: listTerminals((params as { workspaceId: string }).workspaceId),
@@ -771,7 +929,14 @@ const handlers: Record<string, Handler> = {
 	},
 	"settings.update": (params) => {
 		const config = (params as { config: AppConfigUpdate }).config;
-		return updateConfig(config);
+		const updated = updateConfig(config);
+		// The bridge is part of the gated surface: turning the setting off has to take the lock file and the
+		// listening port with it, not merely hide the UI. See ideBridge/SPEC.md.
+		if (config.claudeCodeEnabled !== undefined) {
+			if (updated.claudeCodeEnabled) void startIdeBridge().catch(() => {});
+			else void stopIdeBridge();
+		}
+		return updated;
 	},
 	"feedback.respond": (params) => {
 		respondToInterview((params as { action: InterviewResponse }).action);

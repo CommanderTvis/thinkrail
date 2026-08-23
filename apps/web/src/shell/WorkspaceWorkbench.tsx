@@ -1,17 +1,31 @@
 import {
+	RiAlertLine as AlertTriangle,
+	RiCheckboxCircleLine as CheckCircle2,
+	RiFileTransferLine as FileSymlink,
 	RiGitBranchLine as GitBranch,
 	RiLoader4Line as Loader2,
 	RiChatNewLine as MessageSquarePlus,
 	RiTerminalBoxLine as SquareTerminal,
 } from "@remixicon/react";
-import { lazy, type ReactNode, Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import {
+	lazy,
+	type ReactNode,
+	Suspense,
+	useCallback,
+	useEffect,
+	useMemo,
+	useRef,
+	useState,
+} from "react";
+import { ClaudeMark } from "../components/ClaudeMark";
 import { ErrorBoundary } from "../components/ErrorBoundary";
 import { QuietScrollArea } from "../components/QuietScrollArea";
 import { LoadingRegion } from "../components/Skeleton";
 import { DropdownMenuItem } from "../components/ui/dropdown-menu";
 import { IconTooltip } from "../components/ui/tooltip";
-import { type LayoutAttention, layoutResourceIdentity } from "../lib";
+import { cn, type LayoutAttention, layoutResourceIdentity } from "../lib";
 import { ChangesPanel } from "../panels/ChangesPanel";
+import { ClaudeConfigPanel } from "../panels/ClaudeConfigPanel";
 import { DiffPane } from "../panels/DiffPane";
 import { FilePane } from "../panels/FilePane";
 import { FileTree } from "../panels/FileTree";
@@ -24,6 +38,7 @@ import { TerminalWorkbenchBody, useTerminalClose } from "../panels/TerminalWorkb
 import { useWorkspaceReview } from "../panels/useWorkspaceReview";
 import { useWorkspaceSpecs } from "../panels/useWorkspaceSpecs";
 import {
+	type ClaudeCodeSessionState,
 	type EditorTab,
 	isConnectedGeneration,
 	isDefaultWorkspace,
@@ -40,6 +55,7 @@ import {
 	useAppStore,
 } from "../store";
 import { createSessionWithSkillBaseline, errorText, getTransport } from "../transport";
+import { ClaudeLauncher } from "./ClaudeLauncher";
 import {
 	currentChatDestination,
 	hydrateChatResource,
@@ -55,6 +71,7 @@ import {
 	type LayoutTab,
 	type LayoutTabFocusRequest,
 	type LayoutToolId,
+	VERTICAL_TABS_WIDTH,
 	Workbench,
 	type WorkspaceLayoutDocument,
 } from "./layout";
@@ -62,12 +79,14 @@ import { toLayoutTab, useLayoutIntentProcessing } from "./layoutIntents";
 import { commitWorkspaceLayout, useWorkspaceLayoutState } from "./layoutState";
 import { syncLegacySelectionFromAttention, useLegacySelectionAdapter } from "./legacySelection";
 import { useTerminalPlacementReconciliation } from "./terminalReconciliation";
+import { useReportedActiveFile } from "./useReportedActiveFile";
 import { WorkspaceChatHistory } from "./WorkspaceChatHistory";
 
 const ChatView = lazy(() => import("../chat/ChatView"));
 const PlanPane = lazy(() => import("../panels/PlanPane"));
 
 const NO_EDITOR_TABS: EditorTab[] = [];
+const NO_CLAUDE_CODE_STATUS: Record<string, ClaudeCodeSessionState> = {};
 
 function MissingResource({ label }: { label: string }) {
 	return (
@@ -207,6 +226,32 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 		(state) => state.layoutProjectionEpochByWorkspace[workspaceId] ?? 0,
 	);
 	const layoutPreferences = useAppStore((state) => state.localLayoutPreferences);
+	const claudeCodeEnabled = useAppStore((state) => state.claudeCodeEnabled);
+	useReportedActiveFile(workspaceId);
+	const verticalWidthTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+	useEffect(
+		() => () => {
+			if (verticalWidthTimer.current) clearTimeout(verticalWidthTimer.current);
+		},
+		[],
+	);
+	// Dragging emits a width per frame; only where it came to rest is worth persisting.
+	const persistVerticalTabsWidth = useCallback(
+		(width: number) => {
+			const clamped = Math.min(
+				VERTICAL_TABS_WIDTH.max,
+				Math.max(VERTICAL_TABS_WIDTH.min, Math.round(width)),
+			);
+			if (clamped === layoutPreferences.verticalCenterTabsWidth) return;
+			if (verticalWidthTimer.current) clearTimeout(verticalWidthTimer.current);
+			verticalWidthTimer.current = setTimeout(() => {
+				useAppStore
+					.getState()
+					.setLocalLayoutPreferences({ ...layoutPreferences, verticalCenterTabsWidth: clamped });
+			}, 400);
+		},
+		[layoutPreferences],
+	);
 	const workspace = useAppStore((state) => selectWorkspaceById(state, workspaceId));
 	const contextProject = useAppStore(selectContextProject);
 	const editorTabs = useAppStore((state) => state.tabsByWorkspace[workspaceId] ?? NO_EDITOR_TABS);
@@ -218,6 +263,9 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 	const reviewComments = useAppStore((state) => state.reviewsByWorkspace[workspaceId]?.comments);
 	const reviewDraftCount = useAppStore((state) => selectReviewDraftCount(state, workspaceId));
 	const reviewFlagByPath = useMemo(() => reviewFlags(reviewComments), [reviewComments]);
+	const claudeCodeByTerminal = useAppStore(
+		(state) => state.claudeCodeByTerminal[workspaceId] ?? NO_CLAUDE_CODE_STATUS,
+	);
 	const [focusRequest, setFocusRequest] = useState<LayoutTabFocusRequest | null>(null);
 	const activeReviewedPath = useAppStore((state) => selectActiveReviewedPath(state, workspaceId));
 	const readActiveReviewedPath = useCallback(
@@ -308,13 +356,16 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 		const cachedResources = new Set(
 			cache.flatMap((item) => {
 				const resource = toLayoutTab(item);
-				return resource && (resource.kind === "file" || resource.kind === "diff")
+				return resource &&
+					(resource.kind === "file" ||
+						resource.kind === "external-file" ||
+						resource.kind === "diff")
 					? [layoutResourceIdentity(resource)]
 					: [];
 			}),
 		);
 		for (const tab of collectAllGroups(document).flatMap((group) => group.tabs)) {
-			if (tab.kind !== "file" && tab.kind !== "diff") continue;
+			if (tab.kind !== "file" && tab.kind !== "external-file" && tab.kind !== "diff") continue;
 			const identity = layoutResourceIdentity(tab);
 			if (cachedResources.has(identity)) continue;
 			const cacheArrived = () =>
@@ -327,17 +378,21 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 				return latest ? findPlacedResource(latest, tab) : null;
 			};
 			const loadedTick = selectWorkspaceTick(useAppStore.getState(), workspaceId);
-			if (tab.kind === "file") {
+			if (tab.kind === "file" || tab.kind === "external-file") {
+				const external = tab.kind === "external-file";
 				void getTransport()
-					.request("fs.readFile", { workspaceId, path: tab.path })
+					.request(external ? "claudeConfig.readFile" : "fs.readFile", {
+						workspaceId,
+						path: tab.path,
+					})
 					.then(({ content }) => {
 						const latest = useAppStore.getState();
 						if (!current || !isConnectedGeneration(latest, connectionGeneration)) return;
 						const placed = currentPlacement();
-						if (placed?.kind !== "file" || cacheArrived()) return;
+						if (placed?.kind !== tab.kind || cacheArrived()) return;
 						useAppStore.getState().openTab(
 							{
-								kind: "file",
+								kind: tab.kind,
 								id: placed.id,
 								workspaceId,
 								path: placed.path,
@@ -446,15 +501,15 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 			const exact = editorById.get(tab.id);
 			const editor =
 				exact &&
-				(exact.kind === "file" || exact.kind === "diff") &&
+				(exact.kind === "file" || exact.kind === "external-file" || exact.kind === "diff") &&
 				layoutResourceIdentity(exact) === identity
 					? exact
 					: editorByResource.get(identity);
-			if (!editor) return <MissingResource label={tab.kind === "file" ? "file" : "diff"} />;
+			if (!editor) return <MissingResource label={tab.kind === "diff" ? "diff" : "file"} />;
 			return (
 				<ErrorBoundary label="editor" resetKeys={[workspaceId, tab.id]}>
 					<Suspense fallback={<MissingResource label="editor" />}>
-						{editor.kind === "file" ? (
+						{editor.kind === "file" || editor.kind === "external-file" ? (
 							<FilePane tab={editor} />
 						) : editor.kind === "diff" ? (
 							<DiffPane tab={editor} />
@@ -505,6 +560,17 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 				case "review":
 					body = <ReviewPanel workspaceId={workspaceId} failed={review.failed} />;
 					break;
+				case "claude":
+					body = claudeCodeEnabled ? (
+						<ClaudeConfigPanel workspaceId={workspaceId} />
+					) : (
+						// A layout saved while it was on outlives the setting, so the tab explains itself
+						// rather than rendering a pane that would be refused by the host anyway.
+						<div className="flex h-full items-center justify-center px-lg text-center tr-text-ui text-text-muted">
+							Claude Code integration is off. Turn it on in Settings.
+						</div>
+					);
+					break;
 			}
 			return (
 				<ErrorBoundary label={`${tool} tool`} resetKeys={[workspaceId, tool]}>
@@ -512,7 +578,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 				</ErrorBoundary>
 			);
 		},
-		[review.failed, specs.failed, specs.reload, workspaceId],
+		[review.failed, specs.failed, specs.reload, workspaceId, claudeCodeEnabled],
 	);
 
 	const isDefault = workspace != null && isDefaultWorkspace(workspace);
@@ -537,13 +603,15 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 						layoutOpenOptionsForNavigation(store, workspaceId, navigation),
 					);
 				})
-				.catch(() => {
+				.catch((cause: unknown) => {
 					const state = useAppStore.getState();
 					if (
 						layoutOpenOptionsForNavigation(state, workspaceId, navigation).activate !== false &&
 						!state.removedWorkspaceIds[workspaceId]
 					) {
-						toast.error("The agent session could not be created.", "Couldn't start the chat");
+						// The host says why — a missing extension, an unauthenticated provider — and a fixed
+						// string threw that away, leaving nothing to act on.
+						toast.error(errorText(cause), "Couldn't start the chat");
 					}
 				})
 				.finally(() => useAppStore.getState().endChatStart(workspaceId));
@@ -566,10 +634,36 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 				attention={attention}
 				maxSideGroups={layoutPreferences.maxSideGroups}
 				maxBottomGroups={layoutPreferences.maxBottomGroups}
+				verticalCenterTabs={layoutPreferences.verticalCenterTabs}
+				verticalCenterTabsWidth={layoutPreferences.verticalCenterTabsWidth}
+				onVerticalCenterTabsWidthChange={persistVerticalTabsWidth}
 				defaultPaneDirection={layoutPreferences.defaultPaneDirection}
 				projectionEpoch={projectionEpoch}
 				{...(focusRequest ? { focusRequest } : {})}
 				renderTabBody={renderTabBody}
+				renderTabIcon={(tab, active) => {
+					// Claude's colour only on the active tab. See shell/SPEC.md.
+					const mark = (
+						<ClaudeMark className={cn("size-3.5 shrink-0", active && "text-agent-claude")} />
+					);
+					if (
+						claudeCodeEnabled &&
+						tab.kind === "terminal" &&
+						terminalByKey.get(tab.tabKey)?.agent === "claude"
+					) {
+						return mark;
+					}
+					if (claudeCodeEnabled && tab.kind === "tool" && tab.tool === "claude") return mark;
+					if (tab.kind === "external-file") {
+						return (
+							<FileSymlink
+								aria-label={`Outside the worktree: ${tab.path}`}
+								className="size-3.5 shrink-0 text-agent-claude"
+							/>
+						);
+					}
+					return null;
+				}}
 				renderTabAdornment={(tab) => {
 					if (tab.kind === "tool" && tab.tool === "review" && reviewDraftCount > 0) {
 						return (
@@ -580,6 +674,52 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 								{reviewDraftCount}
 							</span>
 						);
+					}
+					if (tab.kind === "terminal") {
+						const claudeCode = claudeCodeByTerminal[tab.tabKey];
+						if (!claudeCode) return null;
+						if (claudeCode.status === "running") {
+							return (
+								<Loader2
+									data-testid="terminal-claude-code-status"
+									data-status="running"
+									className="size-3 shrink-0 animate-spin text-text-muted motion-reduce:animate-none"
+								/>
+							);
+						}
+						if (claudeCode.status === "blocked") {
+							return (
+								<span
+									data-testid="terminal-claude-code-status"
+									data-status="blocked"
+									role="status"
+									aria-label="Claude needs your input"
+									title="Claude needs your input"
+									className="size-2 shrink-0 animate-pulse rounded-full bg-feedback-warning motion-reduce:animate-none"
+								/>
+							);
+						}
+						if (claudeCode.status === "done") {
+							return (
+								<CheckCircle2
+									data-testid="terminal-claude-code-status"
+									data-status="done"
+									aria-label="Claude finished"
+									className="size-3 shrink-0 text-feedback-success"
+								/>
+							);
+						}
+						if (claudeCode.status === "failed") {
+							return (
+								<AlertTriangle
+									data-testid="terminal-claude-code-status"
+									data-status="failed"
+									aria-label="Claude hit an error"
+									className="size-3 shrink-0 text-feedback-error"
+								/>
+							);
+						}
+						return null;
 					}
 					if (tab.kind !== "file" && tab.kind !== "diff") return null;
 					const flag = reviewFlagByPath.get(tab.path);
@@ -659,6 +799,9 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 				renderCenterActions={(groupId) => (
 					<>
 						<WorkspaceChatHistory workspaceId={workspaceId} targetGroupId={groupId} />
+						{claudeCodeEnabled ? (
+							<ClaudeLauncher workspaceId={workspaceId} groupId={groupId} />
+						) : null}
 						<IconTooltip label="New terminal in this group">
 							<button
 								type="button"
@@ -722,7 +865,12 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 							prepared.onAccepted(current);
 							if (tab.kind === "chat") {
 								state.closeChatToHistory(tab.sessionId, false, workspaceId, false);
-							} else if (tab.kind === "file" || tab.kind === "diff" || tab.kind === "document") {
+							} else if (
+								tab.kind === "file" ||
+								tab.kind === "external-file" ||
+								tab.kind === "diff" ||
+								tab.kind === "document"
+							) {
 								for (const cache of state.tabsByWorkspace[workspaceId] ?? []) {
 									const resource = toLayoutTab(cache);
 									if (resource && layoutResourceIdentity(resource) === closedIdentity) {

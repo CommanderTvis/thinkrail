@@ -1,0 +1,9 @@
+{
+	"name": "thinkrail",
+	"description": "ThinkRail terminal integration for Claude Code - status tracking and native notifications",
+	"version": "0.2.0",
+	"author": {
+		"name": "ThinkRail"
+	},
+	"homepage": "https://github.com/CommanderTvis/thinkrail"
+}

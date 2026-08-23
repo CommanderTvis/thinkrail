@@ -230,6 +230,11 @@ themselves.
   and themed with our token utilities (`cn()` in `src/lib/utils.ts`) — never shadcn's default oklch
   palette. Use these for accessible menus / dialogs / tooltips; icon-only controls label themselves with
   `IconTooltip`, never native `title`.
+  - **A third-party *brand mark* is the one exception**, and is not an icon-set lookup: `ClaudeMark`
+    identifies the Claude Code agent on a terminal tab the way Warp does, and no generic glyph reads as
+    that vendor. It lives in `src/components/`, not `components/ui/`, and wears the `agent-claude`
+    token — a palette entry of its own, since a vendor identity is neither a status colour nor the
+    theme accent, but still wants per-theme adjustment for contrast.
 
 ## Get right
 

@@ -20,6 +20,7 @@ import {
 	E2E_HOME_DIR,
 	E2E_PI_AGENT_DIR,
 	E2E_PICK_DIR_POINTER,
+	E2E_PICK_FILE_POINTER,
 	E2E_PORT,
 } from "./e2e/fixtures/paths";
 
@@ -81,6 +82,7 @@ export default defineConfig({
 			// control *file* (seeded to the git fixture in globalSetup); a test can rewrite it to hand the
 			// picker a different folder (e.g. a non-git one) without restarting the shared host.
 			THINKRAIL_PICK_DIR: E2E_PICK_DIR_POINTER,
+			THINKRAIL_PICK_FILE: E2E_PICK_FILE_POINTER,
 			// Force the New-Workspace dialog's `gh` probe to "Not connected" so the suite is deterministic
 			// regardless of the dev machine's real `gh` auth — and exercises the offline/local-branch degrade path.
 			THINKRAIL_GH_OFFLINE: "1",

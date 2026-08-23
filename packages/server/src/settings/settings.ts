@@ -5,7 +5,7 @@ import {
 	isSystemThemePair,
 	isThemeMode,
 } from "@thinkrail/contracts";
-import { loadConfig, saveConfig } from "../persistence";
+import { loadConfig, normalizeClaudeCommand, saveConfig } from "../persistence";
 import { normalizeStoredCustomLayoutPresets, validateCustomLayoutPresets } from "./layoutPresets";
 
 type SettingsPublisher = (config: AppConfig) => void;
@@ -76,7 +76,7 @@ export function updateConfig(partial: AppConfigUpdate): AppConfig {
 	if (nextThemeMode === "system" && !nextSystemThemePair) {
 		throw new Error("system theme mode requires a complete pair");
 	}
-	const next: AppConfig = {
+	const merged: AppConfig = {
 		...current,
 		...rest,
 		...(theme === undefined ? {} : { theme }),
@@ -85,6 +85,10 @@ export function updateConfig(partial: AppConfigUpdate): AppConfig {
 		...(subagentsEnabled === undefined ? {} : { subagentsEnabled }),
 		...(jbcentralQuotaEnabled === undefined ? {} : { jbcentralQuotaEnabled }),
 		...(jbcentralQuotaRefreshSeconds === undefined ? {} : { jbcentralQuotaRefreshSeconds }),
+	};
+	const next: AppConfig = {
+		...merged,
+		claudeCommand: normalizeClaudeCommand(merged.claudeCommand),
 		...(customLayoutPresets === undefined
 			? {}
 			: { customLayoutPresets: validateCustomLayoutPresets(customLayoutPresets) }),
