@@ -254,9 +254,7 @@ test("a project without specs suggests setting it up", async ({ page }) => {
 	}
 });
 
-test("opening a non-git folder from the Welcome screen offers to initialise a repo", async ({
-	page,
-}) => {
+test("opening a non-git folder from the Welcome screen opens it as it is", async ({ page }) => {
 	await stagePlainFolder(page);
 	await page.goto("/");
 	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
@@ -265,10 +263,7 @@ test("opening a non-git folder from the Welcome screen offers to initialise a re
 	await page.getByTestId("welcome-action").filter({ hasText: "Open project" }).click();
 	await page.getByTestId("menu-open-project").click();
 
-	const confirmInit = page.getByTestId("confirm-init-repo");
-	await expect(confirmInit).toBeVisible();
-	await confirmInit.click();
-
+	await expect(page.getByTestId("confirm-init-repo")).toHaveCount(0);
 	await expect(
 		page.getByTestId("project-item").filter({ hasText: basename(E2E_PLAIN_DIR) }),
 	).toBeVisible();

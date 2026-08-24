@@ -1,10 +1,9 @@
 import type { Project } from "@thinkrail/contracts";
-import { T, useT } from "@thinkrail/locales/react";
+import { useT } from "@thinkrail/locales/react";
 import { type ReactNode, useState } from "react";
 import { selectSupportsProjectClone, useAppStore } from "../store";
 import { errorText, getTransport } from "../transport";
 import { CloneProjectDialog } from "./CloneProjectDialog";
-import { ConfirmDialog } from "./ConfirmDialog";
 import { CreateProjectDialog } from "./CreateProjectDialog";
 import { createLatestOperation } from "./latestOperation";
 import { NoticeDialog } from "./NoticeDialog";
@@ -28,7 +27,6 @@ export function useOpenProject(
 	const t = useT();
 	const supportsClone = useAppStore(selectSupportsProjectClone);
 	const [cloneIntent, setCloneIntent] = useState<{ isCurrent: () => boolean } | null>(null);
-	const [initTarget, setInitTarget] = useState<string | null>(null);
 	const [creating, setCreating] = useState(false);
 	const [openError, setOpenError] = useState<string | null>(null);
 	const [pathEntry, setPathEntry] = useState<{ reason: string | null } | null>(null);
@@ -58,8 +56,7 @@ export function useOpenProject(
 				.request("project.inspect", { path: trimmed })
 				.catch(() => null);
 			if (!isCurrent()) return;
-			if (status?.kind === "initable") setInitTarget(trimmed);
-			else if (status?.kind === "missing")
+			if (status?.kind === "missing")
 				setOpenError(t("panels.openProject.missing", { path: trimmed }));
 			else if (status?.kind === "notDirectory")
 				setOpenError(t("panels.openProject.notDirectory", { path: trimmed }));
@@ -69,19 +66,6 @@ export function useOpenProject(
 
 	const openProject = (rawPath: string) =>
 		openProjectForIntent(rawPath, projectOpenIntents.begin());
-
-	const initProject = async (path: string) => {
-		const isCurrent = projectOpenIntents.begin();
-		try {
-			const project = await getTransport().request("project.init", { path });
-			if (!isCurrent()) return;
-			await adopt(project, isCurrent);
-			if (!isCurrent()) return;
-		} catch (err) {
-			if (!isCurrent()) return;
-			setOpenError(errorText(err, t("panels.openProject.initFailed", { path })));
-		}
-	};
 
 	const startNewProject = () => {
 		projectOpenIntents.begin();
@@ -119,25 +103,6 @@ export function useOpenProject(
 
 	const dialogs = (
 		<>
-			<ConfirmDialog
-				open={initTarget !== null}
-				onOpenChange={(o) => {
-					if (!o) setInitTarget(null);
-				}}
-				title={t("panels.openProject.initTitle")}
-				description={
-					<T
-						i18nKey="panels.openProject.initDescription"
-						values={{ path: initTarget }}
-						components={[<span key="path" className="tr-text-emphasis text-text-default" />]}
-					/>
-				}
-				confirmLabel={t("panels.openProject.initConfirm")}
-				confirmTestId="confirm-init-repo"
-				onConfirm={() => {
-					if (initTarget) void initProject(initTarget);
-				}}
-			/>
 			{cloneIntent ? (
 				<CloneProjectDialog
 					onClose={() => setCloneIntent(null)}

@@ -43,6 +43,11 @@ function gitToplevel(path: string): string | null {
 	return result.ok && result.out ? resolve(result.out) : null;
 }
 
+function stampGit(project: Project, hasGit: boolean): void {
+	if (hasGit) delete project.hasGit;
+	else project.hasGit = false;
+}
+
 function slugify(name: string): string {
 	return (
 		name
@@ -88,14 +93,23 @@ export function getProjects(): Project[] {
 
 export function openProject(inputPath: string, displayName?: string): Project {
 	const path = resolveProjectPath(inputPath);
-	const root = gitToplevel(path);
-	if (!root) throw new CodedError("NOT_GIT", `Not a git repository: ${path}`);
+	let stat: ReturnType<typeof statSync>;
+	try {
+		stat = statSync(path);
+	} catch {
+		throw new Error(`No such folder: ${path}`);
+	}
+	if (!stat.isDirectory()) throw new Error(`Not a folder: ${path}`);
+	const gitRoot = gitToplevel(path);
+	const hasGit = gitRoot !== null;
+	const root = gitRoot ?? canonicalPath(path);
 
 	const projects = getProjects();
 	const existing = projects.find((p) => p.path === root);
 	if (existing) {
 		delete existing.closed;
 		existing.lastOpened = Date.now();
+		stampGit(existing, hasGit);
 		saveProjects(projects);
 		emit(existing);
 		return existing;
@@ -118,6 +132,7 @@ export function openProject(inputPath: string, displayName?: string): Project {
 		lastOpened: Date.now(),
 		piResourceTrust: piTrustSeed?.(root) ? "granted" : "untrusted",
 	};
+	stampGit(project, hasGit);
 	projects.push(project);
 	saveProjects(projects);
 	emit(project);
