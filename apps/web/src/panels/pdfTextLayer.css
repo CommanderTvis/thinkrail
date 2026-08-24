@@ -1,0 +1,52 @@
+/*
+ * The geometry contract pdf.js's TextLayer renders against: it writes --font-height, --scale-x and
+ * --rotate on each span and leaves the rest to CSS. Copied from pdfjs-dist/web/pdf_viewer.css rather
+ * than imported, because that file is the whole viewer — 160KB of toolbar, sidebar and :root palettes we
+ * do not use. A pdf.js upgrade that changes these custom properties breaks selection silently; the e2e
+ * that selects real text is what turns that into a red build. See panels/SPEC.md.
+ */
+.textLayer {
+	position: absolute;
+	inset: 0;
+	overflow: clip;
+	z-index: 0;
+	line-height: 1;
+	text-align: initial;
+	letter-spacing: normal;
+	word-spacing: normal;
+	text-size-adjust: none;
+	forced-color-adjust: none;
+	transform-origin: 0 0;
+	caret-color: CanvasText;
+	--min-font-size: 1;
+	--text-scale-factor: calc(var(--total-scale-factor) * var(--min-font-size));
+	--min-font-size-inv: calc(1 / var(--min-font-size));
+}
+
+.textLayer :is(span, br) {
+	position: absolute;
+	color: transparent;
+	white-space: pre;
+	cursor: text;
+	transform-origin: 0% 0%;
+	user-select: text;
+}
+
+.textLayer > :not(.markedContent),
+.textLayer .markedContent span:not(.markedContent) {
+	z-index: 1;
+	--font-height: 0;
+	--scale-x: 1;
+	--rotate: 0deg;
+	font-size: calc(var(--text-scale-factor) * var(--font-height));
+	transform: rotate(var(--rotate)) scaleX(var(--scale-x)) scale(var(--min-font-size-inv));
+}
+
+.textLayer .markedContent {
+	display: contents;
+}
+
+.textLayer span[role="img"] {
+	user-select: none;
+	cursor: default;
+}

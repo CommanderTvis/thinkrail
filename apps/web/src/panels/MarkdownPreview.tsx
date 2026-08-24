@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { stripFrontmatter } from "@/lib/utils";
 import { Markdown, type MarkdownRehypePlugins } from "../chat/Markdown";
 import { reportIdeSelection } from "../transport";

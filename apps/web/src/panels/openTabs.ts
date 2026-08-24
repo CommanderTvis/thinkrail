@@ -2,6 +2,7 @@ import type { GitDiffScope } from "@thinkrail/contracts";
 import {
 	DOUBLE_CLICK_SETTLE_MS,
 	isAbsolutePath,
+	isPdfPath,
 	layoutResourceIdentity,
 	projectRelativePath,
 	tupleKey,
@@ -159,15 +160,20 @@ export function openFileInTab(
 	const external = isAbsolutePath(path);
 	const kind = external ? ("external-file" as const) : ("file" as const);
 	const id = tupleKey(kind, workspaceId, path);
+	// A PDF is rendered by pointing an <iframe> at the worktree file route directly (see PdfPreview.tsx) —
+	// reading it here would decode binary bytes as UTF-8 text for content nothing uses.
+	const binary = !external && isPdfPath(path);
 	return openReadTab(
 		workspaceId,
 		id,
 		layoutResourceIdentity({ kind, id, name: baseName(path), path }),
 		intent,
 		() =>
-			external
-				? getTransport().request("claudeConfig.readFile", { workspaceId, path })
-				: getTransport().request("fs.readFile", { workspaceId, path }),
+			binary
+				? Promise.resolve({ content: "" })
+				: external
+					? getTransport().request("claudeConfig.readFile", { workspaceId, path })
+					: getTransport().request("fs.readFile", { workspaceId, path }),
 		({ content }, loadedTick) => ({
 			kind,
 			id,

@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import type { Components } from "react-markdown";
-import { getTransport } from "../transport";
+import { worktreeFileUrl } from "./filesUrl";
 import { openFileInTab } from "./openTabs";
 
 export type HrefKind = "empty" | "anchor" | "external" | "relative";
@@ -43,10 +43,6 @@ export function slugify(text: string): string {
 function relativePathname(href: string): string {
 	const i = href.search(/[?#]/);
 	return i < 0 ? href : href.slice(0, i);
-}
-
-function encodePath(path: string): string {
-	return path.split("/").map(encodeURIComponent).join("/");
 }
 
 interface MdNode {
@@ -130,9 +126,10 @@ export function documentComponents(ctx: { workspaceId: string; path: string }): 
 	function DocumentImage({ src, alt, title }: { src?: string; alt?: string; title?: string }) {
 		const isRelative = classifyHref(src) === "relative" && src !== undefined;
 		const target = isRelative ? resolveRelativePath(ctx.path, relativePathname(src)) : null;
+		// One place builds a worktree file URL; the PDF preview reads the same one. See panels/SPEC.md.
 		const resolved = isRelative
 			? target
-				? `${getTransport().httpBase()}/files/${encodeURIComponent(ctx.workspaceId)}/${encodePath(target)}`
+				? worktreeFileUrl(ctx.workspaceId, target)
 				: undefined
 			: src;
 		return <img src={resolved} alt={alt ?? ""} title={title} />;

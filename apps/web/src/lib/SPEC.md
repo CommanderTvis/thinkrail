@@ -14,7 +14,8 @@ Tiny UI helpers shared across components.
 ## Boundary
 
 - **Owns:** `utils.ts` → `cn()` (merge clsx output through tailwind-merge) + `isMarkdownPath()` (the
-  `.md`/`.markdown` gate for the rendered-preview view) + `stripFrontmatter()` (drop a leading YAML `---`
+  `.md`/`.markdown` gate for the rendered-preview view) + `isPdfPath()` (the `.pdf` gate for the
+  native-`<iframe>` viewer, `panels/PdfPreview.tsx`) + `stripFrontmatter()` (drop a leading YAML `---`
   block so the rendered view doesn't render spec metadata as a heading) + `cssColorToHex()` (canonicalize
   a CSS color to hex — minified CSS serves `#fff`/`gray`-style equivalents, which strict consumers like
   Monaco and xterm reject; `""` when unparseable). Plus the primitives that more than one module needs and
@@ -78,7 +79,7 @@ Tiny UI helpers shared across components.
   **`tupleKey()`** length-prefixes independent strings, **`parseTupleKey()`** reads only its requested
   namespace, and **`layoutResourceIdentity()`** gives every frontend-local placement/cache alias one
   semantic resource key, so delimiters and stable noncanonical placement ids cannot split or alias identities.
-- **Public surface (barrel):** `cn`, `isMarkdownPath`, `stripFrontmatter`, `cssColorToHex`,
+- **Public surface (barrel):** `cn`, `isMarkdownPath`, `isPdfPath`, `stripFrontmatter`, `cssColorToHex`,
   `normalizePath`, `isAbsolutePath`, `projectRelativePath` (canonical worktree-relative POSIX identity;
   collapses in-root `.`/`..` aliases but preserves an attempted leading escape for host rejection; Windows
   drive-rooted containment compares path/root case-insensitively while preserving the candidate's casing),
