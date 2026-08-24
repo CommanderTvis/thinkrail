@@ -48,6 +48,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Textarea } from "@/components/ui/textarea";
+import { IconTooltip } from "@/components/ui/tooltip";
 import { CLAUDE_MODELS, claudeLaunchCommand, cn, shellQuotePath } from "@/lib";
 import {
 	applyTemplateSlotEdit,
@@ -353,12 +354,15 @@ export function NewWorkspaceDialog({
 	});
 	const submitEnabled = !creating && !templatePending;
 
+	const gitless = projects.find((p) => p.id === selectedProjectId)?.hasGit === false;
+	const isolated = target === "worktree" && !gitless;
+
 	const create = async () => {
 		if (!submitEnabled) return;
 		setCreating(true);
 		const text = finalizeTemplateSlotSession(prompt, slotSession).trim();
 		let workspace: Workspace;
-		if (target === "default") {
+		if (!isolated) {
 			const def = await enterDefaultWorkspace(selectedProjectId);
 			if (!def) {
 				setCreating(false);
@@ -382,7 +386,7 @@ export function NewWorkspaceDialog({
 		}
 
 		const store = useAppStore.getState();
-		if (target === "worktree") {
+		if (isolated) {
 			onCreated(workspace);
 			store.activateWorkspace(workspace);
 		}
@@ -449,7 +453,6 @@ export function NewWorkspaceDialog({
 	};
 
 	const selectedProject = projects.find((p) => p.id === selectedProjectId);
-	const isolated = target === "worktree";
 
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
@@ -478,7 +481,9 @@ export function NewWorkspaceDialog({
 					<DialogDescription>
 						{isolated
 							? "A separate checkout on its own new branch. Files, chats, changes, and terminals stay scoped to it."
-							: "Runs directly in your project folder — no isolation. Changes land on the current branch."}
+							: gitless
+								? "Your project folder itself. It is not a git repository, so there is nothing to isolate."
+								: "Runs directly in your project folder — no isolation. Changes land on the current branch."}
 					</DialogDescription>
 				</DialogHeader>
 
@@ -492,6 +497,12 @@ export function NewWorkspaceDialog({
 						label="Isolated workspace"
 						name={targetGroupName}
 						active={isolated}
+						disabled={gitless}
+						title={
+							gitless
+								? "This folder is not a git repository, so there is nothing for a worktree to branch from."
+								: undefined
+						}
 						testid="ws-target-worktree"
 						onSelect={() => setTarget("worktree")}
 					/>
@@ -736,6 +747,8 @@ function TargetOption({
 	label,
 	name,
 	active,
+	disabled = false,
+	title,
 	testid,
 	onSelect,
 }: {
@@ -743,23 +756,40 @@ function TargetOption({
 	label: string;
 	name: string;
 	active: boolean;
+	disabled?: boolean;
+	title?: string | undefined;
 	testid: string;
 	onSelect: () => void;
 }) {
-	return (
+	const control = (
 		<label
 			data-testid={testid}
 			data-active={active}
+			data-disabled={disabled || undefined}
 			className={cn(
-				"flex h-28 cursor-pointer items-center gap-8 rounded-[var(--radius-sm)] px-12 tr-text-ui transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-primary",
-				active ? "bg-primary-subtle text-primary" : "text-text-muted hover:text-text-default",
+				"flex h-28 items-center gap-8 rounded-[var(--radius-sm)] px-12 tr-text-ui transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-primary",
+				disabled
+					? "cursor-not-allowed text-control-disabled-text"
+					: active
+						? "cursor-pointer bg-primary-subtle text-primary"
+						: "cursor-pointer text-text-muted hover:text-text-default",
 			)}
 		>
-			<input type="radio" name={name} className="sr-only" checked={active} onChange={onSelect} />
+			<input
+				type="radio"
+				name={name}
+				className="sr-only"
+				checked={active}
+				disabled={disabled}
+				onChange={onSelect}
+			/>
 			<Icon className="size-14 shrink-0" />
 			{label}
 		</label>
 	);
+	// The reason an option is refused is ours to phrase and ours to style — the native `title` arrived
+	// late, unthemed, and in the OS's own voice. See panels/SPEC.md.
+	return title ? <IconTooltip label={title}>{control}</IconTooltip> : control;
 }
 
 function ProjectPicker({

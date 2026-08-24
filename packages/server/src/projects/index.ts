@@ -2,7 +2,6 @@ export {
 	acknowledgeProjectSkills,
 	closeProject,
 	getProjects,
-	initProject,
 	inspectProjectPath,
 	listProjects,
 	listRecentProjects,
