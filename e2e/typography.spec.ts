@@ -183,8 +183,10 @@ test("typography survives a narrow mobile viewport without clipping or overflow"
 			const style = getComputedStyle(el);
 			if (!/hidden|clip/.test(style.overflowY)) continue;
 			const over = el.scrollHeight - el.clientHeight;
-			if (over > 1 && el.clientHeight > 0)
-				out.push(`${el.tagName}[${el.getAttribute("data-testid") ?? ""}] +${over}px`);
+			// A 1px clipped box is the visually-hidden idiom (Radix renders one inside every open tooltip
+			// for screen readers). Its overflow is the point, and it is not visible text that can clip.
+			if (el.clientHeight <= 1 || el.clientWidth <= 1) continue;
+			if (over > 1) out.push(`${el.tagName}[${el.getAttribute("data-testid") ?? ""}] +${over}px`);
 		}
 		if (document.documentElement.scrollWidth > window.innerWidth + 1)
 			out.push(
