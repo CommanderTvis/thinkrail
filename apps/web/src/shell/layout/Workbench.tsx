@@ -1189,45 +1189,51 @@ function WorkbenchTab({
 				: "editor-tab";
 	return (
 		<ContextMenu>
-			<ContextMenuTrigger asChild>
-				<div
-					ref={drag.setNodeRef}
-					role="presentation"
-					data-testid={tabTestId}
-					data-active={active}
-					data-preview={preview}
-					data-kind={tab.kind === "document" ? "plan" : tab.kind}
-					data-session-id={tab.kind === "chat" ? tab.sessionId : undefined}
-					data-dragging={drag.isDragging || undefined}
-					data-paned={inPane || undefined}
-					className={
-						vertical
-							? "group relative flex w-full shrink-0 items-center border-border-muted border-b text-text-muted after:pointer-events-none after:absolute after:inset-y-0 after:left-0 after:z-10 after:w-[2px] after:content-[''] data-[active=true]:bg-control-bg-selected data-[active=true]:text-text-default data-[active=true]:after:bg-primary data-[dragging]:opacity-40 data-[paned]:border-primary data-[paned]:border-l-2"
-							: "group relative flex min-w-96 max-w-192 shrink-0 items-center border-border-default border-r text-text-muted after:pointer-events-none after:absolute after:inset-x-0 after:bottom-0 after:z-10 after:h-[2px] after:rounded-full after:content-[''] data-[active=true]:bg-control-bg-selected data-[active=true]:text-text-default data-[active=true]:after:bg-primary data-[dragging]:opacity-40"
-					}
-				>
+			{/* Anchored to the whole row, not the name button: the button's right edge is exactly where the
+			    close cross sits, so a tooltip opening there hides the control you are reaching for. */}
+			<IconTooltip
+				label={preview ? "Preview — double-click to keep" : tabTitle(tab)}
+				side={vertical ? "right" : "bottom"}
+			>
+				<ContextMenuTrigger asChild>
 					<div
-						ref={before.setNodeRef}
-						aria-hidden="true"
-						data-drop-label={acceptsBefore ? `Insert before ${name}` : undefined}
-						data-drop-active={before.isOver || undefined}
+						ref={drag.setNodeRef}
+						role="presentation"
+						data-testid={tabTestId}
+						data-active={active}
+						data-preview={preview}
+						data-kind={tab.kind === "document" ? "plan" : tab.kind}
+						data-session-id={tab.kind === "chat" ? tab.sessionId : undefined}
+						data-dragging={drag.isDragging || undefined}
+						data-paned={inPane || undefined}
 						className={
 							vertical
-								? "pointer-events-none absolute inset-x-0 top-0 z-10 h-1/4 border-primary data-[drop-active]:border-t-2"
-								: "pointer-events-none absolute inset-y-0 left-0 z-10 w-1/2 border-primary data-[drop-active]:border-l-2"
+								? "group relative flex w-full shrink-0 items-center border-border-muted border-b text-text-muted after:pointer-events-none after:absolute after:inset-y-0 after:left-0 after:z-10 after:w-[2px] after:content-[''] data-[active=true]:bg-control-bg-selected data-[active=true]:text-text-default data-[active=true]:after:bg-primary data-[dragging]:opacity-40 data-[paned]:border-primary data-[paned]:border-l-2"
+								: "group relative flex min-w-96 max-w-192 shrink-0 items-center border-border-default border-r text-text-muted after:pointer-events-none after:absolute after:inset-x-0 after:bottom-0 after:z-10 after:h-[2px] after:rounded-full after:content-[''] data-[active=true]:bg-control-bg-selected data-[active=true]:text-text-default data-[active=true]:after:bg-primary data-[dragging]:opacity-40"
 						}
-					/>
-					<div
-						ref={after.setNodeRef}
-						aria-hidden="true"
-						data-drop-label={acceptsAfter ? `Insert after ${name}` : undefined}
-						data-drop-active={after.isOver || undefined}
-						className={
-							vertical
-								? "pointer-events-none absolute inset-x-0 bottom-0 z-10 h-1/4 border-primary data-[drop-active]:border-b-2"
-								: "pointer-events-none absolute inset-y-0 right-0 z-10 w-1/2 border-primary data-[drop-active]:border-r-2"
-						}
-					/>
+					>
+						<div
+							ref={before.setNodeRef}
+							aria-hidden="true"
+							data-drop-label={acceptsBefore ? `Insert before ${name}` : undefined}
+							data-drop-active={before.isOver || undefined}
+							className={
+								vertical
+									? "pointer-events-none absolute inset-x-0 top-0 z-10 h-1/4 border-primary data-[drop-active]:border-t-2"
+									: "pointer-events-none absolute inset-y-0 left-0 z-10 w-1/2 border-primary data-[drop-active]:border-l-2"
+							}
+						/>
+						<div
+							ref={after.setNodeRef}
+							aria-hidden="true"
+							data-drop-label={acceptsAfter ? `Insert after ${name}` : undefined}
+							data-drop-active={after.isOver || undefined}
+							className={
+								vertical
+									? "pointer-events-none absolute inset-x-0 bottom-0 z-10 h-1/4 border-primary data-[drop-active]:border-b-2"
+									: "pointer-events-none absolute inset-y-0 right-0 z-10 w-1/2 border-primary data-[drop-active]:border-r-2"
+							}
+						/>
 						{acceptsPane && inPane ? (
 							<div
 								ref={paneJoin.setNodeRef}
@@ -1263,7 +1269,7 @@ function WorkbenchTab({
 							onClick={selectFromClick}
 							onDoubleClick={selectFromDoubleClick}
 							onKeyDown={onKeyDown}
-							className={`flex min-w-0 flex-1 items-center gap-4 pl-8 text-left outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary ${vertical ? "py-8" : "py-4"} ${tab.kind === "tool" ? "pr-8" : ""}`}
+							className={`flex min-w-0 flex-1 items-center gap-xs pl-sm text-left outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary ${vertical ? "py-sm" : "py-xs"} ${tab.kind === "tool" ? "pr-sm" : ""}`}
 						>
 							{tabIcon(tab, renderTabIcon, active)}
 							{subtitle ? (
@@ -1274,22 +1280,23 @@ function WorkbenchTab({
 							) : (
 								<span className={`truncate ${preview ? "italic" : ""}`}>{name}</span>
 							)}
-						{renderTabAdornment(tab)}
-					</button>
-					{tab.kind !== "tool" ? (
-						<button
-							type="button"
-							tabIndex={-1}
-							data-testid={tab.kind === "terminal" ? "terminal-tab-close" : "editor-tab-close"}
-							aria-label={`Close ${name}`}
-							onClick={onClose}
-							className="mr-4 rounded-[var(--radius-sm)] p-2 opacity-0 hover:bg-control-bg-hovered group-hover:opacity-100 focus:opacity-100"
-						>
-							<X className="size-14" />
+							{renderTabAdornment(tab)}
 						</button>
-					) : null}
-				</div>
-			</ContextMenuTrigger>
+						{tab.kind !== "tool" ? (
+							<button
+								type="button"
+								tabIndex={-1}
+								data-testid={tab.kind === "terminal" ? "terminal-tab-close" : "editor-tab-close"}
+								aria-label={`Close ${name}`}
+								onClick={onClose}
+								className="mr-4 rounded-[var(--radius-sm)] p-2 opacity-0 hover:bg-control-bg-hovered group-hover:opacity-100 focus:opacity-100"
+							>
+								<X className="size-14" />
+							</button>
+						) : null}
+					</div>
+				</ContextMenuTrigger>
+			</IconTooltip>
 			<ContextMenuContent>
 				<ContextMenuItem onSelect={() => focusTab()}>Focus tab</ContextMenuItem>
 				<ContextMenuItem

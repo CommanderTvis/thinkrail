@@ -750,6 +750,38 @@ workspace path — it reads as a broken feature rather than an absent one.
   the right verb. Linux has no portable "select this entry", so it opens the containing folder.
 - The label follows the platform's own name for its file manager; "Show in Finder" on Linux would read
   as a bug.
+
+## Tab labels carry our tooltip, not the browser's
+
+A center/side tab name is truncated far more often than not, so the full name has to be reachable on
+hover. It uses the shared `IconTooltip` rather than a native `title`: the native one is unstyled and
+waits about a second, which is useless for text the user is already looking at.
+
+- **It keeps the provider's delay, deliberately.** `delayDuration={0}` was tried first and is the
+  obvious reading of "instant" — it is not shipped, because it reliably wedges the tab-search popover
+  open: with an instant tooltip on every tab, widening the window past the overflow threshold leaves
+  `Find an open tab…` mounted over a strip that no longer overflows (`e2e/layout.spec.ts`'s keyboard and
+  menu commands test fails ~2 runs in 3, against a ~1 in 3 baseline for that file). The provider's
+  `skipDelayDuration` already makes every tooltip after the first instant while moving along a strip,
+  which is the case that actually matters.
+- **The tooltip wraps the tab *button*, not the label span.** Anchoring it to the name reads better on
+  paper — the label *is* the truncated name — but Radix's trigger then sits on the element a tab drag
+  starts from, and swallows the pointer events the drag needs: `e2e/layout.spec.ts`'s side-group
+  resize test fails 4 runs in 4 that way. The button is already the drag handle and the accessible
+  control, so the trigger belongs there.
+- `IconTooltip` grew an optional `delayDuration` for this, and it stays available — but nothing in the
+  tab strip may use `0` without re-checking the two tests above.
+- **A tooltip is a label, never a target.** `TooltipContent` is `pointer-events-none` app-wide: anchored
+  beside a control it inevitably covers a neighbour, and a panel that swallows the click meant for the
+  tab underneath is worse than no tooltip at all. Safe because every label in the app is plain text —
+  an interactive tooltip would need its own component, not this one. The tab tooltip additionally opens
+  **along the strip's own axis** (`right` when vertical, `bottom` when horizontal) so it lands beside the
+  strip rather than on the next tab, and is anchored to the **whole tab row**, not the name button: the
+  button's right edge is exactly where the close cross sits, so a vertical strip's tooltip opened there
+  hides the control the same hover just revealed. Anchoring the row also keeps Radix's trigger off the
+  drag handle, which is what broke dragging when it wrapped the label span. `e2e/layout.spec.ts` pins both the computed `pointer-events` and
+  that a covered neighbour is still clickable.
+
 ## Selecting in the rendered document reaches Claude
 
 A selection made in the markdown preview is reported to the Claude Code bridge exactly as an editor

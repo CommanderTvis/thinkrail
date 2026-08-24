@@ -101,6 +101,12 @@
 .review-comment-rail {
 	background: var(--text-subtle);
 }
+/* Radix positions tooltip content inside a wrapper div of its own, and `pointer-events-none` on the
+   content leaves that wrapper catching every click under an open tooltip — see components/ui/SPEC.md. */
+[data-radix-popper-content-wrapper]:has(> [data-slot="tooltip-content"]) {
+	pointer-events: none;
+}
+
 .review-add-icon-holder {
 	/* Right-above the cursor point: the nudge + the ABOVE placement make the standard floating
 	   "comment here" offset (see reviewWidgets.ts / PreviewCommenting.tsx). */

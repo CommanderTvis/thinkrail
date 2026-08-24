@@ -42,6 +42,18 @@ The shadcn/ui primitives (Radix), copied in and owned here, themed with our desi
   `open`) silently overwrites the popover's or menu's on the shared button, breaking any
   `data-[state=open]` / `has-[[data-state=open]]` styling. Never hand-roll that span at the call site —
   `tooltip.test.tsx` pins both the isolation and the absence of a hand-rolled wrapper.
+- **The pointer-transparency covers Radix's wrapper, not only the content.** Radix portals tooltip
+  content inside a positioning `[data-radix-popper-content-wrapper]` div it owns, which no `className`
+  of ours reaches; with only the content transparent, an open tooltip still swallowed every click in its
+  wrapper's box — the tab tooltip sits directly over the chat header's plan strip, which became
+  unclickable while it was up. `index.css` makes the wrapper transparent too, matched by
+  `data-slot="tooltip-content"` on our content so no other popper is affected.
+- **Hoverable tooltip content is off** (`disableHoverableContent` on the one provider). Radix otherwise
+  holds a tooltip open while the pointer is inside a grace polygon spanning trigger to content — and our
+  content is `pointer-events-none`, so there is nothing in it to reach and no reason to hold anything. On
+  a row of icon buttons that polygon covers the *neighbours*: the label sits directly above the row and is
+  wider than the icon under it, so moving one button along kept the previous tooltip up and let the new
+  one open only sometimes. A tooltip that is purely a label has no hover state to preserve.
 
 - **`context-menu` and `dropdown-menu` are one visual menu system** — same tokenized content surface,
   radius/shadow, item/icon spacing, separators, semantic action colors, focus rows, and viewport collision

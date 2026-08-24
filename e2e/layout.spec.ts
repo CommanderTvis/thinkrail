@@ -1224,6 +1224,59 @@ test("a local transition during a side resize cancels the gesture and says so", 
 	await expect(page.getByTestId("right-layout-rail")).toBeVisible();
 });
 
+test("a tab tooltip labels without blocking the tab it overlaps", async ({ page }) => {
+	await openDefaultWorkbench(page);
+	await openKeptFiles(page, ["README.md", "notes.txt", "LINKS.md"]);
+	const tabs = page.getByTestId("editor-tab");
+
+	// Hovering one tab shows our tooltip…
+	await tabs.filter({ hasText: "notes.txt" }).hover();
+	const tip = page.getByRole("tooltip").filter({ hasText: "notes.txt" });
+	await expect(tip.first()).toBeVisible();
+
+	// …and it must never swallow a click meant for a neighbour it happens to cover.
+	await expect
+		.poll(() => tip.first().evaluate((el) => getComputedStyle(el as HTMLElement).pointerEvents))
+		.toBe("none");
+
+	await tabs.filter({ hasText: "LINKS.md" }).click();
+	await expect(tabs.filter({ hasText: "LINKS.md" })).toHaveAttribute("data-active", "true");
+});
+
+test("a tab tooltip does not cover that tab's own close control", async ({ page }) => {
+	await openDefaultWorkbench(page);
+	await openKeptFiles(page, ["README.md", "notes.txt", "LINKS.md"]);
+
+	// Vertical tabs are where this bites: the tooltip opens to the *right*, which is exactly where the
+	// close cross sits. With a horizontal strip it opens below and clears it either way.
+	await page.getByTestId("open-settings").click();
+	await page.getByTestId("settings-nav-layout").click();
+	const verticalToggle = page.getByTestId("vertical-center-tabs");
+	await verticalToggle.click();
+	// Controlled by host-saved settings, so the box only ticks once the round trip lands.
+	await expect(verticalToggle).toBeChecked();
+	await page.keyboard.press("Escape");
+	await expect(page.getByTestId("settings-dialog")).toHaveCount(0);
+
+	const tab = page.getByTestId("editor-tab").filter({ hasText: "notes.txt" });
+	await tab.hover();
+	const tip = page.getByRole("tooltip").filter({ hasText: "notes.txt" }).first();
+	await expect(tip).toBeVisible();
+
+	const close = tab.getByTestId("editor-tab-close");
+	const [tipBox, closeBox] = [await tip.boundingBox(), await close.boundingBox()];
+	if (!tipBox || !closeBox) throw new Error("tooltip or close control has no box");
+	const overlaps =
+		tipBox.x < closeBox.x + closeBox.width &&
+		closeBox.x < tipBox.x + tipBox.width &&
+		tipBox.y < closeBox.y + closeBox.height &&
+		closeBox.y < tipBox.y + tipBox.height;
+	expect(overlaps).toBe(false);
+
+	await close.click();
+	await expect(page.getByTestId("editor-tab").filter({ hasText: "notes.txt" })).toHaveCount(0);
+});
+
 test("a third tab joins a pane's arrangement instead of restarting it", async ({ page }) => {
 	await openDefaultWorkbench(page);
 	await openKeptFiles(page, ["README.md", "notes.txt", "LINKS.md"]);
