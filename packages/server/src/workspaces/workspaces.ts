@@ -475,6 +475,15 @@ export function setWorkspaceDiffBase(id: string, ref: string | null): Workspace 
 	return ws;
 }
 
+/**
+ * Only asked once a diff has already failed, so the ordinary workspace pays nothing for it.
+ */
+function vcsGap(ws: Workspace): Workspace["vcs"] {
+	if (!git(ws.worktreePath, ["rev-parse", "--git-dir"]).ok) return "none";
+	if (!git(ws.worktreePath, ["rev-parse", "--verify", "HEAD"]).ok) return "unborn";
+	return undefined;
+}
+
 export async function listWorkspaces(
 	projectId: string,
 	opts: { includeDiffStats?: boolean } = {},
@@ -493,7 +502,9 @@ export async function listWorkspaces(
 	);
 	return projectRows(projectId).map((w) => {
 		const stats = statsByKey.get(workspaceDiffKey(w));
-		return stats ? { ...w, diffStats: stats } : w;
+		if (stats) return { ...w, diffStats: stats };
+		const vcs = vcsGap(w);
+		return vcs ? { ...w, vcs } : w;
 	});
 }
 

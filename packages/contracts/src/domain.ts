@@ -13,9 +13,11 @@ export interface Project {
 	acknowledgedSkills?: string[];
 	disabledSkills?: string[];
 	disabledGroups?: string[];
+	/** `false` for a plain folder ThinkRail opened without a git repo; absent/`true` otherwise. */
+	hasGit?: boolean;
 }
 
-export type ProjectPathStatus = { kind: "repo" | "initable" | "missing" | "notDirectory" };
+export type ProjectPathStatus = { kind: "missing" | "notDirectory" | "ok" };
 
 export interface DiffStats {
 	added: number;
@@ -36,6 +38,11 @@ export interface Workspace {
 	renamed?: boolean;
 	initialTerminalPending?: true;
 	diffStats?: DiffStats;
+	/**
+	 * Why git can answer nothing here, when it can't: no repository at all, or one with no commits yet.
+	 * Absent for the ordinary case. Live, not stamped — a first commit clears it.
+	 */
+	vcs?: "none" | "unborn";
 	skillOverrides?: Record<string, "on" | "off">;
 	subagentsOverride?: SubagentOverride;
 }

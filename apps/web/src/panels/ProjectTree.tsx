@@ -462,27 +462,31 @@ function ProjectRow({
 						openingDialogRef.current = false;
 					}}
 				>
-					<ContextMenuItem
-						data-testid="project-menu-create-workspace"
-						onSelect={(event) => {
-							event.preventDefault();
-							openDialogAfterMenu(onAddWorkspaceFromMenu);
-						}}
-					>
-						<Plus />
-						Create workspace
-					</ContextMenuItem>
-					<ContextMenuItem
-						data-testid="project-menu-open-existing-worktree"
-						onSelect={(event) => {
-							event.preventDefault();
-							openDialogAfterMenu(onOpenExistingWorktree);
-						}}
-					>
-						<FolderOpen />
-						Open existing worktree…
-					</ContextMenuItem>
-					<ContextMenuSeparator />
+					{project.hasGit === false ? null : (
+						<>
+							<ContextMenuItem
+								data-testid="project-menu-create-workspace"
+								onSelect={(event) => {
+									event.preventDefault();
+									openDialogAfterMenu(onAddWorkspaceFromMenu);
+								}}
+							>
+								<Plus />
+								Create workspace
+							</ContextMenuItem>
+							<ContextMenuItem
+								data-testid="project-menu-open-existing-worktree"
+								onSelect={(event) => {
+									event.preventDefault();
+									openDialogAfterMenu(onOpenExistingWorktree);
+								}}
+							>
+								<FolderOpen />
+								Open existing worktree…
+							</ContextMenuItem>
+							<ContextMenuSeparator />
+						</>
+					)}
 					<ContextMenuItem
 						data-testid="project-menu-close"
 						onSelect={(event) => {

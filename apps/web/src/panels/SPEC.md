@@ -38,7 +38,9 @@ treatment.
   ~700ms long press is its touch equivalent. With a project-name button focused, the standard Context Menu
   key or Shift+F10 opens the same menu for keyboard-only use; arrow/activate/Escape keys work normally.
   The menu is neutral: **Plus Create workspace**, **FolderOpen Open existing worktree…**, separator,
-  **X Close project**. Create is exactly the direct `+` flow. Open existing worktree opens the
+  **X Close project** — the first two only for a project with a real git repo (`project.hasGit === false`
+  hides both plus the separator, since a plain folder has nothing for `git worktree add` to attach to;
+  its Default workspace is the only workspace it will ever have). Create is exactly the direct `+` flow. Open existing worktree opens the
   `ExistingWorktreeDialog` chooser fed by `workspace.listExisting` (branch + absolute path per row;
   detached-HEAD rows stay visible but disabled); choosing one calls `workspace.openExisting`, then expands
   the project and activates the attached row without starting a chat. Close
@@ -114,21 +116,21 @@ treatment.
   **`useOpenProject`** hook (reused by `ProjectTree` **and**
   `WelcomePanel`, so the flow is identical in the Projects view and the Welcome screen): `project.open` reactivates
   a closed known path under its same id (or opens a new one), then the initiating client selects Project
-  Home while every client receives `project.updated`; on failure `project.inspect` → either offers to
-  bootstrap the folder into a repo — a modal **`ConfirmDialog`**
-  (confirm → `project.init`) — when it's `initable`, or surfaces the error in a **`NoticeDialog`** — so a
-  non-git folder is never a silent no-op. The native picker remains the local fast path and keeps its raised
+  Home while every client receives `project.updated`. A git repo and a plain folder open the same way —
+  there is no init offer to accept first (`projects/SPEC.md`: `openProject`
+  no longer requires a repo, and stamps `Project.hasGit` from what it finds). On failure `project.inspect`
+  classifies *why*, so a **`NoticeDialog`** carries a specific reason (missing folder, not a folder, or
+  the raw error) rather than a silent no-op. The native picker remains the local fast path and keeps its raised
   timeout because it waits on a human; if the host cannot present it, the rejection instead opens an
   **Open project from host path** dialog carrying the reason and an autofocused path field. The dialog says
   the path belongs to the computer running ThinkRail, accepts a host-absolute path or `~` / `~/…`, and
-  submits through this same open/inspect/init flow. **Enter host path…** is also always present beside Open
+  submits through this same open/inspect flow. **Enter host path…** is also always present beside Open
   project in `AddProjectMenu`: a remote client cannot tell whether a successful native picker opened on an
   unseen host display, so recovery cannot be failure-only. Every open gesture starts one client-wide
   last-intent generation shared by both mounted `useOpenProject` instances. The flow rechecks that generation
-  after each picker, open, inspect, init, and adoption await, so a manual path or recent selection from either
+  after each picker, open, inspect, and adoption await, so a manual path or recent selection from either
   surface supersedes any older flow before it can select a project or raise a stale dialog.
-  These are modals on `components/ui/dialog` (the init offer has no on-screen anchor, unlike the Remove
-  popover); `NoticeDialog` remains the single-button
+  These are modals on `components/ui/dialog`; `NoticeDialog` remains the single-button
   surface for failures with no recovery inside that notice. The hook returns a `dialogs` node each consumer
   renders. **Selecting a
   project** (clicking its row — the chevron expands/collapses separately) **deselects any active

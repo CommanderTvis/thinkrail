@@ -46,6 +46,13 @@ Frame groups may remain empty in any workspace. Closing a final resource therefo
 ## Layout grammar
 
 - **Center:** a recursive horizontal/vertical binary tree, maximum four leaves. A split replaces one leaf with equal halves. User creation/resize requires each child to remain at least 320 px wide and 180 px high. Empty leaves are valid frame slots and render the shell-provided empty surface. Remove/Merge promotes a sibling and rehomes every affected workspace's tabs deterministically.
+- **A tool the workspace cannot serve is not offered.** `Workbench` takes `unofferedTools`, and every
+  reveal menu — the side group's and the tab context menu's — leaves those out, so nothing in the shell can
+  open one. The engine stays ignorant of *why*: the shell decides, this module only withholds. It reaches
+  the two menus through a context rather than a prop threaded across every group view; both read it where
+  the list is built, and nothing else needs it. Withholding never touches the document: a tool already
+  placed keeps its tab (its renderer explains itself, as the Claude pane does when the integration is off),
+  and the condition can clear without a saved layout having been rewritten behind the user.
 - **Auxiliary eligibility:** Projects, Specs, Files, Changes, and Review are singleton auxiliary-only tools owned by the frame; terminals are workspace resources and may occupy center or any auxiliary region. Hiding a singleton preserves its restore target. View/deep-link reveal restores or unfolds it in frame-local position and focuses the requested item in current workspace attention.
 - **Left/right:** ordered vertical frame stacks. Dragging an outer separator through its minimum hides that side, retains the last expanded width, and exposes its full-height restore rail. Broad upper/lower targets create groups before/after each row, including folded or currently empty rows. Expanded bodies have a 120 px normal minimum; folded groups occupy 27 px and retain normalized expanded weights. An empty frame group remains available across workspaces until explicit removal and renders a named
   Add/Reveal surface rather than disappearing; a region with groups may stay hidden.

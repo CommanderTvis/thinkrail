@@ -12,7 +12,6 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
 	closeProject,
-	initProject,
 	inspectProjectPath,
 	isProjectTrusted,
 	listProjects,
@@ -21,11 +20,6 @@ import {
 	setProjectPublisher,
 	setProjectTrust,
 } from "./projects";
-
-function gitOut(cwd: string, ...args: string[]): string {
-	const r = Bun.spawnSync(["git", "-C", cwd, ...args], { stdout: "pipe", stderr: "ignore" });
-	return new TextDecoder().decode(r.stdout).trim();
-}
 
 function git(cwd: string, ...args: string[]): void {
 	const result = Bun.spawnSync(["git", "-C", cwd, ...args], { stdout: "ignore", stderr: "ignore" });
@@ -41,21 +35,6 @@ function makeRepo(path: string): void {
 	writeFileSync(join(path, "README.md"), "# repo\n");
 	git(path, "add", "-A");
 	git(path, "commit", "-m", "init");
-}
-
-function withoutUserGitConfig<T>(run: () => T): T {
-	const savedGlobal = process.env.GIT_CONFIG_GLOBAL;
-	const savedSystem = process.env.GIT_CONFIG_SYSTEM;
-	process.env.GIT_CONFIG_GLOBAL = "/dev/null";
-	process.env.GIT_CONFIG_SYSTEM = "/dev/null";
-	try {
-		return run();
-	} finally {
-		if (savedGlobal === undefined) delete process.env.GIT_CONFIG_GLOBAL;
-		else process.env.GIT_CONFIG_GLOBAL = savedGlobal;
-		if (savedSystem === undefined) delete process.env.GIT_CONFIG_SYSTEM;
-		else process.env.GIT_CONFIG_SYSTEM = savedSystem;
-	}
 }
 
 let dataDir: string;
@@ -132,22 +111,22 @@ test("inspectProjectPath: a file is `notDirectory`", () => {
 	expect(inspectProjectPath(file)).toEqual({ kind: "notDirectory" });
 });
 
-test("inspectProjectPath: a plain directory is `initable`", () => {
+test("inspectProjectPath: a plain directory is `ok` — there is nothing left to offer to git-init", () => {
 	const dir = join(dataDir, "plain");
 	mkdirSync(dir);
-	expect(inspectProjectPath(dir)).toEqual({ kind: "initable" });
+	expect(inspectProjectPath(dir)).toEqual({ kind: "ok" });
 });
 
-test("inspectProjectPath: a git repo (and any subdirectory) is `repo`", () => {
+test("inspectProjectPath: a git repo (and any subdirectory) is also `ok`", () => {
 	const repo = join(dataDir, "repo");
 	makeRepo(repo);
 	const sub = join(repo, "src", "deep");
 	mkdirSync(sub, { recursive: true });
-	expect(inspectProjectPath(repo)).toEqual({ kind: "repo" });
-	expect(inspectProjectPath(sub)).toEqual({ kind: "repo" });
+	expect(inspectProjectPath(repo)).toEqual({ kind: "ok" });
+	expect(inspectProjectPath(sub)).toEqual({ kind: "ok" });
 });
 
-test("host-home paths resolve consistently across inspect, open, and init", () => {
+test("host-home paths resolve consistently across inspect and open", () => {
 	const home = join(dataDir, "host-home");
 	const repo = join(home, "repo");
 	const plain = join(home, "plain");
@@ -158,11 +137,11 @@ test("host-home paths resolve consistently across inspect, open, and init", () =
 	process.env.HOME = home;
 	process.env.USERPROFILE = home;
 	try {
-		expect(inspectProjectPath("~")).toEqual({ kind: "initable" });
-		expect(inspectProjectPath("~/repo")).toEqual({ kind: "repo" });
+		expect(inspectProjectPath("~")).toEqual({ kind: "ok" });
+		expect(inspectProjectPath("~/repo")).toEqual({ kind: "ok" });
 		expect(openProject("~/repo").path).toBe(realpathSync(repo));
-		expect(inspectProjectPath("~/plain")).toEqual({ kind: "initable" });
-		expect(withoutUserGitConfig(() => initProject("~/plain")).path).toBe(realpathSync(plain));
+		expect(inspectProjectPath("~/plain")).toEqual({ kind: "ok" });
+		expect(openProject("~/plain").path).toBe(realpathSync(plain));
 	} finally {
 		if (savedHome === undefined) delete process.env.HOME;
 		else process.env.HOME = savedHome;
@@ -172,56 +151,46 @@ test("host-home paths resolve consistently across inspect, open, and init", () =
 });
 
 test("relative project paths are rejected instead of using the host process cwd", () => {
-	for (const operation of [openProject, inspectProjectPath, initProject]) {
+	for (const operation of [openProject, inspectProjectPath]) {
 		expect(() => operation("relative/project")).toThrow("must be absolute or start with ~/");
 	}
 });
 
-test("initProject: initialises a plain folder, commits its contents, and opens it", () => {
+test("openProject opens a plain folder directly — no git-init, no dialog needed", () => {
 	const dir = join(dataDir, "plain");
 	mkdirSync(dir);
 	writeFileSync(join(dir, "hello.txt"), "hi\n");
 
-	const project = withoutUserGitConfig(() => initProject(dir));
+	const project = openProject(dir);
 	expect(project.path).toBe(realpathSync(dir));
-	expect(existsSync(join(dir, ".git"))).toBe(true);
-	expect(gitOut(dir, "rev-parse", "HEAD")).not.toBe("");
-	expect(gitOut(dir, "ls-tree", "-r", "HEAD", "--name-only")).toContain("hello.txt");
+	expect(project.hasGit).toBe(false);
+	expect(existsSync(join(dir, ".git"))).toBe(false);
 	expect(listProjects()).toHaveLength(1);
 });
 
-test("initProject: an empty folder gets an empty initial commit (a HEAD), so worktrees work", () => {
-	const dir = join(dataDir, "empty");
-	mkdirSync(dir);
-
-	withoutUserGitConfig(() => initProject(dir));
-	expect(gitOut(dir, "rev-parse", "HEAD")).not.toBe("");
-	expect(gitOut(dir, "ls-tree", "-r", "HEAD", "--name-only")).toBe("");
-	const wt = join(dataDir, "wt");
-	git(dir, "worktree", "add", wt, "-b", "feature");
-	expect(existsSync(wt)).toBe(true);
-});
-
-test("initProject: commits even with no configured git identity (the -c fallback)", () => {
-	const dir = join(dataDir, "noid");
-	mkdirSync(dir);
-	writeFileSync(join(dir, "file.txt"), "x\n");
-
-	withoutUserGitConfig(() => initProject(dir));
-	expect(gitOut(dir, "rev-parse", "HEAD")).not.toBe("");
-	expect(gitOut(dir, "log", "-1", "--format=%an")).toBe("ThinkRail");
-});
-
-test("initProject: an existing repo is opened, not re-initialised (dedupe, history preserved)", () => {
+test("openProject stamps hasGit false, and a real repo omits the field entirely", () => {
 	const repo = join(dataDir, "repo");
 	makeRepo(repo);
-	const originalHead = gitOut(repo, "rev-parse", "HEAD");
+	expect(openProject(repo).hasGit).toBeUndefined();
+});
 
-	const first = initProject(repo);
-	const second = initProject(repo);
+test("reopening a plain folder that later became a real repo picks up hasGit again", () => {
+	const dir = join(dataDir, "later-git");
+	mkdirSync(dir);
+	const first = openProject(dir);
+	expect(first.hasGit).toBe(false);
+
+	makeRepo(dir);
+	const second = openProject(dir);
 	expect(second.id).toBe(first.id);
-	expect(listProjects()).toHaveLength(1);
-	expect(gitOut(repo, "rev-parse", "HEAD")).toBe(originalHead);
+	expect(second.hasGit).toBeUndefined();
+});
+
+test("openProject refuses a path that doesn't exist or isn't a folder", () => {
+	expect(() => openProject(join(dataDir, "nope"))).toThrow("No such folder");
+	const file = join(dataDir, "a-file.txt");
+	writeFileSync(file, "not a dir\n");
+	expect(() => openProject(file)).toThrow("Not a folder");
 });
 
 test("legacy project records default to open in both projections", () => {
@@ -280,7 +249,7 @@ test("closeProject rejects an unknown id instead of reporting a success with no 
 test("setProjectTrust: persists a revocable, fail-closed trust decision", () => {
 	const repo = join(dataDir, "repo");
 	makeRepo(repo);
-	const project = initProject(repo);
+	const project = openProject(repo);
 
 	expect(project.trusted).toBeUndefined();
 	expect(isProjectTrusted(project.id)).toBe(false);

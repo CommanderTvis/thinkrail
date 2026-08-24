@@ -136,7 +136,6 @@ export const WS_METHODS = {
 	projectList: "project.list",
 	projectClose: "project.close",
 	projectInspect: "project.inspect",
-	projectInit: "project.init",
 	projectHasSpecs: "project.hasSpecs",
 	projectSetTrust: "project.setTrust",
 	projectAcknowledgeSkills: "project.acknowledgeSkills",
@@ -350,7 +349,6 @@ export interface WsMethodMap {
 	"project.list": { params: Record<string, never>; result: Project[] };
 	"project.close": { params: { id: string }; result: Ack };
 	"project.inspect": { params: { path: string }; result: ProjectPathStatus };
-	"project.init": { params: { path: string }; result: Project };
 	"project.hasSpecs": { params: { projectId: string }; result: { hasSpecs: boolean } };
 	"project.setTrust": { params: { id: string; trusted: boolean }; result: Project };
 	"project.acknowledgeSkills": { params: { id: string; names: string[] }; result: Project };

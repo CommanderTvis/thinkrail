@@ -106,6 +106,9 @@ place as `kind: "external"` — outside the data dir, never created or mutated h
   Diff stats default **on** for compatibility, while `includeDiffStats: false` skips the per-workspace
   fan-out for cold navigation — an automatic reload on a shared host must not diff every worktree),
   `listWorkspaceRecords`
+  A row whose diff could not be read carries **`vcs`** (`"none"` / `"unborn"`) saying whether git is absent
+  or merely has no commits yet; it is computed only on that failure path, so an ordinary workspace pays
+  nothing for it, and it is never persisted — a first commit clears it on the next read.
   (raw registry records without Default ensure, folder-truth reconciliation, or per-workspace git diffStats —
   for internal read-only paths like history scope mapping that must not block on git spawns),
   `workspaceDiffStats`, **`setWorkspaceSubagentsOverride(id, override)`** — persist `"on"` / `"off"`,
@@ -159,7 +162,11 @@ place as `kind: "external"` — outside the data dir, never created or mutated h
   folder's current HEAD (`symbolic-ref --short`, unborn-safe; detached → literal `HEAD`), `baseBranch`
   = the repo's default branch via `git`'s `resolveDefaultBranch` (unborn-safe — its last fallback is
   `currentBranch`, so the literal `"HEAD"` never persists) — so Default's Changes measure like
-  any workspace, degenerating to uncommitted work when the folder sits on the default branch itself.
+  any workspace, degenerating to uncommitted work when the folder sits on the default branch itself. The
+  same unborn-safe fallback is what makes a **plain, non-git project's** Default workspace come up as
+  `{branch: "HEAD", baseBranch: "HEAD"}` instead of throwing: `currentBranch`'s underlying `git rev-parse
+  --show-toplevel` simply fails for a folder with no `.git`, same as an unborn repo, and this path already
+  treated that as "not an error" — `projects/SPEC.md`'s `Project.hasGit` addition needed no change here.
   Drift is **not** only a list-time discovery: `refreshUserOwnedWorkspace(workspaceId)` is the same
   re-sync **without** the diff-stat listing (an external workspace re-syncs only its `branch`, and an
   unreadable checkout is never persisted as a fake detached `HEAD`; unknown id / a managed workspace /

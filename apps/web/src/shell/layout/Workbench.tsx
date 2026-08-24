@@ -42,7 +42,17 @@ import {
 	RiTerminalBoxLine as SquareTerminal,
 	RiCloseLine as X,
 } from "@remixicon/react";
-import { Fragment, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+	createContext,
+	Fragment,
+	type ReactNode,
+	useCallback,
+	useContext,
+	useEffect,
+	useMemo,
+	useRef,
+	useState,
+} from "react";
 import { CustomIcon } from "../../components/CustomIcon";
 import {
 	Command,
@@ -161,8 +171,22 @@ interface PreparedLayoutClose {
 	onAccepted: (currentDocument?: WorkspaceLayoutDocument) => void;
 }
 
+const NO_TOOLS: readonly LayoutToolId[] = [];
+
+/**
+ * Tools the shell says this workspace cannot offer. Read where a reveal menu is built rather than
+ * threaded through every group — see SPEC.md.
+ */
+const UnofferedToolsContext = createContext<readonly LayoutToolId[]>(NO_TOOLS);
+
+function revealable(tools: readonly LayoutToolId[], unoffered: readonly LayoutToolId[]) {
+	return unoffered.length === 0 ? tools : tools.filter((tool) => !unoffered.includes(tool));
+}
+
 export interface WorkbenchProps {
 	document: WorkspaceLayoutDocument;
+	/** Tools that stay out of the reveal menus while this workspace cannot serve them. */
+	unofferedTools?: readonly LayoutToolId[];
 	attention: LayoutAttention;
 	maxSideGroups: number;
 	maxBottomGroups: number;
@@ -1101,7 +1125,7 @@ function WorkbenchTab({
 		disabled: !acceptsAfter,
 	});
 	const groups = collectAllGroups(document);
-	const missingTools = unplacedTools(document);
+	const missingTools = revealable(unplacedTools(document), useContext(UnofferedToolsContext));
 	const splitReason = (direction: CenterSplitDirection): string | null => {
 		if (location.area !== "center") return "Only center tabs can split the center.";
 		if (tab.kind === "tool") return "Tools stay in a side region.";
@@ -2173,7 +2197,10 @@ function SideGroupMenu({
 	renderSideMenuActions: WorkbenchProps["renderSideMenuActions"];
 	onRevealTool: (tool: LayoutToolId) => void;
 }) {
-	const missing = unplacedToolsForSide(document, side);
+	const missing = revealable(
+		unplacedToolsForSide(document, side),
+		useContext(UnofferedToolsContext),
+	);
 	const actions = renderSideMenuActions(side, groupId);
 	if (missing.length === 0 && !actions) return null;
 	return (
@@ -2895,6 +2922,7 @@ function HiddenSideRail({
 
 export function Workbench({
 	document,
+	unofferedTools = NO_TOOLS,
 	attention,
 	maxSideGroups,
 	maxBottomGroups,
@@ -3694,82 +3722,84 @@ export function Workbench({
 	);
 
 	return (
-		<DndContext
-			sensors={sensors}
-			collisionDetection={workbenchCollisionDetection}
-			measuring={{ droppable: { strategy: MeasuringStrategy.Always } }}
-			onDragStart={handleDragStart}
-			onDragCancel={() => setDraggingTab(null)}
-			onDragEnd={handleDragEnd}
-		>
-			<div
-				ref={workbenchRef}
-				data-testid="workbench"
-				className="flex h-full min-h-0 min-w-0 overflow-hidden"
-				onPointerDownCapture={() => {
-					tabSelectionEpoch.current += 1;
-				}}
-				onKeyDownCapture={(event) => {
-					if (!event.ctrlKey || event.altKey || event.metaKey || event.key !== "F6") return;
-					event.preventDefault();
-					event.stopPropagation();
-					focusAdjacentGroup(event.shiftKey ? -1 : 1);
-				}}
+		<UnofferedToolsContext.Provider value={unofferedTools}>
+			<DndContext
+				sensors={sensors}
+				collisionDetection={workbenchCollisionDetection}
+				measuring={{ droppable: { strategy: MeasuringStrategy.Always } }}
+				onDragStart={handleDragStart}
+				onDragCancel={() => setDraggingTab(null)}
+				onDragEnd={handleDragEnd}
 			>
-				{!leftVisible ? (
-					<HiddenSideRail
-						side="left"
-						onShow={() => {
-							const result = showSide(document, "left", maxSideGroups, attention);
-							if (!isLayoutUnavailable(result)) apply(result);
-						}}
-						showEnabled={canShowSide(document, "left")}
-						dropEnabled={
-							!!draggingTab &&
-							canPlaceLayoutTab(draggingTab, "left") &&
-							canCreateSideGroup(
-								document,
-								"left",
-								draggingTab,
-								maxSideGroups,
-								document.left.groups.length,
-							)
-						}
-						targetIndex={document.left.groups.length}
-					/>
-				) : null}
-				{workbenchColumns}
-				{!rightVisible ? (
-					<HiddenSideRail
-						side="right"
-						onShow={() => {
-							const result = showSide(document, "right", maxSideGroups, attention);
-							if (!isLayoutUnavailable(result)) apply(result);
-						}}
-						showEnabled={canShowSide(document, "right")}
-						dropEnabled={
-							!!draggingTab &&
-							canPlaceLayoutTab(draggingTab, "right") &&
-							canCreateSideGroup(
-								document,
-								"right",
-								draggingTab,
-								maxSideGroups,
-								document.right.groups.length,
-							)
-						}
-						targetIndex={document.right.groups.length}
-					/>
-				) : null}
-			</div>
-			<DragOverlay dropAnimation={null}>
-				{draggingTab ? (
-					<div className="flex max-w-224 items-center gap-4 rounded-[var(--radius-sm)] border border-primary bg-container-elevated-bg px-8 py-4 tr-text-ui text-text-default shadow-lg">
-						{tabIcon(draggingTab, renderTabIcon)}
-						<span className="truncate">{layoutTabName(draggingTab)}</span>
-					</div>
-				) : null}
-			</DragOverlay>
-		</DndContext>
+				<div
+					ref={workbenchRef}
+					data-testid="workbench"
+					className="flex h-full min-h-0 min-w-0 overflow-hidden"
+					onPointerDownCapture={() => {
+						tabSelectionEpoch.current += 1;
+					}}
+					onKeyDownCapture={(event) => {
+						if (!event.ctrlKey || event.altKey || event.metaKey || event.key !== "F6") return;
+						event.preventDefault();
+						event.stopPropagation();
+						focusAdjacentGroup(event.shiftKey ? -1 : 1);
+					}}
+				>
+					{!leftVisible ? (
+						<HiddenSideRail
+							side="left"
+							onShow={() => {
+								const result = showSide(document, "left", maxSideGroups, attention);
+								if (!isLayoutUnavailable(result)) apply(result);
+							}}
+							showEnabled={canShowSide(document, "left")}
+							dropEnabled={
+								!!draggingTab &&
+								canPlaceLayoutTab(draggingTab, "left") &&
+								canCreateSideGroup(
+									document,
+									"left",
+									draggingTab,
+									maxSideGroups,
+									document.left.groups.length,
+								)
+							}
+							targetIndex={document.left.groups.length}
+						/>
+					) : null}
+					{workbenchColumns}
+					{!rightVisible ? (
+						<HiddenSideRail
+							side="right"
+							onShow={() => {
+								const result = showSide(document, "right", maxSideGroups, attention);
+								if (!isLayoutUnavailable(result)) apply(result);
+							}}
+							showEnabled={canShowSide(document, "right")}
+							dropEnabled={
+								!!draggingTab &&
+								canPlaceLayoutTab(draggingTab, "right") &&
+								canCreateSideGroup(
+									document,
+									"right",
+									draggingTab,
+									maxSideGroups,
+									document.right.groups.length,
+								)
+							}
+							targetIndex={document.right.groups.length}
+						/>
+					) : null}
+				</div>
+				<DragOverlay dropAnimation={null}>
+					{draggingTab ? (
+						<div className="flex max-w-224 items-center gap-4 rounded-[var(--radius-sm)] border border-primary bg-container-elevated-bg px-8 py-4 tr-text-ui text-text-default shadow-lg">
+							{tabIcon(draggingTab, renderTabIcon)}
+							<span className="truncate">{layoutTabName(draggingTab)}</span>
+						</div>
+					) : null}
+				</DragOverlay>
+			</DndContext>
+		</UnofferedToolsContext.Provider>
 	);
 }

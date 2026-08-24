@@ -123,7 +123,6 @@ import { openPr, previewPr } from "../pr";
 import {
 	acknowledgeProjectSkills,
 	closeProject,
-	initProject,
 	inspectProjectPath,
 	listProjects,
 	openProject,
@@ -348,7 +347,6 @@ function requireClaudeCode(): void {
 const handlers: Record<string, Handler> = {
 	"project.open": (params) => openProject((params as { path: string }).path),
 	"project.inspect": (params) => inspectProjectPath((params as { path: string }).path),
-	"project.init": (params) => initProject((params as { path: string }).path),
 	"project.list": () => listProjects(),
 	"project.hasSpecs": (params) => {
 		const { projectId } = params as { projectId: string };

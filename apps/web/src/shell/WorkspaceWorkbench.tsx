@@ -88,6 +88,25 @@ const PlanPane = lazy(() => import("../panels/PlanPane"));
 const NO_EDITOR_TABS: EditorTab[] = [];
 const NO_CLAUDE_CODE_STATUS: Record<string, ClaudeCodeSessionState> = {};
 
+// Changes and Review are both windows onto git history; without a repository, or before the first
+// commit, neither has anything to answer with — see SPEC.md.
+const GIT_TOOLS: readonly LayoutToolId[] = ["changes", "review"];
+const NO_UNOFFERED_TOOLS: readonly LayoutToolId[] = [];
+
+function gitlessNotice(vcs: "none" | "unborn"): ReactNode {
+	return (
+		<div
+			data-testid="tool-needs-git"
+			data-vcs={vcs}
+			className="flex h-full items-center justify-center px-16 text-center tr-text-ui text-text-muted"
+		>
+			{vcs === "none"
+				? "This project folder is not a git repository, so there is nothing to compare."
+				: "This repository has no commits yet, so there is nothing to compare against."}
+		</div>
+	);
+}
+
 function MissingResource({ label }: { label: string }) {
 	return (
 		<LoadingRegion rows={12} label={`Restoring ${label}`} className="h-full overflow-hidden p-16" />
@@ -253,6 +272,9 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 		[layoutPreferences],
 	);
 	const workspace = useAppStore((state) => selectWorkspaceById(state, workspaceId));
+	const initialTerminalEligible = workspace?.initialTerminalEligible === true;
+	const vcsGap = workspace?.vcs;
+	const unofferedTools = vcsGap ? GIT_TOOLS : NO_UNOFFERED_TOOLS;
 	const contextProject = useAppStore(selectContextProject);
 	const editorTabs = useAppStore((state) => state.tabsByWorkspace[workspaceId] ?? NO_EDITOR_TABS);
 	const chatStarting = useAppStore((state) => (state.chatStartsByWorkspace[workspaceId] ?? 0) > 0);
@@ -555,10 +577,14 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 					);
 					break;
 				case "changes":
-					body = <ChangesPanel workspaceId={workspaceId} />;
+					body = vcsGap ? gitlessNotice(vcsGap) : <ChangesPanel workspaceId={workspaceId} />;
 					break;
 				case "review":
-					body = <ReviewPanel workspaceId={workspaceId} failed={review.failed} />;
+					body = vcsGap ? (
+						gitlessNotice(vcsGap)
+					) : (
+						<ReviewPanel workspaceId={workspaceId} failed={review.failed} />
+					);
 					break;
 				case "claude":
 					body = claudeCodeEnabled ? (
@@ -578,7 +604,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 				</ErrorBoundary>
 			);
 		},
-		[review.failed, specs.failed, specs.reload, workspaceId, claudeCodeEnabled],
+		[review.failed, specs.failed, specs.reload, workspaceId, claudeCodeEnabled, vcsGap],
 	);
 
 	const isDefault = workspace != null && isDefaultWorkspace(workspace);
@@ -631,6 +657,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 		<div data-testid="workspace-workbench" data-layout-status="settled" className="contents">
 			<Workbench
 				document={document}
+				unofferedTools={unofferedTools}
 				attention={attention}
 				maxSideGroups={layoutPreferences.maxSideGroups}
 				maxBottomGroups={layoutPreferences.maxBottomGroups}

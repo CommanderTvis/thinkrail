@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { rmSync, statSync } from "node:fs";
+import { statSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, isAbsolute, join, resolve } from "node:path";
 import type { Project, ProjectPathStatus } from "@thinkrail/contracts";
@@ -68,16 +68,36 @@ export function getProjects(): Project[] {
 	return projects;
 }
 
+function stampGit(project: Project, hasGit: boolean): void {
+	if (hasGit) delete project.hasGit;
+	else project.hasGit = false;
+}
+
+/**
+ * A worktree needs a real repo; a plain folder does not — ThinkRail opens either directly rather than
+ * offering to `git init` one, so `root` is the git toplevel when there is one and the folder itself
+ * otherwise. See projects/SPEC.md.
+ */
 export function openProject(inputPath: string): Project {
 	const path = resolveProjectPath(inputPath);
-	const root = gitToplevel(path);
-	if (!root) throw new Error(`Not a git repository: ${path}`);
+	let stat: ReturnType<typeof statSync>;
+	try {
+		stat = statSync(path);
+	} catch {
+		throw new Error(`No such folder: ${path}`);
+	}
+	if (!stat.isDirectory()) throw new Error(`Not a folder: ${path}`);
+
+	const gitRoot = gitToplevel(path);
+	const hasGit = gitRoot !== null;
+	const root = gitRoot ?? canonicalPath(path);
 
 	const projects = getProjects();
 	const existing = projects.find((p) => p.path === root);
 	if (existing) {
 		delete existing.closed;
 		existing.lastOpened = Date.now();
+		stampGit(existing, hasGit);
 		saveProjects(projects);
 		emit(existing);
 		return existing;
@@ -95,6 +115,7 @@ export function openProject(inputPath: string): Project {
 		slug: uniqueSlug(slugify(basename(root)), taken),
 		lastOpened: Date.now(),
 	};
+	stampGit(project, hasGit);
 	projects.push(project);
 	saveProjects(projects);
 	emit(project);
@@ -174,44 +195,14 @@ export function isProjectTrusted(id: string): boolean {
 	return getProjects().find((p) => p.id === id)?.trusted === true;
 }
 
-function inspectResolvedProjectPath(path: string): ProjectPathStatus {
+/** Diagnoses why `openProject` failed — there is no longer a `git`-related outcome to report here. */
+export function inspectProjectPath(inputPath: string): ProjectPathStatus {
+	const path = resolveProjectPath(inputPath);
 	let stat: ReturnType<typeof statSync>;
 	try {
 		stat = statSync(path);
 	} catch {
 		return { kind: "missing" };
 	}
-	if (!stat.isDirectory()) return { kind: "notDirectory" };
-	return { kind: gitToplevel(path) ? "repo" : "initable" };
-}
-
-export function inspectProjectPath(inputPath: string): ProjectPathStatus {
-	return inspectResolvedProjectPath(resolveProjectPath(inputPath));
-}
-
-export function initProject(inputPath: string): Project {
-	const path = resolveProjectPath(inputPath);
-	const status = inspectResolvedProjectPath(path);
-	if (status.kind === "missing") throw new Error(`No such folder: ${path}`);
-	if (status.kind === "notDirectory") throw new Error(`Not a folder: ${path}`);
-	if (status.kind === "repo") return openProject(path);
-
-	const init = git(path, ["init", "-b", "main"]);
-	if (!init.ok) throw new Error(`git init failed: ${path}`);
-	try {
-		const added = git(path, ["add", "-A"]);
-		if (!added.ok) throw new Error(`git add failed: ${path}`);
-
-		const identity: string[] = [];
-		if (!git(path, ["config", "user.name"]).out) identity.push("-c", "user.name=ThinkRail");
-		if (!git(path, ["config", "user.email"]).out)
-			identity.push("-c", "user.email=thinkrail@localhost");
-		const commit = git(path, [...identity, "commit", "--allow-empty", "-m", "Initial commit"]);
-		if (!commit.ok) throw new Error(`git commit failed: ${path}`);
-	} catch (err) {
-		rmSync(join(path, ".git"), { recursive: true, force: true });
-		throw err;
-	}
-
-	return openProject(path);
+	return stat.isDirectory() ? { kind: "ok" } : { kind: "notDirectory" };
 }
