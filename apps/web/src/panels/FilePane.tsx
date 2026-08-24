@@ -1,5 +1,6 @@
-import { FileSymlink } from "lucide-react";
+import { FileSymlink, PanelLeft } from "lucide-react";
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { IconTooltip } from "@/components/ui/tooltip";
 import { abbreviateHomePath, isMarkdownPath, isPdfPath } from "@/lib/utils";
 import { LoadingRegion } from "../components/Skeleton";
 import type { ExternalFileTab, FileTab } from "../store";
@@ -12,6 +13,27 @@ import { ToggleSegment } from "./ToggleSegment";
 import { useLiveTabContent } from "./useLiveTabContent";
 import { useFileReview } from "./useReviewCommenting";
 
+function OutlineToggle({ active, onClick }: { active: boolean; onClick: () => void }) {
+	return (
+		<IconTooltip label={active ? "Hide outline" : "Show outline"}>
+			<button
+				type="button"
+				data-testid="md-toggle-outline"
+				aria-pressed={active}
+				aria-label={active ? "Hide outline" : "Show outline"}
+				onClick={onClick}
+				className={`flex size-6 items-center justify-center rounded-[var(--radius-sm)] outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary ${
+					active
+						? "bg-container-elevated-bg text-text-default"
+						: "text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
+				}`}
+			>
+				<PanelLeft className="size-3.5" />
+			</button>
+		</IconTooltip>
+	);
+}
+
 const MonacoEditor = lazy(() => import("./MonacoEditor"));
 const MarkdownPreview = lazy(() => import("./MarkdownPreview"));
 const PdfPreview = lazy(() => import("./PdfPreview"));
@@ -20,6 +42,7 @@ const loading = <LoadingRegion rows={12} className="h-full p-12" />;
 
 export function FilePane({ tab }: { tab: FileTab | ExternalFileTab }) {
 	const setFileTabView = useAppStore((s) => s.setFileTabView);
+	const setFileTabOutline = useAppStore((s) => s.setFileTabOutline);
 	const review = useFileReview(tab.workspaceId, tab.path, "inline");
 	const reviewComments = useAppStore((s) => s.reviewsByWorkspace[tab.workspaceId]?.comments);
 	const fileHasDraft = useMemo(
@@ -140,6 +163,12 @@ export function FilePane({ tab }: { tab: FileTab | ExternalFileTab }) {
 				aria-label="Markdown view mode"
 				className="flex h-32 shrink-0 items-center justify-end gap-4 border-border-default border-b bg-container-header-bg px-12"
 			>
+				{view === "rendered" ? (
+					<OutlineToggle
+						active={tab.outlineOpen ?? false}
+						onClick={() => setFileTabOutline(tab.id, !(tab.outlineOpen ?? false))}
+					/>
+				) : null}
 				<SendReviewButton workspaceId={tab.workspaceId} path={tab.path} />
 				<ToggleSegment
 					testid="md-toggle-preview"
@@ -163,6 +192,7 @@ export function FilePane({ tab }: { tab: FileTab | ExternalFileTab }) {
 								workspaceId={tab.workspaceId}
 								path={tab.path}
 								review={review}
+								outlineOpen={tab.outlineOpen ?? false}
 							/>
 						</div>
 					</Suspense>
