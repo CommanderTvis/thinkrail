@@ -4,6 +4,7 @@ import {
 	hasPlatformModifier,
 	isAbsolutePath,
 	isMarkdownPath,
+	isPdfPath,
 	layoutResourceIdentity,
 	normalizePath,
 	parseTupleKey,
@@ -38,6 +39,13 @@ test("isMarkdownPath matches .md/.markdown case-insensitively, nothing else", ()
 	expect(isMarkdownPath("notes.txt")).toBe(false);
 	expect(isMarkdownPath("mdfile")).toBe(false);
 	expect(isMarkdownPath("weird.md.ts")).toBe(false);
+});
+
+test("isPdfPath matches .pdf case-insensitively, nothing else", () => {
+	expect(isPdfPath("report.pdf")).toBe(true);
+	expect(isPdfPath("docs/spec.PDF")).toBe(true);
+	expect(isPdfPath("weird.pdf.ts")).toBe(false);
+	expect(isPdfPath("notes.txt")).toBe(false);
 });
 
 test("stripFrontmatter drops a leading YAML block, keeping the body", () => {

@@ -1,5 +1,8 @@
+import { renameSync, rmSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { expect, test } from "@playwright/test";
 import { createWorkspaceViaDialog, openFixtureProject } from "./fixtures/app";
+import { minimalPdf } from "./fixtures/repo";
 
 test("opens a file in a center Monaco tab, focuses on re-open, and closes", async ({ page }) => {
 	await openFixtureProject(page);
@@ -71,4 +74,74 @@ test("opens a non-markdown file straight to Monaco with no rendered-view toggle"
 	await expect(page.getByTestId("editor-pane")).toContainText("plain-text-fixture");
 	await expect(page.getByTestId("markdown-view-toggle")).toHaveCount(0);
 	await expect(page.getByTestId("markdown-preview")).toHaveCount(0);
+});
+
+test("a PDF renders through pdf.js, and zooming re-rasterizes it larger", async ({ page }) => {
+	await openFixtureProject(page);
+	await createWorkspaceViaDialog(page);
+	await page.getByTestId("tab-files").click();
+
+	const pdf = page.getByTestId("file-node").filter({ hasText: "sample.pdf" });
+	await expect(pdf).toBeVisible();
+	await pdf.dblclick();
+
+	await expect(page.getByTestId("editor-tab").filter({ hasText: "sample.pdf" })).toBeVisible();
+	// Proves the worker asset resolved and a page actually rasterized — neither is visible to typecheck.
+	const canvas = page.getByTestId("pdf-page").first();
+	await expect(canvas).toBeVisible();
+	const before = await canvas.evaluate((el) => (el as HTMLCanvasElement).width);
+	expect(before).toBeGreaterThan(0);
+
+	await expect(page.getByTestId("pdf-zoom-level")).toHaveText("100%");
+	await page.getByTestId("pdf-zoom-in").click();
+	await expect(page.getByTestId("pdf-zoom-level")).not.toHaveText("100%");
+	await expect
+		.poll(async () => canvas.evaluate((el) => (el as HTMLCanvasElement).width))
+		.toBeGreaterThan(before);
+
+	await page.getByTestId("pdf-zoom-reset").click();
+	await expect(page.getByTestId("pdf-zoom-level")).toHaveText("100%");
+
+	// The canvas is a picture of the page; the text a reader wants to copy is the layer over it.
+	const words = page.getByTestId("pdf-text-layer").first().locator("span");
+	await expect(words.filter({ hasText: "ThinkRail PDF" }).first()).toHaveCount(1);
+	const selected = await words.first().evaluate((span) => {
+		const range = document.createRange();
+		range.selectNodeContents(span);
+		const selection = window.getSelection();
+		selection?.removeAllRanges();
+		selection?.addRange(range);
+		return selection?.toString() ?? "";
+	});
+	expect(selected).toContain("ThinkRail PDF");
+
+	// A PDF is not text: the markdown chrome does not belong to it, and it owns its own toolbar instead.
+	await expect(page.getByTestId("markdown-view-toggle")).toHaveCount(0);
+	await expect(page.getByTestId("markdown-preview")).toHaveCount(0);
+	await expect(page.getByTestId("pdf-toolbar")).toBeVisible();
+});
+
+test("a rewritten PDF shows its new bytes without reopening the tab", async ({ page }) => {
+	await openFixtureProject(page);
+	const workspace = await createWorkspaceViaDialog(page);
+	await page.getByTestId("tab-files").click();
+	await page.getByTestId("file-node").filter({ hasText: "sample.pdf" }).dblclick();
+	const firstWord = page.getByTestId("pdf-text-layer").first().locator("span").first();
+	await expect(firstWord).toContainText("ThinkRail PDF");
+
+	const target = join(workspace.worktreePath, "sample.pdf");
+	writeFileSync(target, minimalPdf().replace("(ThinkRail PDF)", "(Recompiled now)"), "latin1");
+	await expect(firstWord).toContainText("Recompiled now", { timeout: 10_000 });
+
+	// The way a compiler does it: the file goes away and comes back under a rename.
+	const temp = `${target}.tmp`;
+	rmSync(target);
+	writeFileSync(temp, minimalPdf().replace("(ThinkRail PDF)", "(Second pass)"), "latin1");
+	renameSync(temp, target);
+	await expect(firstWord).toContainText("Second pass", { timeout: 10_000 });
+
+	// And the toolbar can ask again, for the bytes a watch never told us about.
+	writeFileSync(target, minimalPdf().replace("(ThinkRail PDF)", "(By hand)"), "latin1");
+	await page.getByTestId("pdf-reload").click();
+	await expect(firstWord).toContainText("By hand", { timeout: 10_000 });
 });

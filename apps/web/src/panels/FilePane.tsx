@@ -1,6 +1,6 @@
 import { FileSymlink } from "lucide-react";
-import { lazy, Suspense, useCallback, useMemo } from "react";
-import { abbreviateHomePath, isMarkdownPath } from "@/lib/utils";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { abbreviateHomePath, isMarkdownPath, isPdfPath } from "@/lib/utils";
 import { LoadingRegion } from "../components/Skeleton";
 import type { ExternalFileTab, FileTab } from "../store";
 import { useAppStore } from "../store";
@@ -14,6 +14,7 @@ import { useFileReview } from "./useReviewCommenting";
 
 const MonacoEditor = lazy(() => import("./MonacoEditor"));
 const MarkdownPreview = lazy(() => import("./MarkdownPreview"));
+const PdfPreview = lazy(() => import("./PdfPreview"));
 
 const loading = <LoadingRegion rows={12} className="h-full p-12" />;
 
@@ -27,6 +28,7 @@ export function FilePane({ tab }: { tab: FileTab | ExternalFileTab }) {
 	);
 
 	const external = tab.kind === "external-file";
+	const pdf = !external && isPdfPath(tab.path);
 	const clearFocus = useCallback(() => useAppStore.getState().clearFileFocus(tab.path), [tab.path]);
 
 	// Resolved against the text the editor holds, never sent as a line by the host — see panels/SPEC.md.
@@ -38,13 +40,26 @@ export function FilePane({ tab }: { tab: FileTab | ExternalFileTab }) {
 		[focusKeyPath, tab.content],
 	);
 
+	// A PDF is re-fetched by this counter, and only a change that names *this file* advances it: the
+	// workspace tick moves for every write anywhere, and a compile writes a dozen of them. See SPEC.md.
+	const [pdfRevision, setPdfRevision] = useState(0);
+	const fsChange = useAppStore((s) => s.fsChangesByWorkspace[tab.workspaceId]);
+	useEffect(() => {
+		if (!pdf || !fsChange) return;
+		if (!fsChange.truncated && !fsChange.paths.includes(tab.path)) return;
+		setPdfRevision((current) => current + 1);
+	}, [pdf, fsChange, tab.path]);
+
 	useLiveTabContent(tab, {
+		// A PDF is rendered from its own bytes over its own route, never from tab.content — see PdfPreview.tsx.
 		// An external tab's path is outside the worktree, so the worktree-scoped read cannot refresh it.
 		read: () =>
-			getTransport().request(external ? "claudeConfig.readFile" : "fs.readFile", {
-				workspaceId: tab.workspaceId,
-				path: tab.path,
-			}),
+			pdf
+				? Promise.resolve({ content: "" })
+				: getTransport().request(external ? "claudeConfig.readFile" : "fs.readFile", {
+						workspaceId: tab.workspaceId,
+						path: tab.path,
+					}),
 		applyFresh: ({ content }, tick) =>
 			useAppStore.getState().updateFileTabContent(tab.workspaceId, tab.id, content, tick),
 		keepCurrent: (tick) =>
@@ -88,6 +103,14 @@ export function FilePane({ tab }: { tab: FileTab | ExternalFileTab }) {
 				{externalBar}
 				<div className="min-h-0 flex-1">{editor}</div>
 			</div>
+		);
+	}
+
+	if (pdf) {
+		return (
+			<Suspense fallback={loading}>
+				<PdfPreview workspaceId={tab.workspaceId} path={tab.path} cacheBust={pdfRevision} />
+			</Suspense>
 		);
 	}
 
