@@ -317,6 +317,11 @@ provider is "connected" iff any `configured`) on mount and re-checks whenever th
 it disappears the moment the user connects one; a transport error degrades to *not* nagging (offline ≠ "no
 provider"). All provider **management** lives in Settings, not here (the always-on strip is gone).
 
+**The Start work dialog phrases its own refusals.** The Isolated option a plain folder cannot offer wore a
+native `title`, so the reason arrived on the OS's schedule, in the OS's styling, over a themed dialog. It is
+an `IconTooltip` like every other explanation in the app — the label is a `<label>` around an `sr-only`
+radio, so only the input is disabled and the tooltip still has a live trigger to hang on.
+
 **`NewProjectDialog`** is the create half of the project verbs, reached from the **`AddProjectMenu`** in
 every state (the rail's `+` and Welcome's own Open-project card both carry it) and additionally as a
 Welcome **card in the no-projects state**, where there is nothing else on screen to do. It is not a card
@@ -456,7 +461,13 @@ visually-hidden radio inputs, so assistive tech hears one mutually-exclusive cho
 visible: the two-mode model in one glance) chooses **where** the work runs, and the **one-line
 description directly below it** is the only mode-aware prose, stating just the difference: **Isolated
 workspace** → **“A separate git worktree on its own new branch.”**; **Project folder** → **“Your project
-folder itself. No isolation, work lands on the current branch.”** In folder mode the base-branch picker and the naming hint are hidden (nothing is created — submit **enters** the
+folder itself. No isolation, work lands on the current branch.”** A project opened as a **plain folder**
+(`Project.hasGit === false`) has nothing for `git worktree add` to attach to, so the Isolated option is
+**disabled** (`data-disabled`, titled with the reason), the dialog is folder mode whatever the segment
+state says (`isolated` is the target *and* the project's ability to isolate — switching the project
+picker to a plain folder flips it too), and the description reads **“Your project folder itself. It is
+not a git repository, so there is nothing to isolate.”**; the Welcome “Start building” card says the
+same in its subtitle instead of promising a worktree. Pinned by `e2e/gitless.spec.ts`. In folder mode the base-branch picker and the naming hint are hidden (nothing is created — submit **enters** the
 project's Default workspace via the shared **`enterDefaultWorkspace`** helper (`defaultWorkspace.ts`:
 `workspace.list` → fold into the store → activate the `kind === "default"` row, one atomic entry — the
 rail's auto-expand follows activation; error toast + `null` if an older host has none — the same helper

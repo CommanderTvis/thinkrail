@@ -898,3 +898,24 @@ test("includeDiffStats: false keeps membership/order/Default ensure while skippi
 		expect(full.find((w) => w.id === ws.id)?.diffStats).toEqual({ added: 2, removed: 0 });
 	}
 });
+
+test("a workspace git cannot answer for says why: no repository, or no commits yet", () => {
+	const plain = join(dataDir, "plain");
+	const unborn = join(dataDir, "unborn");
+	mkdirSync(plain);
+	mkdirSync(unborn);
+	git(unborn, "init", "-b", "main");
+	writeFileSync(
+		join(dataDir, "projects.json"),
+		JSON.stringify([
+			{ id: "p1", name: "repo", path: repo, slug: "repo", lastOpened: 1 },
+			{ id: "p2", name: "plain", path: plain, slug: "plain", lastOpened: 2, hasGit: false },
+			{ id: "p3", name: "unborn", path: unborn, slug: "unborn", lastOpened: 3 },
+		]),
+	);
+
+	expect(listWorkspaces("p2")[0]?.vcs).toBe("none");
+	expect(listWorkspaces("p3")[0]?.vcs).toBe("unborn");
+	// The ordinary case says nothing, and never pays for the extra look.
+	expect(listWorkspaces("p1")[0]).not.toHaveProperty("vcs");
+});

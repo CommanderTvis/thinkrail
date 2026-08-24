@@ -130,7 +130,11 @@ export function WelcomePanel() {
 							primary
 							icon={Rocket}
 							title="Start building"
-							subtitle="Cut an isolated worktree + branch, then pair with the agent to build it."
+							subtitle={
+								project.hasGit === false
+									? "Pair with the agent in the project folder — no git, so no worktree to cut."
+									: "Cut an isolated worktree + branch, then pair with the agent to build it."
+							}
 							onClick={() => setDialog({ projectId: project.id, prompt: "" })}
 							className="motion-safe:animate-reveal"
 						/>
@@ -157,7 +161,11 @@ export function WelcomePanel() {
 						<Card
 							icon={Rocket}
 							title="Start building"
-							subtitle="Cut an isolated worktree + branch and pair with the agent."
+							subtitle={
+								project.hasGit === false
+									? "Pair with the agent in the project folder — no git, so no worktree to cut."
+									: "Cut an isolated worktree + branch and pair with the agent."
+							}
 							onClick={() => setDialog({ projectId: project.id, prompt: "" })}
 							className="motion-safe:animate-reveal"
 						/>

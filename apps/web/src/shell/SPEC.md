@@ -127,6 +127,21 @@ what ThinkRail launched and to nothing a person types themselves, and it is visi
 rather than being an invisible difference between running Claude here and running it anywhere else. The
 setting turns it off for anyone who wants the CLI's own view back.
 
+## Panes that need git
+
+Changes and Review are windows onto git history, and a workspace can have none — a project folder that is
+not a repository, or a repository before its first commit. Both then answer nothing, and the pane used to
+say so as a red *Could not read the changes* error, which reads as a fault rather than as the ordinary
+state of a fresh folder.
+
+- **`Workspace.vcs`** (`"none"` / `"unborn"`, absent otherwise) is the host's answer, live rather than
+  stamped — a first commit clears it — and the shell reads it for the active workspace only.
+- **While it is set, neither tool is offered**: `unofferedTools` withholds them from every reveal menu, so
+  they cannot be opened. A tab a preset already placed stays and renders a one-line explanation naming
+  which of the two states it is in, the same shape the Claude pane uses when the integration is off.
+- The panels themselves are untouched: this is the shell declining to ask, not a new mode inside
+  `ChangesPanel` or `ReviewPanel`.
+
 ## Error resilience
 
 Every independently mounted workbench resource body—including documents, terminals, and singleton tools—has its own keyed region boundary, so one bad lazy panel cannot blank workbench chrome, sibling groups, or shell. Switching workspace or resource resets stuck region errors. Failed dynamic chunks offer a page reload rather than retrying the same stale module. `main.tsx` retains the last-resort boundary around `Shell`.
