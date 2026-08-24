@@ -23,6 +23,17 @@ export function seedFixtureRepo(): void {
 	writeFileSync(join(E2E_FIXTURE_REPO, "notes.txt"), "plain-text-fixture\n");
 	writeFileSync(join(E2E_FIXTURE_REPO, "sample.pdf"), minimalPdf(), "latin1");
 	writeFileSync(
+		join(E2E_FIXTURE_REPO, "WIDE.md"),
+		[
+			"# Wide document",
+			"",
+			`| ${Array.from({ length: 14 }, (_, i) => `column-heading-${i}`).join(" | ")} |`,
+			`| ${Array.from({ length: 14 }, () => "---").join(" | ")} |`,
+			`| ${Array.from({ length: 14 }, (_, i) => `a-fairly-long-cell-${i}`).join(" | ")} |`,
+			"",
+		].join("\n"),
+	);
+	writeFileSync(
 		join(E2E_FIXTURE_REPO, "ALERTS.md"),
 		[
 			"# Alert callouts",

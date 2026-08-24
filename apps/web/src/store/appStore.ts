@@ -101,6 +101,7 @@ export interface FileTab {
 	path: string;
 	content: string;
 	view?: "rendered" | "source";
+	outlineOpen?: boolean;
 	loadedTick?: number;
 }
 /** Same payload as a FileTab, but addressed by absolute path — see contracts' LayoutExternalFileTab. */
@@ -112,6 +113,7 @@ export interface ExternalFileTab {
 	path: string;
 	content: string;
 	view?: "rendered" | "source";
+	outlineOpen?: boolean;
 	loadedTick?: number;
 }
 export interface ChatTab {
@@ -893,6 +895,7 @@ interface AppState {
 	) => CenterNavigationStamp | null;
 	noteNavigation: (workspaceId: string) => void;
 	setFileTabView: (id: string, view: "rendered" | "source") => void;
+	setFileTabOutline: (id: string, open: boolean) => void;
 	setDiffTabView: (id: string, view: DiffTabView) => void;
 	setDiffTabRendered: (id: string, rendered: boolean) => void;
 	setDiffTabIgnoreWhitespace: (id: string, ignoreWhitespace: boolean) => void;
@@ -2168,6 +2171,21 @@ export const useAppStore = create<AppState>((set, get) => ({
 				tabsByWorkspace: {
 					...s.tabsByWorkspace,
 					[wsId]: tabs.map((t) => (t.id === id && t.kind === "file" ? { ...t, view } : t)),
+				},
+			};
+		}),
+	setFileTabOutline: (id, open) =>
+		set((s) => {
+			const wsId = s.activeWorkspaceId;
+			if (!wsId) return {};
+			const tabs = s.tabsByWorkspace[wsId] ?? [];
+			if (!tabs.some((t) => t.id === id && t.kind === "file")) return {};
+			return {
+				tabsByWorkspace: {
+					...s.tabsByWorkspace,
+					[wsId]: tabs.map((t) =>
+						t.id === id && t.kind === "file" ? { ...t, outlineOpen: open } : t,
+					),
 				},
 			};
 		}),

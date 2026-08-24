@@ -159,7 +159,8 @@ treatment.
   **List | Tree** toggle (`store.changesView`, app-wide) switching a flat list and a folder
   **`ChangesTree`**; clicking a file in either opens/focuses its **center Monaco diff tab**, and every file
   row carries the shared **`ChangeRowActions`** menu),
-  `FilePane` (+ its lazy `MonacoEditor` / `MarkdownPreview` / `PdfPreview`) + `DiffPane` (+ its lazy
+  `FilePane` (+ its lazy `MonacoEditor` / `MarkdownPreview` / `PdfPreview`, plus `Outline` +
+  `outlineTree.buildOutlineTree`) + `DiffPane` (+ its lazy
   `MonacoDiff`), plus lazy `TerminalInstance`. The Monaco plumbing both editors share —
   worker wiring, the local loader, the token-driven `thinkrail` theme + the `[data-theme]` re-theme
   observer — lives once in `monacoSetup.ts`; the slim header view-toggle segment (`Preview|Source`,
@@ -1536,6 +1537,36 @@ tab — `external-file` when the path escaped the worktree, which is most of Cla
   **external** link opens a new tab, and a **relative image** rewrites to the host **`/files/…`** route
   (built from `transport.httpBase()`). A cross-file link's `#fragment` is not yet followed (opens the
   file only).
+- **The Outline toggles inline, in the same header as Preview/Source — a fourth control, not a new
+  layout region.** `LayoutToolId` is a closed set (`shell/layout/SPEC.md`); an Obsidian-style heading
+  tree earns its own panel only if it needs to outlive the tab it belongs to, and this one doesn't. The
+  toggle (`md-toggle-outline`) is per-tab state (`FileTab.outlineOpen`, `store.setFileTabOutline`) so it
+  survives a tab switch without a store migration, and only shows for `view === "rendered"` without an
+  active review — a review's chunked, comment-spliced render (`mdProps` below) never runs the heading
+  collector, so there is nothing to show.
+- **The outline is read from the rendered DOM, not the markdown AST.** The obvious design — have
+  `remarkHeadingIds` report the walk that assigns each slug — was built first and is wrong here: the
+  review path renders the document in comment-spliced *segments*, each with its own plugin instance and
+  therefore its own dedupe counter, so an AST-derived id is not guaranteed to be the id that reached the
+  page. `useRenderedHeadings` queries `h1[id]…h6[id]` inside the document instead, which is true by
+  construction and works identically in both paths, with a `MutationObserver` to catch headings that
+  arrive late (shiki, mermaid). `outlineTree.buildOutlineTree` nests the flat, document-order result by
+  level — closing every open node at ≥ the incoming level — and is the only place a heading skip (h1
+  straight to h3) is resolved.
+- **The outline column makes the preview a flex row, so the body needs `min-w-0`.** A flex item defaults
+  to `min-width: auto` and therefore refuses to shrink below its content — the scroller grows past its
+  pane and an ancestor clips it, which looks like "horizontal scrolling is broken" (headings and prose cut
+  off at the right edge, nothing to drag). Prose is meant to *wrap*; only a wide table scrolls, inside its
+  own box. `e2e/editor.spec.ts` pins all three: the scroller fits its pane, the document does not overflow
+  sideways, and a wide table does.
+- **`useFileReview` returns a value, never `undefined`.** The first version of this feature gated both
+  the toggle and the outline on `!review` and so rendered *neither*, since `FilePane` always has a review
+  object. The outline now wraps both render paths, and the toggle is gated only on the rendered view.
+  `e2e/editor.spec.ts` covers the toggle and asserts an entry's `data-heading-id` matches a heading that
+  actually exists — the check that would have caught the original bug.
+- **Clicking an entry scrolls, it doesn't select.** `Outline` reuses the exact `getElementById(id)`
+  `scrollIntoView` used for in-doc `#` links (above) rather than a second navigation mechanism — one
+  scroll path for "jump to a heading," whether the click came from a link or the outline.
 - **Code surfaces re-theme from generic tokens, resiliently.** `MonacoEditor` defines the `thinkrail`
   theme from live surface + semantic syntax variables and chooses its normal/high-contrast base from
   manifest appearance/contrast metadata—never from a known id—then redefines it after the theme module's
