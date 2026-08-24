@@ -49,6 +49,10 @@ export function createSkillLoadRequests(deps: SkillLoadDependencies) {
 		async prewarmWorkspaceSkillLoad(workspaceId: string): Promise<void> {
 			await prepare(workspaceId, true);
 		},
+		/** A workspace something on screen is reading live: watched for real, not as a prewarm guess. */
+		async watchWorkspaceForLiveContent(workspaceId: string): Promise<void> {
+			await prepare(workspaceId, false);
+		},
 		async createSession(params: WsParams<"session.create">) {
 			const syncedTick = await prepare(params.workspaceId, false);
 			const result = await deps.createSession(params);
@@ -87,6 +91,7 @@ const skillLoadRequests = createSkillLoadRequests({
 });
 
 export const prewarmWorkspaceSkillLoad = skillLoadRequests.prewarmWorkspaceSkillLoad;
+export const watchWorkspaceForLiveContent = skillLoadRequests.watchWorkspaceForLiveContent;
 export const createSessionWithSkillBaseline = skillLoadRequests.createSession;
 export const getSessionMessagesWithSkillBaseline = skillLoadRequests.getSessionMessages;
 export const reloadSessionResourcesWithSkillBaseline = skillLoadRequests.reloadSessionResources;
