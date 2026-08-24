@@ -1,9 +1,12 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import type { Components } from "react-markdown";
 import { stripFrontmatter } from "@/lib/utils";
 import { Markdown, type MarkdownRehypePlugins } from "../chat/Markdown";
 import { reportIdeSelection } from "../transport";
 import { alertComponents, remarkGithubAlerts } from "./markdownAlerts";
 import { documentComponents, remarkHeadingIds } from "./markdownLinks";
+import { Outline } from "./Outline";
+import type { HeadingEntry } from "./outlineTree";
 import { type ComposerInsert, PreviewCommenting } from "./PreviewCommenting";
 import { ReviewThreadCard } from "./ReviewThreadCard";
 import {
@@ -145,6 +148,44 @@ function useReportedPreviewSelection(
 		document.addEventListener("selectionchange", onSelectionChange);
 		return () => document.removeEventListener("selectionchange", onSelectionChange);
 	}, [container, workspaceId, path]);
+
+/**
+ * Reads the outline out of the *rendered* document rather than the markdown AST. The review path renders
+ * the document in comment-spliced segments, each with its own `remarkHeadingIds` pass and therefore its
+ * own dedupe counter — so an AST-derived id is not guaranteed to be the id that actually reached the DOM.
+ * Querying the headings we rendered is both simpler and true by construction. See panels/SPEC.md.
+ */
+function useRenderedHeadings(
+	container: React.RefObject<HTMLElement | null>,
+	enabled: boolean,
+): HeadingEntry[] {
+	const [headings, setHeadings] = useState<HeadingEntry[]>([]);
+
+	useEffect(() => {
+		if (!enabled) return;
+		const root = container.current;
+		if (!root) return;
+		const collect = () => {
+			const found = [
+				...root.querySelectorAll<HTMLElement>("h1[id], h2[id], h3[id], h4[id], h5[id], h6[id]"),
+			].map((el) => ({
+				level: Number(el.tagName.slice(1)),
+				text: el.textContent ?? "",
+				id: el.id,
+			}));
+			setHeadings((prev) =>
+				prev.length === found.length && prev.every((h, i) => h.id === found[i]?.id) ? prev : found,
+			);
+		};
+		collect();
+		// Markdown renders asynchronously in places (shiki, mermaid), so a single read after mount can miss
+		// late headings; the observer settles it without polling.
+		const observer = new MutationObserver(collect);
+		observer.observe(root, { childList: true, subtree: true });
+		return () => observer.disconnect();
+	}, [container, enabled]);
+
+	return headings;
 }
 
 function OutlineColumn({ headings }: { headings: readonly HeadingEntry[] }) {
@@ -160,26 +201,60 @@ export default function MarkdownPreview({
 	workspaceId,
 	path,
 	review,
+	outlineOpen,
 }: {
 	content: string;
 	workspaceId: string;
 	path: string;
 	review?: EditorReview;
+	outlineOpen?: boolean;
 }) {
 	const components = useMemo(() => documentComponents({ workspaceId, path }), [path, workspaceId]);
-	if (!review) {
-		return (
-			<div
-				data-testid="markdown-preview"
-				className="h-full overflow-auto bg-container-workspace-bg"
-			>
-				<article className="mx-auto max-w-[78ch] px-24 py-16">
-					<MarkdownDocument content={content} workspaceId={workspaceId} path={path} />
-				</article>
-			</div>
-		);
-	}
+	const documentRef = useRef<HTMLDivElement>(null);
+	const showOutline = outlineOpen ?? false;
+	const headings = useRenderedHeadings(documentRef, showOutline);
 
+	const body = review ? (
+		<ReviewedDocument
+			content={content}
+			review={review}
+			components={components}
+			documentRef={documentRef}
+		/>
+	) : (
+		<div ref={documentRef} className="h-full overflow-auto bg-container-workspace-bg">
+			<article className="mx-auto max-w-[78ch] px-xl py-lg">
+				<MarkdownDocument content={content} workspaceId={workspaceId} path={path} />
+			</article>
+		</div>
+	);
+
+	// One wrapper for both paths: the outline is a property of the document, not of whether it is under
+	// review. `markdown-preview` stays on the scrolling body in the review path, which owns it.
+	return (
+		<div
+			{...(review ? {} : { "data-testid": "markdown-preview" })}
+			className="flex h-full min-h-0 bg-container-workspace-bg"
+		>
+			{showOutline ? <OutlineColumn headings={headings} /> : null}
+			{/* `min-w-0` is load-bearing: a flex item defaults to `min-width:auto` and so refuses to shrink
+			    below its content, which makes the scroller grow instead of scrolling a wide table sideways. */}
+			<div className="min-h-0 min-w-0 flex-1">{body}</div>
+		</div>
+	);
+}
+
+function ReviewedDocument({
+	content,
+	review,
+	components,
+	documentRef,
+}: {
+	content: string;
+	review: EditorReview;
+	components: Components;
+	documentRef: React.RefObject<HTMLDivElement | null>;
+}) {
 	const stripped = stripFrontmatter(content);
 	const rawOffset = frontmatterOffset(content, stripped);
 	const mdProps = (stampOffset: number) => ({
@@ -201,7 +276,7 @@ export default function MarkdownPreview({
 					: threadInserts;
 				const segments = splicedSegments(stripped, rawOffset, inserts);
 				return (
-					<article className="mx-auto max-w-[78ch] px-24 py-16">
+					<article ref={documentRef} className="mx-auto max-w-[78ch] px-24 py-16">
 						{segments.map((segment) => (
 							<div key={segment.key}>
 								{segment.text && <Markdown text={segment.text} {...mdProps(segment.stampOffset)} />}

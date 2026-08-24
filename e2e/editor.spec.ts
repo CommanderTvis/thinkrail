@@ -121,6 +121,68 @@ test("a PDF renders through pdf.js, and zooming re-rasterizes it larger", async 
 	await expect(page.getByTestId("pdf-toolbar")).toBeVisible();
 });
 
+test("the markdown outline lists the document's headings and scrolls to one", async ({ page }) => {
+	await openFixtureProject(page);
+	await createWorkspaceViaDialog(page);
+	await page.getByTestId("tab-files").click();
+	await page.getByTestId("file-node").filter({ hasText: "LARGE.md" }).dblclick();
+	await expect(page.getByTestId("markdown-preview")).toBeVisible();
+
+	// Off by default, and the toggle belongs to the rendered view only.
+	await expect(page.getByTestId("markdown-outline")).toHaveCount(0);
+	const toggle = page.getByTestId("md-toggle-outline");
+	await expect(toggle).toHaveAttribute("aria-pressed", "false");
+
+	await toggle.click();
+	await expect(page.getByTestId("markdown-outline")).toBeVisible();
+	const entries = page.getByTestId("markdown-outline-entry");
+	await expect(entries.first()).toBeVisible();
+
+	// The entry must link to a heading that actually rendered — the reason the outline is read from the
+	// DOM rather than the markdown AST.
+	const id = await entries.first().getAttribute("data-heading-id");
+	expect(id).toBeTruthy();
+	await expect(page.locator(`#${id}`)).toHaveCount(1);
+
+	await page.getByTestId("md-toggle-source").click();
+	await expect(page.getByTestId("md-toggle-outline")).toHaveCount(0);
+	await page.getByTestId("md-toggle-preview").click();
+	await expect(page.getByTestId("markdown-outline")).toBeVisible();
+});
+
+test("a wide markdown document stays inside its pane instead of being clipped", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	await createWorkspaceViaDialog(page);
+	await page.getByTestId("tab-files").click();
+	await page.getByTestId("file-node").filter({ hasText: "WIDE.md" }).dblclick();
+
+	const preview = page.getByTestId("markdown-preview");
+	await expect(preview).toBeVisible();
+
+	// The scroller must stay inside its pane. A flex item defaults to `min-width:auto` and grows past it
+	// instead, which is what clipped headings and prose off the right edge.
+	const pane = page.getByTestId("editor-pane").first();
+	const paneWidth = (await pane.boundingBox())?.width ?? 0;
+	expect(paneWidth).toBeGreaterThan(0);
+	expect((await preview.boundingBox())?.width ?? 0).toBeLessThanOrEqual(paneWidth + 1);
+
+	// Prose wraps rather than scrolling: the document itself must not overflow sideways.
+	const doc = await preview.evaluate((el) => ({
+		scrollWidth: el.scrollWidth,
+		clientWidth: el.clientWidth,
+	}));
+	expect(doc.scrollWidth).toBeLessThanOrEqual(doc.clientWidth + 1);
+
+	// A wide table is the exception — it scrolls inside its own box, so the page never has to.
+	const table = preview.locator("table").first();
+	await expect(table).toBeVisible();
+	await expect
+		.poll(() => table.evaluate((el) => el.scrollWidth - el.clientWidth))
+		.toBeGreaterThan(0);
+});
+
 test("a rewritten PDF shows its new bytes without reopening the tab", async ({ page }) => {
 	await openFixtureProject(page);
 	const workspace = await createWorkspaceViaDialog(page);
