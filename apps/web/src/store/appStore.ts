@@ -2177,8 +2177,6 @@ export const useAppStore = create<AppState>((set, get) => ({
 			const targetsLocation =
 				s.chatLocationRequest?.workspaceId === wsId &&
 				s.chatLocationRequest.sessionId === sessionId;
-			const targetsRoute =
-				s.routeChatTarget?.workspaceId === wsId && s.routeChatTarget.sessionId === sessionId;
 			const targetsHistory = s.historyOpenRequest?.sessionId === sessionId;
 			return {
 				...(syncLayout
@@ -2203,7 +2201,6 @@ export const useAppStore = create<AppState>((set, get) => ({
 					[wsId]: [entry, ...(s.closedChatsByWorkspace[wsId] ?? [])],
 				},
 				...(targetsLocation ? { chatLocationRequest: null } : {}),
-				...(targetsRoute ? { routeChatTarget: null } : {}),
 				...(targetsHistory ? { historyOpenRequest: null } : {}),
 			};
 		}),
