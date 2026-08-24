@@ -2,7 +2,6 @@ import type { Project } from "@thinkrail/contracts";
 import { type ReactNode, useState } from "react";
 import { useAppStore } from "../store";
 import { errorText, getTransport } from "../transport";
-import { ConfirmDialog } from "./ConfirmDialog";
 import { createLatestOperation } from "./latestOperation";
 import { NoticeDialog } from "./NoticeDialog";
 import { OpenProjectPathDialog } from "./OpenProjectPathDialog";
@@ -16,7 +15,6 @@ export function useOpenProject(onOpened: (project: Project) => void | Promise<vo
 	enterHostPath: () => void;
 	dialogs: ReactNode;
 } {
-	const [initTarget, setInitTarget] = useState<string | null>(null);
 	const [openError, setOpenError] = useState<string | null>(null);
 	const [pathEntry, setPathEntry] = useState<{ reason: string | null } | null>(null);
 
@@ -41,9 +39,7 @@ export function useOpenProject(onOpened: (project: Project) => void | Promise<vo
 				.request("project.inspect", { path: trimmed })
 				.catch(() => null);
 			if (!isCurrent()) return;
-			if (status?.kind === "initable") setInitTarget(trimmed);
-			else if (status?.kind === "missing")
-				setOpenError(`This folder no longer exists:\n${trimmed}`);
+			if (status?.kind === "missing") setOpenError(`This folder no longer exists:\n${trimmed}`);
 			else if (status?.kind === "notDirectory") setOpenError(`This isn't a folder:\n${trimmed}`);
 			else setOpenError(errorText(err, `Couldn't open ${trimmed}.`));
 		}
@@ -51,19 +47,6 @@ export function useOpenProject(onOpened: (project: Project) => void | Promise<vo
 
 	const openProject = (rawPath: string) =>
 		openProjectForIntent(rawPath, projectOpenIntents.begin());
-
-	const initProject = async (path: string) => {
-		const isCurrent = projectOpenIntents.begin();
-		try {
-			const project = await getTransport().request("project.init", { path });
-			if (!isCurrent()) return;
-			await adopt(project, isCurrent);
-			if (!isCurrent()) return;
-		} catch (err) {
-			if (!isCurrent()) return;
-			setOpenError(errorText(err, `Couldn't initialise a git repository in ${path}.`));
-		}
-	};
 
 	const enterHostPath = () => {
 		projectOpenIntents.begin();
@@ -90,25 +73,6 @@ export function useOpenProject(onOpened: (project: Project) => void | Promise<vo
 
 	const dialogs = (
 		<>
-			<ConfirmDialog
-				open={initTarget !== null}
-				onOpenChange={(o) => {
-					if (!o) setInitTarget(null);
-				}}
-				title="Initialize a git repository?"
-				description={
-					<>
-						<span className="tr-text-emphasis text-text-default">{initTarget}</span> isn't a git
-						repository. ThinkRail works on git worktrees, so it needs one. Initialize a repo here
-						and commit the folder's current contents?
-					</>
-				}
-				confirmLabel="Initialize & open"
-				confirmTestId="confirm-init-repo"
-				onConfirm={() => {
-					if (initTarget) void initProject(initTarget);
-				}}
-			/>
 			<OpenProjectPathDialog
 				open={pathEntry !== null}
 				reason={pathEntry?.reason ?? null}
