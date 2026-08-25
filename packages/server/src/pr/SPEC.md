@@ -37,8 +37,8 @@ the live `git symbolic-ref`), and an external (adopted) workspace can equally si
 this guard, Open PR would `git push origin <default-branch>` straight to the shared branch on an
 unprotected remote, publishing the commits before any PR could offer its review boundary. The client
 disables the Open PR affordances (header button, draft-PR menu item, the "ready to ship" banner) the
-same way for the same reason. **`refreshUserOwnedWorkspace(workspaceId)` resolves the LIVE branch for
-Default/external workspaces** (`workspaces`' same sync used by the fs-watcher tee) and persists it — a
+same way for the same reason. **`refreshWorkspaceBranch(workspaceId)` resolves the LIVE branch for
+every worktree** (`workspaces`' same sync used by the fs-watcher tee) and persists it — a
 no-op for created workspaces, whose branch only ThinkRail ever moves. Open PR validates once before its
 async dirty-file read (preserving the safe base-branch fast failure), then refreshes, reloads, and
 revalidates immediately after that await. Without both, a branch switched in a terminal while the Git
@@ -110,7 +110,7 @@ an update, a create, or an ambiguous create result.
 - **Owns:** the push + PR action, PR-body rendering from the wire plan, GitHub slug/compare-URL
   derivation.
 - **Public surface (barrel):** `openPr`, `previewPr`.
-- **Allowed deps:** `workspaces` (workspace record, `refreshUserOwnedWorkspace`), `git` (exec + status), `todos` (`listTodos` for
+- **Allowed deps:** `workspaces` (workspace record, `refreshWorkspaceBranch`), `git` (exec + status), `todos` (`listTodos` for
   the body), `branch-review` (provider detection, existing-PR lookup, the shared command runner,
   `forgetOpenBranchReview`),
   `github` (`ghSetupProblem` — the named compare-fallback reason); `contracts` types;

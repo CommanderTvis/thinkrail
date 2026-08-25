@@ -167,11 +167,16 @@ place as `kind: "external"` — outside the data dir, never created or mutated h
   `{branch: "HEAD", baseBranch: "HEAD"}` instead of throwing: `currentBranch`'s underlying `git rev-parse
   --show-toplevel` simply fails for a folder with no `.git`, same as an unborn repo, and this path already
   treated that as "not an error" — `projects/SPEC.md`'s `Project.hasGit` addition needed no change here.
-  Drift is **not** only a list-time discovery: `refreshUserOwnedWorkspace(workspaceId)` is the same
-  re-sync **without** the diff-stat listing (an external workspace re-syncs only its `branch`, and an
-  unreadable checkout is never persisted as a fake detached `HEAD`; unknown id / a managed workspace /
-  no drift → no save, no emit), which the host wires to `watch`'s **repo-metadata nudge** (host-mediated,
-  `watch` has no `workspaces` edge — see [[submodule-server-watch]]). So a `git switch` in the Default
+  Drift is **not** only a list-time discovery: `refreshWorkspaceBranch(workspaceId)` is the same
+  re-sync **without** the diff-stat listing, and it covers **every** workspace: Default re-syncs
+  `branch` + `baseBranch` from folder truth, while an external *or* app-created worktree re-syncs only
+  its `branch` — a worktree's base is the recorded intent its Changes measure against, and a
+  `git checkout` inside it must not silently redefine that. A managed worktree is only branch-*named* at
+  creation; nothing stops a terminal from checking out another branch there, and the rail said the
+  branch it was born on until the next reload. An unreadable checkout is never persisted as a fake
+  detached `HEAD`; unknown id / no drift → no save, no emit. The host wires this to `watch`'s
+  **repo-metadata nudge** (host-mediated,
+  `watch` has no `workspaces` edge — see [[submodule-server-watch]]). So a `git switch` in any
   workspace's terminal converges the rail, the top bar and the empty receipt live, instead of leaving
   them on the old branch until a manual project reload — including a switch that leaves the working tree
   byte-identical (`git switch -c`), which writes nothing outside `.git` (`gitStatus` reads its header branch live for
@@ -213,7 +218,7 @@ place as `kind: "external"` — outside the data dir, never created or mutated h
   self-publishes), so registry membership stays shared domain state across every client (architecture #9).
 - **Public surface (barrel):** `createWorkspace`, `listExistingWorktrees`, `openExistingWorktree`,
   `listWorkspaces`, `listWorkspaceRecords`, `forgetWorkspace`, `reclaimWorktree`, `removeWorkspace`,
-  `workspaceDiffStats`, `workspaceDiffKey`, `getWorkspace`, `renameWorkspace`, `refreshUserOwnedWorkspace`,
+  `workspaceDiffStats`, `workspaceDiffKey`, `getWorkspace`, `renameWorkspace`, `refreshWorkspaceBranch`,
   `completeInitialTerminalReservation`, `ensureWorkspaceScratchDir`, `setWorkspacePublisher`,
   `WorkspaceLifecycleEvent`, `setWorkspaceDiffBase`, `setWorkspaceSkillOverride`,
   `setWorkspaceSubagentsOverride`.

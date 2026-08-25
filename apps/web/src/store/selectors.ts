@@ -202,6 +202,12 @@ export function isExternalWorkspace(workspace: Pick<Workspace, "kind">): boolean
 	return workspace.kind === "external";
 }
 
+export function workspaceBranchLabel(workspace: Pick<Workspace, "kind" | "branch">): string {
+	return workspace.branch === "HEAD" && !isDefaultWorkspace(workspace)
+		? "detached HEAD"
+		: workspace.branch;
+}
+
 export function isUserOwnedWorkspace(workspace: Pick<Workspace, "kind">): boolean {
 	return isDefaultWorkspace(workspace) || isExternalWorkspace(workspace);
 }

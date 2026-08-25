@@ -53,6 +53,7 @@ import {
 	selectActiveWorkspaceProjectId,
 	toast,
 	useAppStore,
+	workspaceBranchLabel,
 } from "../store";
 import { errorText, getTransport, prewarmWorkspaceSkillLoad } from "../transport";
 import { AddProjectMenu } from "./AddProjectMenu";
@@ -555,7 +556,6 @@ function WorkspaceRow({
 			: isExternal
 				? FolderOpen
 				: GitBranch;
-	const isTwoLine = workspace.branch !== workspace.name;
 	const [menuOpen, setMenuOpen] = useState(false);
 	const openMenuFromContext = (event: MouseEvent) => {
 		event.preventDefault();
@@ -620,20 +620,18 @@ function WorkspaceRow({
 		}
 	};
 
-	const identityClass = `flex min-w-0 flex-1 gap-4 text-left ${isTwoLine ? "items-start" : "items-center"}`;
+	const identityClass = "flex min-w-0 flex-1 items-start gap-4 text-left";
 	const identityIcon = (
-		<Icon
-			className={`${isTwoLine ? "mt-2 " : ""}size-14 shrink-0 ${isActive ? "text-primary" : "text-text-muted"}`}
-		/>
+		<Icon className={`mt-2 size-14 shrink-0 ${isActive ? "text-primary" : "text-text-muted"}`} />
 	);
-	const branchLabel = isTwoLine ? (
+	const branchLabel = (
 		<span
 			data-testid="workspace-branch"
 			className="truncate text-text-subtle tr-text-metadata leading-tight"
 		>
-			{workspace.branch}
+			{workspaceBranchLabel(workspace)}
 		</span>
-	) : null;
+	);
 
 	return (
 		<li>

@@ -9,7 +9,7 @@ import {
 import { assertSafeRef, git, gitAsync, gitStatus } from "../git";
 import { ghSetupProblem } from "../github";
 import { listTodos } from "../todos";
-import { getWorkspace, refreshUserOwnedWorkspace } from "../workspaces";
+import { getWorkspace, refreshWorkspaceBranch } from "../workspaces";
 import { renderPrBody } from "./prBody";
 
 const COMPARE_BODY_LIMIT = 4_000;
@@ -189,7 +189,7 @@ export async function ghPrFlow(
 }
 
 function prWorkspace(workspaceId: string) {
-	refreshUserOwnedWorkspace(workspaceId);
+	refreshWorkspaceBranch(workspaceId);
 	const ws = getWorkspace(workspaceId);
 	assertSafeRef(ws.branch);
 	if (ws.branch === baseRef(ws.baseBranch)) {

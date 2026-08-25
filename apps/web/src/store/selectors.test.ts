@@ -25,6 +25,7 @@ import {
 	selectLayoutTabPlacement,
 	selectSkillsStale,
 	specPathMatcher,
+	workspaceBranchLabel,
 } from "./selectors";
 
 const projects: Project[] = [
@@ -57,6 +58,13 @@ test("workspace kind predicates distinguish managed and user-owned checkouts", (
 	expect(isUserOwnedWorkspace(managed)).toBe(false);
 	expect(isUserOwnedWorkspace(defaultWorkspace)).toBe(true);
 	expect(isUserOwnedWorkspace(external)).toBe(true);
+});
+
+test("the branch caption names a detached worktree, and leaves a git-less folder alone", () => {
+	expect(workspaceBranchLabel({ branch: "main" })).toBe("main");
+	expect(workspaceBranchLabel({ kind: "external", branch: "HEAD" })).toBe("detached HEAD");
+	expect(workspaceBranchLabel({ branch: "HEAD" })).toBe("detached HEAD");
+	expect(workspaceBranchLabel({ kind: "default", branch: "HEAD" })).toBe("HEAD");
 });
 
 test("layout placement lookup traverses recursive center and every auxiliary region", () => {

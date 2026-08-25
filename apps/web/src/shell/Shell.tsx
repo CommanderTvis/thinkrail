@@ -20,6 +20,7 @@ import {
 	selectActiveWorkspace,
 	selectContextProject,
 	useAppStore,
+	workspaceBranchLabel,
 } from "../store";
 import {
 	applyThemePreference,
@@ -135,7 +136,7 @@ export function Shell() {
 								<>
 									<GitBranch className="size-14 shrink-0 text-text-muted" />
 									<span data-testid="scope-branch" className="truncate text-text-muted">
-										{activeWorkspace.branch}
+										{workspaceBranchLabel(activeWorkspace)}
 									</span>
 									{isUserOwnedWorkspace(activeWorkspace) ? null : (
 										<span

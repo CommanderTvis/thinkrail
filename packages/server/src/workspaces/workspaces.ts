@@ -352,21 +352,21 @@ export function completeInitialTerminalReservation(workspaceId: string): Workspa
 	return workspace;
 }
 
-export function refreshUserOwnedWorkspace(workspaceId: string): void {
+export function refreshWorkspaceBranch(workspaceId: string): void {
 	const peek = loadWorkspaces().find((workspace) => workspace.id === workspaceId);
-	if (peek?.kind !== "default" && peek?.kind !== "external") return;
+	if (!peek) return;
 	const truth =
 		peek.kind === "default"
 			? { kind: "default" as const, ...folderTruth(peek.worktreePath) }
 			: (() => {
 					const branch = tryCurrentBranch(peek.worktreePath);
-					return branch === null ? null : { kind: "external" as const, branch };
+					return branch === null ? null : { kind: peek.kind, branch };
 				})();
 	if (!truth) return;
 
 	const all = loadWorkspaces();
 	const workspace = all.find((candidate) => candidate.id === workspaceId);
-	if (workspace?.kind !== truth.kind) return;
+	if (!workspace || workspace.kind !== truth.kind) return;
 	if (truth.kind === "default") {
 		if (!applyFolderTruth(workspace, truth)) return;
 	} else {
@@ -491,8 +491,8 @@ export async function listWorkspaces(
 	const project = getProjects().find((p) => p.id === projectId);
 	if (project) ensureDefaultWorkspace(project);
 	for (const workspace of loadWorkspaces()) {
-		if (workspace.projectId === projectId && workspace.kind === "external") {
-			refreshUserOwnedWorkspace(workspace.id);
+		if (workspace.projectId === projectId && workspace.kind !== "default") {
+			refreshWorkspaceBranch(workspace.id);
 		}
 	}
 	const rows = projectRows(projectId);

@@ -74,9 +74,13 @@ treatment.
   and opens a centered `ConfirmDialog`; confirming fires `workspace.remove` and lets every client react to the
   host's `workspace.removed` push via the store's `applyWorkspaceRemoved`; a rejected request (no event will
   come) surfaces an error toast, leaving the row in place. Each **workspace row** is **two-line**: the display
-  `name` on top with the git **branch on a second line beneath it** (muted, monospace), rendered only when
-  it differs from the name (so pristine/legacy `workspace-N` rows stay a single compact line) — the display
-  name is decoupled from the git branch (see [[submodule-server-workspaces]]). Workspace rows deliberately
+  `name` on top with the git **branch on a second line beneath it** (muted, monospace), always rendered —
+  the display name is decoupled from the git branch (see [[submodule-server-workspaces]]), so which branch
+  a worktree is on is answerable from the rail alone rather than only when the two happen to disagree. A
+  worktree checked out off a branch carries the literal `HEAD` as its branch and reads **"detached HEAD"**
+  (`workspaceBranchLabel`, shared with the top bar's `scope-branch`); a *folder* project with no git at
+  all reports the same literal, and its Default row prints it verbatim, because there it means "this
+  folder has no branches", not "detached". Workspace rows deliberately
   show **no `+N −M` change badge**: the Projects view is for navigation and identity; change detail stays in
   the dedicated Changes views. The **Default workspace**
   (`kind === "default"` — the project folder itself) renders **pinned first** (the server pins it in
