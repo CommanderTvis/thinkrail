@@ -166,7 +166,7 @@ export interface LayoutTabFocusRequest {
 	tabId?: string;
 }
 
-interface PreparedLayoutClose {
+export interface PreparedLayoutClose {
 	document: WorkspaceLayoutDocument;
 	onAccepted: (currentDocument?: WorkspaceLayoutDocument) => void;
 }

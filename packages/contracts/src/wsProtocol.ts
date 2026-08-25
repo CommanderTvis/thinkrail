@@ -19,6 +19,7 @@ import type {
 	EditorInfo,
 	ExistingWorktreeCandidate,
 	FileNode,
+	FileWriteResult,
 	GitCommit,
 	GitDiffScope,
 	GithubAuthStatus,
@@ -193,6 +194,7 @@ export const WS_METHODS = {
 	prOpen: "pr.open",
 	fsReadDir: "fs.readDir",
 	fsReadFile: "fs.readFile",
+	fsWriteFile: "fs.writeFile",
 	specGraph: "spec.graph",
 	claudeConfigGet: "claudeConfig.get",
 	claudeConfigAccount: "claudeConfig.account",
@@ -206,6 +208,7 @@ export const WS_METHODS = {
 	claudeConfigMarketplaceRun: "claudeConfig.marketplaceRun",
 	claudeConfigMcpList: "claudeConfig.mcpList",
 	claudeConfigReadFile: "claudeConfig.readFile",
+	claudeConfigWriteFile: "claudeConfig.writeFile",
 	claudeConfigPlanEdit: "claudeConfig.planEdit",
 	claudeConfigApplyEdit: "claudeConfig.applyEdit",
 	ideBridgeSelectionChanged: "ideBridge.selectionChanged",
@@ -452,7 +455,14 @@ export interface WsMethodMap {
 		result: OpenPrResult;
 	};
 	"fs.readDir": { params: { workspaceId: string; path: string }; result: FileNode[] };
-	"fs.readFile": { params: { workspaceId: string; path: string }; result: { content: string } };
+	"fs.readFile": {
+		params: { workspaceId: string; path: string };
+		result: { content: string; hash: string };
+	};
+	"fs.writeFile": {
+		params: { workspaceId: string; path: string; content: string; baseHash: string };
+		result: FileWriteResult;
+	};
 	"fs.revealPath": { params: { workspaceId: string; path: string }; result: Ack };
 	"spec.graph": { params: { workspaceId: string }; result: SpecGraphSnapshot };
 	"claudeConfig.get": { params: { workspaceId: string }; result: ClaudeConfigSnapshot };
@@ -503,7 +513,11 @@ export interface WsMethodMap {
 	};
 	"claudeConfig.readFile": {
 		params: { workspaceId: string; path: string };
-		result: { content: string };
+		result: { content: string; hash: string };
+	};
+	"claudeConfig.writeFile": {
+		params: { workspaceId: string; path: string; content: string; baseHash: string };
+		result: FileWriteResult;
 	};
 	"claudeConfig.pluginStatus": {
 		params: Record<string, never>;
