@@ -8,6 +8,7 @@ import type {
 	ClaudeConfigScope,
 	ClaudeConfigSnapshot,
 	ClaudeContextLayer,
+	FileWriteResult,
 } from "@thinkrail/contracts";
 import { readFileAt, writeFileAt } from "../fs";
 import { isObject, stringList } from "./json";
@@ -458,11 +459,7 @@ function detectProblems(
  * paths the resolver itself just reported, which is what keeps an arbitrary absolute path from being
  * readable through this method. See SPEC.md.
  */
-export function readClaudeConfigFile(
-	workspaceId: string,
-	root: string,
-	path: string,
-): { content: string } {
+export function claudeConfigFilePath(workspaceId: string, root: string, path: string): string {
 	const snapshot = resolveClaudeConfig(workspaceId, root);
 	const allowed = new Set<string>(snapshot.inspected.map((entry) => entry.path));
 	for (const layer of snapshot.context) allowed.add(layer.path);
@@ -477,7 +474,25 @@ export function readClaudeConfigFile(
 	}
 	if (!allowed.has(path))
 		throw new Error("Not a file this workspace's Claude configuration reports");
-	return { content: readFileSync(path, "utf8") };
+	return path;
+}
+
+export function readClaudeConfigFile(
+	workspaceId: string,
+	root: string,
+	path: string,
+): { content: string; hash: string } {
+	return readFileAt(claudeConfigFilePath(workspaceId, root, path));
+}
+
+export function writeClaudeConfigFile(
+	workspaceId: string,
+	root: string,
+	path: string,
+	content: string,
+	baseHash: string,
+): FileWriteResult {
+	return writeFileAt(claudeConfigFilePath(workspaceId, root, path), content, baseHash);
 }
 
 export function resolveClaudeConfig(workspaceId: string, root: string): ClaudeConfigSnapshot {

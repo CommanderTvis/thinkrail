@@ -6,10 +6,12 @@ import type {
 	IdeOpenDiffParams,
 	IdeOpenEditorInfo,
 	IdeOpenFileParams,
+	IdeSaveDocumentParams,
 } from "@thinkrail/contracts";
 import { projectRelativePath } from "../lib";
-import { selectWorkspaceById, useAppStore } from "../store";
+import { type EditorTab, selectWorkspaceById, useAppStore } from "../store";
 import { getTransport } from "../transport";
+import { isFileTabDirty, saveFileTab } from "./fileSave";
 import { openFileInTab } from "./openTabs";
 
 function relative(workspaceId: string, path: string): string {
@@ -19,11 +21,16 @@ function relative(workspaceId: string, path: string): string {
 	);
 }
 
-function openEditors(workspaceId: string): IdeOpenEditorInfo[] {
+function fileTabs(workspaceId: string): Array<EditorTab & { path: string }> {
 	const tabs = useAppStore.getState().tabsByWorkspace[workspaceId] ?? [];
-	return tabs
-		.filter((tab) => tab.kind === "file" || tab.kind === "external-file")
-		.map((tab) => ({ path: (tab as { path: string }).path, isDirty: false }));
+	return tabs.filter(
+		(tab): tab is EditorTab & { path: string } =>
+			tab.kind === "file" || tab.kind === "external-file",
+	);
+}
+
+function openEditors(workspaceId: string): IdeOpenEditorInfo[] {
+	return fileTabs(workspaceId).map((tab) => ({ path: tab.path, isDirty: isFileTabDirty(tab) }));
 }
 
 async function run(request: IdeActionRequest): Promise<unknown> {
@@ -52,13 +59,19 @@ async function run(request: IdeActionRequest): Promise<unknown> {
 		case "checkDocumentDirty": {
 			const p = params as IdeCheckDocumentDirtyParams;
 			const path = relative(workspaceId, p.path);
-			const open = openEditors(workspaceId).some((editor) => editor.path === path);
-			// Every editor here is read-only against the host's copy, so an open file is never dirty.
-			return { success: open, isDirty: false };
+			const tab = fileTabs(workspaceId).find((candidate) => candidate.path === path);
+			return { success: tab !== undefined, isDirty: tab !== undefined && isFileTabDirty(tab) };
 		}
-		case "saveDocument":
-			// Nothing to flush: edits go to disk through the agent, not this editor. See SPEC.md.
-			return { success: true, saved: false };
+		case "saveDocument": {
+			const p = params as IdeSaveDocumentParams;
+			const path = relative(workspaceId, p.path);
+			const tab = fileTabs(workspaceId).find((candidate) => candidate.path === path);
+			if (!tab) return { success: false, saved: false };
+			const wasDirty = isFileTabDirty(tab);
+			if (wasDirty) await saveFileTab(workspaceId, tab.id);
+			const after = fileTabs(workspaceId).find((candidate) => candidate.id === tab.id);
+			return { success: true, saved: wasDirty && after !== undefined && !isFileTabDirty(after) };
+		}
 		case "closeTab": {
 			const p = params as IdeCloseTabParams;
 			const tabs = useAppStore.getState().tabsByWorkspace[workspaceId] ?? [];

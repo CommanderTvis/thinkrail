@@ -26,9 +26,11 @@ import { IconTooltip } from "../components/ui/tooltip";
 import { cn, type LayoutAttention, layoutResourceIdentity } from "../lib";
 import { ChangesPanel } from "../panels/ChangesPanel";
 import { ClaudeConfigPanel } from "../panels/ClaudeConfigPanel";
+import { ConfirmDialog } from "../panels/ConfirmDialog";
 import { DiffPane } from "../panels/DiffPane";
 import { FilePane } from "../panels/FilePane";
 import { FileTree } from "../panels/FileTree";
+import { isFileTabDirty } from "../panels/fileSave";
 import { openFileInTab } from "../panels/openTabs";
 import { ProjectTree } from "../panels/ProjectTree";
 import { ReviewPanel, selectActiveReviewedPath } from "../panels/ReviewPanel";
@@ -71,6 +73,7 @@ import {
 	type LayoutTab,
 	type LayoutTabFocusRequest,
 	type LayoutToolId,
+	type PreparedLayoutClose,
 	VERTICAL_TABS_WIDTH,
 	Workbench,
 	type WorkspaceLayoutDocument,
@@ -645,6 +648,58 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 		[changeAttention, workspaceId],
 	);
 
+	const dirtyTabPaths = useAppStore((state) => {
+		const paths = (state.tabsByWorkspace[workspaceId] ?? [])
+			.filter(isFileTabDirty)
+			.map((tab) => (tab as { path: string }).path);
+		return paths.length > 0 ? paths.join("\u0000") : "";
+	});
+	const dirtyPaths = useMemo(
+		() => new Set(dirtyTabPaths ? dirtyTabPaths.split("\u0000") : []),
+		[dirtyTabPaths],
+	);
+	const [discardTarget, setDiscardTarget] = useState<{ name: string; close: () => void } | null>(
+		null,
+	);
+
+	const closeResourceTab = useCallback(
+		(tab: LayoutTab, prepare: (document?: WorkspaceLayoutDocument) => PreparedLayoutClose) => {
+			const prepared = prepare();
+			const closedIdentity = layoutResourceIdentity(tab);
+			void commitWorkspaceLayout(workspaceId, prepared.document, document)
+				.then(() => {
+					const state = useAppStore.getState();
+					const current = state.layoutDocumentsByWorkspace[workspaceId];
+					if (
+						current &&
+						collectAllGroups(current)
+							.flatMap((group) => group.tabs)
+							.some((candidate) => layoutResourceIdentity(candidate) === closedIdentity)
+					) {
+						return;
+					}
+					prepared.onAccepted(current);
+					if (tab.kind === "chat") {
+						state.closeChatToHistory(tab.sessionId, false, workspaceId, false);
+					} else if (
+						tab.kind === "file" ||
+						tab.kind === "external-file" ||
+						tab.kind === "diff" ||
+						tab.kind === "document"
+					) {
+						for (const cache of state.tabsByWorkspace[workspaceId] ?? []) {
+							const resource = toLayoutTab(cache);
+							if (resource && layoutResourceIdentity(resource) === closedIdentity) {
+								state.closeTab(cache.id, false, false, workspaceId);
+							}
+						}
+					}
+				})
+				.catch(() => {});
+		},
+		[workspaceId, document],
+	);
+
 	if (!document || !attention) {
 		return (
 			<div className="flex h-full items-center justify-center bg-container-content-bg tr-text-ui text-text-muted">
@@ -692,6 +747,16 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 					return null;
 				}}
 				renderTabAdornment={(tab) => {
+					if ((tab.kind === "file" || tab.kind === "external-file") && dirtyPaths.has(tab.path)) {
+						return (
+							<span
+								data-testid="file-unsaved-dot"
+								role="img"
+								aria-label="Unsaved changes"
+								className="size-1.5 shrink-0 rounded-full bg-feedback-warning"
+							/>
+						);
+					}
 					if (tab.kind === "tool" && tab.tool === "review" && reviewDraftCount > 0) {
 						return (
 							<span
@@ -859,6 +924,10 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 				onUserNavigation={() => useAppStore.getState().noteNavigation(workspaceId)}
 				readNavigationTick={() => selectWorkspaceNavTick(useAppStore.getState(), workspaceId)}
 				onRequestClose={(tab, prepare) => {
+					if ((tab.kind === "file" || tab.kind === "external-file") && dirtyPaths.has(tab.path)) {
+						setDiscardTarget({ name: tab.name, close: () => closeResourceTab(tab, prepare) });
+						return;
+					}
 					if (tab.kind === "terminal") {
 						const close = () => {
 							const state = useAppStore.getState();
@@ -875,38 +944,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 						else close();
 						return;
 					}
-					const prepared = prepare();
-					const closedIdentity = layoutResourceIdentity(tab);
-					void commitWorkspaceLayout(workspaceId, prepared.document, document)
-						.then(() => {
-							const state = useAppStore.getState();
-							const current = state.layoutDocumentsByWorkspace[workspaceId];
-							if (
-								current &&
-								collectAllGroups(current)
-									.flatMap((group) => group.tabs)
-									.some((candidate) => layoutResourceIdentity(candidate) === closedIdentity)
-							) {
-								return;
-							}
-							prepared.onAccepted(current);
-							if (tab.kind === "chat") {
-								state.closeChatToHistory(tab.sessionId, false, workspaceId, false);
-							} else if (
-								tab.kind === "file" ||
-								tab.kind === "external-file" ||
-								tab.kind === "diff" ||
-								tab.kind === "document"
-							) {
-								for (const cache of state.tabsByWorkspace[workspaceId] ?? []) {
-									const resource = toLayoutTab(cache);
-									if (resource && layoutResourceIdentity(resource) === closedIdentity) {
-										state.closeTab(cache.id, false, false, workspaceId);
-									}
-								}
-							}
-						})
-						.catch(() => {});
+					closeResourceTab(tab, prepare);
 				}}
 				onNewChat={startChat}
 				onNewTerminal={(groupId, area) =>
@@ -915,6 +953,21 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 				onGestureCanceled={() => toast.info("The layout changed. Your drag was canceled.")}
 			/>
 			{terminalClose.confirmation}
+			<ConfirmDialog
+				open={discardTarget !== null}
+				onOpenChange={(open) => {
+					if (!open) setDiscardTarget(null);
+				}}
+				title="Unsaved changes"
+				description={`“${discardTarget?.name ?? "This file"}” has edits that were never written to disk. Closing the tab throws them away.`}
+				confirmLabel="Discard and close"
+				confirmTestId="file-discard-confirm"
+				destructive
+				onConfirm={() => {
+					discardTarget?.close();
+					setDiscardTarget(null);
+				}}
+			/>
 		</div>
 	);
 }

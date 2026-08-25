@@ -170,17 +170,18 @@ export function openFileInTab(
 		intent,
 		() =>
 			binary
-				? Promise.resolve({ content: "" })
+				? Promise.resolve({ content: "", hash: "" })
 				: external
 					? getTransport().request("claudeConfig.readFile", { workspaceId, path })
 					: getTransport().request("fs.readFile", { workspaceId, path }),
-		({ content }, loadedTick) => ({
+		({ content, hash }, loadedTick) => ({
 			kind,
 			id,
 			workspaceId,
 			path,
 			name: baseName(path),
 			content,
+			hash,
 			loadedTick,
 		}),
 		requestedNavigation,
