@@ -88,7 +88,7 @@ import {
 	setWatchPublisher,
 	stopAllWatches,
 } from "../watch";
-import { getWorkspace, refreshUserOwnedWorkspace, setWorkspacePublisher } from "../workspaces";
+import { getWorkspace, refreshWorkspaceBranch, setWorkspacePublisher } from "../workspaces";
 import {
 	isPromptCommitted,
 	isSettledTurn,
@@ -521,7 +521,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	setFsNudgePublisher(publishFsChanged);
 
 	setRepoMetaPublisher((workspaceId) => {
-		refreshUserOwnedWorkspace(workspaceId);
+		refreshWorkspaceBranch(workspaceId);
 		publishFsChanged({ workspaceId, paths: [], truncated: false, skillChange: "none" });
 	});
 

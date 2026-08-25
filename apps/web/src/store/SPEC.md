@@ -557,7 +557,10 @@ branch's review — a commit sha means nothing in another worktree — and dropp
   identities from its supplied document + local attention, while host attachment remains exclusive per terminal),
   `selectActiveWorkspaceProjectId`, `selectHistoryTarget` + `HistoryTarget` (the shell's `Ctrl+R` routing
   target: the locally selected chat resource, or the workspace's newest chat otherwise),
-  `selectContextProject`, the layout placement selectors (recursive center plus left/right/bottom auxiliary
+  `selectContextProject`, `workspaceBranchLabel` (one branch caption for the rail row and the top bar:
+  a non-Default workspace carrying the literal `HEAD` is a detached checkout and reads "detached HEAD",
+  while a Default row prints the literal as-is because a git-less folder project reports it too),
+  the layout placement selectors (recursive center plus left/right/bottom auxiliary
   groups), `selectAttentionCenterTab` (the selected resource in local last center focus),
   `selectTerminalRunsClaude` (Claude Code is what runs in a terminal, by either witness — the host's
   process-table `agent` or a status the plugin already reported — because the poll is a tick behind the
