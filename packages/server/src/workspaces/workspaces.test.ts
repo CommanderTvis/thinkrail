@@ -22,7 +22,7 @@ import {
 	listWorkspaces,
 	openExistingWorktree,
 	reclaimWorktree,
-	refreshUserOwnedWorkspace,
+	refreshWorkspaceBranch,
 	removeWorkspace,
 	renameWorkspace,
 	setWorkspaceDiffBase,
@@ -314,7 +314,7 @@ test("external workspace branch metadata converges on refresh and list", async (
 	setWorkspacePublisher((event) => events.push(event));
 
 	git(external, "switch", "-c", "feature/live");
-	refreshUserOwnedWorkspace(workspace.id);
+	refreshWorkspaceBranch(workspace.id);
 	expect(events).toEqual([
 		{
 			kind: "updated",
@@ -332,7 +332,7 @@ test("external workspace branch metadata converges on refresh and list", async (
 
 	events.length = 0;
 	rmSync(external, { recursive: true, force: true });
-	refreshUserOwnedWorkspace(workspace.id);
+	refreshWorkspaceBranch(workspace.id);
 	expect(events).toHaveLength(0);
 	expect(
 		listWorkspaceRecords("p1").find((candidate) => candidate.id === workspace.id)?.branch,
@@ -722,7 +722,7 @@ test("the Default workspace's branch and base refresh from the folder on each li
 	expect((await listWorkspaces("p1"))[0]?.diffStats).toEqual({ added: 2, removed: 0 });
 });
 
-test("refreshUserOwnedWorkspace re-syncs and publishes Default drift off the list path", async () => {
+test("refreshWorkspaceBranch re-syncs and publishes Default drift off the list path", async () => {
 	await listWorkspaces("p1");
 	const def = listWorkspaceRecords("p1").find((w) => w.kind === "default");
 	if (!def) throw new Error("expected the ensured Default workspace");
@@ -731,19 +731,31 @@ test("refreshUserOwnedWorkspace re-syncs and publishes Default drift off the lis
 	const events: WorkspaceLifecycleEvent[] = [];
 	setWorkspacePublisher((e) => events.push(e));
 
-	refreshUserOwnedWorkspace(def.id);
+	refreshWorkspaceBranch(def.id);
 	expect(events).toHaveLength(0);
 
 	git(repo, "switch", "-c", "feature/live");
-	refreshUserOwnedWorkspace(def.id);
+	refreshWorkspaceBranch(def.id);
 	expect(events).toEqual([
 		{ kind: "updated", workspace: { ...def, branch: "feature/live", baseBranch: "feature/live" } },
 	]);
 	expect(listWorkspaceRecords("p1").find((w) => w.id === def.id)?.branch).toBe("feature/live");
 
-	refreshUserOwnedWorkspace(worktree.id);
-	refreshUserOwnedWorkspace("nope");
+	refreshWorkspaceBranch(worktree.id);
+	refreshWorkspaceBranch("nope");
 	expect(events).toHaveLength(1);
+
+	git(worktree.worktreePath, "switch", "-c", "live-iso");
+	refreshWorkspaceBranch(worktree.id);
+	expect(events).toHaveLength(2);
+	expect(events[1]).toMatchObject({
+		kind: "updated",
+		workspace: { id: worktree.id, branch: "live-iso" },
+	});
+	expect(listWorkspaceRecords("p1").find((w) => w.id === worktree.id)?.branch).toBe("live-iso");
+	expect(listWorkspaceRecords("p1").find((w) => w.id === worktree.id)?.baseBranch).toBe(
+		worktree.baseBranch,
+	);
 });
 
 test("the Default workspace is non-removable and non-renamable — loud server-side guards", async () => {
