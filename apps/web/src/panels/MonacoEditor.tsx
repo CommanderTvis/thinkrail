@@ -28,6 +28,9 @@ export default function MonacoEditor({
 	focusLine,
 	onFocusHandled,
 	workspaceId,
+	editable,
+	onChange,
+	onSave,
 }: {
 	path: string;
 	content: string;
@@ -35,6 +38,9 @@ export default function MonacoEditor({
 	focusLine?: number | undefined;
 	onFocusHandled?: (() => void) | undefined;
 	workspaceId?: string | undefined;
+	editable?: boolean | undefined;
+	onChange?: ((value: string) => void) | undefined;
+	onSave?: (() => void) | undefined;
 }) {
 	const stopThemeWatchRef = useRef<(() => void) | null>(null);
 	const menuIconsRef = useRef<{ dispose(): void } | null>(null);
@@ -53,6 +59,8 @@ export default function MonacoEditor({
 	const pathRef = useRef(path);
 	pathRef.current = path;
 	const selectionRef = useRef<{ dispose(): void } | null>(null);
+	const saveRef = useRef(onSave);
+	saveRef.current = onSave;
 
 	const syncThreads = useCallback((target: EditorReview) => {
 		if (!editorRef.current) return;
@@ -73,6 +81,13 @@ export default function MonacoEditor({
 			revealAt(codeEditor, focusLineRef.current);
 			focusHandledRef.current?.();
 		}
+		// Ctrl/Cmd+S is the editor's, never the window's — see panels/SPEC.md.
+		codeEditor.onKeyDown((event) => {
+			if (event.keyCode !== m.KeyCode.KeyS || !(event.ctrlKey || event.metaKey)) return;
+			event.preventDefault();
+			event.stopPropagation();
+			saveRef.current?.();
+		});
 		selectionRef.current = codeEditor.onDidChangeCursorSelection((event) => {
 			const ws = workspaceIdRef.current;
 			if (!ws) return;
@@ -150,7 +165,8 @@ export default function MonacoEditor({
 			beforeMount={beforeMount}
 			onMount={onMount}
 			loading={<LoadingRegion rows={12} className="h-full w-full p-12" />}
-			options={sharedEditorOptions()}
+			onChange={(value) => onChange?.(value ?? "")}
+			options={{ ...sharedEditorOptions(), readOnly: !editable }}
 		/>
 	);
 }

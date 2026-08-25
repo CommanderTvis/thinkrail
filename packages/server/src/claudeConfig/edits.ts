@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import type {
@@ -50,10 +49,6 @@ function readIfPresent(path: string): string {
 	} catch {
 		return "";
 	}
-}
-
-function hashOf(content: string): string {
-	return createHash("sha256").update(content).digest("hex").slice(0, 16);
 }
 
 function settingsPathFor(root: string, scope: ClaudeWritableScope): string {

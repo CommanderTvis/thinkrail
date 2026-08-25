@@ -99,7 +99,13 @@ export interface FileTab {
 	workspaceId: string;
 	name: string;
 	path: string;
+	/** What is on disk, as last read — the base a save compares against and a merge is cut from. */
 	content: string;
+	hash?: string;
+	/** The buffer, while it differs from `content`. Absent means nothing unsaved. */
+	draft?: string;
+	/** Disk content seen changing under an unsaved buffer; `content` stays the merge base. */
+	external?: { content: string; hash: string };
 	view?: "rendered" | "source";
 	outlineOpen?: boolean;
 	loadedTick?: number;
@@ -111,7 +117,13 @@ export interface ExternalFileTab {
 	workspaceId: string;
 	name: string;
 	path: string;
+	/** What is on disk, as last read — the base a save compares against and a merge is cut from. */
 	content: string;
+	hash?: string;
+	/** The buffer, while it differs from `content`. Absent means nothing unsaved. */
+	draft?: string;
+	/** Disk content seen changing under an unsaved buffer; `content` stays the merge base. */
+	external?: { content: string; hash: string };
 	view?: "rendered" | "source";
 	outlineOpen?: boolean;
 	loadedTick?: number;
@@ -905,7 +917,22 @@ interface AppState {
 	setDiffScope: (workspaceId: string, scope: GitDiffScope) => void;
 	noteFsChanged: (payload: WorkspaceFsChangedPayload) => void;
 	markSkillsSynced: (sessionId: string, syncedTick: number) => void;
-	updateFileTabContent: (workspaceId: string, id: string, content: string, tick: number) => void;
+	updateFileTabContent: (
+		workspaceId: string,
+		id: string,
+		content: string,
+		hash: string,
+		tick: number,
+	) => void;
+	setFileTabDraft: (workspaceId: string, id: string, draft: string) => void;
+	settleFileTabSave: (workspaceId: string, id: string, content: string, hash: string) => void;
+	applyFileTabMerge: (
+		workspaceId: string,
+		id: string,
+		merged: string,
+		disk: { content: string; hash: string },
+	) => void;
+	discardFileTabDraft: (workspaceId: string, id: string) => void;
 	updateDiffTabContent: (
 		workspaceId: string,
 		id: string,
@@ -1125,6 +1152,46 @@ function reconcileProjectNavigation(
 	const currentProjectId = selectActiveWorkspaceProjectId(state) ?? state.selectedProjectId;
 	if (!currentProjectId || projects.some((project) => project.id === currentProjectId)) return {};
 	return { selectedProjectId: projects[0]?.id ?? null, activeWorkspaceId: null };
+}
+
+type EditableFileTab = FileTab | ExternalFileTab;
+
+function isEditableFileTab(tab: EditorTab): tab is EditableFileTab {
+	return tab.kind === "file" || tab.kind === "external-file";
+}
+
+function withoutDraft(tab: EditableFileTab): EditableFileTab {
+	const next = { ...tab };
+	delete next.draft;
+	return next;
+}
+
+function withoutExternal(tab: EditableFileTab): EditableFileTab {
+	const next = { ...tab };
+	delete next.external;
+	return next;
+}
+
+function settled(tab: EditableFileTab): EditableFileTab {
+	return withoutExternal(withoutDraft(tab));
+}
+
+/** Every file-buffer write goes through one place, so no call site can forget the workspace guard. */
+function mapFileTab(
+	state: Pick<AppState, "removedWorkspaceIds" | "tabsByWorkspace">,
+	workspaceId: string,
+	id: string,
+	next: (tab: EditableFileTab) => EditableFileTab,
+): Partial<AppState> {
+	if (state.removedWorkspaceIds[workspaceId]) return {};
+	const tabs = state.tabsByWorkspace[workspaceId] ?? [];
+	if (!tabs.some((tab) => tab.id === id && isEditableFileTab(tab))) return {};
+	return {
+		tabsByWorkspace: {
+			...state.tabsByWorkspace,
+			[workspaceId]: tabs.map((tab) => (tab.id === id && isEditableFileTab(tab) ? next(tab) : tab)),
+		},
+	};
 }
 
 function omitKey<T>(record: Record<string, T>, key: string): Record<string, T> {
@@ -2229,20 +2296,41 @@ export const useAppStore = create<AppState>((set, get) => ({
 				skillsSyncedTickBySession: { ...s.skillsSyncedTickBySession, [sessionId]: synced },
 			};
 		}),
-	updateFileTabContent: (workspaceId, id, content, tick) =>
-		set((s) => {
-			if (s.removedWorkspaceIds[workspaceId]) return {};
-			const tabs = s.tabsByWorkspace[workspaceId] ?? [];
-			if (!tabs.some((tab) => tab.id === id && tab.kind === "file")) return {};
-			return {
-				tabsByWorkspace: {
-					...s.tabsByWorkspace,
-					[workspaceId]: tabs.map((tab) =>
-						tab.id === id && tab.kind === "file" ? { ...tab, content, loadedTick: tick } : tab,
-					),
-				},
-			};
-		}),
+	updateFileTabContent: (workspaceId, id, content, hash, tick) =>
+		set((s) =>
+			mapFileTab(s, workspaceId, id, (tab) => {
+				// A dirty buffer keeps its base for the merge — see store/SPEC.md.
+				if (tab.draft !== undefined && tab.draft !== tab.content) {
+					return content === tab.content
+						? { ...withoutExternal(tab), loadedTick: tick }
+						: { ...tab, external: { content, hash }, loadedTick: tick };
+				}
+				return { ...settled(tab), content, hash, loadedTick: tick };
+			}),
+		),
+	setFileTabDraft: (workspaceId, id, draft) =>
+		set((s) =>
+			mapFileTab(s, workspaceId, id, (tab) =>
+				draft === tab.content ? withoutDraft(tab) : { ...tab, draft },
+			),
+		),
+	settleFileTabSave: (workspaceId, id, content, hash) =>
+		set((s) => mapFileTab(s, workspaceId, id, (tab) => ({ ...settled(tab), content, hash }))),
+	applyFileTabMerge: (workspaceId, id, merged, disk) =>
+		set((s) =>
+			mapFileTab(s, workspaceId, id, (tab) =>
+				merged === disk.content
+					? { ...settled(tab), content: disk.content, hash: disk.hash }
+					: { ...withoutExternal(tab), content: disk.content, hash: disk.hash, draft: merged },
+			),
+		),
+	discardFileTabDraft: (workspaceId, id) =>
+		set((s) =>
+			mapFileTab(s, workspaceId, id, (tab) => {
+				const disk = tab.external;
+				return disk ? { ...settled(tab), content: disk.content, hash: disk.hash } : settled(tab);
+			}),
+		),
 	updateDiffTabContent: (workspaceId, id, original, modified, tick, loadedTarget) =>
 		set((s) => {
 			if (s.removedWorkspaceIds[workspaceId]) return {};

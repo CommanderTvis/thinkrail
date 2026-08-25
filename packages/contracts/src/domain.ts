@@ -85,6 +85,14 @@ export interface EditorInfo {
 
 export type WorkspaceSkillChange = "none" | "detected" | "unknown";
 
+/**
+ * The answer to one file write. A write is a compare-and-swap against the content the editor last read,
+ * so "not written" is an ordinary outcome carrying what is on disk now — the client merges from there.
+ */
+export type FileWriteResult =
+	| { written: true; hash: string }
+	| { written: false; disk: { content: string; hash: string } };
+
 export interface WorkspaceFsChangedPayload {
 	workspaceId: string;
 	paths: string[];

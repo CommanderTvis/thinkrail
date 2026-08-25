@@ -403,9 +403,16 @@ components. The **Skills-reload badge** rides the same tick without a separate s
   The selector
   **`selectSkillsStale(state, workspaceId, sessionId)`** = `skillChangeTick > syncedTick` — store-derived
   (survives `ChatView`'s tab-switch remount) and per-session (a sibling/newer chat that loaded the current
-  skills is not flagged; a reload clears only its own). Also **`updateFileTabContent(workspaceId, id, content,
+  skills is not flagged; a reload clears only its own). Also **`updateFileTabContent(workspaceId, id, content, hash,
   tick)`** — a `FileTab` carries the `tick` its content was loaded at, so `FilePane` detects staleness
-  (`workspaceTick > tab.loadedTick`) across tab switches, and its diff twin
+  (`workspaceTick > tab.loadedTick`) across tab switches. A file tab is a **buffer**, not just content:
+  `content`/`hash` are what disk last said, `draft` is the unsaved text while it differs, and `external`
+  is disk content seen changing *under* an unsaved buffer. That last distinction is the whole point —
+  refreshing a dirty tab must not move `content`, because the three-way merge that resolves it has to be
+  cut from the text the edits were made against; the newer content waits in `external` and the pane says
+  so. **`setFileTabDraft`**, **`settleFileTabSave`**, **`applyFileTabMerge`** and
+  **`discardFileTabDraft`** are the four transitions, each one atomic so no call site can leave a buffer
+  half-updated (a merge, for instance, always moves the base and the draft together). Its diff twin
   **`updateDiffTabContent(workspaceId, id, original, modified, tick, loadedTarget)`** — a `DiffTab` follows the same
   staleness contract in `DiffPane`, in **two** dimensions: the fs tick and the review target the two sides were
   read against, written together so neither can outlive the content it describes. The transient

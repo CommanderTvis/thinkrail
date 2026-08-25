@@ -45,7 +45,13 @@ Tiny UI helpers shared across components.
   host-read tab opens), and the
   **`LayoutAttention`** device-local overlay shared by store, shell, and the headless layout child, with
   own-property-safe `readLayoutSelection()` / `readLayoutNavigationClock()` accessors for untrusted
-  tuple-keyed maps. Also the shared
+  tuple-keyed maps. **`mergeText.ts`** is the three-way line merge a save falls back on: each side is
+  reduced to the base line ranges it replaced, ranges only one side touched are applied, ranges both
+  touched agree or become conflict markers — ranges that merely *touch* are not an overlap, so edits on
+  adjacent lines still merge. It lives in the client because the buffer being merged is client state: the
+  host hands back what is on disk and decides nothing. Line-based rather than character-based, which is
+  what makes the markers the same shape the user already knows from git. **`claudeLaunch.ts`** holds what
+  the Claude Code launcher runs: `claudeLaunchCommand()`
   appends a preset's flags to the configured command *line* (so the user's own flags keep their place),
   `shellQuotePath()` makes a picked executable one shell word, `CLAUDE_LAUNCH_MENU` is the grouped
   preset list — data, not markup, so the flags are pinned by unit test instead of read out of JSX — and
@@ -84,7 +90,7 @@ Tiny UI helpers shared across components.
   collapses in-root `.`/`..` aliases but preserves an attempted leading escape for host rejection; Windows
   drive-rooted containment compares path/root case-insensitively while preserving the candidate's casing),
   `shallowEqualArrays`, `userText`, `parseSkillInvocation`, `matchesSkillInvocationCommand`,
-  `claudeLaunchCommand`, `shellQuotePath`, `CLAUDE_LAUNCH_MENU`,
+  `claudeLaunchCommand`, `shellQuotePath`, `CLAUDE_LAUNCH_MENU`, `mergeText`, `hasConflictMarkers`,
   `relativeTime`, `platformShortcutLabel`, `hasPlatformModifier`, `copyText`, `randomId`,
   `DOUBLE_CLICK_SETTLE_MS`, `tupleKey`, `parseTupleKey`, `layoutResourceIdentity`,
   `readLayoutSelection`, `readLayoutNavigationClock`, the `LayoutAttention` type, `parseCliAgentSequence`,

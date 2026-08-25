@@ -1,6 +1,7 @@
-import { readdirSync, readFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { isAbsolute, join, relative, resolve } from "node:path";
-import type { FileNode } from "@thinkrail/contracts";
+import type { FileNode, FileWriteResult } from "@thinkrail/contracts";
 import { loadWorkspaces } from "../persistence";
 
 function resolveInWorktree(workspaceId: string, path: string): { root: string; abs: string } {
@@ -29,9 +30,42 @@ export function readDir(workspaceId: string, path: string): FileNode[] {
 		.sort((a, b) => (a.kind === b.kind ? a.name.localeCompare(b.name) : a.kind === "dir" ? -1 : 1));
 }
 
-export function readFile(workspaceId: string, path: string): { content: string } {
-	const { abs } = resolveInWorktree(workspaceId, path);
-	return { content: readFileSync(abs, "utf8") };
+export function contentHash(content: string): string {
+	return createHash("sha256").update(content, "utf8").digest("hex").slice(0, 16);
+}
+
+export function readFileAt(abs: string): { content: string; hash: string } {
+	const content = readFileSync(abs, "utf8");
+	return { content, hash: contentHash(content) };
+}
+
+export function readFile(workspaceId: string, path: string): { content: string; hash: string } {
+	return readFileAt(resolveInWorktree(workspaceId, path).abs);
+}
+
+/**
+ * Compare-and-swap: the write lands only if what is on disk is still what the editor last read. See
+ * SPEC.md for why the base is a content hash rather than an mtime.
+ */
+export function writeFileAt(abs: string, content: string, baseHash: string): FileWriteResult {
+	let disk: { content: string; hash: string };
+	try {
+		disk = readFileAt(abs);
+	} catch {
+		disk = { content: "", hash: contentHash("") };
+	}
+	if (disk.hash !== baseHash) return { written: false, disk };
+	writeFileSync(abs, content, "utf8");
+	return { written: true, hash: contentHash(content) };
+}
+
+export function writeFile(
+	workspaceId: string,
+	path: string,
+	content: string,
+	baseHash: string,
+): FileWriteResult {
+	return writeFileAt(resolveInWorktree(workspaceId, path).abs, content, baseHash);
 }
 
 export function resolveWorktreeFile(workspaceId: string, path: string): string {

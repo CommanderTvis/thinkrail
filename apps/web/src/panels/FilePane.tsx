@@ -6,6 +6,7 @@ import { LoadingRegion } from "../components/Skeleton";
 import type { ExternalFileTab, FileTab } from "../store";
 import { useAppStore } from "../store";
 import { getTransport } from "../transport";
+import { isFileTabDirty, mergeDiskIntoDraft, saveFileTab } from "./fileSave";
 import { jsonKeyLine } from "./jsonKeyLine";
 import { reviewFlagFor } from "./reviewModel";
 import { SendReviewButton } from "./SendReviewButton";
@@ -40,7 +41,7 @@ const PdfPreview = lazy(() => import("./PdfPreview"));
 
 const loading = <LoadingRegion rows={12} className="h-full p-12" />;
 
-export function FilePane({ tab }: { tab: FileTab | ExternalFileTab }) {
+function FilePaneBody({ tab }: { tab: FileTab | ExternalFileTab }) {
 	const setFileTabView = useAppStore((s) => s.setFileTabView);
 	const setFileTabOutline = useAppStore((s) => s.setFileTabOutline);
 	const review = useFileReview(tab.workspaceId, tab.path, "inline");
@@ -78,22 +79,34 @@ export function FilePane({ tab }: { tab: FileTab | ExternalFileTab }) {
 		// An external tab's path is outside the worktree, so the worktree-scoped read cannot refresh it.
 		read: () =>
 			pdf
-				? Promise.resolve({ content: "" })
+				? Promise.resolve({ content: "", hash: "" })
 				: getTransport().request(external ? "claudeConfig.readFile" : "fs.readFile", {
 						workspaceId: tab.workspaceId,
 						path: tab.path,
 					}),
-		applyFresh: ({ content }, tick) =>
-			useAppStore.getState().updateFileTabContent(tab.workspaceId, tab.id, content, tick),
+		applyFresh: ({ content, hash }, tick) =>
+			useAppStore.getState().updateFileTabContent(tab.workspaceId, tab.id, content, hash, tick),
 		keepCurrent: (tick) =>
-			useAppStore.getState().updateFileTabContent(tab.workspaceId, tab.id, tab.content, tick),
+			useAppStore
+				.getState()
+				.updateFileTabContent(tab.workspaceId, tab.id, tab.content, tab.hash ?? "", tick),
 	});
+
+	const buffer = tab.draft ?? tab.content;
+	const dirty = isFileTabDirty(tab);
+	const save = useCallback(
+		() => void saveFileTab(tab.workspaceId, tab.id),
+		[tab.workspaceId, tab.id],
+	);
 
 	const editor = (
 		<Suspense fallback={loading}>
 			<MonacoEditor
 				path={tab.path}
-				content={tab.content}
+				content={buffer}
+				editable={!pdf}
+				onChange={(next) => useAppStore.getState().setFileTabDraft(tab.workspaceId, tab.id, next)}
+				onSave={save}
 				review={review}
 				focusLine={focusLine}
 				onFocusHandled={clearFocus}
@@ -116,7 +129,37 @@ export function FilePane({ tab }: { tab: FileTab | ExternalFileTab }) {
 			<span title={tab.path} className="min-w-0 truncate tr-code-text text-text-muted">
 				{abbreviateHomePath(tab.path)}
 			</span>
-			<span className="ml-auto shrink-0 tr-text-metadata text-text-subtle">read-only</span>
+			<span className="ml-auto shrink-0 tr-text-metadata text-text-subtle">
+				{dirty ? "unsaved" : ""}
+			</span>
+		</div>
+	) : null;
+
+	const diskBar = tab.external ? (
+		<div
+			data-testid="file-disk-changed"
+			className="flex shrink-0 flex-wrap items-center gap-sm border-feedback-warning border-b bg-container-header-bg px-sm py-xs tr-text-metadata text-text-default"
+		>
+			<span>This file changed on disk while you were editing it.</span>
+			<button
+				type="button"
+				data-testid="file-disk-merge"
+				// Editor chrome never takes the caret: the buffer keeps focus so Ctrl+S still reaches it.
+				onMouseDown={(event) => event.preventDefault()}
+				onClick={() => mergeDiskIntoDraft(tab.workspaceId, tab.id)}
+				className="rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg px-sm py-0.5 hover:bg-control-bg-hovered"
+			>
+				Merge into my edits
+			</button>
+			<button
+				type="button"
+				data-testid="file-disk-discard"
+				onMouseDown={(event) => event.preventDefault()}
+				onClick={() => useAppStore.getState().discardFileTabDraft(tab.workspaceId, tab.id)}
+				className="rounded-[var(--radius-sm)] border border-border-default px-sm py-0.5 text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
+			>
+				Discard mine, take the file
+			</button>
 		</div>
 	) : null;
 
@@ -124,6 +167,7 @@ export function FilePane({ tab }: { tab: FileTab | ExternalFileTab }) {
 		return (
 			<div className="flex h-full min-h-0 flex-col">
 				{externalBar}
+				{diskBar}
 				<div className="min-h-0 flex-1">{editor}</div>
 			</div>
 		);
@@ -138,17 +182,20 @@ export function FilePane({ tab }: { tab: FileTab | ExternalFileTab }) {
 	}
 
 	if (!isMarkdownPath(tab.path)) {
-		if (!fileHasDraft) return editor;
+		// Unconditional: a changing tree around Monaco remounts it — see panels/SPEC.md.
 		return (
 			<div className="flex h-full min-h-0 flex-col">
-				<div
-					data-testid="file-review-toolbar"
-					role="toolbar"
-					aria-label="Review actions"
-					className="flex h-32 shrink-0 items-center justify-end gap-4 border-border-default border-b bg-container-header-bg px-12"
-				>
-					<SendReviewButton workspaceId={tab.workspaceId} path={tab.path} />
-				</div>
+				{fileHasDraft ? (
+					<div
+						data-testid="file-review-toolbar"
+						role="toolbar"
+						aria-label="Review actions"
+						className="flex h-32 shrink-0 items-center justify-end gap-4 border-border-default border-b bg-container-header-bg px-8"
+					>
+						<SendReviewButton workspaceId={tab.workspaceId} path={tab.path} />
+					</div>
+				) : null}
+				{diskBar}
 				<div className="min-h-0 flex-1">{editor}</div>
 			</div>
 		);
@@ -183,12 +230,13 @@ export function FilePane({ tab }: { tab: FileTab | ExternalFileTab }) {
 					onClick={() => setFileTabView(tab.id, "source")}
 				/>
 			</div>
+			{diskBar}
 			<div className="min-h-0 flex-1">
 				{view === "rendered" ? (
 					<Suspense fallback={loading}>
 						<div className="h-full motion-safe:animate-reveal">
 							<MarkdownPreview
-								content={tab.content}
+								content={buffer}
 								workspaceId={tab.workspaceId}
 								path={tab.path}
 								review={review}
@@ -201,5 +249,26 @@ export function FilePane({ tab }: { tab: FileTab | ExternalFileTab }) {
 				)}
 			</div>
 		</div>
+	);
+}
+
+/**
+ * Ctrl/Cmd+S belongs to the pane, not the editor alone: the disk-changed bar's buttons take focus, and a
+ * save request from there is the same request. Scoped here rather than to the window, where a focused
+ * terminal would swallow it. See panels/SPEC.md.
+ */
+export function FilePane({ tab }: { tab: FileTab | ExternalFileTab }) {
+	return (
+		<section
+			aria-label={tab.name}
+			className="contents"
+			onKeyDown={(event) => {
+				if (event.key !== "s" || !(event.ctrlKey || event.metaKey)) return;
+				event.preventDefault();
+				void saveFileTab(tab.workspaceId, tab.id);
+			}}
+		>
+			<FilePaneBody tab={tab} />
+		</section>
 	);
 }

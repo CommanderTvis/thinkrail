@@ -811,12 +811,37 @@ from `main.tsx` through `transport`'s `setIdeActionHandler` seam, since `transpo
   instead of a duplicate addressed the other way.
 - **`openDiff` opens the file, and says so.** The CLI proposes unsaved content; our diff tabs read both
   sides from git and cannot represent that, so the reply carries `diffShown: false` rather than claiming
-  a diff appeared. `saveDocument`/`checkDocumentDirty` answer for a read-only editor: nothing to flush,
-  never dirty. The bridge's SPEC lists these as deliberate gaps.
+  a diff appeared. `saveDocument`/`checkDocumentDirty` answer honestly now that the editor
+  writes: dirty is a real buffer's state, and a save runs the same path Ctrl+S does, reporting `saved`
+  only when the buffer actually settled — a save refused by a conflict says so rather than claiming
+  success.
 - **`MonacoEditor` reports its selection** (`onDidChangeCursorSelection` → `transport.reportIdeSelection`)
   and reports the document closed on unmount, which is also what makes `getLatestSelection` outlive the
   tab. It reports only when given a `workspaceId`, so a Monaco instance rendered outside a workspace tab
   contributes nothing.
+
+## Editing a file
+
+An editor tab is a buffer, not a viewer. There is **no autosave**: Ctrl/Cmd+S writes, and until then
+nothing on disk moves — the tab shows an unsaved dot and closing it asks first.
+
+- **A save is a compare-and-swap** (`fileSave.ts`, `fs.writeFile` / `claudeConfig.writeFile`) against the
+  content the editor last read. A file that moved underneath is never overwritten: what is on disk comes
+  back and is merged into the buffer with `lib`'s three-way merge, leaving conflict markers where both
+  sides changed the same lines. Saving again is then an ordinary write against the newer base. The user
+  therefore always sees what is about to be written, including in the clean-merge case — the merge lands
+  in the buffer rather than being written for them.
+- **A file changing under an unsaved buffer is announced immediately**, not held until the save fails:
+  the refresh that would normally replace the tab's content parks it in `external` instead and the pane
+  shows a bar offering the same merge, or discarding the buffer for what is on disk. Its buttons
+  `preventDefault` on mousedown, so the caret stays in the editor and Ctrl+S still reaches it.
+- **The pane owns the shortcut, not the window.** Monaco handles Ctrl+S when the caret is in it, and the
+  pane handles it for everything else in the pane; a window-level listener would fire for a focused
+  terminal, where Ctrl+S means something else entirely.
+- **The wrapper around the editor is unconditional.** A bar appearing must not change the shape of the
+  tree around Monaco, or React remounts it and the caret, scroll position and undo history go with it.
+- **External files are editable too**, through the allowlist the Claude configuration pane already
+  resolves — the same compare-and-swap, the same merge.
 
 ## What a Claude terminal is running on
 

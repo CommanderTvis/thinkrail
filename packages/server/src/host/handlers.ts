@@ -91,6 +91,7 @@ import {
 	resolveClaudeConfig,
 	runMarketplaceAction,
 	uninstallClaudePlugin,
+	writeClaudeConfigFile,
 } from "../claudeConfig";
 import { selectDirectory, selectFile } from "../dialog";
 import {
@@ -100,7 +101,7 @@ import {
 	revealPathInFileManager,
 } from "../editors";
 import { recordAcceptedMessage, respondToInterview } from "../feedback";
-import { readDir, readFile, resolveWorktreeFile } from "../fs";
+import { readDir, readFile, resolveWorktreeFile, writeFile } from "../fs";
 import {
 	countUnpushedCommits,
 	gitDiffFile,
@@ -459,6 +460,11 @@ const handlers: Record<string, Handler> = {
 		void ensureWatch(p.workspaceId);
 		return readFile(p.workspaceId, p.path);
 	},
+	"fs.writeFile": (params) => {
+		const p = params as { workspaceId: string; path: string; content: string; baseHash: string };
+		void ensureWatch(p.workspaceId);
+		return writeFile(p.workspaceId, p.path, p.content, p.baseHash);
+	},
 	"spec.graph": (params) => {
 		const p = params as { workspaceId: string };
 		void ensureWatch(p.workspaceId);
@@ -533,6 +539,17 @@ const handlers: Record<string, Handler> = {
 		requireClaudeCode();
 		const p = params as { workspaceId: string; path: string };
 		return readClaudeConfigFile(p.workspaceId, getWorkspace(p.workspaceId).worktreePath, p.path);
+	},
+	"claudeConfig.writeFile": (params) => {
+		requireClaudeCode();
+		const p = params as { workspaceId: string; path: string; content: string; baseHash: string };
+		return writeClaudeConfigFile(
+			p.workspaceId,
+			getWorkspace(p.workspaceId).worktreePath,
+			p.path,
+			p.content,
+			p.baseHash,
+		);
 	},
 	"claudeConfig.pluginStatus": () => {
 		requireClaudeCode();
