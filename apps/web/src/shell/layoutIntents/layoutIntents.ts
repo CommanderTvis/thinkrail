@@ -18,6 +18,7 @@ import {
 	findLayoutTab,
 	findPlacedResource,
 	findTabLocation,
+	groupTabs,
 	hideBottom,
 	hideSide,
 	isLayoutUnavailable,
@@ -161,6 +162,8 @@ export function toLayoutTab(tab: EditorTab): LayoutCenterTab | null {
 				docPath: tab.docPath,
 			};
 		}
+		case "blueprint":
+			return { kind: "blueprint", id: tab.id, name: tab.name };
 		case "plan":
 			return {
 				kind: "document",
@@ -436,6 +439,20 @@ export function useLayoutIntentProcessing(
 					if (!isLayoutUnavailable(shown)) result = shown;
 				}
 				break;
+			case "pane-with": {
+				const location = findTabLocation(document, layoutIntent.targetId);
+				if (location?.area === "center") {
+					const paned = groupTabs(
+						document,
+						location.groupId,
+						layoutIntent.tabId,
+						layoutIntent.targetId,
+						layoutIntent.direction,
+					);
+					if (!isLayoutUnavailable(paned)) result = paned;
+				}
+				break;
+			}
 			case "toggle-bottom":
 				if (document.bottom.visible) {
 					result = hideBottom(document, attention);

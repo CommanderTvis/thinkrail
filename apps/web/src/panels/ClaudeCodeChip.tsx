@@ -36,10 +36,10 @@ export function ClaudeCodeChip({ visible }: { visible: boolean }) {
 		<div
 			data-testid="claude-plugin-chip"
 			data-state={status.state}
-			className="absolute inset-x-2 bottom-2 z-20 flex items-start gap-sm rounded-[var(--radius-md)] border border-border-default bg-container-elevated-bg px-sm py-xs shadow-lg"
+			className="absolute inset-x-2 bottom-2 z-20 flex items-start gap-8 rounded-[var(--radius-md)] border border-border-default bg-container-elevated-bg px-8 py-4 shadow-lg"
 		>
-			<Sparkles className="mt-0.5 size-3.5 shrink-0 text-primary" />
-			<div className="flex min-w-0 flex-1 flex-col gap-0.5">
+			<Sparkles className="mt-2 size-14 shrink-0 text-primary" />
+			<div className="flex min-w-0 flex-1 flex-col gap-2">
 				<span className="tr-text-ui text-text-default">
 					{updating
 						? `Update ThinkRail's Claude Code plugin to v${status.availableVersion}?`
@@ -80,7 +80,7 @@ export function ClaudeCodeChip({ visible }: { visible: boolean }) {
 						.catch((cause: unknown) => toast.error(errorText(cause), "Couldn't enable the plugin"))
 						.finally(() => setBusy(false));
 				}}
-				className="shrink-0 rounded-[var(--radius-sm)] bg-primary px-sm py-0.5 tr-text-ui text-text-on-primary hover:opacity-90 disabled:opacity-60"
+				className="shrink-0 rounded-[var(--radius-sm)] bg-primary px-8 py-2 tr-text-ui text-text-on-primary hover:opacity-90 disabled:opacity-60"
 			>
 				{updating ? "Update" : "Enable"}
 			</button>
@@ -92,9 +92,9 @@ export function ClaudeCodeChip({ visible }: { visible: boolean }) {
 					dismissed = true;
 					setHidden(true);
 				}}
-				className="shrink-0 rounded-[var(--radius-sm)] p-0.5 text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
+				className="shrink-0 rounded-[var(--radius-sm)] p-2 text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
 			>
-				<X className="size-3.5" />
+				<X className="size-14" />
 			</button>
 		</div>
 	);

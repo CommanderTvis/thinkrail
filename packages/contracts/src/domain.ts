@@ -17,7 +17,7 @@ export interface Project {
 	hasGit?: boolean;
 }
 
-export type ProjectPathStatus = { kind: "missing" | "notDirectory" | "ok" };
+export type ProjectPathStatus = { kind: "repo" | "initable" | "missing" | "notDirectory" };
 
 export interface DiffStats {
 	added: number;

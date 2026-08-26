@@ -237,6 +237,18 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 	const fitFnRef = useRef<(() => void) | null>(null);
 	const reattachRef = useRef<(() => void) | null>(null);
 	const initialCommandRef = useRef(initialCommand);
+	const queuedInput = useAppStore(
+		(state) => state.terminalInputByWorkspace[tupleKey(workspaceId, tabKey)],
+	);
+
+	// ThinkRail speaks to an agent running in this terminal — a spec reconcile, say — and only the
+	// component holding the attachment knows the server id to write to. See panels/SPEC.md.
+	useEffect(() => {
+		const id = serverIdRef.current;
+		if (!queuedInput || !id) return;
+		const text = useAppStore.getState().consumeTerminalInput(workspaceId, tabKey);
+		if (text) void getTransport().request("terminal.write", { id, data: `${text}\r` });
+	}, [queuedInput, tabKey, workspaceId]);
 	// Read through a ref: the key handler is installed once, and which agent runs here changes later.
 	const agentNewline = useAppStore(
 		(state) =>
@@ -427,7 +439,7 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 			prebind = attemptPrebind;
 			void getTransport()
 				.request("terminal.attach", { workspaceId, tabKey, ...spawnedAt })
-				.then(({ id, created, replay, prefill }) => {
+				.then(({ id, created, replay, prefill, prefillSubmit }) => {
 					if (disposed) return;
 					if (attachGeneration !== startedAt || prebind !== attemptPrebind) {
 						attemptPrebind.stop();
@@ -448,9 +460,15 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 						setReady(true);
 						if (buffered.exit) handleExit(buffered.exit);
 						applyFit();
-						// Typed, never submitted: the user decides whether to spend a resume. See SPEC.md.
+						// Typed, never submitted: the user decides whether to spend a resume — unless the
+						// surface that owns this terminal promised to bring its agent back. See SPEC.md.
 						if (prefill && serverIdRef.current === id) {
-							sendTerminalWrite(getTransport().request("terminal.write", { id, data: prefill }));
+							sendTerminalWrite(
+								getTransport().request("terminal.write", {
+									id,
+									data: prefillSubmit ? `${prefill}\r` : prefill,
+								}),
+							);
 						}
 						if (created && serverIdRef.current === id && initialCommandRef.current) {
 							sendTerminalWrite(

@@ -9,7 +9,6 @@ import {
 	isJbcentralQuotaRefreshSeconds,
 	normalizeThemePreference,
 	type Project,
-	VERTICAL_TABS_WIDTH,
 	type Workspace,
 } from "@thinkrail/contracts";
 
@@ -62,6 +61,23 @@ export function loadTerminalSessions(): PersistedTerminalSessions {
 
 export function saveTerminalSessions(sessions: PersistedTerminalSessions): void {
 	writeJson("terminals.json", sessions);
+}
+
+/** What a blueprint needs to come back after a restart: who asked for it, and who is writing it. */
+export interface PersistedBlueprint {
+	source: { kind: "idea"; brief: string } | { kind: "product" } | { kind: "spec"; path: string };
+	agentId: "pi" | "claude";
+	author?: { kind: "chat"; sessionId: string } | { kind: "terminal"; tabKey: string };
+}
+
+export type PersistedBlueprints = Record<string, PersistedBlueprint>;
+
+export function loadBlueprints(): PersistedBlueprints {
+	return readJson<PersistedBlueprints>("blueprints.json", {});
+}
+
+export function saveBlueprints(blueprints: PersistedBlueprints): void {
+	writeJson("blueprints.json", blueprints);
 }
 
 export function normalizeClaudeCommand(value: unknown): string {

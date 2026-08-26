@@ -523,6 +523,10 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     `extensionFactories`: a **headless-search policy** (a `tool_call` hook defaulting
     `web_search`'s `workflow` to `"none"`, since pi-web-access would otherwise open a browser curator our
     `rpc` host can't render), `askUserQuestionExtension` (registers the `ask_user_question` tool),
+    `blueprintToolExtension` (registers **`blueprint_check`** — the read-only report on the workspace's
+    `BLUEPRINT.md`, whose implementation the host installs through the `setBlueprintCheckTool` seam
+    because this module may not import the blueprint feature; with nothing installed the factory
+    registers no tool, so a host without that surface does not carry a tool whose every call fails),
     `oversizedImageGuard` (the context-level image-size guard, see the `imageGuard` bullet), **and the
     caller's `extraFactories`** — per-session host bindings (the workspace-bound subagents extension),
     value-imported so dev and the compiled binary take the same path.

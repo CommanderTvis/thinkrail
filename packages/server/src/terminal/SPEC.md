@@ -142,6 +142,15 @@ A terminal that had Claude running when the host went down comes back with the i
 **typed at the prompt but not run**. Restoring a session spends tokens and re-reads context, so the
 decision stays the user's; the tab is otherwise an ordinary shell.
 
+- **Unless a surface promised otherwise.** `setResumeRunPolicy` is the seam by which a feature that owns a
+  terminal — today the blueprint's author, which promises the pair comes back together — says "this one is
+  mine, run it". Attach then returns `prefillSubmit`, and the client sends the offer with a trailing `\r`
+  instead of leaving it at the prompt. This module knows nothing about blueprints: `host` composes the
+  policy, the same way it composes every other cross-feature edge. Without it the author terminal came
+  back with `claude --resume <id>` sitting unsubmitted, which reads as "revive is broken" rather than
+  "here is an offer" — the tab was restored by the layout, so the blueprint's own restore saw it as
+  already present and issued nothing.
+
 - **Two halves, two sources.** The *command* comes from the process table — `captureProcessCommand` reads
   the agent's argv once, when the poll first sees it, so the flags the user chose (`--chrome`, a model)
   survive. The poll itself stays name-only: `args=` is unbounded and would be carried for every process
@@ -261,6 +270,8 @@ decision stays the user's; the tab is otherwise an ordinary shell.
   revive. Replay-persistence and natural-exit cases use bounded publisher-observed data/exit conditions as
   readiness edges, never elapsed time; their expected output marker never appears contiguously in the command
   input, so terminal echo cannot impersonate command execution.
+- `terminalManager.test.ts` — an unclaimed offer is typed and never run, a claimed one carries
+  `prefillSubmit`, and the claim is per tab and per workspace.
 - `agentResume.test.ts` — an unwritten session refused, flags preserved, an earlier `--resume`/`--continue` replaced rather than stacked,
   a bare `--resume` (the picker) consuming no following flag, and a non-UUID id refused.
 - `processTree.test.ts` — `ps` row parsing (spaces in names, `.exe` stripping, header junk), descendant

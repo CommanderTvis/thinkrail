@@ -375,7 +375,11 @@ ReviewSnapshot>`** with **`setWorkspaceReview`** (a `review.get` read landing) a
 **`applyReviewChanged`** (folds a `review.changed` push — full snapshot, idempotent; every client,
 including a mutation's initiator, converges here — no optimism); `applyWorkspaceRemoved` drops the
 entry; the pending-draft count is a selector (`selectReviewDraftCount`), never duplicated in
-components. The **Skills-reload badge** rides the same tick without a separate signal:
+components. The **blueprint slice** — **`blueprintByWorkspace: Record<workspaceId, BlueprintState>`**
+with **`setWorkspaceBlueprint`** (a `blueprint.open` or `blueprint.get` reply landing) and
+**`applyBlueprintChanged`** (folds a `blueprint.changed` push, skipping a removed workspace exactly as the
+review slice does); `applyWorkspaceRemoved` drops the entry. One blueprint per workspace, so the
+workspace id is the whole key. The **Skills-reload badge** rides the same tick without a separate signal:
   `noteFsChanged` also folds **`skillChangeTickByWorkspace: Record<workspaceId, tick>`** — the tick of the
   most recent *skill-relevant* batch, from the host-authored `payload.skillChange` semantic (`detected` for
   a concrete project-skill path, `unknown` for a genuinely pathless uncertainty, `none` for concrete

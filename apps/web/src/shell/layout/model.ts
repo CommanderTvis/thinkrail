@@ -990,7 +990,8 @@ export function moveTabToGroup(
 		movingTab.kind === "external-file" ||
 		movingTab.kind === "diff" ||
 		movingTab.kind === "chat" ||
-		movingTab.kind === "document"
+		movingTab.kind === "document" ||
+		movingTab.kind === "blueprint"
 	) {
 		return { reason: "The destination group no longer exists." };
 	}

@@ -317,8 +317,28 @@ of the host.
   attention, or current/default-selection identity. Every current-layout type—including the projected
   `WorkspaceLayoutDocument`, `WorkbenchFrame`, and `WorkspaceViewState`—is web-local and deliberately absent
   from contracts. There is no current-layout method or push channel.
+- **blueprint.ts** — the interactive-spec wire. `BlueprintDoc` is a list of **already-parsed** blocks
+  (`prose` with markdown text, `control` with a `BlueprintControl`), each carrying its own render-stable
+  `id`. A control carries its `kind` (`select` — exactly one; `multi` — any number, checkboxes), `options`
+  (label + the **axis** that says why you would pick it), `selectedIds` (an array either way, so a client
+  renders both kinds without branching on cardinality), `pending` (the agent opened the block and its
+  options have not arrived — a stream is always mid-sentence), and `locked` (the reader set this by hand,
+  so regeneration may not re-decide it). `BlueprintEdit` carries a text rewrite the reader has staged but
+  not confirmed, addressed by a `BlueprintEditTarget` — a prose block, or one option's label or axis.
+  `BlueprintState.workspaceId` **is** the blueprint's identity: one per workspace, so every method is
+  addressed by workspace and `LayoutBlueprintTab` needs no field beyond its kind. **`BlueprintSource`** is
+  what the author was given to start from — an `idea` (the brief), the `product` (the worktree itself), or
+  a `spec` (a worktree-relative markdown path). It travels with the state because the panel names what a
+  document was taken over from, and it is what `blueprint.open` carries instead of a bare brief. The *format* itself —
+  the markdown convention the agent writes — never reaches this file or the client: the host parses it and
+  puts blocks on the wire, which is what lets `apps/web` render a streaming, still-invalid document without
+  depending on a parser it is not allowed to import. `BlueprintState` is the whole per-document state
+  (`phase`, the accepted `doc`, an optional `proposal` = a rewrite plus the `BlueprintChange[]` naming what
+  else moved, `error`, and the `generation` that marks a superseded run). See
+  [[submodule-server-blueprint]].
 - **wsProtocol.ts** — `WS_METHODS` (`project.*` — incl. **`project.close`** (mark the stable record
-  closed without deleting associated state), **`project.inspect`** (classify a path) + **`project.init`**
+  closed without deleting associated state), **`project.inspect`** (classify a path) + **`project.init`** (`{parentPath, name}` → create the folder,
+  `git init` it with no commit, open it)
   (`git init` + commit, then open) + **`project.hasSpecs`** (lazy per-project "contains a registered
   spec?" for the Welcome screen — a full-tree walk, so requested only for the shown project,
   never eagerly for every project) / `workspace.*` — notably **`workspace.list { projectId,

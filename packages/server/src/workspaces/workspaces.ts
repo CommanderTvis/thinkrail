@@ -229,6 +229,11 @@ export async function createWorkspace(
 		: nextAutoBranch(project);
 	const wsName = displayName ?? branch;
 
+	if (!git(project.path, ["rev-parse", "--verify", "HEAD"]).ok)
+		throw new Error(
+			"This repository has no commits yet, so there is nothing to branch a workspace from. Make the first commit, then try again.",
+		);
+
 	const base = baseRef?.trim();
 	let baseBranch: string;
 	if (base) baseBranch = base;

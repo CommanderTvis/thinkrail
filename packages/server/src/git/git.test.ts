@@ -649,6 +649,17 @@ test("scope resolution never turns a git launch failure into a semantic outcome"
 	await expect(resolveDiffRange(workspace)).rejects.toThrow(/Could not resolve the diff range/);
 });
 
+test("a repository with no commits is named as such, not reported as a bad revision", () => {
+	const fresh = join(dataDir, "unborn-repo");
+	rmSync(fresh, { recursive: true, force: true });
+	mkdirSync(fresh, { recursive: true });
+	Bun.spawnSync(["git", "-C", fresh, "init", "-b", "main"], { stdout: "ignore", stderr: "ignore" });
+	writeFileSync(join(fresh, "untracked.txt"), "hello\n");
+	seedWorkspace({ worktreePath: fresh });
+
+	expect(() => gitStatus("w1")).toThrow(/no commits yet/);
+});
+
 function stagedPaths(): string[] {
 	return new TextDecoder()
 		.decode(

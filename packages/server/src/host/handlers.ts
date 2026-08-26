@@ -1,7 +1,12 @@
+import { existsSync } from "node:fs";
 import { isAbsolute, join } from "node:path";
 import type {
 	AppConfigUpdate,
 	AskUserQuestionResult,
+	BlueprintAgentId,
+	BlueprintAuthor,
+	BlueprintEditTarget,
+	BlueprintSource,
 	ClaudeEditRequest,
 	ClaudeMarketplaceAction,
 	ClaudeWritableScope,
@@ -77,6 +82,22 @@ import {
 	startProxyJbcentral,
 	updateJbcentral,
 } from "../auth";
+import {
+	BLUEPRINT_APPENDIX,
+	BLUEPRINT_FILE,
+	blueprintBrief,
+	closeBlueprint,
+	confirmBlueprintEdits,
+	discardBlueprintEdits,
+	editBlueprintText,
+	getBlueprint,
+	noteBlueprintAuthorSession,
+	openBlueprint,
+	openingPrompt,
+	resolveBlueprintSource,
+	selectBlueprintOption,
+	setBlueprintAuthor,
+} from "../blueprint";
 import { findOpenBranchReview } from "../branch-review";
 import {
 	applyClaudeEdit,
@@ -124,6 +145,8 @@ import { openPr, previewPr } from "../pr";
 import {
 	acknowledgeProjectSkills,
 	closeProject,
+	createProject,
+	initProject,
 	inspectProjectPath,
 	listProjects,
 	openProject,
@@ -157,6 +180,7 @@ import {
 	templateDirs,
 } from "../templates";
 import {
+	agentSessionExists,
 	attachTerminal,
 	closeTerminalTab,
 	closeWorkspaceTerminals,
@@ -165,6 +189,7 @@ import {
 	renameTerminal,
 	reserveTerminal,
 	resizeTerminal,
+	resumeCommand,
 	writeTerminal,
 } from "../terminal";
 import {
@@ -348,6 +373,11 @@ function requireClaudeCode(): void {
 const handlers: Record<string, Handler> = {
 	"project.open": (params) => openProject((params as { path: string }).path),
 	"project.inspect": (params) => inspectProjectPath((params as { path: string }).path),
+	"project.init": (params) => initProject((params as { path: string }).path),
+	"project.create": (params) => {
+		const p = params as { parentPath: string; name: string };
+		return createProject(p.parentPath, p.name);
+	},
 	"project.list": () => listProjects(),
 	"project.hasSpecs": (params) => {
 		const { projectId } = params as { projectId: string };
@@ -663,6 +693,7 @@ const handlers: Record<string, Handler> = {
 		requireClaudeCode();
 		const p = params as { workspaceId: string; tabKey: string; sessionId: string };
 		rememberAgentSession(p.workspaceId, p.tabKey, p.sessionId);
+		noteBlueprintAuthorSession(p.workspaceId, p.tabKey, p.sessionId);
 		return {};
 	},
 	"ideBridge.selectionChanged": (params) => {
@@ -1070,6 +1101,63 @@ const handlers: Record<string, Handler> = {
 		const dirs = templateDirs(p.workspaceId ? getWorkspace(p.workspaceId).worktreePath : undefined);
 		return saveTemplate(dirs, p.scope, p.name, p.content);
 	},
+	"blueprint.open": (params) => {
+		const p = params as {
+			workspaceId: string;
+			source: BlueprintSource;
+			agentId: BlueprintAgentId;
+		};
+		const workspace = getWorkspace(p.workspaceId);
+		const source = resolveBlueprintSource(workspace.worktreePath, p.source);
+		const state = openBlueprint(p.workspaceId, workspace.worktreePath, source, p.agentId);
+		const opening = openingPrompt(source);
+		return { state, opening, command: claudeAuthorCommand(p.agentId, opening) };
+	},
+	"blueprint.authorCommand": (params) => {
+		const { workspaceId } = params as { workspaceId: string };
+		const record = blueprintBrief(workspaceId);
+		if (record?.author?.kind !== "terminal") return { command: null };
+		// Resume the recorded conversation when there is one. Without one, a document already on disk is
+		// never handed the opening prompt again — that prompt says "write the file" — the most recent
+		// conversation in this dedicated worktree is the author, so it is continued instead. See SPEC.md.
+		const resume = record.author.agentSessionId;
+		const resumed = resume ? claudeResumeCommand(workspaceId, resume) : null;
+		if (resumed) return { command: resumed };
+		const worktreePath = getWorkspace(workspaceId).worktreePath;
+		if (existsSync(join(worktreePath, BLUEPRINT_FILE))) {
+			return { command: claudeContinueCommand() };
+		}
+		return { command: claudeAuthorCommand("claude", openingPrompt(record.source)) };
+	},
+	"blueprint.setAuthor": (params) => {
+		const p = params as { workspaceId: string; author: BlueprintAuthor };
+		setBlueprintAuthor(p.workspaceId, p.author);
+		return { ok: true } as const;
+	},
+	"blueprint.close": (params) => {
+		closeBlueprint((params as { workspaceId: string }).workspaceId);
+		return { ok: true } as const;
+	},
+	"blueprint.get": (params) => {
+		const { workspaceId } = params as { workspaceId: string };
+		return getBlueprint(workspaceId, getWorkspace(workspaceId).worktreePath);
+	},
+	"blueprint.select": (params) => {
+		const p = params as { workspaceId: string; controlId: string; optionId: string };
+		return { reconcile: selectBlueprintOption(p.workspaceId, p.controlId, p.optionId) };
+	},
+	"blueprint.edit": (params) => {
+		const p = params as { workspaceId: string; target: BlueprintEditTarget; text: string };
+		editBlueprintText(p.workspaceId, p.target, p.text);
+		return { ok: true } as const;
+	},
+	"blueprint.confirmEdits": (params) => ({
+		reconcile: confirmBlueprintEdits((params as { workspaceId: string }).workspaceId),
+	}),
+	"blueprint.discardEdits": (params) => {
+		discardBlueprintEdits((params as { workspaceId: string }).workspaceId);
+		return { ok: true } as const;
+	},
 	"template.delete": (params) => {
 		const p = params as { workspaceId?: string; scope: TemplateScope; name: string };
 		const dirs = templateDirs(p.workspaceId ? getWorkspace(p.workspaceId).worktreePath : undefined);
@@ -1077,6 +1165,32 @@ const handlers: Record<string, Handler> = {
 		return { ok: true } as const;
 	},
 };
+
+/**
+ * `claude "<prompt>"` starts an *interactive* session seeded with it — the author has to be a real TUI
+ * the reader can talk to, not a `--print` run. Shell-quoted because it is handed to a PTY as a line.
+ */
+function claudeResumeCommand(workspaceId: string, agentSessionId: string): string | null {
+	const cwd = getWorkspace(workspaceId).worktreePath;
+	if (!agentSessionExists(cwd, agentSessionId)) return null;
+	return resumeCommand(getConfig().claudeCommand, agentSessionId);
+}
+
+/** The author's own launch flags, with `--continue` in place of a prompt: same appendix, same conversation. */
+function claudeContinueCommand(): string {
+	const config = getConfig();
+	if (!config.claudeCodeEnabled) throw new Error("Turn Claude Code on in Settings first.");
+	const quote = (text: string) => `'${text.replaceAll("'", `'\\''`)}'`;
+	return `${config.claudeCommand} --append-system-prompt ${quote(BLUEPRINT_APPENDIX)} --continue`;
+}
+
+function claudeAuthorCommand(agentId: BlueprintAgentId, opening: string): string | null {
+	if (agentId !== "claude") return null;
+	const config = getConfig();
+	if (!config.claudeCodeEnabled) throw new Error("Turn Claude Code on in Settings first.");
+	const quote = (text: string) => `'${text.replaceAll("'", `'\\''`)}'`;
+	return `${config.claudeCommand} --append-system-prompt ${quote(BLUEPRINT_APPENDIX)} ${quote(opening)}`;
+}
 
 export function requestMethodDiagnostic(method: string): string {
 	return Object.hasOwn(handlers, method) ? method : "unknown method";

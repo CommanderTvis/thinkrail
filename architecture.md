@@ -4,7 +4,7 @@ type: architecture-design
 status: active
 title: ThinkRail — top-level architecture
 parent: goal-and-requirements
-covers: [client-host-split, cli-entrypoint, wire-contract, transport-endpoint, ui-shell-panels, git-worktrees, remote-tailscale, hydrate-then-stream, domain-vs-view-state, frontend-local-workbench-frame, client-local-navigation, central-integration]
+covers: [client-host-split, blueprint-two-hosts, cli-entrypoint, wire-contract, transport-endpoint, ui-shell-panels, git-worktrees, remote-tailscale, hydrate-then-stream, domain-vs-view-state, frontend-local-workbench-frame, client-local-navigation, central-integration]
 tags: [v1, architecture]
 ---
 
@@ -186,7 +186,17 @@ packages/pi-thinkrail-workflow pi extension: the workflow skill system + its alw
     **tmux was rejected** as the persistence layer: an unassumable dependency on Windows, a competing tab
     model, env-propagation breakage, and polling-based capture — for restart survival we have already
     decided not to hold. Detail: [[submodule-server-terminal]].
-13. **Central's cross-module lifecycle has one architectural owner.** Its adapter, runtime generation,
+13. **The blueprint format is proved on two agent hosts, and that is not a second engine.** The
+    interactive-spec generator runs on the in-process `pi` runtime *and* on Claude Code headless
+    (`--print --output-format stream-json`), because a document format that only one runtime can produce
+    is a format tied to a vendor — and the format is the artefact here, not the runtime. This does **not**
+    reopen the pi-only engine decision: neither runner is an agent *session*. They take a system prompt
+    and a prompt and return text; they hold no tools, no filesystem access, no session state, and nothing
+    in `AgentSessionManager` knows they exist. Chats, workspaces, skills and compaction remain `pi`'s
+    alone, in-process, exactly as the goal spec says. The Claude runner is additionally gated on
+    `AppConfig.claudeCodeEnabled`, so a user who does not run Claude Code never acquires a `claude`
+    subprocess. Detail: [[submodule-server-blueprint]].
+14. **Central's cross-module lifecycle has one architectural owner.** Its adapter, runtime generation,
     wire status/quota, synchronized preferences, provider card, and top-bar readout remain in their bounded
     modules; the correspondence between those surfaces and their liveness obligations belongs to
     [[central-integration]]. This keeps feature-specific mechanics in

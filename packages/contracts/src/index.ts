@@ -5,6 +5,8 @@ export {
 	parseAgentTodos,
 	statusForAgentEvent,
 } from "./agentStatus";
+export type * from "./blueprint";
+export { BLUEPRINT_FILE } from "./blueprint";
 export type * from "./claudeConfig";
 export {
 	CLAUDE_CONFIG_SCOPE_ORDER,

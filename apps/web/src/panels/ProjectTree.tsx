@@ -57,8 +57,10 @@ import {
 } from "../store";
 import { errorText, getTransport, prewarmWorkspaceSkillLoad } from "../transport";
 import { AddProjectMenu } from "./AddProjectMenu";
+import { BlueprintStartDialog } from "./BlueprintStartDialog";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { ExistingWorktreeDialog } from "./ExistingWorktreeDialog";
+import { NewProjectDialog } from "./NewProjectDialog";
 import { NewWorkspaceDialog } from "./NewWorkspaceDialog";
 import { useOpenProject } from "./useOpenProject";
 import { canRenameWorkspace, workspaceRenameValue } from "./workspaceActions";
@@ -85,6 +87,8 @@ export function ProjectTree() {
 	const expandedProjectIds = useAppStore((s) => s.expandedProjectIds);
 	const [dialogProjectId, setDialogProjectId] = useState<string | null>(null);
 	const [existingDialogProjectId, setExistingDialogProjectId] = useState<string | null>(null);
+	const [newProject, setNewProject] = useState(false);
+	const [blueprintProjectId, setBlueprintProjectId] = useState<string | null>(null);
 	const addProjectButtonRef = useRef<HTMLButtonElement>(null);
 	const projectNameButtonsRef = useRef(new Map<string, HTMLButtonElement>());
 	const pendingCloseFocusProjectIdRef = useRef<string | null>(null);
@@ -240,6 +244,7 @@ export function ProjectTree() {
 					recentProjects={recentProjects}
 					onOpen={() => void pickAndOpen()}
 					onEnterHostPath={enterHostPath}
+					onNew={() => setNewProject(true)}
 					onOpenRecent={(p) => void openProject(p)}
 				>
 					<Button
@@ -337,6 +342,28 @@ export function ProjectTree() {
 						if (returnFocusId) focusProjectNameOrAdd(returnFocusId);
 					}}
 					onOpened={onExistingWorktreeOpened}
+				/>
+			) : null}
+
+			{newProject ? (
+				<NewProjectDialog
+					onOpenChange={setNewProject}
+					onCreated={(project) =>
+						useAppStore.getState().selectProject(project.id, { reveal: true })
+					}
+					onDraftBlueprint={(project) => {
+						setNewProject(false);
+						setBlueprintProjectId(project.id);
+					}}
+				/>
+			) : null}
+
+			{blueprintProjectId !== null ? (
+				<BlueprintStartDialog
+					projectId={blueprintProjectId}
+					onOpenChange={(open) => {
+						if (!open) setBlueprintProjectId(null);
+					}}
 				/>
 			) : null}
 

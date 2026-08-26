@@ -95,6 +95,17 @@ function resetState(): void {
 	writeFileSync(E2E_PICK_DIR_POINTER, E2E_FIXTURE_REPO);
 }
 
+/**
+ * An empty folder for `project.init` to create inside, with the host's picker pointed at it. Call it
+ * AFTER `openAppFresh` — `resetState` re-points the picker at the fixture repo.
+ */
+export function stageProjectParent(dir: string): string {
+	rmSync(dir, { recursive: true, force: true });
+	mkdirSync(dir, { recursive: true });
+	writeFileSync(E2E_PICK_DIR_POINTER, dir);
+	return dir;
+}
+
 export function stagePlainFolder(): string {
 	resetState();
 	rmSync(E2E_PLAIN_DIR, { recursive: true, force: true });

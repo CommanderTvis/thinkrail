@@ -1,6 +1,8 @@
 import {
 	RiFolderOpenLine as FolderOpen,
+	RiFolderAddLine as FolderPlus,
 	RiHome2Line as House,
+	RiPencilRuler2Line as PencilRuler,
 	type RemixiconComponentType as LucideIcon,
 	RiRocketLine as Rocket,
 	RiSparkling2Line as Sparkles,
@@ -12,16 +14,13 @@ import { PRODUCT_NAME } from "../constants/branding";
 import { useAppStore } from "../store";
 import { getTransport } from "../transport";
 import { AddProjectMenu } from "./AddProjectMenu";
+import { BlueprintStartDialog } from "./BlueprintStartDialog";
 import { enterDefaultWorkspace } from "./defaultWorkspace";
+import { NewProjectDialog } from "./NewProjectDialog";
 import { NewWorkspaceDialog } from "./NewWorkspaceDialog";
 import { ProjectSkillsNotice } from "./ProjectSkillsNotice";
 import { ProviderWarningBanner } from "./ProviderWarningBanner";
 import { useOpenProject } from "./useOpenProject";
-
-const SETUP_PROMPT = "/skill:setting-up-a-project ";
-
-const SETUP_NOTE =
-	"Runs the setting-up-a-project skill — the agent drafts your project's specs, starting from its goal, before building.";
 
 export function WelcomePanel() {
 	const projects = useAppStore((s) => s.projects);
@@ -33,6 +32,8 @@ export function WelcomePanel() {
 		note?: string;
 	} | null>(null);
 	const [hasSpecs, setHasSpecs] = useState<boolean | null>(null);
+	const [blueprintStart, setBlueprintStart] = useState<string | null>(null);
+	const [newProject, setNewProject] = useState(false);
 
 	const project = projects.find((p) => p.id === selectedProjectId) ?? projects[0] ?? null;
 
@@ -72,6 +73,25 @@ export function WelcomePanel() {
 
 	const noProjects = project == null;
 
+	const newProjectCard = () => (
+		<Card
+			icon={FolderPlus}
+			title="New project"
+			subtitle="Create a folder, start a git repo in it, and open it here."
+			onClick={() => setNewProject(true)}
+		/>
+	);
+
+	const blueprintCard = () => (
+		<Card
+			icon={PencilRuler}
+			title="Draft a blueprint"
+			tag="new"
+			subtitle="Describe an idea; get a spec whose decisions you can change."
+			onClick={() => project && setBlueprintStart(project.id)}
+		/>
+	);
+
 	const projectFolderCard = (projectId: string) => (
 		<Card
 			icon={House}
@@ -87,6 +107,7 @@ export function WelcomePanel() {
 			recentProjects={recentProjects}
 			onOpen={() => void pickAndOpen()}
 			onEnterHostPath={enterHostPath}
+			onNew={() => setNewProject(true)}
 			onOpenRecent={(path) => void openProject(path)}
 			align="start"
 		>
@@ -117,6 +138,7 @@ export function WelcomePanel() {
 
 			<div className="mt-24 flex flex-wrap justify-center gap-12">
 				{noProjects ? (
+<<<<<<< HEAD
 					openProjectCard()
 				) : hasSpecs === null ? (
 					<>
@@ -124,6 +146,13 @@ export function WelcomePanel() {
 						<CardSkeleton />
 					</>
 				) : hasSpecs ? (
+=======
+					<>
+						{openProjectCard()}
+						{newProjectCard()}
+					</>
+				) : hasSpecs === null ? null : hasSpecs ? (
+>>>>>>> 4e0ccfb3 (A spec you can argue with, written by an agent you can talk to)
 					<>
 						<Card
 							cta
@@ -135,6 +164,7 @@ export function WelcomePanel() {
 							className="motion-safe:animate-reveal"
 						/>
 						{projectFolderCard(project.id)}
+						{blueprintCard()}
 					</>
 				) : (
 					<>
@@ -142,8 +172,9 @@ export function WelcomePanel() {
 							cta
 							primary
 							icon={Sparkles}
-							title="Set up project"
+							title="Draft a blueprint"
 							tag="spec-first"
+<<<<<<< HEAD
 							subtitle="Draft the project's specs with the agent before building, starting from its goal."
 							onClick={() =>
 								setDialog({
@@ -153,6 +184,10 @@ export function WelcomePanel() {
 								})
 							}
 							className="motion-safe:animate-reveal"
+=======
+							subtitle="Describe the idea; the agent drafts a spec whose decisions you can change."
+							onClick={() => setBlueprintStart(project.id)}
+>>>>>>> 4e0ccfb3 (A spec you can argue with, written by an agent you can talk to)
 						/>
 						<Card
 							icon={Rocket}
@@ -166,6 +201,26 @@ export function WelcomePanel() {
 				)}
 			</div>
 
+			{newProject ? (
+				<NewProjectDialog
+					onOpenChange={setNewProject}
+					onCreated={(created) =>
+						useAppStore.getState().selectProject(created.id, { reveal: true })
+					}
+					onDraftBlueprint={(created) => {
+						setNewProject(false);
+						setBlueprintStart(created.id);
+					}}
+				/>
+			) : null}
+			{blueprintStart ? (
+				<BlueprintStartDialog
+					projectId={blueprintStart}
+					onOpenChange={(open) => {
+						if (!open) setBlueprintStart(null);
+					}}
+				/>
+			) : null}
 			{dialog ? (
 				<NewWorkspaceDialog
 					open

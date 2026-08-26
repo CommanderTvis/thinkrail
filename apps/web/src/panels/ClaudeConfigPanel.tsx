@@ -66,7 +66,7 @@ function ContextSurface({
 	const total = alwaysOn.reduce((sum, layer) => sum + layer.bytes, 0);
 	if (layers.length === 0) {
 		return (
-			<p className="p-sm tr-text-ui text-text-muted">No instruction files reach this workspace.</p>
+			<p className="p-8 tr-text-ui text-text-muted">No instruction files reach this workspace.</p>
 		);
 	}
 	const hasRootLevelProjectClaudeMd = layers.some(
@@ -87,7 +87,7 @@ function ContextSurface({
 							title: "Create CLAUDE.md",
 						})
 					}
-					className="flex flex-col items-start gap-0.5 border-border-muted border-b px-sm py-xs text-left hover:bg-control-bg-hovered"
+					className="flex flex-col items-start gap-2 border-border-muted border-b px-8 py-4 text-left hover:bg-control-bg-hovered"
 				>
 					<span className="tr-text-ui text-text-default">Add CLAUDE.md</span>
 					<span className="tr-text-metadata text-text-muted">
@@ -105,7 +105,7 @@ function ContextSurface({
 							title: "Create CLAUDE.local.md",
 						})
 					}
-					className="flex flex-col items-start gap-0.5 border-border-muted border-b px-sm py-xs text-left hover:bg-control-bg-hovered"
+					className="flex flex-col items-start gap-2 border-border-muted border-b px-8 py-4 text-left hover:bg-control-bg-hovered"
 				>
 					<span className="tr-text-ui text-text-default">Add CLAUDE.local.md</span>
 					<span className="tr-text-metadata text-text-muted">
@@ -115,7 +115,7 @@ function ContextSurface({
 			)}
 			<div
 				data-testid="claude-context-total"
-				className="flex items-baseline justify-between gap-sm border-border-default border-b px-sm py-xs"
+				className="flex items-baseline justify-between gap-8 border-border-default border-b px-8 py-4"
 			>
 				<span className="tr-text-eyebrow text-text-muted">Persistent context</span>
 				<span className="tr-code-text text-text-default">{formatSize(total)}</span>
@@ -132,13 +132,13 @@ function ContextSurface({
 						<span
 							key={guide}
 							aria-hidden="true"
-							className="ml-sm w-md shrink-0 border-border-default border-l"
+							className="ml-8 w-12 shrink-0 border-border-default border-l"
 						/>
 					))}
-					<div className="flex min-w-0 flex-1 items-center gap-sm py-xs pr-sm pl-sm">
-						<FileText className="size-3.5 shrink-0 text-text-subtle" />
+					<div className="flex min-w-0 flex-1 items-center gap-8 py-4 pr-8 pl-8">
+						<FileText className="size-14 shrink-0 text-text-subtle" />
 						<div className="flex min-w-0 flex-1 flex-col">
-							<div className="flex items-center gap-xs">
+							<div className="flex items-center gap-4">
 								<span className="truncate tr-text-ui text-text-default">{layer.label}</span>
 								<ScopeChip scope={layer.origin.scope} />
 								{layer.lazy ? (
@@ -204,7 +204,7 @@ export function ClaudeConfigPanel({ workspaceId }: { workspaceId: string }) {
 			data-testid="claude-config-panel"
 			className="flex h-full min-h-0 flex-col bg-container-sidebar-bg"
 		>
-			<div className="flex h-panel-header-row shrink-0 items-center gap-sm px-sm">
+			<div className="flex h-panel-header-row shrink-0 items-center gap-8 px-8">
 				{SURFACES.map((option) => (
 					<ToggleSegment
 						key={option.value}
@@ -220,15 +220,15 @@ export function ClaudeConfigPanel({ workspaceId }: { workspaceId: string }) {
 						data-testid="claude-config-refresh"
 						aria-label="Re-read configuration"
 						onClick={() => load(applied.current)}
-						className="ml-auto flex size-5 items-center justify-center rounded-[var(--radius-sm)] text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
+						className="ml-auto flex size-20 items-center justify-center rounded-[var(--radius-sm)] text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
 					>
-						<RefreshCw className="size-3.5" />
+						<RefreshCw className="size-14" />
 					</button>
 				</IconTooltip>
 			</div>
 
 			{error ? (
-				<p data-testid="claude-config-error" className="px-sm py-xs tr-text-ui text-feedback-error">
+				<p data-testid="claude-config-error" className="px-8 py-4 tr-text-ui text-feedback-error">
 					{error}
 				</p>
 			) : null}
@@ -238,12 +238,12 @@ export function ClaudeConfigPanel({ workspaceId }: { workspaceId: string }) {
 					key={problem.title + (problem.path ?? "")}
 					data-testid="claude-config-problem"
 					data-severity={problem.severity}
-					className="flex items-start gap-xs border-border-muted border-b px-sm py-xs"
+					className="flex items-start gap-4 border-border-muted border-b px-8 py-4"
 				>
 					{problem.severity === "warning" ? (
-						<AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-feedback-warning" />
+						<AlertTriangle className="mt-2 size-14 shrink-0 text-feedback-warning" />
 					) : (
-						<Info className="mt-0.5 size-3.5 shrink-0 text-feedback-info" />
+						<Info className="mt-2 size-14 shrink-0 text-feedback-info" />
 					)}
 					<div className="flex min-w-0 flex-col">
 						<span className="tr-text-ui text-text-default">{problem.title}</span>
@@ -288,7 +288,7 @@ export function ClaudeConfigPanel({ workspaceId }: { workspaceId: string }) {
 
 			<QuietScrollArea className="min-h-0 flex-1">
 				{!snapshot ? (
-					<p className="p-sm tr-text-ui text-text-muted">Reading configuration…</p>
+					<p className="p-8 tr-text-ui text-text-muted">Reading configuration…</p>
 				) : surface === "context" ? (
 					<ContextSurface layers={snapshot.context} onOpen={openSource} onEdit={setPendingEdit} />
 				) : surface === "settings" ? (

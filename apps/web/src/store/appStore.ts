@@ -2,6 +2,7 @@ import type {
 	AgentTodoItem,
 	AppConfig,
 	AskUserQuestionResult,
+	BlueprintState,
 	ClaudeCodeStatus,
 	ComposerGrowthLimit,
 	ExtUiRequest,
@@ -33,6 +34,7 @@ import type {
 	WorkspaceFsChangedPayload,
 } from "@thinkrail/contracts";
 import {
+	BLUEPRINT_FILE,
 	customMessageText,
 	DEFAULT_CONFIG,
 	isAskUserAnswersMessage,
@@ -63,6 +65,7 @@ import {
 	tupleKey,
 	userText,
 } from "../lib";
+import { openBlueprintPair } from "../panels/blueprintOpen";
 import type {
 	LayoutAuxiliaryRegion,
 	LayoutTabPane,
@@ -167,7 +170,25 @@ export interface PlanTab {
 	name: string;
 	sessionId: string;
 }
-export type EditorTab = FileTab | ExternalFileTab | ChatTab | DocTab | DiffTab | PlanTab;
+export interface BlueprintTab {
+	kind: "blueprint";
+	id: string;
+	name: string;
+	workspaceId: string;
+}
+
+export type EditorTab =
+	| FileTab
+	| ExternalFileTab
+	| ChatTab
+	| DocTab
+	| DiffTab
+	| PlanTab
+	| BlueprintTab;
+
+export function blueprintTabId(workspaceId: string): string {
+	return tupleKey("blueprint", workspaceId);
+}
 
 export function chatTabId(workspaceId: string, sessionId: string): string {
 	return tupleKey("chat", workspaceId, sessionId);
@@ -248,6 +269,8 @@ export interface LayoutOpenOptions {
 	navigation?: CenterNavigationStamp | null;
 	countNavigation?: boolean;
 	claimPreview?: boolean;
+	/** Opt out of the blueprint redirect and open `BLUEPRINT.md` as plain source. */
+	rawBlueprintSource?: boolean;
 }
 
 export type LayoutIntent =
@@ -293,6 +316,14 @@ export type LayoutIntent =
 	| { id: string; kind: "close-terminal"; workspaceId: string; tabKey: string }
 	| { id: string; kind: "select-terminal"; workspaceId: string; tabKey: string }
 	| { id: string; kind: "toggle-side"; workspaceId: string; side: "left" | "right" }
+	| {
+			id: string;
+			kind: "pane-with";
+			workspaceId: string;
+			tabId: string;
+			targetId: string;
+			direction: "horizontal" | "vertical";
+	  }
 	| { id: string; kind: "toggle-bottom"; workspaceId: string };
 export type LayoutIntentInput = LayoutIntent extends infer Intent
 	? Intent extends { id: string }
@@ -819,6 +850,8 @@ interface AppState {
 	} | null;
 	specsByWorkspace: Record<string, SpecGraphNode[]>;
 	reviewsByWorkspace: Record<string, ReviewSnapshot>;
+	blueprintByWorkspace: Record<string, BlueprintState>;
+	terminalInputByWorkspace: Record<string, string>;
 	reviewFocusRequest: { workspaceId: string; commentId: string } | null;
 	fileFocusRequest: { workspaceId: string; path: string; keyPath: readonly string[] } | null;
 	fsChangesByWorkspace: Record<string, { tick: number; paths: string[]; truncated: boolean }>;
@@ -954,6 +987,9 @@ interface AppState {
 	confirmTerminalReservation: (workspaceId: string, tabKey: string) => void;
 	rejectTerminalReservation: (workspaceId: string, tabKey: string) => void;
 	consumeTerminalInitialCommand: (workspaceId: string, tabKey: string) => void;
+	/** A line for a terminal ThinkRail does not own the connection to; its instance flushes it. */
+	queueTerminalInput: (workspaceId: string, tabKey: string, text: string) => void;
+	consumeTerminalInput: (workspaceId: string, tabKey: string) => string | null;
 	setClaudeCodeStatus: (
 		workspaceId: string,
 		tabKey: string,
@@ -1065,6 +1101,8 @@ interface AppState {
 	requestFileFocus: (workspaceId: string, path: string, keyPath: readonly string[]) => void;
 	clearFileFocus: (path?: string) => void;
 	applyReviewChanged: (payload: ReviewChangedPayload) => void;
+	setWorkspaceBlueprint: (state: BlueprintState) => void;
+	applyBlueprintChanged: (state: BlueprintState) => void;
 	pushToast: (toast: Omit<Toast, "id">) => string;
 	dismissToast: (id: string) => void;
 }
@@ -1707,6 +1745,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 	specRequest: null,
 	specsByWorkspace: {},
 	reviewsByWorkspace: {},
+	blueprintByWorkspace: {},
+	terminalInputByWorkspace: {},
 	reviewFocusRequest: null,
 	fileFocusRequest: null,
 	changesView: "list",
@@ -1845,6 +1885,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 				specsByWorkspace: omitKey(state.specsByWorkspace, workspaceId),
 				diffScopeByWorkspace: omitKey(state.diffScopeByWorkspace, workspaceId),
 				reviewsByWorkspace: omitKey(state.reviewsByWorkspace, workspaceId),
+				blueprintByWorkspace: omitKey(state.blueprintByWorkspace, workspaceId),
 				changesRequest:
 					state.changesRequest?.workspaceId === workspaceId ? null : state.changesRequest,
 				specRequest: state.specRequest?.workspaceId === workspaceId ? null : state.specRequest,
@@ -2059,6 +2100,17 @@ export const useAppStore = create<AppState>((set, get) => ({
 	openTab: (tab, intent, syncLayout = true, options = {}) =>
 		set((s) => {
 			const wsId = tab.workspaceId;
+			// The spec has exactly one surface. Opening its file — from Files, Specs, anywhere — brings the
+			// blueprint pair back instead of a second, plain view of the same document. See panels/SPEC.md.
+			if (
+				tab.kind === "file" &&
+				tab.path === BLUEPRINT_FILE &&
+				!options.rawBlueprintSource &&
+				!s.removedWorkspaceIds[wsId]
+			) {
+				void openBlueprintPair(wsId);
+				return {};
+			}
 			const sessionId = editorSessionId(tab);
 			if (
 				s.removedWorkspaceIds[wsId] ||
@@ -2417,6 +2469,21 @@ export const useAppStore = create<AppState>((set, get) => ({
 				activeTerminalByWorkspace: { ...s.activeTerminalByWorkspace, [workspaceId]: tabKey },
 			};
 		}),
+	queueTerminalInput: (workspaceId, tabKey, text) =>
+		set((s) => ({
+			terminalInputByWorkspace: {
+				...s.terminalInputByWorkspace,
+				[tupleKey(workspaceId, tabKey)]: text,
+			},
+		})),
+	consumeTerminalInput: (workspaceId, tabKey) => {
+		const key = tupleKey(workspaceId, tabKey);
+		const text = get().terminalInputByWorkspace[key] ?? null;
+		if (text !== null) {
+			set((s) => ({ terminalInputByWorkspace: omitKey(s.terminalInputByWorkspace, key) }));
+		}
+		return text;
+	},
 	setWorkspaceTerminals: (workspaceId, tabs) =>
 		set((s) => {
 			if (s.removedWorkspaceIds[workspaceId]) return {};
@@ -3345,6 +3412,16 @@ export const useAppStore = create<AppState>((set, get) => ({
 				? {}
 				: { reviewsByWorkspace: { ...s.reviewsByWorkspace, [payload.workspaceId]: next } };
 		}),
+	setWorkspaceBlueprint: (state) =>
+		set((s) => ({
+			blueprintByWorkspace: { ...s.blueprintByWorkspace, [state.workspaceId]: state },
+		})),
+	applyBlueprintChanged: (state) =>
+		set((s) =>
+			s.removedWorkspaceIds[state.workspaceId]
+				? {}
+				: { blueprintByWorkspace: { ...s.blueprintByWorkspace, [state.workspaceId]: state } },
+		),
 	pushToast: (toast) => {
 		const twin = get().toasts.find(
 			(t) => t.variant === toast.variant && t.title === toast.title && t.message === toast.message,

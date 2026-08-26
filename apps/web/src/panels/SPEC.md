@@ -213,7 +213,7 @@ hook, others quiet `welcome-action`s). Welcome is **the mode fork**: with a proj
 **"Start building"** (isolated worktree) with **"Work in project folder"** (the Default workspace) so the
 two working modes are a visible choice, not a hidden default. The cards by state: **no projects** →
 **"Open project"** (one card); **project + `hasSpecs`** → **"Start building"** (primary) + "Work in
-project folder"; **project + no specs** → a spec-first **"Set up project"** (primary) + "Start building"
+project folder"; **project + no specs** → a spec-first **"Draft a blueprint"** (primary) + "Start building"
 + "Work in project folder". **"Open project" appears only in the no-projects state** — where it's the
 only possible action; once a project is shown, opening another is the projects-rail **"+"** (the same
 dropdown), so Welcome stays the *work-in-this-project* surface. That card hangs the shared
@@ -255,6 +255,128 @@ provider is "connected" iff any `configured`) on mount and re-checks whenever th
 it disappears the moment the user connects one; a transport error degrades to *not* nagging (offline ≠ "no
 provider"). All provider **management** lives in Settings, not here (the always-on strip is gone).
 
+**`NewProjectDialog`** is the create half of the project verbs, reached from the **`AddProjectMenu`** in
+every state (the rail's `+` and Welcome's own Open-project card both carry it) and additionally as a
+Welcome **card in the no-projects state**, where there is nothing else on screen to do. It is not a card
+in the other states on purpose — the card row is a mode fork, not a command palette, and a global verb
+already reachable from the menu does not earn a permanent slot beside it.
+
+The dialog is a parent-folder picker plus a name field, and it **shows the full target path before it
+creates anything** — the one thing a "name a new project" box usually hides. `project.create` makes the
+folder and `git init`s it with no commit, so the success state says so plainly and points at the missing
+first commit rather than letting the user discover it at *Start building* (which now refuses an unborn
+HEAD by name — see [[submodule-server-workspaces]]). That success state is also where the two features
+meet: **Draft a blueprint** hands straight to `BlueprintStartDialog`. The offer is a prop, and the rail's
+copy of the dialog omits it — inside a workspace a blueprint has nowhere to render, and an affordance
+whose destination does not exist is worse than a missing one.
+
+**A blueprint lives in the project folder, beside the agent that writes it.** `BlueprintStartDialog`
+takes the brief and opens the project's **Default workspace** — not a cut worktree. A spec is written
+*before* there is anything to isolate, and a branch named after a paragraph helps nobody; the reader who
+wants isolation cuts a worktree once the spec says what to build. One project folder holds one spec, so
+starting a blueprint where one already exists reopens that pair instead of clobbering the file. From
+there: `blueprint.open`, the **`focus` preset** committed as the first layout, the chosen agent's surface, and
+two layout intents that open the blueprint tab and pane it **horizontally** with that surface — agent
+left, specification right.
+
+**The agent pill decides what the left pane *is*, and either way it is the document's author.** `pi`
+opens a chat session and sends it the opening prompt; `claude` places a centre terminal running
+`claude --append-system-prompt … "<opening prompt>"` — *interactive*, so the reader can talk to the thing
+that is writing. They are different kinds of thing, so the flow returns the layout id of whichever it
+opened and builds the pane around that rather than assuming a chat, and registers it as the author with
+`blueprint.setAuthor`.
+
+**Changing the spec from the panel talks to that author.** `blueprint.select` and `blueprint.confirmEdits`
+write the file host-side and hand back the sentence the author still needs to hear; the *client* delivers
+it, because a terminal takes writes only from its attached client. A chat gets `session.prompt`; a
+terminal gets the line queued in the store for `TerminalInstance`, the one component that holds the
+server id. There is no Keep/Discard gate any more — the file is the document, and what moved in the
+author's last rewrite is shown as a strip and highlighted rules rather than held for approval.
+
+**The author goes in the centre group, named explicitly.** `addTerminal` silently drops `targetArea`
+unless a `targetGroupId` comes with it, and its default region is the bottom — so passing `"center"`
+alone put the Claude author under the document instead of beside it. The flow therefore takes
+`primaryCenterGroupId` of the layout it just committed and names it.
+
+**The trust gate is explained, not bypassed.** Claude Code asks to trust a folder the first time it runs
+in one, and no flag skips that in interactive mode (the docs are explicit: only `--print` does). Writing
+trust into the user's `~/.claude.json` behind their back would break the rule that `claudeConfig` writes
+only on consent, so the `awaiting` state says what is being asked and that the folder is the empty
+worktree ThinkRail just cut.
+
+**Drafting a spec is not the moment for the rest of the IDE.** The `focus` preset is reused rather than
+invented: one centre group, every side tool and the bottom region hidden — no Specs, Files, Changes,
+Review or shell competing with the document. They are hidden, not deleted, so revealing one later is the
+ordinary gesture. The default-terminal seeding in `WorkspaceWorkbench` additionally **skips a workspace
+whose centre holds a blueprint**, which is a placement fact and so survives reload without a flag. There is no project-less
+blueprint: a chat and a terminal are workspace-scoped in ThinkRail, so a spec with nothing beside it was
+a spec you could not talk about. The Welcome card therefore disappears from the **no-projects** state,
+where there is no project to cut a workspace from.
+
+**The spec has exactly one surface.** `store.openTab` intercepts a file tab for `BLUEPRINT.md` — from
+Files, from Specs, from anywhere — and calls `openBlueprintPair` instead, so the reader can never end up
+with a plain markdown view of the document beside its live one. The **hatch is deliberate but
+inconvenient**: right-click the file in Files → *Open raw source*, which passes `rawBlueprintSource`
+through `openFileInTab` to opt out of the redirect. It is not on the tab's own menu — `Workbench` is
+generic layout machinery with no workspace in scope, and teaching it about blueprints to save a click
+would be the wrong coupling. If the author's half was closed it comes
+back too: a pi chat by its persisted session id, a Claude terminal by reattaching its tab, where the
+terminal module's existing resume machinery prefills `claude --resume <session>` for the reader to
+confirm. Spending a resume stays their decision, exactly as it is everywhere else in the app.
+
+**`BlueprintPane`** is the tab body, and it hydrates itself: the layout tab is persisted, so a reload
+arrives with no store entry and reads `blueprint.get` for its workspace. Until the author has written
+`BLUEPRINT.md` the pane says so plainly (`phase: "awaiting"`) instead of showing an empty document.
+
+**Blueprint is the spec-first path, and it is reachable from every state that has a project.** In a
+project **without specs** it *is* the primary **Draft a blueprint** card — that card (once titled "Set up project", a name that
+said nothing about what it opened) used to open New Workspace with
+`/skill:setting-up-a-project ` prefilled, and the blueprint replaces that route (the skill itself is
+untouched and still runs from any chat via `/skill:`). In a project **with** specs, and in the
+**no-projects** state, it is a quiet `Draft a blueprint` card; `NewProjectDialog`'s success state offers
+it too. An earlier revision confined it to the empty state on the theory that a blueprint is a pre-repo
+artefact — that was wrong in practice: a user who has just made a project is precisely the user who wants
+one, and confining it left no way back to the offer once that dialog closed. **`BlueprintStartDialog`** is the whole input —
+one pill per *source*, then whatever that source needs, then one pill per agent, the Claude pill disabled
+with its reason until Claude Code is enabled in Settings.
+
+**Three sources, one door.** An idea is the free-text field. **This project** needs no input at all — the
+worktree is the input. **A document** opens the host's native file picker (`dialog.selectFile`, the same
+one that finds a Claude binary) and shows the chosen path; the host is what decides whether that path is
+inside the project, so a file picked from somewhere else comes back as a refusal in a toast with the
+dialog still open, before a workspace has been spent on it. A separate "take over" door was rejected: the
+agent pill, the workspace it lands in and the layout it applies are identical in all three cases, and two
+dialogs would have been the same dialog twice. The submit button says what it will do — *Draft it* for an
+idea, *Take it over* for either takeover.
+
+`BlueprintView` renders the host's *parsed* document (`BlueprintDoc` — ordered prose and control blocks),
+never the format's text: `apps/web` cannot parse a format it is not allowed to depend on a parser for, and
+the tolerance a stream demands lives in the host's parser instead (see [[submodule-server-blueprint]]).
+Prose blocks go through `chat/Markdown`; a control block is **`BlueprintControlView`**, which renders a
+dropdown for `kind: "select"` and a checkbox list for `kind: "multi"` — the axis is the reason a control
+exists, so it is always visible beside its option rather than hidden behind a hover. A block keeps its own
+`id` as the React key (a control's id, prose numbered in order), so a streaming rewrite re-renders in
+place rather than remounting the document under the reader's cursor.
+
+**Every visible piece of text is editable, through one primitive.** `EditableText` is a button that
+becomes a `textarea` on click: Escape abandons, blur or Enter commits (Cmd/Ctrl+Enter for prose, which
+takes plain Enter as a newline). Prose renders as markdown until clicked and as its own source while being
+edited, so the reader edits what they wrote rather than what it compiled to. A commit does **not**
+regenerate — it stages, and a `blueprint-edits` strip appears offering **Confirm edits** (react now) and
+**Revert** (put the agent's words back). That asymmetry against controls, which react on click, is the
+recalculation policy; it lives in [[submodule-server-blueprint]]. Every control is **disabled while the
+agent is running** — `data-phase` on the root carries `generating` / `idle` / `reacting` / `proposed` /
+`failed`, and the e2e suite drives off exactly that attribute. The spec-graph frontmatter the author opens
+the file with renders as the same `FrontmatterProperties` table a markdown file gets, first in the
+document; an edit there rebuilds the block and goes over the wire as a `frontmatter` text edit, staged
+and confirmed with the prose edits rather than landing as a tab draft (a blueprint has no tab draft).
+`e2e/blueprint-watch.spec.ts` pins the table and one edit.
+
+When a reaction settles, the view shows the **proposal**, not the accepted document: a warning strip names
+how many other things moved, lists them, and offers Keep or Discard, while every control the rewrite
+touched wears a warning rule down its left edge. That is the answer to "the reader changed one thing and
+twenty moved" — they see the twenty before any of it is theirs.
+
 Beneath it, **`ProjectSkillsNotice`** is the pre-workspace trust surface (so trust is reachable with no
 workspace yet): **presence-gated** — renders nothing unless the selected project ships committed skills —
 showing a **count** ("ships N skills → *Trust project*"), a "N new → *Review & enable*" state for skills that
@@ -291,7 +413,7 @@ session) instead of a chat — the same launch the tab strip's launcher performs
 means no prompt-driven auto-rename, so the naming hint stays hidden for Claude and the worktree keeps
 its placeholder name unless the Name field was edited. `e2e/new-workspace.spec.ts` drives it against a
 stand-in `claude`. An optional **`promptNote`** renders as a small info strip above
-the prompt (used by "Set up project" to say what the seeded skill command does). The worktree mode's
+the prompt (used by "Draft a blueprint" to say what the seeded skill command does). The worktree mode's
 base-branch trigger reads **“From
 {base}”**, not an unexplained ref. An optional **`initialPrompt`** seeds the prompt hero (still editable;
 empty by default); while the prompt is non-empty (worktree mode), a secondary hint says ThinkRail will name the workspace
@@ -788,10 +910,15 @@ waits about a second, which is useless for text the user is already looking at.
 
 ## Selecting in the rendered document reaches Claude
 
-A selection made in the markdown preview is reported to the Claude Code bridge exactly as an editor
-selection is (`transport.reportIdeSelection`), so highlighting a passage of prose is a way to hand it to
-a running agent.
+A selection made in the markdown preview **or the blueprint pane** is reported to the Claude Code bridge
+exactly as an editor selection is (`transport.reportIdeSelection`), so highlighting a passage of prose is
+a way to hand it to a running agent — including the spec the agent is in the middle of writing.
 
+- **The blueprint pane stamps its own blocks.** It renders `BlueprintDoc` blocks, not markdown, so no
+  rehype plugin puts the stamps there: the host sends `BlueprintState.lines` (a block-id → span map that
+  `blueprintBlockLines` derives from the *serializer*, so a layout change moves the text and the spans
+  together) and the pane writes them onto each block as the same `data-md-line-*` attributes. That is
+  what lets `stampedSelectionLines` read both views without knowing the difference between them.
 - **The range is block-level; the text is exact.** The line span comes from the `data-md-line-*` stamps
   the review comments already rely on, which mark enclosing blocks — so selecting half a paragraph
   reports that paragraph's lines with the selected text. That is the honest limit of what the rendered
@@ -1630,6 +1757,17 @@ tab — `external-file` when the path escaped the worktree, which is most of Cla
 - **Clicking an entry scrolls, it doesn't select.** `Outline` reuses the exact `getElementById(id)`
   `scrollIntoView` used for in-doc `#` links (above) rather than a second navigation mechanism — one
   scroll path for "jump to a heading," whether the click came from a link or the outline.
+- **A blueprint passage is selectable text first and a click-to-edit second.** `EditableText`'s read
+  view was a `<button>` wrapping the rendered markdown, which broke the one thing the blueprint shares
+  with every other document — drag over a passage and the selection reaches the running agent through
+  the IDE bridge (`useReportedBlueprintSelection`, the same `data-md-line-*` stamps the file preview
+  reports from). Text inside a button is not reliably selectable, and a drag that ends over the same
+  element is also a *click*, which swapped the selection for a textarea the moment the mouse came up.
+  A passage is plain text now, and the action is its own small Edit button beside it — shown on hover,
+  always reachable by keyboard — because a paragraph announced as one button is also wrong for a screen
+  reader; the same shape serves a control's option label and axis. `e2e/blueprint-watch.spec.ts` drags over a passage with a real
+  mouse and asserts the selection survives the mouse-up with no editor opened; the report itself rides
+  the same `reportIdeSelection` call the file preview is trusted on.
 - **Code surfaces re-theme from generic tokens, resiliently.** `MonacoEditor` defines the `thinkrail`
   theme from live surface + semantic syntax variables and chooses its normal/high-contrast base from
   manifest appearance/contrast metadata—never from a known id—then redefines it after the theme module's

@@ -188,6 +188,13 @@ place as `kind: "external"` — outside the data dir, never created or mutated h
   `kind: "default"` — forget would hand the archive teardown's `rm -rf` fallback the project folder,
   rename would `git branch -m` the user's real branch; the record carries `renamed: true` so both
   auto-rename passes stay away as belt-and-suspenders.
+- **An unborn HEAD is refused by name, before git is asked to do the impossible.** `createWorkspace`
+  verifies `HEAD` resolves and otherwise throws "This repository has no commits yet…". A worktree needs a
+  commit to branch from, and without this check the sequence is doubly obscure: `rev-parse --abbrev-ref
+  HEAD` *fails* on an unborn HEAD, so `baseBranch` falls through to the literal string `"HEAD"`, and the
+  user is shown `git worktree add failed: fatal: invalid reference: HEAD`. [[submodule-server-projects]]'s
+  `initProject` now makes a root commit precisely so this is not the everyday path, but the check stays:
+  that commit is best-effort, and a user can always open a repository they initialized themselves.
 - **Initial-terminal provisioning is a durable host handshake.** Every workspace record first persisted by
   `createWorkspace`, `openExistingWorktree`, or Default ensure carries optional literal
   `initialTerminalPending: true`. `host` idempotently reserves the deterministic process-free terminal tab,

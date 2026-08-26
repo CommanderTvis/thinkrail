@@ -442,6 +442,8 @@ function tabSearchKeywords(tab: LayoutTab): string[] {
 			return [name, tab.kind, tab.sessionId];
 		case "document":
 			return [name, tab.kind, tab.sourceId, tab.docPath];
+		case "blueprint":
+			return [name, tab.kind];
 		case "terminal":
 			return [name, tab.kind, tab.tabKey];
 		case "tool":
@@ -1269,7 +1271,7 @@ function WorkbenchTab({
 							onClick={selectFromClick}
 							onDoubleClick={selectFromDoubleClick}
 							onKeyDown={onKeyDown}
-							className={`flex min-w-0 flex-1 items-center gap-xs pl-sm text-left outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary ${vertical ? "py-sm" : "py-xs"} ${tab.kind === "tool" ? "pr-sm" : ""}`}
+							className={`flex min-w-0 flex-1 items-center gap-4 pl-8 text-left outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary ${vertical ? "py-8" : "py-4"} ${tab.kind === "tool" ? "pr-8" : ""}`}
 						>
 							{tabIcon(tab, renderTabIcon, active)}
 							{subtitle ? (
@@ -1723,9 +1725,9 @@ function CenterGroupView({
 							data-testid="new-chat"
 							aria-label="New chat"
 							onClick={() => onNewChat(group.id)}
-							className="flex w-7 shrink-0 items-center justify-center text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
+							className="flex w-32 shrink-0 items-center justify-center text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
 						>
-							<MessageSquarePlus className="size-4" />
+							<MessageSquarePlus className="size-16" />
 						</button>
 					</IconTooltip>
 				</>

@@ -392,7 +392,7 @@ export function LayoutSettings() {
 				</div>
 			</section>
 
-			<section className="space-y-sm border-border-default border-t pt-lg">
+			<section className="space-y-8 border-border-default border-t pt-16">
 				<div>
 					<h3 className="tr-title-section text-text-default">Editor tabs</h3>
 					<p className="tr-text-metadata text-text-muted">
@@ -400,7 +400,7 @@ export function LayoutSettings() {
 						centre keeps the strip, since two columns leave too little room for the editors.
 					</p>
 				</div>
-				<label className="flex w-full items-center gap-sm tr-text-ui text-text-default">
+				<label className="flex w-full items-center gap-8 tr-text-ui text-text-default">
 					<input
 						type="checkbox"
 						data-testid="vertical-center-tabs"
@@ -411,7 +411,7 @@ export function LayoutSettings() {
 								verticalCenterTabs: event.target.checked,
 							})
 						}
-						className="size-4 shrink-0 accent-primary"
+						className="size-16 shrink-0 accent-primary"
 					/>
 					<span className="min-w-0 flex-1">Show editor tabs vertically</span>
 				</label>

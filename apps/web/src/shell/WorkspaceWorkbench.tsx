@@ -87,6 +87,9 @@ import { WorkspaceChatHistory } from "./WorkspaceChatHistory";
 
 const ChatView = lazy(() => import("../chat/ChatView"));
 const PlanPane = lazy(() => import("../panels/PlanPane"));
+const BlueprintPane = lazy(() =>
+	import("../panels/BlueprintView").then((module) => ({ default: module.BlueprintPane })),
+);
 
 const NO_EDITOR_TABS: EditorTab[] = [];
 const NO_CLAUDE_CODE_STATUS: Record<string, ClaudeCodeSessionState> = {};
@@ -275,7 +278,6 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 		[layoutPreferences],
 	);
 	const workspace = useAppStore((state) => selectWorkspaceById(state, workspaceId));
-	const initialTerminalEligible = workspace?.initialTerminalEligible === true;
 	const vcsGap = workspace?.vcs;
 	const unofferedTools = vcsGap ? GIT_TOOLS : NO_UNOFFERED_TOOLS;
 	const contextProject = useAppStore(selectContextProject);
@@ -502,6 +504,15 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 					</ErrorBoundary>
 				);
 			}
+			if (tab.kind === "blueprint") {
+				return (
+					<ErrorBoundary label="blueprint" resetKeys={[workspaceId, tab.id]}>
+						<Suspense fallback={<MissingResource label="blueprint" />}>
+							<BlueprintPane workspaceId={workspaceId} />
+						</Suspense>
+					</ErrorBoundary>
+				);
+			}
 			if (tab.kind === "terminal") {
 				const terminal = terminalByKey.get(tab.tabKey);
 				const location = document ? findTabLocation(document, tab.id) : null;
@@ -595,7 +606,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 					) : (
 						// A layout saved while it was on outlives the setting, so the tab explains itself
 						// rather than rendering a pane that would be refused by the host anyway.
-						<div className="flex h-full items-center justify-center px-lg text-center tr-text-ui text-text-muted">
+						<div className="flex h-full items-center justify-center px-16 text-center tr-text-ui text-text-muted">
 							Claude Code integration is off. Turn it on in Settings.
 						</div>
 					);
@@ -685,7 +696,8 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 						tab.kind === "file" ||
 						tab.kind === "external-file" ||
 						tab.kind === "diff" ||
-						tab.kind === "document"
+						tab.kind === "document" ||
+						tab.kind === "blueprint"
 					) {
 						for (const cache of state.tabsByWorkspace[workspaceId] ?? []) {
 							const resource = toLayoutTab(cache);
@@ -726,7 +738,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 				renderTabIcon={(tab, active) => {
 					// Claude's colour only on the active tab. See shell/SPEC.md.
 					const mark = (
-						<ClaudeMark className={cn("size-3.5 shrink-0", active && "text-agent-claude")} />
+						<ClaudeMark className={cn("size-14 shrink-0", active && "text-agent-claude")} />
 					);
 					if (
 						claudeCodeEnabled &&
@@ -740,7 +752,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 						return (
 							<FileSymlink
 								aria-label={`Outside the worktree: ${tab.path}`}
-								className="size-3.5 shrink-0 text-agent-claude"
+								className="size-14 shrink-0 text-agent-claude"
 							/>
 						);
 					}
@@ -753,7 +765,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 								data-testid="file-unsaved-dot"
 								role="img"
 								aria-label="Unsaved changes"
-								className="size-1.5 shrink-0 rounded-full bg-feedback-warning"
+								className="size-6 shrink-0 rounded-full bg-feedback-warning"
 							/>
 						);
 					}
@@ -775,7 +787,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 								<Loader2
 									data-testid="terminal-claude-code-status"
 									data-status="running"
-									className="size-3 shrink-0 animate-spin text-text-muted motion-reduce:animate-none"
+									className="size-12 shrink-0 animate-spin text-text-muted motion-reduce:animate-none"
 								/>
 							);
 						}
@@ -787,7 +799,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 									role="status"
 									aria-label="Claude needs your input"
 									title="Claude needs your input"
-									className="size-2 shrink-0 animate-pulse rounded-full bg-feedback-warning motion-reduce:animate-none"
+									className="size-8 shrink-0 animate-pulse rounded-full bg-feedback-warning motion-reduce:animate-none"
 								/>
 							);
 						}
@@ -797,7 +809,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 									data-testid="terminal-claude-code-status"
 									data-status="done"
 									aria-label="Claude finished"
-									className="size-3 shrink-0 text-feedback-success"
+									className="size-12 shrink-0 text-feedback-success"
 								/>
 							);
 						}
@@ -807,7 +819,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 									data-testid="terminal-claude-code-status"
 									data-status="failed"
 									aria-label="Claude hit an error"
-									className="size-3 shrink-0 text-feedback-error"
+									className="size-12 shrink-0 text-feedback-error"
 								/>
 							);
 						}

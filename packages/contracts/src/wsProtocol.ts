@@ -1,4 +1,13 @@
 import type {
+	BlueprintAgentId,
+	BlueprintAuthor,
+	BlueprintEditTarget,
+	BlueprintLaunch,
+	BlueprintMutationResult,
+	BlueprintSource,
+	BlueprintState,
+} from "./blueprint";
+import type {
 	ClaudeConfigSnapshot,
 	ClaudeEditPlan,
 	ClaudeEditRequest,
@@ -137,6 +146,8 @@ export const WS_METHODS = {
 	projectList: "project.list",
 	projectClose: "project.close",
 	projectInspect: "project.inspect",
+	projectInit: "project.init",
+	projectCreate: "project.create",
 	projectHasSpecs: "project.hasSpecs",
 	projectSetTrust: "project.setTrust",
 	projectAcknowledgeSkills: "project.acknowledgeSkills",
@@ -259,6 +270,15 @@ export const WS_METHODS = {
 	templateGet: "template.get",
 	templateSave: "template.save",
 	templateDelete: "template.delete",
+	blueprintOpen: "blueprint.open",
+	blueprintSetAuthor: "blueprint.setAuthor",
+	blueprintAuthorCommand: "blueprint.authorCommand",
+	blueprintClose: "blueprint.close",
+	blueprintGet: "blueprint.get",
+	blueprintSelect: "blueprint.select",
+	blueprintEdit: "blueprint.edit",
+	blueprintConfirmEdits: "blueprint.confirmEdits",
+	blueprintDiscardEdits: "blueprint.discardEdits",
 } as const;
 
 export const WS_CHANNELS = {
@@ -283,6 +303,7 @@ export const WS_CHANNELS = {
 	feedbackInterview: "feedback.interview",
 	reviewChanged: "review.changed",
 	ideBridgeAction: "ideBridge.action",
+	blueprintChanged: "blueprint.changed",
 } as const;
 
 export type WsMethod = (typeof WS_METHODS)[keyof typeof WS_METHODS];
@@ -352,6 +373,8 @@ export interface WsMethodMap {
 	"project.list": { params: Record<string, never>; result: Project[] };
 	"project.close": { params: { id: string }; result: Ack };
 	"project.inspect": { params: { path: string }; result: ProjectPathStatus };
+	"project.init": { params: { path: string }; result: Project };
+	"project.create": { params: { parentPath: string; name: string }; result: Project };
 	"project.hasSpecs": { params: { projectId: string }; result: { hasSpecs: boolean } };
 	"project.setTrust": { params: { id: string; trusted: boolean }; result: Project };
 	"project.acknowledgeSkills": { params: { id: string; names: string[] }; result: Project };
@@ -538,7 +561,13 @@ export interface WsMethodMap {
 	};
 	"terminal.attach": {
 		params: { workspaceId: string; tabKey: string; title?: string; cols?: number; rows?: number };
-		result: { id: string; created: boolean; replay?: string; prefill?: string };
+		result: {
+			id: string;
+			created: boolean;
+			replay?: string;
+			prefill?: string;
+			prefillSubmit?: boolean;
+		};
 	};
 	"terminal.rename": {
 		params: { workspaceId: string; tabKey: string; title: string };
@@ -701,6 +730,30 @@ export interface WsMethodMap {
 		params: { workspaceId?: string; scope: TemplateScope; name: string };
 		result: Ack;
 	};
+	"blueprint.open": {
+		params: { workspaceId: string; source: BlueprintSource; agentId: BlueprintAgentId };
+		result: BlueprintLaunch;
+	};
+	"blueprint.authorCommand": {
+		params: { workspaceId: string };
+		result: { command: string | null };
+	};
+	"blueprint.setAuthor": {
+		params: { workspaceId: string; author: BlueprintAuthor };
+		result: Ack;
+	};
+	"blueprint.close": { params: { workspaceId: string }; result: Ack };
+	"blueprint.get": { params: { workspaceId: string }; result: BlueprintState | null };
+	"blueprint.select": {
+		params: { workspaceId: string; controlId: string; optionId: string };
+		result: BlueprintMutationResult;
+	};
+	"blueprint.edit": {
+		params: { workspaceId: string; target: BlueprintEditTarget; text: string };
+		result: Ack;
+	};
+	"blueprint.confirmEdits": { params: { workspaceId: string }; result: BlueprintMutationResult };
+	"blueprint.discardEdits": { params: { workspaceId: string }; result: Ack };
 }
 
 export type WsMethodName = keyof WsMethodMap;

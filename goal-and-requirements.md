@@ -19,6 +19,12 @@ system prompt, skills/extensions, compaction, and cost. Every feature influences
 **feed** `pi` — prompt context, files, `pi`'s own skills/extensions — and which flags we spawn it
 with, never by assembling the prompt ourselves.
 
+One surface deliberately runs on more than one runtime and does not contradict this: the **blueprint**
+generator, which drafts an interactive spec before a project exists. It runs on `pi` *and* on Claude Code
+headless, because its product is a document *format* and a format that only one vendor can emit is a
+format owned by that vendor. Those runners are text completions, not agent sessions — no tools, no
+filesystem, no session state. See `architecture.md` Decision #13.
+
 ## V1 — Worktree IDE + cheap wins
 
 A ThinkRail git-worktree IDE shipped through two additive local launchers: a native Electrobun desktop

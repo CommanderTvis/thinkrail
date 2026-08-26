@@ -307,6 +307,16 @@ export interface AttachResult {
 	replay?: string;
 	/** Typed into the shell but never run — the user decides whether to resume. See SPEC.md. */
 	prefill?: string;
+	/** Run the offer instead of typing it: a surface that promised to bring its agent back. */
+	prefillSubmit?: boolean;
+}
+
+type ResumeRunPolicy = (workspaceId: string, tabKey: string) => boolean;
+
+let resumeRunPolicy: ResumeRunPolicy = () => false;
+
+export function setResumeRunPolicy(policy: ResumeRunPolicy | null): void {
+	resumeRunPolicy = policy ?? (() => false);
 }
 
 export function attachTerminal(
@@ -369,6 +379,7 @@ export function attachTerminal(
 		created: true,
 		...(replay ? { replay } : {}),
 		...(prefill ? { prefill } : {}),
+		...(prefill && resumeRunPolicy(workspaceId, tabKey) ? { prefillSubmit: true } : {}),
 	};
 }
 

@@ -199,7 +199,13 @@ function untrackedAdded(worktreePath: string, path: string): number | undefined 
 	}
 }
 
-function diffFailure(stderr: string): Error {
+/**
+ * An unborn HEAD makes every diff base unresolvable, and git says so as `bad revision '<branch>'` — the
+ * name of a branch that does exist, which reads like corruption. Only checked once a diff has failed.
+ */
+function diffFailure(worktreePath: string, stderr: string): Error {
+	if (!git(worktreePath, ["rev-parse", "--verify", "HEAD"]).ok)
+		return new Error("This repository has no commits yet, so there is nothing to compare against.");
 	return new Error(`Could not read the changed files: ${stderr || "git failed"}`);
 }
 
