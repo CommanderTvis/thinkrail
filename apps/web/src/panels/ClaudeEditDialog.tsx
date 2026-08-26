@@ -83,12 +83,12 @@ export function ClaudeEditDialog({
 
 	return (
 		<Dialog open={edit !== null} onOpenChange={(open) => (open ? undefined : onClose())}>
-			<DialogContent className="flex max-h-[80vh] w-full max-w-[44rem] flex-col gap-sm">
+			<DialogContent className="flex max-h-[80vh] w-full max-w-[44rem] flex-col gap-8">
 				<DialogHeader>
 					<DialogTitle>{title}</DialogTitle>
 				</DialogHeader>
 
-				<div className="flex flex-col gap-xs">
+				<div className="flex flex-col gap-4">
 					<p className="tr-text-metadata text-text-muted">Where should this change go?</p>
 					{scopes.map((candidate) => (
 						<button
@@ -97,7 +97,7 @@ export function ClaudeEditDialog({
 							data-testid={`claude-edit-scope-${candidate}`}
 							aria-pressed={scope === candidate}
 							onClick={() => choose(candidate)}
-							className={`flex flex-col items-start gap-0.5 rounded-[var(--radius-sm)] border px-md py-sm text-left tr-text-ui ${
+							className={`flex flex-col items-start gap-2 rounded-[var(--radius-sm)] border px-12 py-8 text-left tr-text-ui ${
 								scope === candidate
 									? "border-primary-muted bg-primary-subtle text-text-default"
 									: "border-border-default text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
@@ -118,7 +118,7 @@ export function ClaudeEditDialog({
 				) : null}
 
 				{plan ? (
-					<div className="flex min-h-0 flex-1 flex-col gap-xs">
+					<div className="flex min-h-0 flex-1 flex-col gap-4">
 						<p className="tr-text-ui text-text-default">{plan.summary}</p>
 						<p className="tr-code-text text-text-muted">
 							{abbreviateHomePath(plan.path)}
@@ -128,9 +128,9 @@ export function ClaudeEditDialog({
 							<p
 								key={warning}
 								data-testid="claude-edit-warning"
-								className="flex items-start gap-xs tr-text-metadata text-feedback-warning"
+								className="flex items-start gap-4 tr-text-metadata text-feedback-warning"
 							>
-								<AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
+								<AlertTriangle className="mt-2 size-14 shrink-0" />
 								<span className="min-w-0 flex-1">{warning}</span>
 							</p>
 						))}
@@ -143,7 +143,7 @@ export function ClaudeEditDialog({
 									<div
 										key={id}
 										data-kind={line.kind}
-										className={`whitespace-pre-wrap break-all px-sm tr-code-text ${
+										className={`whitespace-pre-wrap break-all px-8 tr-code-text ${
 											line.kind === "add"
 												? "bg-feedback-success-subtle text-feedback-success"
 												: line.kind === "remove"
@@ -167,11 +167,11 @@ export function ClaudeEditDialog({
 					</div>
 				) : null}
 
-				<div className="flex shrink-0 items-center justify-end gap-sm">
+				<div className="flex shrink-0 items-center justify-end gap-8">
 					<button
 						type="button"
 						onClick={onClose}
-						className="rounded-[var(--radius-sm)] border border-border-default px-md py-xs tr-text-ui text-text-default hover:bg-control-bg-hovered"
+						className="rounded-[var(--radius-sm)] border border-border-default px-12 py-4 tr-text-ui text-text-default hover:bg-control-bg-hovered"
 					>
 						Cancel
 					</button>
@@ -180,7 +180,7 @@ export function ClaudeEditDialog({
 						data-testid="claude-edit-apply"
 						disabled={!plan?.changes || busy}
 						onClick={apply}
-						className="rounded-[var(--radius-sm)] bg-control-primary-bg px-md py-xs tr-text-ui text-control-primary-text hover:bg-control-primary-bg-hovered disabled:bg-control-primary-disabled-bg disabled:text-control-primary-disabled-text"
+						className="rounded-[var(--radius-sm)] bg-control-primary-bg px-12 py-4 tr-text-ui text-control-primary-text hover:bg-control-primary-bg-hovered disabled:bg-control-primary-disabled-bg disabled:text-control-primary-disabled-text"
 					>
 						Apply this change
 					</button>

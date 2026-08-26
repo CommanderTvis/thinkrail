@@ -1,5 +1,6 @@
 import type { FileNode } from "@thinkrail/contracts";
-import { Clipboard, FolderOpen } from "lucide-react";
+import { BLUEPRINT_FILE } from "@thinkrail/contracts";
+import { Clipboard, FileCode, FolderOpen } from "lucide-react";
 import { useRef, useState } from "react";
 import {
 	ContextMenu,
@@ -114,7 +115,8 @@ function FileNodeRow({
 		setPathsExpanded(representedPaths, nextExpanded);
 		if (nextExpanded) reload();
 	};
-	const open = (intent: TabIntent) => void openFileInTab(workspaceId, node.path, intent);
+	const open = (intent: TabIntent, extra?: { rawBlueprintSource: true }) =>
+		void openFileInTab(workspaceId, node.path, intent, undefined, extra);
 
 	return (
 		<li>
@@ -145,6 +147,15 @@ function FileNodeRow({
 						<FolderOpen />
 						{REVEAL_LABEL}
 					</ContextMenuItem>
+					{node.path === BLUEPRINT_FILE ? (
+						<ContextMenuItem
+							data-testid="file-node-blueprint-source"
+							onSelect={() => open("keep", { rawBlueprintSource: true })}
+						>
+							<FileCode />
+							Open raw source
+						</ContextMenuItem>
+					) : null}
 					<ContextMenuItem
 						data-testid="file-node-copy-path"
 						onSelect={() => {

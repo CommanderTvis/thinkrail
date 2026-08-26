@@ -22,12 +22,12 @@ function OutlineRow({ node }: { node: OutlineNode }) {
 						aria-label={expanded ? `Collapse ${node.entry.text}` : `Expand ${node.entry.text}`}
 						aria-expanded={expanded}
 						onClick={() => setExpanded((value) => !value)}
-						className="flex w-5 shrink-0 items-center justify-center text-text-subtle outline-none transition-colors hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset"
+						className="flex w-20 shrink-0 items-center justify-center text-text-subtle outline-none transition-colors hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset"
 					>
-						<Chevron className="size-3.5" />
+						<Chevron className="size-14" />
 					</button>
 				) : (
-					<span className="w-5 shrink-0" />
+					<span className="w-20 shrink-0" />
 				)}
 				<button
 					type="button"
@@ -37,7 +37,7 @@ function OutlineRow({ node }: { node: OutlineNode }) {
 					title={node.entry.text}
 					onClick={() => scrollToHeading(node.entry.id)}
 					className={cn(
-						"min-w-0 flex-1 truncate rounded-[var(--radius-sm)] py-0.5 pr-xs text-left tr-text-ui outline-none transition-colors hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset",
+						"min-w-0 flex-1 truncate rounded-[var(--radius-sm)] py-2 pr-4 text-left tr-text-ui outline-none transition-colors hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset",
 						node.entry.level <= 1 ? "text-text-default" : "text-text-muted",
 					)}
 				>
@@ -45,7 +45,7 @@ function OutlineRow({ node }: { node: OutlineNode }) {
 				</button>
 			</div>
 			{hasChildren && expanded ? (
-				<ul className="pl-md">
+				<ul className="pl-12">
 					{node.children.map((child) => (
 						<OutlineRow key={child.entry.id} node={child} />
 					))}
@@ -58,14 +58,14 @@ function OutlineRow({ node }: { node: OutlineNode }) {
 export function Outline({ headings }: { headings: readonly HeadingEntry[] }) {
 	if (headings.length === 0) {
 		return (
-			<p data-testid="markdown-outline-empty" className="p-sm tr-text-metadata text-text-subtle">
+			<p data-testid="markdown-outline-empty" className="p-8 tr-text-metadata text-text-subtle">
 				No headings in this document.
 			</p>
 		);
 	}
 	const tree = buildOutlineTree(headings);
 	return (
-		<nav data-testid="markdown-outline" aria-label="Document outline" className="px-xs py-sm">
+		<nav data-testid="markdown-outline" aria-label="Document outline" className="px-4 py-8">
 			<ul>
 				{tree.map((node) => (
 					<OutlineRow key={node.entry.id} node={node} />

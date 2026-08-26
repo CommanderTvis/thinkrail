@@ -185,7 +185,7 @@ export default function PdfPreview({
 				data-testid="pdf-toolbar"
 				role="toolbar"
 				aria-label="PDF view"
-				className="flex h-8 shrink-0 items-center justify-end gap-xs border-border-default border-b bg-container-header-bg px-sm"
+				className="flex h-32 shrink-0 items-center justify-end gap-4 border-border-default border-b bg-container-header-bg px-8"
 			>
 				<span className="mr-auto tr-text-metadata text-text-subtle tabular-nums">
 					{doc ? `${doc.numPages} ${doc.numPages === 1 ? "page" : "pages"}` : ""}
@@ -213,9 +213,9 @@ export default function PdfPreview({
 						data-testid="pdf-zoom-out"
 						aria-label="Zoom out"
 						onClick={() => zoomBy(1 / PDF_SCALE_STEP)}
-						className="flex size-6 items-center justify-center rounded-[var(--radius-sm)] text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
+						className="flex size-24 items-center justify-center rounded-[var(--radius-sm)] text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
 					>
-						<Minus className="size-3.5" />
+						<Minus className="size-14" />
 					</button>
 				</IconTooltip>
 				<IconTooltip label="Zoom in">
@@ -224,9 +224,9 @@ export default function PdfPreview({
 						data-testid="pdf-zoom-in"
 						aria-label="Zoom in"
 						onClick={() => zoomBy(PDF_SCALE_STEP)}
-						className="flex size-6 items-center justify-center rounded-[var(--radius-sm)] text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
+						className="flex size-24 items-center justify-center rounded-[var(--radius-sm)] text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
 					>
-						<Plus className="size-3.5" />
+						<Plus className="size-14" />
 					</button>
 				</IconTooltip>
 				<IconTooltip label="Reset zoom">
@@ -235,19 +235,19 @@ export default function PdfPreview({
 						data-testid="pdf-zoom-reset"
 						aria-label="Reset zoom"
 						onClick={() => setScale(1)}
-						className="flex size-6 items-center justify-center rounded-[var(--radius-sm)] text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
+						className="flex size-24 items-center justify-center rounded-[var(--radius-sm)] text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
 					>
-						<RotateCcw className="size-3.5" />
+						<RotateCcw className="size-14" />
 					</button>
 				</IconTooltip>
 			</div>
 			<div
 				ref={scrollRef}
 				data-testid="pdf-preview"
-				className="min-h-0 flex-1 overflow-auto bg-container-workspace-bg p-md"
+				className="min-h-0 flex-1 overflow-auto bg-container-workspace-bg p-12"
 			>
 				{doc ? (
-					<div className="flex flex-col items-center gap-md">
+					<div className="flex flex-col items-center gap-12">
 						{pageNumbers.map((pageNumber) => (
 							<PdfPage
 								key={`page-${pageNumber}`}

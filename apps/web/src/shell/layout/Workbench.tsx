@@ -442,6 +442,8 @@ function tabSearchKeywords(tab: LayoutTab): string[] {
 			return [name, tab.kind, tab.sessionId];
 		case "document":
 			return [name, tab.kind, tab.sourceId, tab.docPath];
+		case "blueprint":
+			return [name, tab.kind];
 		case "terminal":
 			return [name, tab.kind, tab.tabKey];
 		case "tool":
@@ -1724,9 +1726,9 @@ function CenterGroupView({
 							data-testid="new-chat"
 							aria-label="New chat"
 							onClick={() => onNewChat(group.id)}
-							className="flex w-7 shrink-0 items-center justify-center text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
+							className="flex w-32 shrink-0 items-center justify-center text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
 						>
-							<MessageSquarePlus className="size-4" />
+							<MessageSquarePlus className="size-16" />
 						</button>
 					</IconTooltip>
 				</>

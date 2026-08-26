@@ -562,6 +562,8 @@ test("a project rolls up with NO workspace list loaded — the collapsed, never-
 
 test("a project with only quiet workspaces rolls up to null", () => {
 	expect(projectActivityRollup({}, "p1")).toBeNull();
+});
+
 test("the file the user is in is whatever the focused group shows, and nothing for a chat", () => {
 	const document = (tab: Record<string, unknown>): WorkspaceLayoutDocument => ({
 		version: 1,

@@ -1,4 +1,5 @@
 import type { GitDiffScope } from "@thinkrail/contracts";
+import type { LayoutOpenOptions } from "@/store";
 import {
 	DOUBLE_CLICK_SETTLE_MS,
 	isAbsolutePath,
@@ -49,6 +50,7 @@ async function openReadTab<T>(
 	read: () => Promise<T>,
 	build: (payload: T, loadedTick: number) => EditorTab,
 	requestedNavigation?: CenterNavigationStamp | null,
+	extraOptions?: Partial<LayoutOpenOptions>,
 ): Promise<void> {
 	const navigation =
 		requestedNavigation === undefined
@@ -102,8 +104,8 @@ async function openReadTab<T>(
 					flight.intent,
 					true,
 					flight.intent === "keep" && flight.claimPreview && !overtaken
-						? { ...options, claimPreview: true }
-						: options,
+						? { ...options, ...extraOptions, claimPreview: true }
+						: { ...options, ...extraOptions },
 				);
 		} finally {
 			inFlight.delete(id);
@@ -136,8 +138,8 @@ async function openReadTab<T>(
 				flight.intent,
 				true,
 				flight.intent === "keep" && flight.claimPreview && !overtaken
-					? { ...options, claimPreview: true }
-					: options,
+					? { ...options, ...extraOptions, claimPreview: true }
+					: { ...options, ...extraOptions },
 			);
 	} catch {
 	} finally {
@@ -150,6 +152,7 @@ export function openFileInTab(
 	reported: string,
 	intent: TabIntent,
 	requestedNavigation?: CenterNavigationStamp | null,
+	extraOptions?: Partial<LayoutOpenOptions>,
 ): Promise<void> {
 	const path = projectRelativePath(
 		reported,
@@ -185,6 +188,7 @@ export function openFileInTab(
 			loadedTick,
 		}),
 		requestedNavigation,
+		extraOptions,
 	);
 }
 

@@ -42,6 +42,13 @@ export interface LayoutDocumentTab {
 	docPath: string;
 }
 
+/** One per workspace, so the tab needs no identity beyond its kind. */
+export interface LayoutBlueprintTab {
+	kind: "blueprint";
+	id: string;
+	name: string;
+}
+
 export interface LayoutTerminalTab {
 	kind: "terminal";
 	id: string;
@@ -62,6 +69,7 @@ export type LayoutCenterTab =
 	| LayoutDiffTab
 	| LayoutChatTab
 	| LayoutDocumentTab
+	| LayoutBlueprintTab
 	| LayoutTerminalTab;
 export type LayoutAuxiliaryTab = LayoutToolTab | LayoutTerminalTab;
 export type LayoutSideTab = LayoutAuxiliaryTab;

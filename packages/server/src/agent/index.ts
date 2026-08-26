@@ -1,6 +1,11 @@
 export { type ActivityInputs, deriveActivityStatus } from "./activity";
 export * from "./agentSessionManager";
 export * from "./askUserQuestion";
+export {
+	BLUEPRINT_CHECK_TOOL_NAME,
+	type BlueprintCheckTool,
+	setBlueprintCheckTool,
+} from "./blueprintTool";
 export { readChildTranscript } from "./delegation";
 export {
 	type BundledExtensionFactory,
