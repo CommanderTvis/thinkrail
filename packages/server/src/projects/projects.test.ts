@@ -12,6 +12,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
 	closeProject,
+	createProject,
+	initProject,
 	inspectProjectPath,
 	isProjectTrusted,
 	listProjects,
@@ -51,6 +53,26 @@ afterEach(() => {
 	if (savedDataDir === undefined) delete process.env.THINKRAIL_DATA_DIR;
 	else process.env.THINKRAIL_DATA_DIR = savedDataDir;
 });
+
+/**
+ * `initProject` commits into a repo it just created, so it inherits the developer's global git config —
+ * including signing, which is gated behind a hardware unlock on some machines. Pin both.
+ */
+function withGitIdentity<T>(run: () => T): T {
+	const config = join(dataDir, "test-gitconfig");
+	writeFileSync(
+		config,
+		"[user]\n\tname = test\n\temail = t@thinkrail.test\n[commit]\n\tgpgsign = false\n",
+	);
+	const saved = process.env.GIT_CONFIG_GLOBAL;
+	process.env.GIT_CONFIG_GLOBAL = config;
+	try {
+		return run();
+	} finally {
+		if (saved === undefined) delete process.env.GIT_CONFIG_GLOBAL;
+		else process.env.GIT_CONFIG_GLOBAL = saved;
+	}
+}
 
 function seedWorkspace(worktreePath: string, kind?: "default" | "external"): void {
 	writeFileSync(
@@ -111,19 +133,19 @@ test("inspectProjectPath: a file is `notDirectory`", () => {
 	expect(inspectProjectPath(file)).toEqual({ kind: "notDirectory" });
 });
 
-test("inspectProjectPath: a plain directory is `ok` — there is nothing left to offer to git-init", () => {
+test("inspectProjectPath: a plain directory is `initable`", () => {
 	const dir = join(dataDir, "plain");
 	mkdirSync(dir);
-	expect(inspectProjectPath(dir)).toEqual({ kind: "ok" });
+	expect(inspectProjectPath(dir)).toEqual({ kind: "initable" });
 });
 
-test("inspectProjectPath: a git repo (and any subdirectory) is also `ok`", () => {
+test("inspectProjectPath: a git repo (and any subdirectory) is `repo`", () => {
 	const repo = join(dataDir, "repo");
 	makeRepo(repo);
 	const sub = join(repo, "src", "deep");
 	mkdirSync(sub, { recursive: true });
-	expect(inspectProjectPath(repo)).toEqual({ kind: "ok" });
-	expect(inspectProjectPath(sub)).toEqual({ kind: "ok" });
+	expect(inspectProjectPath(repo)).toEqual({ kind: "repo" });
+	expect(inspectProjectPath(sub)).toEqual({ kind: "repo" });
 });
 
 test("host-home paths resolve consistently across inspect and open", () => {
@@ -137,10 +159,10 @@ test("host-home paths resolve consistently across inspect and open", () => {
 	process.env.HOME = home;
 	process.env.USERPROFILE = home;
 	try {
-		expect(inspectProjectPath("~")).toEqual({ kind: "ok" });
-		expect(inspectProjectPath("~/repo")).toEqual({ kind: "ok" });
+		expect(inspectProjectPath("~")).toEqual({ kind: "initable" });
+		expect(inspectProjectPath("~/repo")).toEqual({ kind: "repo" });
 		expect(openProject("~/repo").path).toBe(realpathSync(repo));
-		expect(inspectProjectPath("~/plain")).toEqual({ kind: "ok" });
+		expect(inspectProjectPath("~/plain")).toEqual({ kind: "initable" });
 		expect(openProject("~/plain").path).toBe(realpathSync(plain));
 	} finally {
 		if (savedHome === undefined) delete process.env.HOME;
@@ -151,7 +173,7 @@ test("host-home paths resolve consistently across inspect and open", () => {
 });
 
 test("relative project paths are rejected instead of using the host process cwd", () => {
-	for (const operation of [openProject, inspectProjectPath]) {
+	for (const operation of [openProject, inspectProjectPath, initProject]) {
 		expect(() => operation("relative/project")).toThrow("must be absolute or start with ~/");
 	}
 });
@@ -262,4 +284,57 @@ test("setProjectTrust: persists a revocable, fail-closed trust decision", () => 
 	setProjectTrust(project.id, false);
 	expect(isProjectTrusted(project.id)).toBe(false);
 	expect(() => setProjectTrust("nope", true)).toThrow();
+});
+
+test("createProject creates the folder, inits a repo with a root commit, and opens it", () => {
+	const project = withGitIdentity(() => createProject(dataDir, "Lightbulb App"));
+
+	expect(project.name).toBe("Lightbulb App");
+	expect(project.slug).toBe("lightbulb-app");
+	expect(project.hasGit).toBeUndefined();
+	expect(existsSync(join(dataDir, "Lightbulb App", ".git"))).toBe(true);
+	expect(listProjects().map((p) => p.id)).toEqual([project.id]);
+
+	// The whole point of the root commit: every git-backed surface has a revision to resolve.
+	const head = Bun.spawnSync(["git", "-C", project.path, "rev-parse", "--verify", "HEAD"]);
+	expect(head.success).toBe(true);
+	const branch = Bun.spawnSync(["git", "-C", project.path, "rev-parse", "--abbrev-ref", "HEAD"]);
+	expect(branch.stdout.toString().trim()).toBe("main");
+	const tracked = Bun.spawnSync(["git", "-C", project.path, "ls-files"]);
+	expect(tracked.stdout.toString().trim()).toBe("");
+});
+
+test("createProject still yields a usable project when git has no identity to commit with", () => {
+	// A global config with no user.name/user.email: `git commit` fails, and the project must survive it.
+	const empty = join(dataDir, "empty-gitconfig");
+	writeFileSync(empty, "");
+	const saved = process.env.GIT_CONFIG_GLOBAL;
+	process.env.GIT_CONFIG_GLOBAL = empty;
+	try {
+		const project = createProject(dataDir, "no-identity");
+
+		expect(existsSync(join(project.path, ".git"))).toBe(true);
+		expect(listProjects().map((p) => p.id)).toEqual([project.id]);
+	} finally {
+		if (saved === undefined) delete process.env.GIT_CONFIG_GLOBAL;
+		else process.env.GIT_CONFIG_GLOBAL = saved;
+	}
+});
+
+test("createProject refuses a name that would escape its parent, or reach an existing folder", () => {
+	mkdirSync(join(dataDir, "taken"));
+
+	for (const name of ["../escape", "nested/deep", ".", "..", "   ", ""]) {
+		expect(() => createProject(dataDir, name)).toThrow(/Not a usable folder name/);
+	}
+	expect(() => createProject(dataDir, "taken")).toThrow(/Already exists/);
+	expect(() => createProject(join(dataDir, "nope"), "x")).toThrow(/No such folder/);
+	expect(listProjects()).toEqual([]);
+});
+
+test("createProject trims the typed name rather than creating a folder with edge whitespace", () => {
+	const project = withGitIdentity(() => createProject(dataDir, "  spaced  "));
+
+	expect(project.name).toBe("spaced");
+	expect(existsSync(join(dataDir, "spaced"))).toBe(true);
 });

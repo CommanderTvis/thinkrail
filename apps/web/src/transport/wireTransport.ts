@@ -1,5 +1,6 @@
 import type {
 	AppConfig,
+	BlueprintChangedPayload,
 	ClaudeCodeStatusPush,
 	ExtUiRequest,
 	HostUpdateNotice,
@@ -197,6 +198,10 @@ export function initTransport(): WsTransport {
 	transport.subscribe(WS_CHANNELS.workspaceRemoved, (data) => {
 		const { projectId, id } = data as WorkspaceRemoved;
 		useAppStore.getState().applyWorkspaceRemoved(projectId, id);
+	});
+
+	transport.subscribe(WS_CHANNELS.blueprintChanged, (data) => {
+		useAppStore.getState().applyBlueprintChanged((data as BlueprintChangedPayload).state);
 	});
 
 	transport.subscribe(WS_CHANNELS.reviewChanged, (data) => {

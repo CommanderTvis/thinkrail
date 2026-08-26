@@ -23,6 +23,7 @@ import {
 	isProjectSkillPath,
 	refreshSubagentTools,
 	setActivityProjectResolver,
+	setBlueprintCheckTool,
 	setExtUiPendingObserver,
 	setExtUiPublisher,
 	setReviewCommentHandler,
@@ -50,6 +51,15 @@ import {
 	setLoginPublisher,
 	stopJbcentralRuntime,
 } from "../auth";
+import {
+	BLUEPRINT_CHECK_DESCRIPTION,
+	BLUEPRINT_FILE,
+	blueprintBrief,
+	checkBlueprint,
+	noteBlueprintAuthorSession,
+	noteBlueprintFileChanged,
+	setBlueprintPublisher,
+} from "../blueprint";
 import { redeliverInterview, releaseInterview, setFeedbackPublisher } from "../feedback";
 import { resolveWorktreeFile } from "../fs";
 import {
@@ -77,6 +87,7 @@ import {
 	resumeClientTerminals,
 	reviveTerminalSessions,
 	setAgentStatusEndpoint,
+	setResumeRunPolicy,
 	setTerminalPublisher,
 	setTerminalTabsPublisher,
 	workspaceForProcess,
@@ -226,6 +237,13 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 				if (delivery === "unreadable") return new Response("ignored");
 				if (delivery.report.session_id) {
 					rememberAgentSession(delivery.workspaceId, delivery.tabKey, delivery.report.session_id);
+					// The blueprint's author is a terminal like any other, but its id must outlive the PTY: this
+					// is what lets the pair reopen onto the same conversation instead of a fresh opening prompt.
+					noteBlueprintAuthorSession(
+						delivery.workspaceId,
+						delivery.tabKey,
+						delivery.report.session_id,
+					);
 				}
 				const push: ClaudeCodeStatusPush = {
 					workspaceId: delivery.workspaceId,
@@ -275,6 +293,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 				ws.subscribe(WS_CHANNELS.settingsChanged);
 				if (hostUpdate) ws.subscribe(WS_CHANNELS.hostUpdateAvailable);
 				ws.subscribe(WS_CHANNELS.reviewChanged);
+				ws.subscribe(WS_CHANNELS.blueprintChanged);
 				ws.subscribe(WS_CHANNELS.ideBridgeAction);
 				const hostPlatform: HostPlatform =
 					process.platform === "darwin" || process.platform === "win32"
@@ -486,6 +505,13 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		);
 	});
 
+	// The blueprint promises the author comes back with the pair, so its terminal runs the resume offer
+	// instead of leaving it typed at a prompt. Composed here: `terminal` knows nothing of blueprints.
+	setResumeRunPolicy((workspaceId, tabKey) => {
+		const author = blueprintBrief(workspaceId)?.author;
+		return author?.kind === "terminal" && author.tabKey === tabKey;
+	});
+
 	setTerminalTabsPublisher((workspaceId, tabs) => {
 		const data: TerminalTabsPush = { workspaceId, tabs };
 		server.publish(
@@ -515,6 +541,10 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 			JSON.stringify({ channel: WS_CHANNELS.workspaceFsChanged, data: payload }),
 		);
 		reanchorWorkspace(payload.workspaceId);
+		// The author writes the spec with ordinary tools and reports to nobody, so the watcher is how
+		// the panel learns it changed. A truncated path list means "something changed" — re-read anyway.
+		if (payload.truncated || payload.paths.some((path) => path.endsWith(BLUEPRINT_FILE)))
+			noteBlueprintFileChanged(payload.workspaceId);
 	};
 	setWatchPublisher(publishFsChanged);
 	setSkillPathClassifier(isProjectSkillPath);
@@ -523,6 +553,15 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	setRepoMetaPublisher((workspaceId) => {
 		refreshWorkspaceBranch(workspaceId);
 		publishFsChanged({ workspaceId, paths: [], truncated: false, skillChange: "none" });
+	});
+
+	setBlueprintCheckTool({ description: BLUEPRINT_CHECK_DESCRIPTION, run: checkBlueprint });
+
+	setBlueprintPublisher((payload) => {
+		server.publish(
+			WS_CHANNELS.blueprintChanged,
+			JSON.stringify({ channel: WS_CHANNELS.blueprintChanged, data: payload }),
+		);
 	});
 
 	setReviewPublisher((payload) => {
@@ -661,6 +700,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		stopping = true;
 		void shutdownAnalytics();
 		stopHostUpdateChecks();
+		setResumeRunPolicy(null);
 		void stopIdeBridge();
 		setIdeBridgeDeps(null);
 		cancelAllLogins();

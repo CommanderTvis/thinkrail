@@ -43,7 +43,9 @@ batches high-frequency Pi events without allowing later wire messages to overtak
   one atomic delivery at roughly 30 Hz, a 128-event forced-flush ceiling, and `flush`/`dispose` lifecycle);
   `wireTransport.ts` (`initTransport`/
   `getTransport` singleton; routes `server.welcome`, **`host.updateAvailable`**, **`project.updated`**, `pi.event`, `pi.extensionUi`,
-  **`session.created`**, **`session.deleted`**, **`provider.changed`**, addressed **`feedback.interview`**, **the
+  **`session.created`**, **`session.deleted`**, **`provider.changed`**, addressed **`feedback.interview`**,
+  **`blueprint.changed`** (a full `BlueprintState` per frame — the streaming document is REPLACE, never
+  append, so a dropped frame costs smoothness and never correctness), **the
   `workspace.created`/`updated`/`removed` lifecycle trio, and `workspace.fsChanged`** into the store — and
   folds every connection transition through
   `setStatus`, whose connected generation gives active-workspace hydration a distinct trigger on every

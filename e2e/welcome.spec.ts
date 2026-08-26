@@ -23,7 +23,9 @@ test("opens a clean ThinkRail with no projects imported", async ({ page }) => {
 
 	await expect(page.getByTestId("welcome-title")).toHaveText("ThinkRail");
 	await expect(page.getByTestId("welcome-cta")).toContainText("Open project");
-	await expect(page.getByTestId("welcome-action")).toHaveCount(0);
+	// Only "New project" here: a blueprint buys a workspace, and there is no project to cut one from.
+	await expect(page.getByTestId("welcome-action")).toHaveCount(1);
+	await expect(page.getByTestId("welcome-action").filter({ hasText: "New project" })).toBeVisible();
 
 	await page.getByTestId("welcome-cta").click();
 	await expect(page.getByTestId("menu-open-project")).toBeVisible();
@@ -147,20 +149,26 @@ test("a project with specs offers Start building over Set up, beside the project
 	await expect(scope).toContainText("sample-project");
 	await expect(scope).toContainText("Project home");
 	await expect(page.getByTestId("welcome-cta")).toContainText("Start building");
-	await expect(page.getByTestId("welcome-action")).toHaveCount(1);
+	await expect(page.getByTestId("welcome-action")).toHaveCount(2);
 	await expect(
 		page.getByTestId("welcome-action").filter({ hasText: "Work in project folder" }),
 	).toBeVisible();
-	await expect(page.getByText("Set up project")).toHaveCount(0);
+	// Reachable once the project has specs too: a blueprint is not a one-time setup step.
+	await expect(
+		page.getByTestId("welcome-action").filter({ hasText: "Draft a blueprint" }),
+	).toBeVisible();
+	await expect(
+		page.getByTestId("welcome-cta").filter({ hasText: "Draft a blueprint" }),
+	).toHaveCount(0);
 	await expect(page.getByTestId("welcome").getByText("Open project")).toHaveCount(0);
 });
 
-test("a project without specs suggests setting it up", async ({ page }) => {
+test("a project without specs offers the blueprint as its spec-first entry", async ({ page }) => {
 	for (const spec of FIXTURE_SPECS) rmSync(join(E2E_FIXTURE_REPO, spec), { force: true });
 	try {
 		await openFixtureProject(page);
 		await expect(page.getByTestId("welcome-title")).toHaveText("sample-project");
-		await expect(page.getByTestId("welcome-cta")).toContainText("Set up project");
+		await expect(page.getByTestId("welcome-cta")).toContainText("Draft a blueprint");
 		await expect(page.getByTestId("welcome-action")).toHaveCount(2);
 		await expect(
 			page.getByTestId("welcome-action").filter({ hasText: "Start building" }),
@@ -169,15 +177,18 @@ test("a project without specs suggests setting it up", async ({ page }) => {
 			page.getByTestId("welcome-action").filter({ hasText: "Work in project folder" }),
 		).toBeVisible();
 
+		// Spec-first is the blueprint now, not a prefilled skill prompt.
 		await page.getByTestId("welcome-cta").click();
+		await expect(page.getByTestId("blueprint-start")).toBeVisible();
+		await page.keyboard.press("Escape");
+		await expect(page.getByTestId("blueprint-start")).toBeHidden();
+
+		await page.getByTestId("welcome-action").filter({ hasText: "Start building" }).click();
 		const dialog = page.getByTestId("new-workspace-dialog");
 		await expect(dialog).toBeVisible();
-		await expect(dialog.getByTestId("ws-prompt")).toHaveValue("/skill:setting-up-a-project ");
-		await expect(dialog.getByTestId("slash-menu")).toHaveCount(0);
 		await expect(dialog.getByTestId("ws-target-worktree")).toHaveAttribute("data-active", "true");
 		await expect(dialog.getByRole("heading", { name: "Create workspace" })).toBeVisible();
 		await expect(dialog.getByTestId("ws-branch-picker")).toBeVisible();
-		await expect(dialog.getByTestId("ws-prompt-note")).toContainText("setting-up-a-project skill");
 
 		await dialog.getByTestId("ws-target-default").click();
 		await expect(dialog.getByRole("heading", { name: "Work in project folder" })).toBeVisible();
@@ -217,7 +228,7 @@ test("opening a non-git folder from the Welcome screen just opens it", async ({ 
 	await expect(page.getByTestId("welcome")).toBeVisible();
 	await expect(page.getByTestId("center-tabs")).toHaveCount(0);
 	await expect(page.getByTestId("welcome-title")).toHaveText(basename(E2E_PLAIN_DIR));
-	await expect(page.getByTestId("welcome-cta")).toContainText("Set up project");
+	await expect(page.getByTestId("welcome-cta")).toContainText("Draft a blueprint");
 	await expect(
 		page.getByTestId("welcome-action").filter({ hasText: "Work in project folder" }),
 	).toBeVisible();

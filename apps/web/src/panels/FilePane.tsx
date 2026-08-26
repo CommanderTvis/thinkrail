@@ -23,13 +23,13 @@ function OutlineToggle({ active, onClick }: { active: boolean; onClick: () => vo
 				aria-pressed={active}
 				aria-label={active ? "Hide outline" : "Show outline"}
 				onClick={onClick}
-				className={`flex size-6 items-center justify-center rounded-[var(--radius-sm)] outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary ${
+				className={`flex size-24 items-center justify-center rounded-[var(--radius-sm)] outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary ${
 					active
 						? "bg-container-elevated-bg text-text-default"
 						: "text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
 				}`}
 			>
-				<PanelLeft className="size-3.5" />
+				<PanelLeft className="size-14" />
 			</button>
 		</IconTooltip>
 	);
@@ -120,9 +120,9 @@ function FilePaneBody({ tab }: { tab: FileTab | ExternalFileTab }) {
 	const externalBar = external ? (
 		<div
 			data-testid="external-file-path"
-			className="flex h-8 shrink-0 items-center gap-xs border-border-default border-b bg-container-header-bg px-sm"
+			className="flex h-32 shrink-0 items-center gap-4 border-border-default border-b bg-container-header-bg px-8"
 		>
-			<FileSymlink className="size-3.5 shrink-0 text-agent-claude" />
+			<FileSymlink className="size-14 shrink-0 text-agent-claude" />
 			<span className="shrink-0 tr-text-label-pill text-text-subtle uppercase">
 				outside worktree
 			</span>
@@ -138,7 +138,7 @@ function FilePaneBody({ tab }: { tab: FileTab | ExternalFileTab }) {
 	const diskBar = tab.external ? (
 		<div
 			data-testid="file-disk-changed"
-			className="flex shrink-0 flex-wrap items-center gap-sm border-feedback-warning border-b bg-container-header-bg px-sm py-xs tr-text-metadata text-text-default"
+			className="flex shrink-0 flex-wrap items-center gap-8 border-feedback-warning border-b bg-container-header-bg px-8 py-4 tr-text-metadata text-text-default"
 		>
 			<span>This file changed on disk while you were editing it.</span>
 			<button
@@ -147,7 +147,7 @@ function FilePaneBody({ tab }: { tab: FileTab | ExternalFileTab }) {
 				// Editor chrome never takes the caret: the buffer keeps focus so Ctrl+S still reaches it.
 				onMouseDown={(event) => event.preventDefault()}
 				onClick={() => mergeDiskIntoDraft(tab.workspaceId, tab.id)}
-				className="rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg px-sm py-0.5 hover:bg-control-bg-hovered"
+				className="rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg px-8 py-2 hover:bg-control-bg-hovered"
 			>
 				Merge into my edits
 			</button>
@@ -156,7 +156,7 @@ function FilePaneBody({ tab }: { tab: FileTab | ExternalFileTab }) {
 				data-testid="file-disk-discard"
 				onMouseDown={(event) => event.preventDefault()}
 				onClick={() => useAppStore.getState().discardFileTabDraft(tab.workspaceId, tab.id)}
-				className="rounded-[var(--radius-sm)] border border-border-default px-sm py-0.5 text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
+				className="rounded-[var(--radius-sm)] border border-border-default px-8 py-2 text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
 			>
 				Discard mine, take the file
 			</button>

@@ -16,6 +16,7 @@ import {
 import type { SkillCatalogEntry, SlashCommandInfo } from "@thinkrail/contracts";
 import specGraphExtension from "pi-spec-graph";
 import { askUserQuestionExtension } from "./askUserQuestion";
+import { blueprintToolExtension } from "./blueprintTool";
 import { oversizedImageGuard } from "./imageGuard";
 import { reviewToolExtension } from "./reviewTool";
 import { decideSkill, type SkillAdmissionContext } from "./skillAdmission";
@@ -208,6 +209,7 @@ export async function buildResourceLoader(
 	const sharedFactories = [
 		headlessSearchPolicy,
 		askUserQuestionExtension,
+		blueprintToolExtension,
 		reviewToolExtension,
 		oversizedImageGuard,
 		...extraFactories,
