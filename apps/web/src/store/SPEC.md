@@ -193,6 +193,10 @@ snapshots plus device-local attention, terminal catalogs, and one **per-session 
   settled transcript never claims ongoing work) and still removes the superseded assistant attempt. The
   reducer relies on pi's guarantee that every emitted `compaction_start` is paired with a
   `compaction_end` (both success and failure paths emit it), the same trust every other event pair gets.
+  Manual-command transport rejection uses one atomic store mutation: given the compaction-turn ids observed
+  before the request, append a failed compaction turn only if none of the current ids is new. Thus a Pi failure
+  already represented by `compaction_end` is never duplicated, while rejection before lifecycle begins is
+  still visible on the same compaction surface.
   **`auto_retry_start` mirrors pi's live-context surgery**: pi's `_prepareRetry` trims the failed
   attempt's assistant message from the live context before re-running the turn (the retry re-streams it
   as a new message) while *keeping it in the session file*, so the reducer drops the superseded failed
@@ -240,8 +244,10 @@ snapshots plus device-local attention, terminal catalogs, and one **per-session 
   pure **`reduceSessionEvent`** folds a `PiEvent` into a runtime. **Only idle sends enter the transcript
   optimistically** (`ChatView.onSubmit` → `appendUserMessage`); the last-turn echo dedup below is
   sufficient precisely because nothing intervenes before the echo. A **streaming send (`steer`/`followUp`)
-  never appends a turn**: its text lives in `queue` (folded verbatim from pi's `queue_update`, seeded from
-  the summary's snapshot at hydration) and the turn lands only via pi's canonical user `message_start` —
+  never appends a turn**: its text lives in `queue` (folded verbatim from the host-projected
+  `queue_update`, seeded from the summary at hydration), alongside the optional conservative `hasImages`
+  aggregate that guards destructive text-only queue restoration; the turn lands only via pi's canonical
+  user `message_start` —
   at its true position, converging live with hydrated. (Mirrors pi's own interactive mode; replaces the
   optimistic-append-for-everything model whose last-turn dedup missed whenever assistant content landed
   between the append and the echo — reproduced live as a duplicated, mispositioned queued bubble.)

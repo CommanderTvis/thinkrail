@@ -283,15 +283,18 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   `queue-item` testids, `data-kind` + `data-index`; full text + delivery meaning in the row `title`),
   sourced from the runtime's `queue`. **Each row carries its own edit and remove actions**
   (`queue-item-edit` / `queue-item-remove`) — both call `session.removeQueued { kind, index }` (rows
-  are position-addressed, matching the wire op); edit additionally prepends the removed text to the
-  draft and refocuses. Per-row actions exist because the original all-or-nothing dequeue (click strip
-  → `clearQueue` → every message merged into one draft blob) proved undiscoverable and lossy in use.
-  **Abort still restores the whole queue** (`onAbort` → `session.clearQueue` → texts prepended
-  `\n\n`-joined, pi's restore order, then `session.abort`) — pi's Escape parity: an aborted run must
-  not silently discard messages queued behind it. A **rejected** streaming send likewise restores its
-  text to the draft alongside the `appendErrorTurn`. Trade-off, accepted: `queue_update` carries text
-  only, so a queued image attachment shows no chip in the strip; the canonical transcript turn later
-  renders its image blocks with the hydrated-turn fallback labels. E2e: `queue.live.spec.ts` (@agent).
+  are position-addressed, matching the wire op); edit additionally restores the removed message's text
+  and images to the draft and refocuses. Per-row actions exist because the original all-or-nothing dequeue
+  (click strip → `clearQueue` → every message merged into one draft blob) proved undiscoverable and lossy
+  in use. **Abort atomically restores the complete queue** (`onAbort` →
+  `session.abort { restoreQueue: true }`): the host drains both Pi lanes and signals abort as one operation,
+  waits for idle, then returns each queued message's text + image content; the web prepends the texts and
+  reattaches every image. Stop therefore cannot let a queued continuation run or silently discard an
+  attachment. A **rejected** streaming send likewise restores its text to the draft alongside the
+  `appendErrorTurn`. The ordinary `queue_update` projection still carries only displayable text plus a
+  conservative `hasImages` aggregate — no image bytes — so a queued image shows no chip in the strip; the
+  canonical transcript turn later renders its image blocks with hydrated fallback labels. E2e:
+  `queue.live.spec.ts` (@agent).
 - **Streaming send modes: split send + interrupt** (`Composer`) — steer/queue semantics are pi's loop
   design (steer = injected at the next turn boundary, after the current assistant message + its tool
   calls; queue = runs after the agent settles; only abort halts an in-flight response) and proved
@@ -412,7 +415,23 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   `source === "prompt"` entries, plus a fresh `template.list { workspaceId }` fetch mapped to
   `SlashCommandInfo` rows (`source: "prompt"`, `sourceInfo` synthesized to match pi's own prompt-template
   convention exactly: `{ path: filePath, source: "local", scope: scope === "global" ? "user" : "project",
-  origin: "top-level" }`) — one merged list. When a `template.list` response comes back **empty**,
+  origin: "top-level" }`) — one merged list. The chat prepends its one **browser-native command**,
+  `/compact [instructions]`, as a display-local `builtin` row labelled `Pi/built-in`; contracts' Pi-mirrored
+  command source stays unchanged. Native `compact` is reserved over an exact-name extension/template
+  collision (skill commands remain namespaced), and the exact Pi parser recognizes only `/compact` or
+  `/compact ` plus trimmed instructions — every near-miss remains an ordinary prompt. A compact submit
+  bypasses the optimistic user echo and every streaming send mode: completed draft images **or the queue's
+  host-authored `hasImages` aggregate** reject it in place with an actionable composer chip (draft + queue
+  preserved; pending draft images already hold all submits). Otherwise the command clears, drains
+  `session.clearQueue { requireTextOnly: true }` back into the composer in steering-then-follow-up order,
+  then calls `session.compact`; the host rechecks the image precondition at the destructive operation, so a
+  stale client or cross-client race still cannot drop queued bytes. The host atomically rejects a second
+  manual compaction while one is already in flight for that session; Pi owns abort, summarization,
+  persistence, and lifecycle. The request snapshots
+  existing compaction-turn ids, and a rejected clear/compact asks the store to append a failed compaction row
+  only when no new lifecycle turn appeared, so Pi's emitted failure and a pre-lifecycle wire failure share one
+  surface without duplicating. Existing live/hydrated compaction rendering is unchanged. When a
+  `template.list` response comes back **empty**,
   `SlashCommandMenu` renders a `footer` nudge (`data-testid="slash-templates-empty"`) that
   deep-links to Settings → Templates via `ChatView`'s `onManageTemplates` — the discoverability half of
   the starter-templates offer (`panels/SPEC.md`), since a fresh install has an empty global prompts dir

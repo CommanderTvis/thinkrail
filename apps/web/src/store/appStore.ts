@@ -395,7 +395,14 @@ export function reduceSessionEvent(rt: SessionRuntime, event: PiEvent): SessionR
 		case "agent_start":
 			return { ...rt, isStreaming: true, attemptAssistantId: null };
 		case "queue_update":
-			return { ...rt, queue: { steering: event.steering, followUp: event.followUp } };
+			return {
+				...rt,
+				queue: {
+					steering: event.steering,
+					followUp: event.followUp,
+					...(event.hasImages ? { hasImages: true as const } : {}),
+				},
+			};
 		case "message_start": {
 			if (event.message.role === "assistant")
 				return {
@@ -788,6 +795,11 @@ interface AppState {
 	) => void;
 	appendUserMessage: (sessionId: string, text: string, attachments?: ChatAttachment[]) => void;
 	appendErrorTurn: (sessionId: string, text: string) => void;
+	appendCompactionFailureUnlessObserved: (
+		sessionId: string,
+		observedTurnIds: ReadonlySet<string>,
+		detail: string,
+	) => void;
 	handlePiEvent: (event: PiEvent, sessionId: string) => void;
 	setModelsForProviderVersion: (providerVersion: number, models: WireModel[]) => void;
 	noteProviderChanged: () => void;
@@ -2553,6 +2565,23 @@ export const useAppStore = create<AppState>((set, get) => ({
 				attemptAssistantId: null,
 				turns: [...clearTurnStreaming(rt.turns), { kind: "error", id: crypto.randomUUID(), text }],
 			})),
+		),
+	appendCompactionFailureUnlessObserved: (sessionId, observedTurnIds, detail) =>
+		set((s) =>
+			withRuntime(s, sessionId, (rt) => {
+				const lifecycleObserved = rt.turns.some(
+					(turn) => turn.kind === "compaction" && !observedTurnIds.has(turn.id),
+				);
+				return lifecycleObserved
+					? rt
+					: {
+							...rt,
+							turns: [
+								...rt.turns,
+								{ kind: "compaction", id: crypto.randomUUID(), status: "failed", detail },
+							],
+						};
+			}),
 		),
 	handlePiEvent: (event, sessionId) =>
 		set((s) => withRuntime(s, sessionId, (rt) => reduceSessionEvent(rt, event))),
