@@ -102,8 +102,11 @@ pins production wiring.
 
 ## Navigation and window security
 
-The native window permits navigation only within its exact loopback origin. User-requested external URLs
-open through the OS instead of replacing the app surface.
+The native window permits navigation only within its own loopback origin. User-requested external URLs
+open through the OS instead of replacing the app surface. "Its own" spans the host's other loopback names:
+the window loads `http://127.0.0.1:<port>`, so a link written as `localhost` or `[::1]` on that same port
+and scheme is the app talking to itself, and handing it to the OS is how the desktop app ends up opening
+browser tabs onto itself. Any other port, host or scheme stays external.
 
 A desktop preload sends typed, one-way route and local-preference messages. It wraps
 `history.replaceState` and `history.pushState` before page scripts and also reports initial/hash/pop
