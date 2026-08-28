@@ -68,7 +68,9 @@ another.
    `{ backendProfileId: "local", windowId: "main" }`. The route is appended to the fresh origin; the
    preference map is serialized as data and prepended to the preload source so the web client can hydrate
    before React mounts despite the changing port. Open one normal native `BrowserWindow` with the system
-   renderer.
+   renderer, `hiddenInset` so the web header is the title bar. Its `trafficLightOffset` is not an origin:
+   Electrobun records where macOS put the close button and *adds* the offset to that, so `{ x: 20, y: 8 }`
+   is what centres Tahoe's 14px lights in the 49px header beside them.
 
 The Electrobun entry bundle contains native-shell code only. A static server import there is forbidden:
 it can load `bun-pty` before `BUN_PTY_LIB` and flatten PI into the wrong extension-loader mode. Startup
