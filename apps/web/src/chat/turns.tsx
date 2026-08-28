@@ -10,7 +10,7 @@ import {
 	RiAlertLine as TriangleAlert,
 	RiToolsLine as Wrench,
 } from "@remixicon/react";
-import type { ImageContent, UserMessage } from "@thinkrail/contracts";
+import type { ImageContent, LayoutToolId, UserMessage } from "@thinkrail/contracts";
 import { type MouseEvent as ReactMouseEvent, type ReactNode, useEffect, useState } from "react";
 import { CustomIcon } from "@/components/CustomIcon";
 import { Button } from "@/components/ui/button";
@@ -55,7 +55,7 @@ export function ChatTurnView({
 	isFinalAnswer: boolean;
 	onOpenSpec?: ((path: string) => void) | undefined;
 	onOpenChange?: ((path: string) => void) | undefined;
-	onReveal?: ((tab: "specs" | "changes") => void) | undefined;
+	onReveal?: ((tool: LayoutToolId) => void) | undefined;
 	onTryAgain?: (() => void) | undefined;
 }) {
 	switch (row.kind) {
@@ -660,7 +660,7 @@ function FileDiffGlyph({ className }: { className?: string }) {
 }
 
 interface ArtifactGroup {
-	id: "specs" | "files";
+	id: string;
 	icon: typeof FileText | ((props: { className?: string }) => ReactNode);
 	paths: string[];
 	label: (count: number) => string;
@@ -760,31 +760,19 @@ export function TurnDivider({
 	workspaceRoot?: string | undefined;
 	onOpenSpec: (path: string) => void;
 	onOpenChange: (path: string) => void;
-	onReveal: (tab: "specs" | "changes") => void;
+	onReveal: (tool: LayoutToolId) => void;
 }) {
-	const { elapsedMs, toolCount, specs, changedFiles } = data;
+	const { elapsedMs, toolCount, groups: dividerGroups } = data;
 	const [selected, select] = useSelection(`${id}:artifacts`);
-	const allGroups: ArtifactGroup[] = [
-		{
-			id: "specs",
-			icon: FileText,
-			paths: specs,
-			label: (n) => `${n} ${n === 1 ? "spec" : "specs"}`,
-			expanded: selected === "specs",
-			onOpen: onOpenSpec,
-			reveal: () => onReveal("specs"),
-		},
-		{
-			id: "files",
-			icon: FileDiffGlyph,
-			paths: changedFiles,
-			label: (n) => `${n} ${n === 1 ? "file changed" : "files changed"}`,
-			expanded: selected === "files",
-			onOpen: onOpenChange,
-			reveal: () => onReveal("changes"),
-		},
-	];
-	const groups = allGroups.filter((group) => group.paths.length > 0);
+	const groups: ArtifactGroup[] = dividerGroups.map((group) => ({
+		id: group.id,
+		icon: group.id === "specs" ? FileText : FileDiffGlyph,
+		paths: group.paths,
+		label: group.label,
+		expanded: selected === group.id,
+		onOpen: group.id === "specs" ? onOpenSpec : onOpenChange,
+		reveal: () => onReveal(group.tool),
+	}));
 
 	if (toolCount === 0 && groups.length === 0 && (elapsedMs == null || elapsedMs < 1000)) {
 		return <div data-testid="turn-divider" className="my-8 h-px bg-border-muted" />;
