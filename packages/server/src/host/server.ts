@@ -141,6 +141,8 @@ export interface CreateServerOptions {
 
 export interface RunningServer {
 	readonly port: number;
+	/** Resolves true as soon as a client holds a socket, false once the wait runs out. */
+	waitForClient: (timeoutMs: number) => Promise<boolean>;
 	stop: () => void;
 	shutdown: () => Promise<void>;
 }
@@ -187,6 +189,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	} = options;
 
 	const sockets = new Map<string, Bun.ServerWebSocket<SocketData>>();
+	const clientWaiters = new Set<() => void>();
 	const reapTimers = new Map<string, ReturnType<typeof setTimeout>>();
 	const requestReplays = new RequestReplayCache<string>();
 	const terminalBackpressured = new Set<string>();
@@ -270,6 +273,8 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 			open(ws) {
 				const replaced = sockets.get(ws.data.clientKey);
 				sockets.set(ws.data.clientKey, ws);
+				for (const arrived of clientWaiters) arrived();
+				clientWaiters.clear();
 				if (replaced && replaced !== ws) replaced.close();
 				terminalBackpressured.delete(ws.data.clientKey);
 				const pendingReap = reapTimers.get(ws.data.clientKey);
@@ -704,6 +709,21 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		}
 	}
 
+	const waitForClient = (timeoutMs: number): Promise<boolean> => {
+		if (sockets.size > 0) return Promise.resolve(true);
+		return new Promise((resolve) => {
+			const arrived = (): void => {
+				clearTimeout(timer);
+				resolve(true);
+			};
+			const timer = setTimeout(() => {
+				clientWaiters.delete(arrived);
+				resolve(false);
+			}, timeoutMs);
+			clientWaiters.add(arrived);
+		});
+	};
+
 	const stop = (): void => {
 		if (stopping) return;
 		stopping = true;
@@ -749,6 +769,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		get port() {
 			return server.port ?? port;
 		},
+		waitForClient,
 		stop,
 		shutdown,
 	};

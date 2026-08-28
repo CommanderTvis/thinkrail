@@ -9,6 +9,7 @@ import { runUninstall } from "./uninstall";
 import { createCliHostUpdate, runUpdate } from "./update";
 
 const DEFAULT_STATIC_DIR = resolve(import.meta.dir, "../../web/dist");
+const BROWSER_HOLD_MS = 2000;
 
 function openBrowser(url: string): void {
 	const command =
@@ -53,7 +54,7 @@ async function bootstrap(build: BuildKind): Promise<void> {
 	}
 
 	const hostUpdate = createCliHostUpdate(build, channel, version);
-	const { port, requested } = await bootHost({
+	const { server, port, requested } = await bootHost({
 		port: options.port,
 		host: options.host,
 		portMode: "free",
@@ -76,7 +77,7 @@ async function bootstrap(build: BuildKind): Promise<void> {
 	const url = `http://${openHost}:${port}`;
 	printStartupMark({ status: "host ready", endpoint: url });
 	console.log(`thinkrail → ${url}`);
-	if (options.open) openBrowser(url);
+	if (options.open && !(await server.waitForClient(BROWSER_HOLD_MS))) openBrowser(url);
 }
 
 export async function launch(build: BuildKind): Promise<void> {
