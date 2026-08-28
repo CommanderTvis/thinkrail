@@ -1,5 +1,5 @@
+import { RiFolderLine as Folder, RiPencilRuler2Line as PencilRuler } from "@remixicon/react";
 import type { Project } from "@thinkrail/contracts";
-import { Folder, PencilRuler } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import {

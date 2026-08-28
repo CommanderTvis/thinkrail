@@ -4,6 +4,7 @@ import { createRoot } from "react-dom/client";
 import { initChatPreferencesPersistence } from "./chat/chatPreferences";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { TooltipProvider } from "./components/ui/tooltip";
+import { initDiscordPresenceReporting } from "./discord/reportPresence";
 import { initNavigation } from "./navigation";
 import { handleIdeAction } from "./panels/ideActions";
 import { initProjectExpansionPersistence } from "./panels/projectExpansion";
@@ -17,6 +18,7 @@ initTransport();
 initChatPreferencesPersistence();
 setIdeActionHandler((request) => void handleIdeAction(request));
 initProjectExpansionPersistence();
+initDiscordPresenceReporting();
 initNavigation();
 
 const root = document.getElementById("root");
