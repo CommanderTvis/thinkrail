@@ -1,14 +1,15 @@
 import {
 	RiArrowUpLine as ArrowUp,
 	RiArrowUpSLine as ChevronUp,
-	RiFileLine as FileIcon,
 	RiFolderLine as FolderIcon,
 	RiHistoryLine as History,
 	RiSparkling2Line as Sparkles,
 	RiStopLine as Square,
+	RiCloseLine as X,
 } from "@remixicon/react";
 import type { ComposerGrowthLimit, ThinkingLevel, WireModel } from "@thinkrail/contracts";
 import {
+	type DragEvent,
 	forwardRef,
 	type KeyboardEvent,
 	useCallback,
@@ -18,8 +19,9 @@ import {
 	useRef,
 	useState,
 } from "react";
+import { FileTypeIcon } from "@/components/FileTypeIcon";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { cn } from "@/lib";
+import { cn, draggedFile } from "@/lib";
 import {
 	applyTemplateSlotEdit,
 	beginTemplateSlotSession,
@@ -126,6 +128,8 @@ interface ComposerProps {
 	commands: SlashCommandItem[];
 	templatePending: boolean;
 	mentionCandidates: MentionCandidate[];
+	/** What the editor is holding for this chat, shown so it is never a silent attachment. */
+	selectionChip?: { label: string; title: string; onRemove: () => void } | null;
 	recentPrompts: string[];
 	models: WireModel[];
 	modelsRefreshing: boolean;
@@ -155,6 +159,8 @@ export interface ComposerHandle {
 	restoreAttachments: (attachments: ChatAttachment[]) => void;
 	openHistory: () => void;
 	refocus: () => void;
+	/** Takes the caret with the draft's end under it — for text put there by something else. */
+	focusDraftEnd: () => void;
 }
 
 export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Composer(
@@ -166,6 +172,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 		commands,
 		templatePending,
 		mentionCandidates,
+		selectionChip,
 		recentPrompts,
 		models,
 		modelsRefreshing,
@@ -343,6 +350,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 			if (slot) focusSelection(slot.start, slot.end);
 			else focusSelection(caret);
 		},
+		focusDraftEnd: () => focusSelection(value.length),
 	}));
 
 	const submit = (behavior: SubmitBehavior) => {
@@ -439,7 +447,19 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 		}
 	};
 
-	const { onPaste, onDrop } = imagePasteDropHandlers(attachedImages);
+	const { onPaste, onDrop: dropImages } = imagePasteDropHandlers(attachedImages);
+
+	const onDrop = (e: DragEvent<HTMLTextAreaElement>) => {
+		const file = draggedFile(e.dataTransfer);
+		if (!file) {
+			dropImages(e);
+			return;
+		}
+		e.preventDefault();
+		const insert = file.kind === "dir" ? `@${file.path}/` : `@${file.path} `;
+		const before = value.slice(0, caret);
+		replaceDraft(`${before}${insert}${value.slice(caret)}`, before.length + insert.length);
+	};
 
 	return (
 		<div
@@ -464,7 +484,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 							{candidate.kind === "dir" ? (
 								<FolderIcon className="size-14 shrink-0" />
 							) : (
-								<FileIcon className="size-14 shrink-0" />
+								<FileTypeIcon path={candidate.path} className="size-14" />
 							)}
 							<span className="truncate">{candidate.path}</span>
 						</button>
@@ -506,6 +526,28 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 				/>
 			) : null}
 
+			{selectionChip ? (
+				<div className="flex flex-wrap gap-4 px-12 pt-12" data-testid="composer-context">
+					<FileChip
+						data-testid="composer-selection"
+						path={selectionChip.label}
+						label={selectionChip.label}
+						title={selectionChip.title}
+						trailing={
+							<button
+								type="button"
+								data-testid="composer-selection-remove"
+								aria-label="Don't send this selection"
+								onClick={selectionChip.onRemove}
+								className="text-text-muted hover:text-text-default"
+							>
+								<X className="size-12" />
+							</button>
+						}
+					/>
+				</div>
+			) : null}
+
 			<PromptImageChips
 				controller={attachedImages}
 				leading={
@@ -517,6 +559,11 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 							title={submitError}
 							label={submitError}
 						/>
+<<<<<<< HEAD
+					) : null
+				}
+			/>
+=======
 					) : null
 				}
 			/>
@@ -536,6 +583,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 							refreshing={modelsRefreshing}
 							onRefresh={onRefreshModels}
 							onSelect={onSelectModel}
+							showLabel={false}
 							className="max-w-80 gap-4 px-4 sm:max-w-144"
 						/>
 						<ThinkingSelector

@@ -1,6 +1,7 @@
 import { RiArrowDownLine as ArrowDown, RiArrowUpLine as ArrowUp } from "@remixicon/react";
 import type {
 	AskUserQuestionResult,
+	LayoutToolId,
 	PromptHit,
 	QueueLane,
 	SessionQueueContent,
@@ -19,11 +20,12 @@ import {
 	DialogTitle,
 } from "@/components/ui/dialog";
 import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { cn } from "@/lib";
+import { cn, selectionLines, selectionQuote } from "@/lib";
 import { type ParsedTemplate, templateToSlashCommand, useTemplateCommandPicker } from "@/prompt";
 import {
 	EMPTY_RUNTIME,
 	SettingsSection,
+	selectAttachedEditorSelection,
 	selectCanRenameChat,
 	selectCatalogModel,
 	selectCompactionTurnIds,
@@ -62,7 +64,13 @@ import { hostSessionGlance, planGlance } from "./planView";
 import { QueueStrip } from "./QueueStrip";
 import { CommandLogView, ResourcesButton, ResourcesContent } from "./resources";
 import { estimateChatRowHeights, type RowHeightEstimateCache } from "./rowHeightEstimates";
-import { type ChatRow, deriveRows, projectRows, rowIndexForTurn } from "./rows";
+import {
+	type ChatRow,
+	deriveRows,
+	projectRows,
+	rowIndexForTurn,
+	type WrittenPathGroupResolver,
+} from "./rows";
 import { SkillsDialog } from "./SkillsDialog";
 import { type StreamStatus, StreamStatusSlot, streamStatus } from "./StreamIndicator";
 import { SubagentTranscriptDialog } from "./SubagentTranscriptDialog";
@@ -212,6 +220,14 @@ export default function ChatView({
 	}, [workspaces]);
 	const specNodes = useAppStore((s) => s.specsByWorkspace[workspaceId]);
 	const isSpec = useMemo(() => specPathMatcher(specNodes ?? []), [specNodes]);
+	const groupFor = useCallback<WrittenPathGroupResolver>(
+		(toolName, path) => {
+			return toolName === "spec_create" || isSpec(path)
+				? { id: "specs", label: (n) => `${n} ${n === 1 ? "spec" : "specs"}`, tool: "specs" }
+				: null;
+		},
+		[isSpec],
+	);
 	const {
 		turns,
 		toolResults,
@@ -242,8 +258,8 @@ export default function ChatView({
 	});
 
 	const chronologicalRows = useMemo(
-		() => deriveRows(turns, toolResults, isStreaming, isSpec),
-		[turns, toolResults, isStreaming, isSpec],
+		() => deriveRows(turns, toolResults, isStreaming, groupFor),
+		[turns, toolResults, isStreaming, groupFor],
 	);
 	const rows = useMemo(
 		() => projectRows(chronologicalRows, chatMessageOrder),
@@ -583,11 +599,7 @@ export default function ChatView({
 	};
 
 	const restoreTextToDraft = (text: string) => {
-		if (!text.trim()) return;
-		const current = useAppStore.getState().sessions[sessionId]?.draft ?? "";
-		const combined = [text, current].filter((t) => t.trim()).join("\n\n");
-		useAppStore.getState().setChatDraft(sessionId, combined);
-		composerRef.current?.refocus();
+		useAppStore.getState().addToChatDraft(sessionId, text);
 	};
 
 	const restoreQueueContentToDraft = (content: SessionQueueContent): void => {
@@ -683,16 +695,17 @@ export default function ChatView({
 			performRename(prepared.title);
 			return { accepted: true };
 		}
+		const message = withSelection(text);
 		if (behavior !== "interrupt") {
-			performSend(text, attachments, behavior);
+			performSend(message, attachments, behavior);
 			return { accepted: true };
 		}
 		getTransport()
 			.request("session.abort", { sessionId })
-			.then(() => performSend(text, attachments, "send"))
+			.then(() => performSend(message, attachments, "send"))
 			.catch((err) => {
 				useAppStore.getState().appendErrorTurn(sessionId, errorText(err));
-				restoreTextToDraft(text);
+				restoreTextToDraft(message);
 			});
 		return { accepted: true };
 	};
@@ -835,6 +848,22 @@ export default function ChatView({
 		};
 	}, [chatLocationRequest, locationRowsReady, revealRow, sessionId, workspaceId]);
 
+	// The highlight the editor is holding for this chat: shown in the composer, sent with the message.
+	const attachedSelection = useAppStore((s) => selectAttachedEditorSelection(s, workspaceId));
+	const withSelection = (text: string): string => {
+		if (!attachedSelection) return text;
+		useAppStore.getState().detachEditorSelection(workspaceId);
+		return [selectionQuote(attachedSelection), text].filter((part) => part.trim()).join("\n\n");
+	};
+
+	const composerFocusRequest = useAppStore((s) => s.composerFocusRequest);
+	useEffect(() => {
+		if (composerFocusRequest?.sessionId !== sessionId) return;
+		if (useAppStore.getState().composerFocusRequest !== composerFocusRequest) return;
+		useAppStore.getState().clearComposerFocus();
+		composerRef.current?.focusDraftEnd();
+	}, [composerFocusRequest, sessionId]);
+
 	const historyOpenRequest = useAppStore((s) => s.historyOpenRequest);
 	const historyOverlayOpen = historyState.open;
 	useEffect(() => {
@@ -866,7 +895,7 @@ export default function ChatView({
 	);
 
 	const onReveal = useCallback(
-		(tool: "specs" | "changes") => {
+		(tool: LayoutToolId) => {
 			useAppStore.getState().requestToolView(workspaceId, tool);
 		},
 		[workspaceId],
@@ -1176,6 +1205,15 @@ export default function ChatView({
 							commands={mergedCommands}
 							templatePending={templatePending}
 							mentionCandidates={mentionCandidates}
+							selectionChip={
+								attachedSelection
+									? {
+											label: `${attachedSelection.path}:${selectionLines(attachedSelection)}`,
+											title: "Sent with your next message",
+											onRemove: () => useAppStore.getState().detachEditorSelection(workspaceId),
+										}
+									: null
+							}
 							recentPrompts={recentPrompts}
 							models={models}
 							modelsRefreshing={modelsRefreshing}
