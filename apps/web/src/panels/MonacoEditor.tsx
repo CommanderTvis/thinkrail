@@ -1,7 +1,8 @@
 import MonacoReact, { type BeforeMount, type OnMount } from "@monaco-editor/react";
-import type { editor } from "monaco-editor";
+import type { editor, Selection } from "monaco-editor";
 import { useCallback, useEffect, useRef } from "react";
 import { LoadingRegion } from "../components/Skeleton";
+import { useAppStore } from "../store";
 import { reportIdeDocumentClosed, reportIdeSelection } from "../transport";
 import { decorateEditorContextMenus } from "./monacoMenuIcons";
 import {
@@ -12,9 +13,30 @@ import {
 } from "./monacoSetup";
 import { applyReviewDecorations } from "./reviewGutter";
 import { attachReviewCommenting, attachReviewThreads } from "./reviewWidgets";
+import { sendSelectionToChat } from "./sendSelectionToChat";
 import type { EditorReview } from "./useReviewCommenting";
 
 const beforeMount: BeforeMount = (m) => defineThinkrailTheme(m);
+
+/**
+ * What the chat is handed: the selected text and the lines it covers, with a trailing line the user did
+ * not really select trimmed off — a selection ending in column 1 of the next line. See panels/SPEC.md.
+ */
+function selectionForChat(
+	codeEditor: editor.IStandaloneCodeEditor,
+	range: Selection,
+): { text: string; startLine: number; endLine: number; language: string } {
+	const model = codeEditor.getModel();
+	return {
+		text: model?.getValueInRange(range) ?? "",
+		startLine: range.startLineNumber,
+		endLine:
+			range.endColumn === 1 && range.endLineNumber > range.startLineNumber
+				? range.endLineNumber - 1
+				: range.endLineNumber,
+		language: model?.getLanguageId() ?? "",
+	};
+}
 
 function revealAt(codeEditor: editor.IStandaloneCodeEditor, line: number): void {
 	codeEditor.setPosition({ lineNumber: line, column: 1 });
@@ -59,6 +81,7 @@ export default function MonacoEditor({
 	const pathRef = useRef(path);
 	pathRef.current = path;
 	const selectionRef = useRef<{ dispose(): void } | null>(null);
+	const chatActionRef = useRef<{ dispose(): void } | null>(null);
 	const saveRef = useRef(onSave);
 	saveRef.current = onSave;
 
@@ -81,12 +104,39 @@ export default function MonacoEditor({
 			revealAt(codeEditor, focusLineRef.current);
 			focusHandledRef.current?.();
 		}
+		const sendSelection = (): void => {
+			const ws = workspaceIdRef.current;
+			const range = codeEditor.getSelection();
+			if (!ws || !range || range.isEmpty() || !codeEditor.getModel()) return;
+			void sendSelectionToChat({
+				...selectionForChat(codeEditor, range),
+				path: pathRef.current,
+				workspaceId: ws,
+			});
+			useAppStore.getState().detachEditorSelection(ws);
+		};
 		// Ctrl/Cmd+S is the editor's, never the window's — see panels/SPEC.md.
 		codeEditor.onKeyDown((event) => {
-			if (event.keyCode !== m.KeyCode.KeyS || !(event.ctrlKey || event.metaKey)) return;
-			event.preventDefault();
-			event.stopPropagation();
-			saveRef.current?.();
+			if (!(event.ctrlKey || event.metaKey)) return;
+			if (event.keyCode === m.KeyCode.KeyS && !event.shiftKey) {
+				event.preventDefault();
+				event.stopPropagation();
+				saveRef.current?.();
+				return;
+			}
+			if (event.keyCode === m.KeyCode.KeyL && event.shiftKey) {
+				event.preventDefault();
+				event.stopPropagation();
+				sendSelection();
+			}
+		});
+		chatActionRef.current = codeEditor.addAction({
+			id: `thinkrail.chat.sendSelection.${codeEditor.getId()}`,
+			label: "Send selection to chat",
+			precondition: "editorHasSelection",
+			contextMenuGroupId: "9_cutcopypaste",
+			contextMenuOrder: 3,
+			run: sendSelection,
 		});
 		selectionRef.current = codeEditor.onDidChangeCursorSelection((event) => {
 			const ws = workspaceIdRef.current;
@@ -94,6 +144,16 @@ export default function MonacoEditor({
 			const model = codeEditor.getModel();
 			if (!model) return;
 			const range = event.selection;
+			// The chat carries what is highlighted, so the store hears about it too — not only the Claude
+			// bridge. An empty selection takes it back off. See panels/SPEC.md.
+			useAppStore
+				.getState()
+				.setEditorSelection(
+					ws,
+					range.isEmpty()
+						? null
+						: { ...selectionForChat(codeEditor, range), path: pathRef.current },
+				);
 			reportIdeSelection({
 				workspaceId: ws,
 				path: pathRef.current,
@@ -150,8 +210,11 @@ export default function MonacoEditor({
 			detachRef.current?.();
 			threadsRef.current?.dispose();
 			selectionRef.current?.dispose();
+			chatActionRef.current?.dispose();
 			const ws = workspaceIdRef.current;
-			if (ws) reportIdeDocumentClosed(ws, pathRef.current);
+			if (!ws) return;
+			useAppStore.getState().setEditorSelection(ws, null);
+			reportIdeDocumentClosed(ws, pathRef.current);
 		},
 		[],
 	);

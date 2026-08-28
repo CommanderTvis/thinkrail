@@ -28,6 +28,7 @@ import {
 	useAppStore,
 } from "./appStore";
 import {
+	selectAttachedEditorSelection,
 	selectCompactionTurnIds,
 	selectCurrentRouteChatTarget,
 	selectDiffScope,
@@ -212,6 +213,49 @@ test("a facts-only report updates the chips and leaves the badge where it was", 
 	// Nothing has said what this terminal is doing, so facts alone are not a badge.
 	store.setClaudeCodeStatus("ws1", "t2", null, { model: "claude-opus-5" });
 	expect(useAppStore.getState().claudeCodeByTerminal.ws1?.t2).toBeUndefined();
+});
+
+test("an editor selection is offered to the chat until it is taken off, and a new one offers again", () => {
+	const store = useAppStore.getState();
+	const selection = {
+		path: "src/a.ts",
+		text: "const a = 1;",
+		startLine: 1,
+		endLine: 1,
+		language: "typescript",
+	};
+	expect(selectAttachedEditorSelection(useAppStore.getState(), "ws1")).toBeNull();
+
+	store.setEditorSelection("ws1", selection);
+	expect(selectAttachedEditorSelection(useAppStore.getState(), "ws1")).toEqual(selection);
+
+	store.detachEditorSelection("ws1");
+	expect(selectAttachedEditorSelection(useAppStore.getState(), "ws1")).toBeNull();
+
+	store.setEditorSelection("ws1", { ...selection, endLine: 2 });
+	expect(selectAttachedEditorSelection(useAppStore.getState(), "ws1")?.endLine).toBe(2);
+
+	// An empty selection is the editor saying there is nothing to carry.
+	store.setEditorSelection("ws1", null);
+	expect(selectAttachedEditorSelection(useAppStore.getState(), "ws1")).toBeNull();
+});
+
+test("addToChatDraft: the added text leads, what was typed follows, and the composer is called for", () => {
+	const store = useAppStore.getState();
+	store.openChatSession("ws1", "s1", null, "medium");
+	store.setChatDraft("s1", "explain this");
+
+	store.addToChatDraft("s1", "src/a.ts:1-2\n```typescript\nconst a = 1;\n```");
+	expect(useAppStore.getState().sessions.s1?.draft).toBe(
+		"src/a.ts:1-2\n```typescript\nconst a = 1;\n```\n\nexplain this",
+	);
+	expect(useAppStore.getState().composerFocusRequest?.sessionId).toBe("s1");
+
+	useAppStore.getState().clearComposerFocus();
+	store.addToChatDraft("s1", "   ");
+	expect(useAppStore.getState().composerFocusRequest).toBeNull();
+	store.addToChatDraft("nobody", "text");
+	expect(useAppStore.getState().composerFocusRequest).toBeNull();
 });
 
 test("pi events route to the right session runtime; chats stay independent", () => {

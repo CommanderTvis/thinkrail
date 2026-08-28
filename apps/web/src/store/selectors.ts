@@ -6,6 +6,7 @@ import type {
 	Workspace,
 } from "@thinkrail/contracts";
 import {
+	type EditorSelection,
 	isAbsolutePath,
 	type LayoutAttention,
 	layoutResourceIdentity,
@@ -472,6 +473,17 @@ export function selectLastOpenChatSession(
 		if (tab?.kind === "chat" && tab.sessionId) return tab.sessionId;
 	}
 	return null;
+}
+
+/** The highlight the chat would carry: present only while the user has not taken it back off. */
+export function selectAttachedEditorSelection(
+	state: {
+		editorSelectionByWorkspace: Record<string, { selection: EditorSelection; attached: boolean }>;
+	},
+	workspaceId: string,
+): EditorSelection | null {
+	const held = state.editorSelectionByWorkspace[workspaceId];
+	return held?.attached ? held.selection : null;
 }
 
 export function selectReviewDraftCount(

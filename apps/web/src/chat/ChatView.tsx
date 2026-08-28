@@ -12,9 +12,11 @@ import type {
 import { type RefCallback, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
 import { Popover, PopoverAnchor, PopoverTrigger } from "@/components/ui/popover";
+import { selectionLines, selectionQuote } from "@/lib";
 import {
 	EMPTY_RUNTIME,
 	SettingsSection,
+	selectAttachedEditorSelection,
 	selectCatalogModel,
 	selectCompactionTurnIds,
 	selectSkillsStale,
@@ -448,11 +450,7 @@ export default function ChatView({
 	};
 
 	const restoreTextToDraft = (text: string) => {
-		if (!text.trim()) return;
-		const current = useAppStore.getState().sessions[sessionId]?.draft ?? "";
-		const combined = [text, current].filter((t) => t.trim()).join("\n\n");
-		useAppStore.getState().setChatDraft(sessionId, combined);
-		composerRef.current?.refocus();
+		useAppStore.getState().addToChatDraft(sessionId, text);
 	};
 
 	const restoreQueueContentToDraft = (content: SessionQueueContent): void => {
@@ -533,16 +531,17 @@ export default function ChatView({
 			performCompact(nativeCommand.instructions);
 			return { accepted: true };
 		}
+		const message = withSelection(text);
 		if (behavior !== "interrupt") {
-			performSend(text, attachments, behavior);
+			performSend(message, attachments, behavior);
 			return { accepted: true };
 		}
 		getTransport()
 			.request("session.abort", { sessionId })
-			.then(() => performSend(text, attachments, "send"))
+			.then(() => performSend(message, attachments, "send"))
 			.catch((err) => {
 				useAppStore.getState().appendErrorTurn(sessionId, errorText(err));
-				restoreTextToDraft(text);
+				restoreTextToDraft(message);
 			});
 		return { accepted: true };
 	};
@@ -667,6 +666,22 @@ export default function ChatView({
 		turns,
 		workspaceId,
 	]);
+
+	// The highlight the editor is holding for this chat: shown in the composer, sent with the message.
+	const attachedSelection = useAppStore((s) => selectAttachedEditorSelection(s, workspaceId));
+	const withSelection = (text: string): string => {
+		if (!attachedSelection) return text;
+		useAppStore.getState().detachEditorSelection(workspaceId);
+		return [selectionQuote(attachedSelection), text].filter((part) => part.trim()).join("\n\n");
+	};
+
+	const composerFocusRequest = useAppStore((s) => s.composerFocusRequest);
+	useEffect(() => {
+		if (composerFocusRequest?.sessionId !== sessionId) return;
+		if (useAppStore.getState().composerFocusRequest !== composerFocusRequest) return;
+		useAppStore.getState().clearComposerFocus();
+		composerRef.current?.focusDraftEnd();
+	}, [composerFocusRequest, sessionId]);
 
 	const historyOpenRequest = useAppStore((s) => s.historyOpenRequest);
 	const historyOverlayOpen = historyState.open;
@@ -913,6 +928,15 @@ export default function ChatView({
 							growthLimit={composerGrowthLimit}
 							commands={mergedCommands}
 							mentionCandidates={mentionCandidates}
+							selectionChip={
+								attachedSelection
+									? {
+											label: `${attachedSelection.path}:${selectionLines(attachedSelection)}`,
+											title: "Sent with your next message",
+											onRemove: () => useAppStore.getState().detachEditorSelection(workspaceId),
+										}
+									: null
+							}
 							recentPrompts={recentPrompts}
 							models={models}
 							modelsRefreshing={modelsRefreshing}

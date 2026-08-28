@@ -487,6 +487,17 @@ branch's review — a commit sha means nothing in another worktree — and dropp
   by placement-only minting) still selects semantically. That selection deliberately does not focus the tab,
   because the mounted history query owns focus. The shell updates the group's local attention so the target
   body mounts and consumes the request without publishing a structural snapshot.
+  The same family carries **`composerFocusRequest { id, sessionId }`** — set by **`addToChatDraft`**,
+  cleared by **`clearComposerFocus()`** — which is how text written into a chat's draft from outside the
+  chat subtree (the editor's "Send selection to chat", a restored queue) also hands over the caret.
+  `addToChatDraft(sessionId, text)` is one action rather than a draft write plus a focus call at each site:
+  the added text leads and whatever was already typed follows it, and the request that lands with it is
+  what `ChatView` turns into a composer focus at the draft's end (see `chat/SPEC.md`). Blank text and an
+  unknown session write nothing and ask for nothing.
+  **`editorSelectionByWorkspace`** is a different kind of transient: not a request but a *standing* one —
+  what the editor has highlighted, and whether the chat is still carrying it. `setEditorSelection` writes it
+  (null when the selection empties or the tab unmounts) and re-arms `attached`, because a fresh highlight is
+  a fresh offer; `detachEditorSelection` is the user declining it, or a send consuming it.
   A third transient in the same family is **`fileFocusRequest { workspaceId, path, keyPath }`** — set by
   **`requestFileFocus`** when the Claude configuration pane opens a file at one of its entries, cleared by
   **`clearFileFocus(path?)`** once the editor has revealed it. It carries a *key path*, never a line: the

@@ -951,6 +951,35 @@ from `main.tsx` through `transport`'s `setIdeActionHandler` seam, since `transpo
   tab. It reports only when given a `workspaceId`, so a Monaco instance rendered outside a workspace tab
   contributes nothing.
 
+## Sending a selection to a pi chat
+
+That live selection reporting only ever reached **Claude Code**, over the IDE bridge — a pi chat had no
+way to be told what the user is looking at, and pasting was the workaround. The editor now reports what is
+highlighted to the **store** as well (`setEditorSelection`, cleared when the selection empties or the tab
+unmounts), which is what the chat composer shows as a chip and sends with the next message — see
+`chat/SPEC.md`. An attachment nobody can see is an attachment nobody trusts.
+
+**"Send selection to chat"** (`sendSelectionToChat.ts`) is the other half: it quotes the selection into the
+workspace's chat composer as text, for pinning several snippets into one message, and takes the chip off
+for that selection so the same lines are not sent twice. The quote itself is `lib/editorSelection.ts`, so
+the two paths cannot drift into two formats.
+
+- **The quote is `path:lines` above a fenced block** of the selected text, tagged with the editor's own
+  language id (`lib`'s `selectionQuote`, shared with the composer's chip). The path is the worktree-relative one the user reads in the file tree, and a single-line
+  selection says `README.md:1`, not `1-1`. A trailing line the user did not really select — a selection
+  that ends in column 1 of the next line — is trimmed off the range, matching the review composer.
+- **The text travels, not a pointer to it.** The agent can read the file itself; what it cannot recover
+  is which part of it the question is about.
+- **It targets the workspace's chat and creates one if there is none** (`selectLastOpenChatSession`, else
+  `createSessionWithSkillBaseline` + `openChatSession`) — the same escalation `reviewSend.ts` uses, since
+  both are "put this into a chat" from outside the chat.
+- **The composer keeps the caret.** The open passes `focusTab: false` and the draft write asks for the
+  composer (`store.addToChatDraft` → `composerFocusRequest`), because the app's ordinary open focuses the
+  tab button, and landing there would mean the next keystroke goes nowhere.
+- **Two ways in: the editor context menu and Ctrl/Cmd+Shift+L.** The chord is handled in the editor's own
+  `onKeyDown` beside Ctrl/Cmd+S rather than as an `addAction` keybinding — Monaco's built-in binding for
+  that chord (select all occurrences) wins the keybinding service, and this deliberately shadows it.
+
 ## Editing a file
 
 An editor tab is a buffer, not a viewer. There is **no autosave**: Ctrl/Cmd+S writes, and until then

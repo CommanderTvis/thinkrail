@@ -500,11 +500,13 @@ export function useLayoutIntentProcessing(
 							: shouldAdvanceAcceptedNavigation(attention, requestNavigation),
 					);
 				}
-				requestFocus({
-					key: layoutIntent.id,
-					location,
-					...(result.focusTabId ? { tabId: result.focusTabId } : {}),
-				});
+				if (layoutIntent.kind !== "open" || layoutIntent.focus !== false) {
+					requestFocus({
+						key: layoutIntent.id,
+						location,
+						...(result.focusTabId ? { tabId: result.focusTabId } : {}),
+					});
+				}
 			}
 		}
 		changeAttention(nextAttention);

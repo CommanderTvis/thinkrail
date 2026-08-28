@@ -57,6 +57,7 @@ import type {
 	ToolResultState,
 } from "../chat/types";
 import {
+	type EditorSelection,
 	type LayoutAttention,
 	layoutResourceIdentity,
 	matchesSkillInvocationCommand,
@@ -271,6 +272,8 @@ export interface LayoutOpenOptions {
 	navigation?: CenterNavigationStamp | null;
 	countNavigation?: boolean;
 	claimPreview?: boolean;
+	/** Leave focus where it is instead of moving it to the tab, for an open that hands the caret on. */
+	focusTab?: boolean;
 	/** Opt out of the blueprint redirect and open `BLUEPRINT.md` as plain source. */
 	rawBlueprintSource?: boolean;
 }
@@ -285,6 +288,7 @@ export type LayoutIntent =
 			targetGroupId?: string;
 			activate?: boolean;
 			claimPreview?: boolean;
+			focus?: boolean;
 			navigation?: CenterNavigationStamp | null;
 			countNavigation?: boolean;
 	  }
@@ -846,6 +850,9 @@ interface AppState {
 	} | null;
 	chatLocationRequest: ChatLocationRequest | null;
 	historyOpenRequest: { id: string; sessionId: string } | null;
+	composerFocusRequest: { id: string; sessionId: string } | null;
+	/** What the editor has highlighted per workspace, and whether the chat is still carrying it. */
+	editorSelectionByWorkspace: Record<string, { selection: EditorSelection; attached: boolean }>;
 	specRequest: {
 		workspaceId: string;
 		path: string;
@@ -1075,6 +1082,11 @@ interface AppState {
 	setStats: (sessionId: string, stats: SessionStats) => void;
 	setCommands: (sessionId: string, commands: SlashCommandInfo[]) => void;
 	setChatDraft: (sessionId: string, text: string) => void;
+	/** Puts text at the top of a chat's draft, keeping what is already typed, and hands it the caret. */
+	addToChatDraft: (sessionId: string, text: string) => void;
+	clearComposerFocus: () => void;
+	setEditorSelection: (workspaceId: string, selection: EditorSelection | null) => void;
+	detachEditorSelection: (workspaceId: string) => void;
 	clearPendingExtUi: (sessionId: string, id: string) => void;
 	applyExtUi: (request: ExtUiRequest) => void;
 	beginLogin: (loginId: string, providerId: string) => void;
@@ -1255,6 +1267,7 @@ function layoutOpenIntentFields(options: LayoutOpenOptions) {
 		...(Object.hasOwn(options, "navigation") ? { navigation: options.navigation } : {}),
 		...(options.countNavigation !== undefined ? { countNavigation: options.countNavigation } : {}),
 		...(options.claimPreview ? { claimPreview: true } : {}),
+		...(options.focusTab === false ? { focus: false } : {}),
 	};
 }
 
@@ -1760,6 +1773,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 	diffScopeByWorkspace: {},
 	chatLocationRequest: null,
 	historyOpenRequest: null,
+	composerFocusRequest: null,
+	editorSelectionByWorkspace: {},
 	fsChangesByWorkspace: {},
 	skillChangeTickByWorkspace: {},
 	skillsSyncedTickBySession: {},
@@ -3214,6 +3229,38 @@ export const useAppStore = create<AppState>((set, get) => ({
 		set((s) => withRuntime(s, sessionId, (rt) => ({ ...rt, commands }))),
 	setChatDraft: (sessionId, draft) =>
 		set((s) => withRuntime(s, sessionId, (rt) => ({ ...rt, draft }))),
+	addToChatDraft: (sessionId, text) =>
+		set((s) => {
+			if (!text.trim()) return {};
+			const runtime = withRuntime(s, sessionId, (rt) => ({
+				...rt,
+				draft: [text, rt.draft ?? ""].filter((part) => part.trim()).join("\n\n"),
+			}));
+			if (runtime.sessions === undefined) return {};
+			return {
+				...runtime,
+				composerFocusRequest: { id: randomId("composer-focus"), sessionId },
+			};
+		}),
+	clearComposerFocus: () => set({ composerFocusRequest: null }),
+	// A fresh highlight is offered to the chat again; only the user (or a send) takes it back off.
+	setEditorSelection: (workspaceId, selection) =>
+		set((s) => ({
+			editorSelectionByWorkspace: selection
+				? { ...s.editorSelectionByWorkspace, [workspaceId]: { selection, attached: true } }
+				: omitKey(s.editorSelectionByWorkspace, workspaceId),
+		})),
+	detachEditorSelection: (workspaceId) =>
+		set((s) => {
+			const held = s.editorSelectionByWorkspace[workspaceId];
+			if (!held?.attached) return {};
+			return {
+				editorSelectionByWorkspace: {
+					...s.editorSelectionByWorkspace,
+					[workspaceId]: { ...held, attached: false },
+				},
+			};
+		}),
 	clearPendingExtUi: (sessionId, id) =>
 		set((s) =>
 			withRuntime(s, sessionId, (rt) => {

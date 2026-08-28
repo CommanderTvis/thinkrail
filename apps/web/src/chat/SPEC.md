@@ -393,6 +393,14 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   fixed floor. Renderers needing attention still route through `ChatActions` to the controller's clamped
   `start`/`nearest` reveal; size-aware `nearest` keeps a tall target's useful leading edge visible and never
   changes follow state by itself.
+
+**What the editor is holding rides with the message.** While a workspace's editor has something
+highlighted, the composer shows it as a chip (`composer-selection`, `path:lines`) and `ChatView` prefixes
+the quote to the text it sends — the optimistic user turn included, so the transcript shows exactly what
+the agent was given. Sending consumes it, and the chip's `×` declines it; either way a fresh highlight
+offers it again (`store`'s `editorSelectionByWorkspace`, `selectAttachedEditorSelection`). A slash command
+is not a place for it, so `/compact` and friends are handled before the prefix is applied. The chip exists
+because the alternative is an attachment the user cannot see, which is worse than no attachment at all.
 - **Composer & chrome** — `Composer` (prompt field + send/steer/followUp/abort, `@`-mentions, `/`
   commands + template **slot sessions** (Tab-through placeholders — see the Template slots bullet
   below), image paste/drop — routed through **`imageAttachment.ts`**: `fileToAttachedImage` decodes in
@@ -494,7 +502,11 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   sourced from the runtime's `queue`. **Each row carries its own edit and remove actions**
   (`queue-item-edit` / `queue-item-remove`) — both call `session.removeQueued { kind, index }` (rows
   are position-addressed, matching the wire op); edit additionally restores the removed message's text
-  and images to the draft and refocuses. Per-row actions exist because the original all-or-nothing dequeue
+  and images to the draft and refocuses. Every one of these draft handoffs goes through the store's
+  **`addToChatDraft`** (see `store/SPEC.md`): the text leads, what was typed follows, and the
+  `composerFocusRequest` it leaves behind is what `ChatView` turns into `focusDraftEnd()` — the caret sits
+  after the handed-over text, ready for the sentence the user is about to write. That is also the path the
+  editor's "Send selection to chat" arrives on, from outside the chat subtree entirely. Per-row actions exist because the original all-or-nothing dequeue
   (click strip → `clearQueue` → every message merged into one draft blob) proved undiscoverable and lossy
   in use. **Abort atomically restores the complete queue** (`onAbort` →
   `session.abort { restoreQueue: true }`): the host drains both Pi lanes and signals abort as one operation,
