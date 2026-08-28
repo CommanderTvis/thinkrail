@@ -191,6 +191,59 @@ export interface TodoPlan {
 	unattributed?: GitFileChange[];
 }
 
+export type DelegationRunStatus = "queued" | "running" | "completed" | "error" | "aborted";
+
+const DELEGATION_RUN_STATUSES: readonly string[] = [
+	"queued",
+	"running",
+	"completed",
+	"error",
+	"aborted",
+];
+
+export function isDelegationRunDetails(value: unknown): value is DelegationRunDetails {
+	if (!value || typeof value !== "object") return false;
+	const d = value as Partial<DelegationRunDetails>;
+	if (typeof d.childSessionId !== "string" || typeof d.task !== "string") return false;
+	if (typeof d.status !== "string" || !DELEGATION_RUN_STATUSES.includes(d.status)) return false;
+	if (typeof d.durationMs !== "number") return false;
+	for (const field of [d.roleName, d.roleSource, d.model, d.activity]) {
+		if (field !== undefined && typeof field !== "string") return false;
+	}
+	const u = d.usage as Partial<DelegationRunDetails["usage"]> | undefined;
+	return (
+		!!u &&
+		typeof u === "object" &&
+		typeof u.input === "number" &&
+		typeof u.output === "number" &&
+		typeof u.cacheRead === "number" &&
+		typeof u.cacheWrite === "number" &&
+		typeof u.cost === "number" &&
+		typeof u.turns === "number" &&
+		typeof u.contextTokens === "number"
+	);
+}
+
+export interface DelegationRunDetails {
+	childSessionId: string;
+	roleName?: string;
+	roleSource?: string;
+	task: string;
+	status: DelegationRunStatus;
+	model?: string;
+	usage: {
+		input: number;
+		output: number;
+		cacheRead: number;
+		cacheWrite: number;
+		cost: number;
+		turns: number;
+		contextTokens: number;
+	};
+	durationMs: number;
+	activity?: string;
+}
+
 export type GitFileStatus = "added" | "modified" | "deleted" | "renamed" | "untracked";
 
 export interface GitFileChange {

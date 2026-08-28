@@ -20,7 +20,10 @@ of the host.
 
 - **Owns:** the wire — entity types, the `pi` event/message types (re-exported), the WS method & channel
   registries, and the protocol version. Including **`WsErrorCode`** — the closed set of failures the *host
-  names* (`WsResponse.errorCode`, today `UNKNOWN_COMMIT` and `PUSH_AUTH_FAILED`), so a client can react to one specific failure
+  names* (`WsResponse.errorCode`, today `UNKNOWN_COMMIT`, `PUSH_AUTH_FAILED`, and
+  `SUBAGENT_TRANSCRIPT_NOT_FOUND` — the latter is `subagent.getTranscript`'s **permanent** miss, the
+  signal that stops the transcript dialog's polling, while transport blips stay plain-`error` transients
+  worth retrying), so a client can react to one specific failure
   instead of pattern-matching an error message. A failure earns a code only when a client behaves differently
   for it; everything else stays a plain `error` string. Expected method-specific synchronization outcomes,
   such as a stale layout replacement, remain typed method results rather than generic WS failures.
@@ -230,6 +233,24 @@ of the host.
   remainder shipped by the same `todo.list` decoration, present only when non-empty: the worktree's
   uncommitted rows attributed to no item of the plan — the changes that would otherwise be invisible in
   the review map (derivation and rationale: [[submodule-server-todos]]).
+  **`DelegationRunDetails`** + the **`DelegationRunStatus`** union — the subagent Agent-card DTO,
+  **mirrored** from `pi-delegation` (never imported): rides `tool_execution_update.partialResult`
+  (REPLACE), the final `Agent` tool result, and the `subagent-completion` custom message; the
+  child transcript itself is read via `subagent.getTranscript`, keyed
+  `(workspaceId, parentSessionId, childSessionId)` — its result also carries the run's current
+  registry `status` (absent once the host no longer knows the run), the client's poll-while-live
+  signal. The completion message's tag + pairing live in
+  `wsProtocol` (the value-bearing half), mirroring the ask-user-answers posture exactly: the
+  **`SUBAGENT_COMPLETION_CUSTOM_TYPE`** constant (mirrors `pi-subagents`' `SUBAGENT_COMPLETION_MESSAGE`,
+  never imported — the DTO posture again), **`SubagentCompletionMessage`** (the compile-held tag↔details
+  shape) and the shared **`isSubagentCompletionMessage`** guard — wire data is untrusted, so the
+  details validate through **`isDelegationRunDetails`** (domain): the **closed status union**, every
+  required **numeric usage field**, `durationMs`, and every present optional display field as a string,
+  never just "an object is present" (PR #303 review finding). That validator is the one home for the
+  shape check — the web's Agent-card reader
+  narrows through it too — plus **`customMessageText`** — the one text extraction over
+  `WireCustomMessage.content` (string | blocks), shared by the web's event reducer and hydration so the
+  completion card's text derives once.
   **history-search read DTOs** — **`HistoryScope`** (the overlay's cycle: this chat → workspace →
   project → everywhere); **`PromptHit`** (a recalled prompt; carries optional `messageIndex` +
   `anchorText` — the kept-newest occurrence's jump anchor) and **`MessageHit`** (a full-text
