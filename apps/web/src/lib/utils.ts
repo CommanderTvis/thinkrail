@@ -144,6 +144,11 @@ function canonicalPosixPath(path: string): string {
 	return `${prefix}${segments.join("/")}`;
 }
 
+/** `/Users/me/.claude/settings.json` → `~/.claude/settings.json`, for showing a path outside the worktree. */
+export function abbreviateHomePath(path: string): string {
+	return path.replace(/^\/Users\/[^/]+|^\/home\/[^/]+/, "~");
+}
+
 export function projectRelativePath(path: string, workspaceRoot?: string | undefined): string {
 	const canonical = canonicalPosixPath(path);
 	if (!canonical || !isAbsolutePath(canonical)) return canonical;
@@ -203,6 +208,14 @@ function browserPlatform(): string {
 
 function isApplePlatform(platform: string): boolean {
 	return APPLE_PLATFORM.test(platform);
+}
+
+/**
+ * macOS specifically, not Apple generally: this gates following the system appearance, and iOS has no
+ * user-facing per-app light/dark contract worth mirroring.
+ */
+export function isMacOS(platform = browserPlatform()): boolean {
+	return /Mac/.test(platform);
 }
 
 export function hasPlatformModifier(

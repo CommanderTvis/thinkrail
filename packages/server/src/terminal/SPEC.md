@@ -80,6 +80,22 @@ identities. A tab's shell outlives every client that looks at it; each frontend 
   during the delay would otherwise be undone by the restore, leaving the PTY at the old size while the
   tracked grid says otherwise — and the change-only rule then makes retrying the new size a no-op. This is the same "redraw after the attach snapshot" class of race the bullet above already
   accepts, deliberately triggered every reattach instead of only incidentally.
+- **Agent detection is polled, and rides the tab snapshot** (`agentWatch.ts` + `processTree.ts`). A PTY
+  reports its own I/O, never which process holds its foreground, so nothing pushes "an agent is running
+  here" — it has to be observed. One `ps -Ao pid=,ppid=,comm=` snapshot per tick builds a pid→children
+  map covering every terminal at once, so cost is a single subprocess per tick no matter how many tabs
+  are open; a per-terminal `pgrep` would scale with tab count. A tab is running an agent when a
+  descendant of its shell is named `claude` (verified: a live Claude Code process reports exactly that
+  `comm`), searched breadth-first to `MAX_DESCENDANT_DEPTH` so a wrapper script still resolves, with a
+  visited set so a cyclic parent chain terminates. The result is folded into `TerminalTabInfo.agent`
+  rather than a new channel — clients already subscribe to `terminal.tabs`, so this needs no new wire
+  surface — and is broadcast **only when the detected set actually changes**, never on every tick.
+  Because an agent appearing is not a membership change, that broadcast deliberately skips
+  `persistTerminalSessions()`; only open/close/archive persist.
+- **`poke()` arms the timer and never sweeps inline.** `attachTerminal` calls it, and a synchronous `ps`
+  on that path blocks long enough for a login shell to fork its profile — which `closeTerminalTab` then
+  reads as a busy shell, turning a fresh tab into a close-confirmation prompt. Detection is allowed to
+  lag a tick; attach is not allowed to block. The timer stops itself once no terminals remain.
 - **Ownership is the host's owner, not the browser page.** Any client may attach; consistent with `history`,
   `todos` and `templates`, which already assume a single-owner host. Consequence: shells survive a reload, a
   closed browser and a different browser.
@@ -108,6 +124,54 @@ identities. A tab's shell outlives every client that looks at it; each frontend 
 - **Not tmux.** Would buy restart survival at the cost of a dep we can't assume on Windows, a competing tab
   model, env-propagation breakage, and `capture-pane` polling. We already accept no crash isolation.
 
+## Tab titles
+
+A tab adopts the title the program inside it sets for itself (OSC 0/2) — how a terminal has always
+reported what it is running, and how Claude Code names a session, so a tab says what it is doing instead
+of "Terminal 3". `renameTerminal` strips null bytes and bounds the length, because this is arbitrary
+output from whatever happens to be running; an empty title means "no opinion" and restores the tab's own
+name rather than blanking it. Warp resolves this the same way and adds one rule worth keeping in mind
+before a manual rename lands: a **custom title always wins over OSC**
+(`app/src/terminal/model/terminal_model.rs`), otherwise the next prompt would overwrite the name the
+user chose.
+
+## Resuming an agent session
+
+A terminal that had Claude running when the host went down comes back with the invocation to resume it
+**typed at the prompt but not run**. Restoring a session spends tokens and re-reads context, so the
+decision stays the user's; the tab is otherwise an ordinary shell.
+
+- **Two halves, two sources.** The *command* comes from the process table — `captureProcessCommand` reads
+  the agent's argv once, when the poll first sees it, so the flags the user chose (`--chrome`, a model)
+  survive. The poll itself stays name-only: `args=` is unbounded and would be carried for every process
+  on the machine every tick, to be discarded. The *session id* exists only inside the agent, and reaches
+  us as the plugin's terminal escape sequence — so the client parses it and hands it back through
+  `terminal.rememberAgent`. **Whichever half lands second writes**: the plugin reports its id within
+  milliseconds of starting while the poll can be a tick behind, so a pair only completed after the first
+  write would otherwise never reach disk — persistence runs on membership changes, and an agent appearing
+  is deliberately not one. **Without the plugin there is no id and no offer**; a guess at which session
+  to resume is worse than none.
+- **Only a session that was still running.** Persistence records the pair only while `agentWatch` reports
+  a live agent for that tab, and clears both the moment it exits. A conversation the user finished before
+  closing is not something to resurrect.
+- **The prefill is consumed by the first revived shell**, like the replay, rather than held for every
+  later reattach — the offer belongs to the interrupted session, and typing into a shell already in use
+  would be an intrusion. **Handed over is not the same as answered**, though: a line typed at a prompt and
+  never run is gone with the shell, so an offer the user did not act on is *carried* (`carriedAgent`) and
+  persisted again, and the next start makes it once more. It stops being made when something actually runs
+  in that tab — the poll seeing an agent there retires it, whether that is the resumed session or anything
+  else — or when the tab is closed. This is deliberately the opposite of the first rule here, which
+  dropped the offer the moment a shell was handed it: that made "not now" indistinguishable from "no", and
+  a user who reopened the app twice lost the session for good.
+- **The offer is verified against disk.** Claude writes a conversation only when
+  the session has something to save, so one started and killed before its first prompt leaves an id that
+  resolves to nothing and produces `No conversation found with session ID`. `agentSessionExists` checks
+  for `~/.claude/projects/<cwd with / and . as ->/<id>.jsonl` before offering, which is also what keeps a
+  carried offer from outliving the conversation it names.
+- `resumeCommand` rebuilds rather than appends: an existing `--resume` (from a previous restore) or a
+  `--continue` is dropped, since `--resume a --resume b` is not a command anyone meant to run. The id is
+  required to be a UUID, so nothing from the process table can be pasted into a shell as anything else.
+
 ## Restrictions
 
 - **`attachTerminal` and its handler must stay synchronous.** Lookup and insert in one tick is what makes
@@ -125,12 +189,31 @@ identities. A tab's shell outlives every client that looks at it; each frontend 
   into the body, where it stops being a re-derivable summary and becomes literal bytes that every later
   snapshot replays and re-persists: one bad mode then outlives the run that observed it, across restarts.
 - Attach hands back the recording and then **discards** held batcher output — the replay already contains it.
+- **`mouseModeGuard.ts` fixes the *live* half of the same class of bug the recorder rule above fixes for
+  restore:** a TUI that leaves SGR mouse tracking (1000/1002/1003/1006) enabled without a matching `DECRST`
+  leaves xterm.js honoring it forever, so every mouse move over what's now a bare shell prompt gets encoded
+  as a report and echoed back as garbage. Two independent triggers, since neither alone covers every real
+  TUI observed in practice:
+  - `transform()` taps the live PTY byte stream (`terminalManager.ts`'s `pty.onData`, upstream of both the
+    recorder and the batcher) and injects a reset immediately after an alt-screen exit whenever mouse
+    tracking was left on — covers a TUI that pairs mouse mode with the alt screen (vim, htop, …) but
+    crashes or is killed before its own cleanup runs.
+  - `resetIfEnabled()` is a fallback driven by `agentWatch`'s `onAgentCleared`: **Claude Code's own CLI
+    runs inline, never touching the alt screen**, so `transform()` has no signal to key off for it —
+    process-tree polling noticing the `claude` process is gone is the only trigger available, wired through
+    `terminalManager.ts`'s `createAgentWatch` call, pushed through the same `recorder`/`output` pair as
+    `pty.onData`. Coarser (bounded by `AGENT_POLL_MS`) and reactive rather than synchronous, but the only
+    option short of shell integration (OSC 133) telling us a foreground process just returned control.
+  Either path is a one-shot reset per left-on episode, never a fresh timer or poll of its own.
 
 ## Validation
 
 - `outputRecorder.test.ts` — bounds, line/escape-safe trimming, alt-screen exclusion (incl. a switch split
   across reads and enter+exit in one read), mode restoration, mouse tracking never restored, and `restore()`
   keeping mode sequences out of the body (incl. a recording persisted by a host that still replayed them).
+- `mouseModeGuard.test.ts` — passthrough of clean output, well-behaved apps left untouched, forced reset on
+  a dirty alt-screen exit, `resetIfEnabled()` for the inline-TUI fallback, no reset when mouse tracking was
+  never on, fires only once per left-on episode, a mode sequence split across chunks.
 - `outputBatcher.test.ts` — batching, backpressure, truncation, `reset`.
 - `shellBusy.test.ts` — child detection, including that an unanswerable platform reports *not* busy.
 - `shellArgs.test.ts` — shell executable precedence across Unix and Windows plus platform-specific arguments.
@@ -139,5 +222,12 @@ identities. A tab's shell outlives every client that looks at it; each frontend 
   revive. Replay-persistence and natural-exit cases use bounded publisher-observed data/exit conditions as
   readiness edges, never elapsed time; their expected output marker never appears contiguously in the command
   input, so terminal echo cannot impersonate command execution.
+- `agentResume.test.ts` — an unwritten session refused, flags preserved, an earlier `--resume`/`--continue` replaced rather than stacked,
+  a bare `--resume` (the picker) consuming no following flag, and a non-UUID id refused.
+- `processTree.test.ts` — `ps` row parsing (spaces in names, `.exe` stripping, header junk), descendant
+  search across generations, depth cap, and cycle termination.
+- `agentWatch.test.ts` — detect/clear transitions notify exactly once, a steady state stays silent, a
+  closed tab drops its entry, the timer stops at zero terminals and restarts, repeated pokes never stack
+  a timer, and an unreadable process table changes nothing.
 - `e2e/terminals.spec.ts` — the rapid re-entry regression, reload survival, second-client takeover,
   cross-client tab convergence.

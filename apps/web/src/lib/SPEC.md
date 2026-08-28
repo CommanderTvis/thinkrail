@@ -44,7 +44,12 @@ Tiny UI helpers shared across components.
   host-read tab opens), and the
   **`LayoutAttention`** device-local overlay shared by store, shell, and the headless layout child, with
   own-property-safe `readLayoutSelection()` / `readLayoutNavigationClock()` accessors for untrusted
-  tuple-keyed maps. Also the shared
+  tuple-keyed maps. **`claudeCodeSequence.ts`** decodes the OSC 777 `notify;<target>;<json>` status
+  sequence a Claude Code plugin (`packages/claude-plugin`, or Warp's own `warp://cli-agent`) writes into
+  a terminal's PTY: `parseCliAgentSequence()` (target allowlist + JSON validation) and `statusForEvent()`
+  (event name -> `ClaudeCodeStatus`). It lives here rather than `panels/` because `store`'s per-terminal
+  status map and `panels/TerminalInstance`'s xterm OSC handler both need it, and `store` may not import
+  from `panels/`. Also the shared
   Shiki highlighter, **kept out of the barrel** so the eager `@/lib` import stays shiki-free:
   `highlighter.ts` loads the curated grammars + JS regex engine and renders with `themes`' one generic
   CSS-variable registration. It is imported per-file (`@/lib/highlighter`) from lazy chunks only; theme
@@ -59,7 +64,8 @@ Tiny UI helpers shared across components.
   `shallowEqualArrays`, `userText`, `parseSkillInvocation`, `matchesSkillInvocationCommand`,
   `relativeTime`, `platformShortcutLabel`, `hasPlatformModifier`, `copyText`, `randomId`,
   `DOUBLE_CLICK_SETTLE_MS`, `tupleKey`, `parseTupleKey`, `layoutResourceIdentity`,
-  `readLayoutSelection`, `readLayoutNavigationClock`, and the `LayoutAttention` type.
+  `readLayoutSelection`, `readLayoutNavigationClock`, the `LayoutAttention` type, `parseCliAgentSequence`,
+  `statusForEvent`, and the `ClaudeCodeStatus`/`ClaudeCodePayload` types.
 - **Allowed deps:** `clsx`, `tailwind-merge`; `@thinkrail/contracts` (types only for canonical messages;
   the layout-resource identity input is a local structural type); `shiki`/`@shikijs/*` (the per-file shiki modules only — never reachable
   through the barrel).

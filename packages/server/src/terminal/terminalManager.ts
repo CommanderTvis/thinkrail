@@ -14,13 +14,17 @@ import {
 	type PersistedTerminalSessions,
 	saveTerminalSessions,
 } from "../persistence";
+import { agentSessionExists, resumeCommand } from "./agentResume";
+import { type AgentWatch, createAgentWatch } from "./agentWatch";
 import { createTerminalCompletionQueue } from "./completionQueue";
+import { createMouseModeGuard, type MouseModeGuard } from "./mouseModeGuard";
 import {
 	createOutputBatcher,
 	type OutputBatcher,
 	type TerminalDeliveryResult,
 } from "./outputBatcher";
 import { createOutputRecorder, type OutputRecorder } from "./outputRecorder";
+import { captureProcessCommand } from "./processTree";
 import { nudgePtyRedraw, type PtyGrid, resizePtyIfChanged } from "./ptyGrid";
 import { terminalShell, terminalShellArgs } from "./shellArgs";
 import { hasChildProcesses } from "./shellBusy";
@@ -34,12 +38,17 @@ interface TerminalEntry {
 	attachedClient: string | null;
 	output: OutputBatcher;
 	recorder: OutputRecorder;
+	mouseModeGuard: MouseModeGuard;
 	grid: PtyGrid;
+	agentCommand?: string | undefined;
+	agentSessionId?: string | undefined;
 }
 
 interface TabRecord {
 	tabKey: string;
 	title: string;
+	/** The name the tab was opened with, restored when a program clears the title it set. */
+	defaultTitle?: string;
 }
 
 const OUTPUT_BATCH = {
@@ -55,6 +64,9 @@ const terminals = new Map<string, TerminalEntry>();
 const ptyByTab = new Map<string, string>();
 const tabsByWorkspace = new Map<string, TabRecord[]>();
 const pendingReplay = new Map<string, string>();
+const pendingPrefill = new Map<string, string>();
+/** The session an un-taken offer names, kept so a restart still has one to make. See SPEC.md. */
+const carriedAgent = new Map<string, { command: string; sessionId: string }>();
 
 const TAB_INDEX_SEP = "\u0000";
 
@@ -78,6 +90,44 @@ function membershipChanged(workspaceId: string): void {
 	broadcastTabs(workspaceId, listTerminals(workspaceId));
 	persistTerminalSessions();
 }
+
+const agentWatch: AgentWatch = createAgentWatch({
+	listTargets: () =>
+		[...terminals.values()].map((entry) => ({
+			workspaceId: entry.workspaceId,
+			tabKey: entry.tabKey,
+			pid: entry.pty.pid,
+		})),
+	// Snapshot only: an agent change is not membership, so it must not persist — see SPEC.md.
+	onWorkspaceChanged: (workspaceId) => broadcastTabs(workspaceId, listTerminals(workspaceId)),
+	// Claude Code runs inline (no alt screen), so mouseModeGuard.transform never sees a trigger for
+	// it — this is the fallback: the poller noticing the process is gone is the only signal we get.
+	// The command is read once, when the agent appears — the poll itself stays name-only.
+	onAgentDetected: (workspaceId, tabKey, agentPid) => {
+		const entry = terminals.get(ptyByTab.get(tabIndex(workspaceId, tabKey)) ?? "");
+		if (!entry) return;
+		const command = captureProcessCommand(agentPid);
+		if (!command) return;
+		entry.agentCommand = command;
+		// Something is running here now: whatever the restore offered is answered, one way or the other.
+		carriedAgent.delete(tabIndex(workspaceId, tabKey));
+		// The two halves arrive independently: the plugin reports its session id within milliseconds of
+		// starting, while this poll can be a tick behind it. Whichever lands second has to write, or a pair
+		// only completed after the first write never reaches disk at all.
+		if (entry.agentSessionId) persistTerminalSessions();
+	},
+	onAgentCleared: (workspaceId, tabKey) => {
+		const entry = terminals.get(ptyByTab.get(tabIndex(workspaceId, tabKey)) ?? "");
+		if (!entry) return;
+		// The agent exited, so there is no live session to come back to — see SPEC.md.
+		entry.agentCommand = undefined;
+		entry.agentSessionId = undefined;
+		const reset = entry.mouseModeGuard.resetIfEnabled();
+		if (!reset) return;
+		entry.recorder.push(reset);
+		entry.output.push(reset);
+	},
+});
 
 const completions = createTerminalCompletionQueue((clientKey, channel, data) =>
 	pushToClient(clientKey, channel, data),
@@ -161,6 +211,7 @@ function spawnForTab(
 	});
 
 	const id = randomUUID();
+	const mouseModeGuard = createMouseModeGuard();
 	const recorder = createOutputRecorder({ maxChars: replayBudgetChars() });
 	if (revived !== undefined) recorder.restore(revived);
 	const output = createOutputBatcher({
@@ -179,12 +230,14 @@ function spawnForTab(
 		attachedClient: clientKey,
 		output,
 		recorder,
+		mouseModeGuard,
 		grid,
 	};
 	terminals.set(id, entry);
 	ptyByTab.set(tabIndex(workspaceId, tabKey), id);
 
-	pty.onData((data) => {
+	pty.onData((raw) => {
+		const data = mouseModeGuard.transform(raw);
 		recorder.push(data);
 		output.push(data);
 	});
@@ -236,6 +289,8 @@ export interface AttachResult {
 	id: string;
 	created: boolean;
 	replay?: string;
+	/** Typed into the shell but never run — the user decides whether to resume. See SPEC.md. */
+	prefill?: string;
 }
 
 export function attachTerminal(
@@ -250,7 +305,8 @@ export function attachTerminal(
 	const isNewTab = !tabs.some((tab) => tab.tabKey === tabKey);
 	if (isNewTab) {
 		assertTerminalCatalogCapacity(tabs);
-		tabs.push({ tabKey, title: options.title ?? `Terminal ${tabs.length + 1}` });
+		const opened = options.title ?? `Terminal ${tabs.length + 1}`;
+		tabs.push({ tabKey, title: opened, defaultTitle: opened });
 	}
 
 	const index = tabIndex(workspaceId, tabKey);
@@ -282,14 +338,29 @@ export function attachTerminal(
 
 	const revived = pendingReplay.get(index);
 	pendingReplay.delete(index);
+	// Consumed by the first shell that comes back, not held for every later reattach: the offer belongs to
+	// the session that was interrupted, and re-typing it into a shell already in use would be an intrusion.
+	const prefill = pendingPrefill.get(index);
+	pendingPrefill.delete(index);
 	const { id, entry } = spawnForTab(workspaceId, tabKey, clientKey, options, revived);
+	// No detection means no `ps` sweep at all: the poll exists to find Claude Code, and a user who has not
+	// asked for that integration should not have their process table read every few seconds.
+	if (loadConfig().claudeCodeEnabled) agentWatch.poke();
 	if (isNewTab) membershipChanged(workspaceId);
 	const replay = entry.recorder.snapshot();
-	return { id, created: true, ...(replay ? { replay } : {}) };
+	return {
+		id,
+		created: true,
+		...(replay ? { replay } : {}),
+		...(prefill ? { prefill } : {}),
+	};
 }
 
 export function listTerminals(workspaceId: string): TerminalTabInfo[] {
-	return tabsFor(workspaceId).map(({ tabKey, title }) => ({ tabKey, title }));
+	return tabsFor(workspaceId).map(({ tabKey, title }) => {
+		const agent = agentWatch.agentFor(workspaceId, tabKey);
+		return { tabKey, title, ...(agent ? { agent } : {}) };
+	});
 }
 
 function attachedEntry(id: string, caller: string): TerminalEntry | undefined {
@@ -325,6 +396,7 @@ export function resizeTerminal(id: string, cols: number, rows: number, caller: s
 function disposeTerminalEntry(id: string, entry: TerminalEntry): void {
 	terminals.delete(id);
 	ptyByTab.delete(tabIndex(entry.workspaceId, entry.tabKey));
+	agentWatch.forget(entry.workspaceId, entry.tabKey);
 	entry.output.dispose();
 	entry.recorder.dispose();
 	entry.pty.kill();
@@ -351,6 +423,8 @@ export function closeTerminalTab(
 
 	tabs.splice(position, 1);
 	pendingReplay.delete(index);
+	pendingPrefill.delete(index);
+	carriedAgent.delete(index);
 	if (entry && id) disposeTerminalEntry(id, entry);
 	membershipChanged(workspaceId);
 	return { closed: true, busy: false };
@@ -377,18 +451,69 @@ export function closeWorkspaceTerminals(workspaceId: string): void {
 export function closeAllTerminals(): void {
 	for (const [id, entry] of terminals) disposeTerminalEntry(id, entry);
 	completions.clear();
+	agentWatch.stop();
+}
+
+/**
+ * The session id only exists in the agent's own hook output, which reaches the client as a terminal
+ * escape sequence — so the client is the one that can see it, and hands it back here to be persisted.
+ */
+const MAX_TAB_TITLE = 200;
+
+/**
+ * Adopt the title the program in the tab set for itself (OSC 0/2), which is how a terminal has always
+ * reported what it is running — and how Claude Code names a session.
+ *
+ * Null bytes are stripped and the length is bounded, because this is arbitrary output from whatever is
+ * running. An empty title means "no opinion" and restores the tab's own name rather than blanking it.
+ */
+export function renameTerminal(workspaceId: string, tabKey: string, title: string): void {
+	const tabs = tabsByWorkspace.get(workspaceId);
+	const tab = tabs?.find((candidate) => candidate.tabKey === tabKey);
+	if (!tabs || !tab) return;
+	const cleaned = title.replaceAll("\u0000", "").trim().slice(0, MAX_TAB_TITLE);
+	const next = cleaned === "" ? (tab.defaultTitle ?? tab.title) : cleaned;
+	if (next === tab.title) return;
+	tab.title = next;
+	// Broadcast only. A shell repaints its title on every prompt, so persisting here wrote every tab's
+	// replay buffer to disk once per command — and the name belongs to the program, not the tab, so it
+	// must not outlive it either. Persistence keeps `defaultTitle`; see SPEC.md.
+	broadcastTabs(workspaceId, listTerminals(workspaceId));
+}
+
+export function rememberAgentSession(workspaceId: string, tabKey: string, sessionId: string): void {
+	const entry = terminals.get(ptyByTab.get(tabIndex(workspaceId, tabKey)) ?? "");
+	if (!entry || entry.agentSessionId === sessionId) return;
+	entry.agentSessionId = sessionId;
+	persistTerminalSessions();
 }
 
 export function persistTerminalSessions(): void {
 	const sessions: PersistedTerminalSessions = {};
 	for (const [workspaceId, tabs] of tabsByWorkspace) {
 		if (tabs.length === 0) continue;
-		sessions[workspaceId] = tabs.map(({ tabKey, title }) => {
+		sessions[workspaceId] = tabs.map(({ tabKey, title, defaultTitle }) => {
 			const index = tabIndex(workspaceId, tabKey);
 			const id = ptyByTab.get(index);
 			const entry = id === undefined ? undefined : terminals.get(id);
 			const recorded = entry ? entry.recorder.snapshot() : pendingReplay.get(index);
-			return { tabKey, title, ...(recorded ? { recorded } : {}) };
+			// Only a session still running when we shut down: one the user already ended is not something
+			// to bring back — see SPEC.md.
+			const live =
+				entry?.agentCommand &&
+				entry.agentSessionId &&
+				agentWatch.agentFor(workspaceId, tabKey) !== undefined
+					? { command: entry.agentCommand, sessionId: entry.agentSessionId }
+					: undefined;
+			// An offer nobody took is still worth making: the user closed the app without answering it, and
+			// a shell that was handed the invocation and never ran it kept nothing. See SPEC.md.
+			const agent = live ?? carriedAgent.get(index);
+			return {
+				tabKey,
+				title: defaultTitle ?? title,
+				...(recorded ? { recorded } : {}),
+				...(agent ? { agent } : {}),
+			};
 		});
 	}
 	saveTerminalSessions(sessions);
@@ -401,9 +526,23 @@ export function reviveTerminalSessions(): void {
 		for (const tab of tabs.slice(0, MAX_TERMINAL_TABS_PER_WORKSPACE)) {
 			if (!isValidTerminalTabKey(tab?.tabKey)) continue;
 			const title = isValidTerminalTitle(tab.title) ? tab.title : "Terminal";
-			restored.push({ tabKey: tab.tabKey, title });
+			restored.push({ tabKey: tab.tabKey, title, defaultTitle: title });
 			if (typeof tab.recorded === "string" && tab.recorded !== "") {
 				pendingReplay.set(tabIndex(workspaceId, tab.tabKey), tab.recorded);
+			}
+			const agent = tab.agent;
+			if (typeof agent?.command === "string" && typeof agent.sessionId === "string") {
+				const cwd = loadWorkspaces().find((w) => w.id === workspaceId)?.worktreePath ?? "";
+				const resume = agentSessionExists(cwd, agent.sessionId)
+					? resumeCommand(agent.command, agent.sessionId)
+					: null;
+				if (resume) {
+					pendingPrefill.set(tabIndex(workspaceId, tab.tabKey), resume);
+					carriedAgent.set(tabIndex(workspaceId, tab.tabKey), {
+						command: agent.command,
+						sessionId: agent.sessionId,
+					});
+				}
 			}
 		}
 		if (restored.length > 0) tabsByWorkspace.set(workspaceId, restored);
@@ -416,4 +555,6 @@ export function resetTerminalState(): void {
 	ptyByTab.clear();
 	tabsByWorkspace.clear();
 	pendingReplay.clear();
+	pendingPrefill.clear();
+	carriedAgent.clear();
 }

@@ -9,6 +9,7 @@ import {
 	isJbcentralQuotaRefreshSeconds,
 	normalizeThemePreference,
 	type Project,
+	VERTICAL_TABS_WIDTH,
 	type Workspace,
 } from "@thinkrail/contracts";
 
@@ -49,6 +50,8 @@ export interface PersistedTerminalTab {
 	tabKey: string;
 	title: string;
 	recorded?: string;
+	/** The agent invocation live in this tab at shutdown, so reopening can offer to resume it. */
+	agent?: { command: string; sessionId: string };
 }
 
 export type PersistedTerminalSessions = Record<string, PersistedTerminalTab[]>;
@@ -77,6 +80,7 @@ export function loadConfig(): AppConfig {
 			typeof value.analyticsEnabled === "boolean"
 				? value.analyticsEnabled
 				: DEFAULT_CONFIG.analyticsEnabled,
+		claudeCodeEnabled: value.claudeCodeEnabled === true,
 		terminalReplayKb:
 			typeof value.terminalReplayKb === "number" && Number.isFinite(value.terminalReplayKb)
 				? value.terminalReplayKb

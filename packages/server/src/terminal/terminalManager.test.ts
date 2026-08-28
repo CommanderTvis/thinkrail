@@ -476,3 +476,66 @@ describe("membership survives an ungraceful exit", () => {
 		expect(listTerminals(WS)).toHaveLength(0);
 	});
 });
+
+describe("resuming an agent a surface promised to bring back", () => {
+	const SESSION = "8241dd03-d47b-417f-9b24-89b2bf7488ba";
+	const savedHome = process.env.HOME;
+
+	function persistAgentTab(tabKey: string): void {
+		// `agentSessionExists` looks for the conversation under $HOME, so the offer is only made when one
+		// is really there — point HOME at the fixture and write it.
+		const home = join(dataDir, "home");
+		const project = join(home, ".claude", "projects", "fixture");
+		mkdirSync(project, { recursive: true });
+		writeFileSync(join(project, `${SESSION}.jsonl`), "{}\n");
+		process.env.HOME = home;
+		saveTerminalSessions({
+			[WS]: [{ tabKey, title: "claude", agent: { command: "claude", sessionId: SESSION } }],
+		});
+	}
+
+	afterEach(() => {
+		setResumeRunPolicy(null);
+		if (savedHome === undefined) delete process.env.HOME;
+		else process.env.HOME = savedHome;
+	});
+
+	test("an offer nobody claimed is typed, never run — the user spends the resume", () => {
+		persistAgentTab("plain");
+		reviveTerminalSessions();
+		const attached = attachTerminal(WS, "plain", "client-1");
+		expect(attached.prefill).toBe(`claude --resume ${SESSION}`);
+		expect(attached.prefillSubmit).toBeUndefined();
+	});
+
+	test("the surface that owns the tab gets its offer run, so the agent is actually back", () => {
+		persistAgentTab("blueprint-author");
+		setResumeRunPolicy(
+			(workspaceId, tabKey) => workspaceId === WS && tabKey === "blueprint-author",
+		);
+		reviveTerminalSessions();
+		const attached = attachTerminal(WS, "blueprint-author", "client-1");
+		expect(attached.prefill).toBe(`claude --resume ${SESSION}`);
+		expect(attached.prefillSubmit).toBe(true);
+	});
+
+	test("an offer the user did not answer is still there after the next restart", () => {
+		persistAgentTab("plain");
+		reviveTerminalSessions();
+		expect(attachTerminal(WS, "plain", "client-1").prefill).toBe(`claude --resume ${SESSION}`);
+
+		// The shell was handed the invocation and never ran it; closing the app keeps nothing of a line
+		// typed at a prompt, so the offer has to survive the write instead.
+		persistTerminalSessions();
+		resetTerminalState();
+		reviveTerminalSessions();
+		expect(attachTerminal(WS, "plain", "client-2").prefill).toBe(`claude --resume ${SESSION}`);
+	});
+
+	test("a claimed tab in another workspace is still only an offer", () => {
+		persistAgentTab("blueprint-author");
+		setResumeRunPolicy((workspaceId) => workspaceId === "some-other-workspace");
+		reviveTerminalSessions();
+		expect(attachTerminal(WS, "blueprint-author", "client-1").prefillSubmit).toBeUndefined();
+	});
+});
