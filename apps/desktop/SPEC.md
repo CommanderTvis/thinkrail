@@ -25,7 +25,8 @@ engine architecture.
 - **Public surface:** the packaged desktop application and unsigned installers; the build/test-only
   `@thinkrail/desktop/artifact` launcher and installer locators consumed by smoke and E2E harnesses.
 - **Allowed deps:** `server` for the embedded host, build-support manifest, and artifact probes; `shared`
-  for release identity; `contracts` for compatibility/native-bridge types; the completed built web
+  for release identity and the retrying teardown both smokes clean up with; `contracts` for
+  compatibility/native-bridge types; the completed built web
   artifact; Electrobun `1.18.1`; Bun/Node.
 - **Forbidden:** spawning the CLI or a second engine process; implementing ordinary product feature or
   agent/domain logic; importing web source at runtime; introducing a desktop-only wire or UI state model;
@@ -126,10 +127,11 @@ Unsigned desktop installers ship beside the CLI artifacts for macOS ARM64, Windo
 Linux ARM64. Nightly maps to Electrobun canary and stable maps to stable. Signing, notarization, and updater
 UX are deferred.
 
-Smoke teardown of a temp tree that a launcher ran from must pass `maxRetries`/`retryDelay` to `rmSync`.
+Smoke teardown of a temp tree that a launcher ran from must go through `@thinkrail/shared/removeTree`.
 Windows releases handles asynchronously after a child exits, so a bare recursive remove throws `EBUSY`
-and fails the release *after* every assertion has already passed. The retry is teardown resilience, not
-error suppression: a tree that stays locked past the backoff still throws.
+and fails the release *after* every assertion has already passed. `rmSync`'s own `maxRetries`/`retryDelay`
+do not fix that here — Bun ignores them — so the retry loop has to be ours. The retry is teardown
+resilience, not error suppression: a tree that stays locked past the backoff still throws.
 
 Linux uses native WebKitGTK without CEF and declares Ubuntu 24.04+/glibc 2.38 plus `libgtk-3-0`,
 `libwebkit2gtk-4.1-0`, `libayatana-appindicator3-1`, and `librsvg2-2`. Xvfb software-rendering flags are
