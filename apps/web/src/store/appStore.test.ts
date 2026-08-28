@@ -13,7 +13,7 @@ import {
 	type WorkspaceLayoutDocument,
 	type WorkspaceSkillChange,
 } from "@thinkrail/contracts";
-import type { ChatTurn } from "../chat/types";
+import type { ChatTurn, FailureRecovery } from "../chat/types";
 import { userText } from "../lib";
 import {
 	captureCenterNavigation,
@@ -151,6 +151,11 @@ function rt(sessionId: string): SessionRuntime {
 	const runtime = useAppStore.getState().sessions[sessionId];
 	if (!runtime) throw new Error(`no runtime for ${sessionId}`);
 	return runtime;
+}
+
+function failureRecovery(sessionId: string): FailureRecovery | undefined {
+	const error = rt(sessionId).turns.find((turn) => turn.kind === "error");
+	return error?.kind === "error" ? error.recovery : undefined;
 }
 
 test("each connected status advances the reconnect generation atomically", () => {
@@ -617,6 +622,7 @@ test("a turn that ends in a provider error surfaces the error (not a false ✓ D
 	expect(after.isStreaming).toBe(false);
 	const err = after.turns.find((t) => t.kind === "error");
 	expect(err?.kind === "error" && err.text).toContain("gpt-5.5");
+	expect(failureRecovery("a")).toBe("try-again");
 	expect(after.turns.some((t) => t.kind === "system" && t.text === "✓ Done")).toBe(false);
 });
 
@@ -631,8 +637,43 @@ test("a terminal length stop is a visible failure, never a false ✓ Done", () =
 	const after = rt("a");
 	const error = after.turns.find((turn) => turn.kind === "error");
 	expect(error?.kind === "error" && error.text.toLowerCase()).toContain("truncated");
+	expect(failureRecovery("a")).toBe("try-again");
 	expect(after.turns.some((turn) => turn.kind === "system" && turn.text === "✓ Done")).toBe(false);
 	expect(after.isStreaming).toBe(false);
+});
+
+test("a local follow-on consumes only its session's failure recovery", () => {
+	const store = useAppStore.getState();
+	store.openChatSession("ws1", "a", null, "medium");
+	store.openChatSession("ws1", "b", null, "medium");
+	for (const sessionId of ["a", "b"]) {
+		store.handlePiEvent(
+			agentSettled({ stopReason: "error", errorMessage: "fetch failed" }),
+			sessionId,
+		);
+	}
+
+	store.appendUserMessage("a", "Try again.");
+
+	expect(failureRecovery("a")).toBeUndefined();
+	expect(failureRecovery("b")).toBe("try-again");
+});
+
+test("another client's agent start consumes only its session's failure recovery", () => {
+	const store = useAppStore.getState();
+	store.openChatSession("ws1", "a", null, "medium");
+	store.openChatSession("ws1", "b", null, "medium");
+	for (const sessionId of ["a", "b"]) {
+		store.handlePiEvent(
+			agentSettled({ stopReason: "error", errorMessage: "fetch failed" }),
+			sessionId,
+		);
+	}
+
+	store.handlePiEvent(agentStart, "b");
+
+	expect(failureRecovery("a")).toBe("try-again");
+	expect(failureRecovery("b")).toBeUndefined();
 });
 
 test("a successful overflow compaction removes the superseded assistant attempt", () => {
@@ -847,6 +888,7 @@ test("appendErrorTurn surfaces a failed send (a rejected prompt) as a visible er
 
 	const err = rt("a").turns.find((t) => t.kind === "error");
 	expect(err?.kind === "error" && err.text).toContain("No API key");
+	expect(failureRecovery("a")).toBeUndefined();
 	expect(rt("a").isStreaming).toBe(false);
 });
 
