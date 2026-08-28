@@ -106,8 +106,11 @@ pins production wiring.
 
 ## Navigation and window security
 
-The native window permits navigation only within its exact loopback origin. User-requested external URLs
-open through the OS instead of replacing the app surface. Navigation listeners use the SDK emitter's
+The native window permits navigation only within its own loopback origin. User-requested external URLs
+open through the OS instead of replacing the app surface. "Its own" spans the host's other loopback names:
+the window loads `http://127.0.0.1:<port>`, so a link written as `localhost` or `[::1]` on that same port
+and scheme is the app talking to itself, and handing it to the OS is how the desktop app ends up opening
+browser tabs onto itself. Any other port, host or scheme stays external. Navigation listeners use the SDK emitter's
 webview-scoped `will-navigate-<id>` and `new-window-open-<id>` channels; the unscoped payload has no
 webview id, and the instance listener's typed event list omits popups. Payload types are derived from
 SDK event factories, not copied into local declarations. Detail can be a raw URL, a popup object, or
