@@ -12,10 +12,12 @@ import { type ITheme, Terminal as XTerm } from "@xterm/xterm";
 import { useCallback, useEffect, useRef, useState } from "react";
 import "@xterm/xterm/css/xterm.css";
 import { type QuietScrollEdges, QuietScrollFrame } from "@/components/QuietScrollArea";
-import { cssColorToHex } from "@/lib";
+import { cssColorToHex, parseCliAgentSequence, statusForEvent } from "@/lib";
 import { useAppStore } from "../store";
 import { onThemeSwap } from "../themes";
 import { getTransport } from "../transport";
+import { notifyClaudeCode } from "./claudeCodeNotify";
+import { createExtendedKeyState } from "./extendedKeys";
 import { createPtySizeSync, runAfterTerminalRelayout } from "./ptySizeSync";
 import { stripAnsiDim, terminalContrastFloor } from "./terminalContrast";
 import { createTerminalPrebindBuffer } from "./terminalPrebindBuffer";
@@ -164,7 +166,41 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 		const onTerminalResize = term.onResize(updateScrollEdges);
 		updateScrollEdges();
 
+		// Extended keys, negotiated rather than assumed: xterm.js implements neither the kitty keyboard
+		// protocol nor modifyOtherKeys, so a program that asks to tell Shift+Enter from Enter is answered
+		// here — and nothing unusual is sent to a program that never asked. See panels/SPEC.md.
+		const extendedKeys = createExtendedKeyState();
+		const kittyPush = term.parser.registerCsiHandler({ prefix: ">", final: "u" }, (params) => {
+			extendedKeys.pushKitty(typeof params[0] === "number" ? params[0] : 1);
+			return true;
+		});
+		const kittyPop = term.parser.registerCsiHandler({ prefix: "<", final: "u" }, () => {
+			extendedKeys.popKitty();
+			return true;
+		});
+		const modifyOtherKeys = term.parser.registerCsiHandler(
+			{ prefix: ">", final: "m" },
+			(params) => {
+				if (params[0] !== 4) return false;
+				extendedKeys.setModifyOtherKeys(typeof params[1] === "number" ? params[1] : 0);
+				return true;
+			},
+		);
+
 		term.attachCustomKeyEventHandler((event) => {
+			if (event.type === "keydown" && !event.isComposing) {
+				const bytes = extendedKeys.encode(event);
+				if (bytes !== null) {
+					// Returning false tells xterm not to process the key — which also skips the
+					// preventDefault it would have done, so the browser was still moving focus on Tab.
+					// Anything handled here is handled entirely here.
+					event.preventDefault();
+					event.stopPropagation();
+					const id = serverIdRef.current;
+					if (id) sendTerminalWrite(getTransport().request("terminal.write", { id, data: bytes }));
+					return false;
+				}
+			}
 			if (event.type !== "keydown" || event.keyCode !== IME_SENTINEL_KEYCODE) return true;
 			if (event.isComposing) return true;
 			const bytes = imeControlBytes(event);
@@ -172,6 +208,46 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 			const id = serverIdRef.current;
 			if (id) sendTerminalWrite(getTransport().request("terminal.write", { id, data: bytes }));
 			return false;
+		});
+
+		// OSC 0/2: the program in the tab naming itself. Claude Code sets it to the session's task, which
+		// is what makes a terminal tab say what it is doing rather than "Terminal 3". See panels/SPEC.md.
+		let reportedTitle: string | null = null;
+		const onTitle = term.onTitleChange((title) => {
+			if (title === reportedTitle) return;
+			reportedTitle = title;
+			void getTransport()
+				.request("terminal.rename", { workspaceId, tabKey, title })
+				.catch(() => {});
+		});
+
+		// The OSC 777 cli-agent protocol: whatever agent is running says what it is doing. Warp defined it
+		// and our Claude Code plugin speaks it — see lib/claudeCodeSequence.ts.
+		let reportedSession: string | null = null;
+		const cliAgentHandler = term.parser.registerOscHandler(777, (data) => {
+			// The only producer we ship is the Claude Code plugin, so this rides the same setting: with it
+			// off there is no badge, no notification and no session recorded. Read per sequence, since the
+			// setting can change while a terminal is open.
+			if (!useAppStore.getState().claudeCodeEnabled) return true;
+			const payload = parseCliAgentSequence(data);
+			const status = payload ? statusForEvent(payload.event) : null;
+			if (payload && status) {
+				useAppStore.getState().setClaudeCodeStatus(workspaceId, tabKey, status, payload.summary);
+				notifyClaudeCode(status, payload);
+			}
+			// Only the agent knows its own session id, and only this sequence carries it — the host needs
+			// it to offer a resume after a restart. See panels/SPEC.md.
+			if (payload?.session_id && payload.session_id !== reportedSession) {
+				reportedSession = payload.session_id;
+				void getTransport()
+					.request("terminal.rememberAgent", {
+						workspaceId,
+						tabKey,
+						sessionId: payload.session_id,
+					})
+					.catch(() => {});
+			}
+			return true;
 		});
 
 		const sizeSync = createPtySizeSync(({ cols, rows }) => {
@@ -249,7 +325,7 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 			prebind = attemptPrebind;
 			void getTransport()
 				.request("terminal.attach", { workspaceId, tabKey, ...spawnedAt })
-				.then(({ id, created, replay }) => {
+				.then(({ id, created, replay, prefill }) => {
 					if (disposed) return;
 					if (attachGeneration !== startedAt || prebind !== attemptPrebind) {
 						attemptPrebind.stop();
@@ -270,6 +346,10 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 						setReady(true);
 						if (buffered.exit) handleExit(buffered.exit);
 						applyFit();
+						// Typed, never submitted: the user decides whether to spend a resume. See SPEC.md.
+						if (prefill && serverIdRef.current === id) {
+							sendTerminalWrite(getTransport().request("terminal.write", { id, data: prefill }));
+						}
 						if (created && serverIdRef.current === id && initialCommandRef.current) {
 							sendTerminalWrite(
 								getTransport().request("terminal.write", {
@@ -328,6 +408,11 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 			onViewportScroll.dispose();
 			onBufferWrite.dispose();
 			onTerminalResize.dispose();
+			onTitle.dispose();
+			kittyPush.dispose();
+			kittyPop.dispose();
+			modifyOtherKeys.dispose();
+			cliAgentHandler.dispose();
 			unsubscribe();
 			unsubscribeExit();
 			unsubscribeDetached();
@@ -340,7 +425,12 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 		const frame = requestAnimationFrame(() => {
 			fitFnRef.current?.();
 			termRef.current?.scrollToBottom();
-			termRef.current?.focus();
+			const active = globalThis.document.activeElement;
+			const claimed =
+				active !== null &&
+				active !== globalThis.document.body &&
+				!hostRef.current?.contains(active);
+			if (!claimed) termRef.current?.focus();
 		});
 		return () => cancelAnimationFrame(frame);
 	}, []);

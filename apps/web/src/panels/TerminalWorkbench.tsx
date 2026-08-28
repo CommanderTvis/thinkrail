@@ -6,6 +6,7 @@ import { IconTooltip } from "../components/ui/tooltip";
 import type { TerminalTab } from "../store";
 import { isConnectedGeneration, toast, useAppStore } from "../store";
 import { errorText, getTransport } from "../transport";
+import { ClaudeCodeChip } from "./ClaudeCodeChip";
 import { ConfirmDialog } from "./ConfirmDialog";
 
 const TerminalInstance = lazy(() => import("./TerminalInstance"));
@@ -59,7 +60,23 @@ export function useTerminalCatalog(workspaceId: string | null): boolean {
 	return ready;
 }
 
+/**
+ * Building xterm costs ~90ms before it can even ask for its shell, and doing it in the commit that switches
+ * tabs makes the switch wait on it. A passive effect runs after that commit has been painted, so flipping
+ * this there lets the new tab appear first and the terminal fill in the panel already on screen.
+ *
+ * Deliberately not `requestAnimationFrame`: it does not fire while the window is occluded or minimised, so
+ * a terminal opened in a hidden window would never start at all. See SPEC.md.
+ */
+function useDeferredUntilPainted(): boolean {
+	const [painted, setPainted] = useState(false);
+	useEffect(() => setPainted(true), []);
+	return painted;
+}
+
 export function TerminalWorkbenchBody({ tab, onAdd }: { tab: TerminalTab; onAdd: () => void }) {
+	const painted = useDeferredUntilPainted();
+	const claudeCodeEnabled = useAppStore((state) => state.claudeCodeEnabled);
 	return (
 		<div data-testid="terminal-panel" className="relative h-full min-h-0 bg-container-terminal-bg">
 			<IconTooltip label="New terminal">
@@ -73,12 +90,15 @@ export function TerminalWorkbenchBody({ tab, onAdd }: { tab: TerminalTab; onAdd:
 					<Plus className="size-14" />
 				</button>
 			</IconTooltip>
+			<ClaudeCodeChip visible={claudeCodeEnabled && tab.agent === "claude"} />
 			<Suspense fallback={null}>
-				<TerminalInstance
-					tabKey={tab.tabKey}
-					workspaceId={tab.workspaceId}
-					{...(tab.initialCommand ? { initialCommand: tab.initialCommand } : {})}
-				/>
+				{painted ? (
+					<TerminalInstance
+						tabKey={tab.tabKey}
+						workspaceId={tab.workspaceId}
+						{...(tab.initialCommand ? { initialCommand: tab.initialCommand } : {})}
+					/>
+				) : null}
 			</Suspense>
 		</div>
 	);
