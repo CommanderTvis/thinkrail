@@ -2,11 +2,11 @@ import {
 	RiArrowUpLine as ArrowUp,
 	RiArrowDownSLine as ChevronDown,
 	RiCornerDownLeftLine as EnterKey,
-	RiFileLine as FileIcon,
 	RiFolderLine as FolderIcon,
 	RiHistoryLine as History,
 	RiSparkling2Line as Sparkles,
 	RiStopFill as StopFill,
+	RiCloseLine as X,
 } from "@remixicon/react";
 import type { ComposerGrowthLimit, ThinkingLevel, WireModel } from "@thinkrail/contracts";
 import { Button } from "@thinkrail/ui/button";
@@ -14,6 +14,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@thinkrail/ui/popover";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { cn } from "@thinkrail/ui/utils";
 import {
+	type DragEvent,
 	forwardRef,
 	type KeyboardEvent,
 	useCallback,
@@ -23,6 +24,8 @@ import {
 	useRef,
 	useState,
 } from "react";
+import { FileTypeIcon } from "@/components/FileTypeIcon";
+import { draggedFile } from "@/lib";
 import {
 	applyTemplateSlotEdit,
 	beginTemplateSlotSession,
@@ -50,7 +53,7 @@ import {
 } from "./ModelEffortPicker";
 import { isModelCommand, parseModelCommand } from "./nativeCommands";
 import { imagePasteDropHandlers, PromptImageChips, usePromptImages } from "./promptImages";
-import type { ChatAttachment } from "./types";
+import type { ChatAttachment, DraftImage } from "./types";
 import type { ModelPreferences } from "./useModelPreferences";
 
 export type SubmitBehavior = "send" | "steer" | "followUp" | "interrupt";
@@ -147,11 +150,15 @@ function highlightTint(state: SlotHighlightState): string {
 interface ComposerProps {
 	value: string;
 	onChange: (value: string) => void;
+	images?: DraftImage[];
+	onImagesChange?: (images: DraftImage[]) => void;
 	isStreaming: boolean;
 	growthLimit: ComposerGrowthLimit;
 	commands: SlashCommandItem[];
 	templatePending: boolean;
 	mentionCandidates: MentionCandidate[];
+	/** What the editor is holding for this chat, shown so it is never a silent attachment. */
+	selectionChip?: { label: string; title: string; onRemove: () => void } | null;
 	recentPrompts: string[];
 	models: WireModel[];
 	modelsRefreshing: boolean;
@@ -182,17 +189,22 @@ export interface ComposerHandle {
 	restoreAttachments: (attachments: ChatAttachment[]) => void;
 	openHistory: () => void;
 	refocus: () => void;
+	/** Takes the caret with the draft's end under it — for text put there by something else. */
+	focusDraftEnd: () => void;
 }
 
 export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Composer(
 	{
 		value,
 		onChange,
+		images: propsImages,
+		onImagesChange,
 		isStreaming,
 		growthLimit,
 		commands,
 		templatePending,
 		mentionCandidates,
+		selectionChip,
 		recentPrompts,
 		models,
 		modelsRefreshing,
@@ -216,7 +228,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 	const ref = useRef<HTMLTextAreaElement>(null);
 	const pickerRef = useRef<ModelEffortPickerHandle>(null);
 	const [caret, setCaret] = useState(0);
-	const attachedImages = usePromptImages();
+	const attachedImages = usePromptImages({ images: propsImages, onImagesChange });
 	const { images } = attachedImages;
 	const [submitError, setSubmitError] = useState<string | null>(null);
 	const pendingImages = attachedImages.pending;
@@ -384,6 +396,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 			if (slot) focusSelection(slot.start, slot.end);
 			else focusSelection(caret);
 		},
+		focusDraftEnd: () => focusSelection(value.length),
 	}));
 
 	const submit = (behavior: SubmitBehavior) => {
@@ -480,7 +493,19 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 		}
 	};
 
-	const { onPaste, onDrop } = imagePasteDropHandlers(attachedImages);
+	const { onPaste, onDrop: dropImages } = imagePasteDropHandlers(attachedImages);
+
+	const onDrop = (e: DragEvent<HTMLTextAreaElement>) => {
+		const file = draggedFile(e.dataTransfer);
+		if (!file) {
+			dropImages(e);
+			return;
+		}
+		e.preventDefault();
+		const insert = file.kind === "dir" ? `@${file.path}/` : `@${file.path} `;
+		const before = value.slice(0, caret);
+		replaceDraft(`${before}${insert}${value.slice(caret)}`, before.length + insert.length);
+	};
 
 	return (
 		<div
@@ -505,7 +530,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 							{candidate.kind === "dir" ? (
 								<FolderIcon className="size-14 shrink-0" />
 							) : (
-								<FileIcon className="size-14 shrink-0" />
+								<FileTypeIcon path={candidate.path} className="size-14" />
 							)}
 							<span className="truncate">{candidate.path}</span>
 						</button>
@@ -545,6 +570,28 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 					onNext={() => stepSlot(1)}
 					className="absolute bottom-full left-12 mb-4"
 				/>
+			) : null}
+
+			{selectionChip ? (
+				<div className="flex flex-wrap gap-4 px-12 pt-12" data-testid="composer-context">
+					<FileChip
+						data-testid="composer-selection"
+						path={selectionChip.label}
+						label={selectionChip.label}
+						title={selectionChip.title}
+						trailing={
+							<button
+								type="button"
+								data-testid="composer-selection-remove"
+								aria-label="Don't send this selection"
+								onClick={selectionChip.onRemove}
+								className="text-text-muted hover:text-text-default"
+							>
+								<X className="size-12" />
+							</button>
+						}
+					/>
+				</div>
 			) : null}
 
 			<PromptImageChips

@@ -11,10 +11,16 @@ import {
 	RiAlertLine as TriangleAlert,
 	RiToolsLine as Wrench,
 } from "@remixicon/react";
-import type { ImageContent, ReviewFixDetails, UserMessage } from "@thinkrail/contracts";
+import type {
+	ImageContent,
+	LayoutToolId,
+	ReviewFixDetails,
+	UserMessage,
+} from "@thinkrail/contracts";
 import type { ToolRenderProps } from "@thinkrail/extension-api/web";
 import { Button } from "@thinkrail/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@thinkrail/ui/dialog";
+import { formatTokens } from "@thinkrail/ui/tokenUsage";
 import { cn } from "@thinkrail/ui/utils";
 import { type MouseEvent as ReactMouseEvent, type ReactNode, useEffect, useState } from "react";
 import { CustomIcon } from "@/components/CustomIcon";
@@ -29,7 +35,7 @@ import { Markdown } from "./Markdown";
 import { ReviewPackageComments } from "./ReviewPackageComments";
 import { parseReviewPackage, reviewFixCommentsToItems, reviewPackageLabel } from "./reviewPackage";
 import { type ChatRow, LARGE_USER_MESSAGE, type TurnDividerData } from "./rows";
-import { formatElapsed, formatTokens } from "./SessionStatsBar";
+import { formatElapsed } from "./SessionStatsBar";
 import { ToolCard } from "./ToolCard";
 import { ToolRendererBody } from "./ToolRendererBody";
 import { getToolChrome, getToolSummary } from "./toolRegistry";
@@ -55,7 +61,7 @@ export function ChatTurnView({
 	isFinalAnswer: boolean;
 	onOpenSpec?: ((path: string) => void) | undefined;
 	onOpenChange?: ((path: string) => void) | undefined;
-	onReveal?: ((tab: "specs" | "changes") => void) | undefined;
+	onReveal?: ((tool: LayoutToolId) => void) | undefined;
 	onTryAgain?: (() => void) | undefined;
 	/** Live-resource deep link for this chat's latest turn divider only. */
 	stillRunning?: StillRunning | undefined;
@@ -664,7 +670,7 @@ function FileDiffGlyph({ className }: { className?: string }) {
 }
 
 interface ArtifactGroup {
-	id: "specs" | "files";
+	id: string;
 	icon: typeof FileText | ((props: { className?: string }) => ReactNode);
 	paths: string[];
 	label: (count: number) => string;
@@ -770,32 +776,20 @@ export function TurnDivider({
 	workspaceRoot?: string | undefined;
 	onOpenSpec: (path: string) => void;
 	onOpenChange: (path: string) => void;
-	onReveal: (tab: "specs" | "changes") => void;
+	onReveal: (tool: LayoutToolId) => void;
 	stillRunning?: StillRunning | undefined;
 }) {
-	const { elapsedMs, toolCount, specs, changedFiles } = data;
+	const { elapsedMs, toolCount, groups: dividerGroups } = data;
 	const [selected, select] = useSelection(`${id}:artifacts`);
-	const allGroups: ArtifactGroup[] = [
-		{
-			id: "specs",
-			icon: FileText,
-			paths: specs,
-			label: (n) => `${n} ${n === 1 ? "spec" : "specs"}`,
-			expanded: selected === "specs",
-			onOpen: onOpenSpec,
-			reveal: () => onReveal("specs"),
-		},
-		{
-			id: "files",
-			icon: FileDiffGlyph,
-			paths: changedFiles,
-			label: (n) => `${n} ${n === 1 ? "file changed" : "files changed"}`,
-			expanded: selected === "files",
-			onOpen: onOpenChange,
-			reveal: () => onReveal("changes"),
-		},
-	];
-	const groups = allGroups.filter((group) => group.paths.length > 0);
+	const groups: ArtifactGroup[] = dividerGroups.map((group) => ({
+		id: group.id,
+		icon: group.id === "specs" ? FileText : FileDiffGlyph,
+		paths: group.paths,
+		label: group.label,
+		expanded: selected === group.id,
+		onOpen: group.id === "specs" ? onOpenSpec : onOpenChange,
+		reveal: () => onReveal(group.tool),
+	}));
 	const running = stillRunning && stillRunning.count > 0 ? stillRunning : null;
 
 	if (
