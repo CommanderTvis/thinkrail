@@ -27,6 +27,13 @@ and process-boot logic lives in `packages/server`.
    status + the resolved endpoint, retain the parse-stable `thinkrail → <url>` line, and open the browser
    there (cross-platform: `open` / `start` / `xdg-open`, best-effort), unless `--no-open`. Exit-only
    commands and redirected output omit the mark.
+   **The open waits a beat for a tab that is already there.** A restart usually lands back on the same
+   port while the previous browser tab is still open and retrying, and opening a second tab onto the same
+   host leaves two live clients fighting over the same terminals ("This terminal is open somewhere else").
+   So the launch holds up to `BROWSER_HOLD_MS` on `server.waitForClient` and opens only if nobody
+   connected — the URL is printed before the wait, so the hold is invisible unless you are watching for
+   it. A tab whose reconnect backoff has grown past the hold still gets a second tab; the alternative is
+   delaying every cold start by the full backoff ceiling.
 5. SIGINT / SIGTERM await the shared idempotent `server.shutdown()` before exit; they do not duplicate
    agent, analytics, or resource teardown.
 

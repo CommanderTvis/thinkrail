@@ -20,7 +20,9 @@ e2e).
 - **Owns:** the HTTP+WS server, static serving, the WS dispatch registry, server-side feature services
   (project/workspace/git/fs/terminal + the in-process `AgentSession` manager), and `~/.thinkrail`
   persistence.
-- **Public surface:** `createServer(options) → Promise<RunningServer>` (`{ port, stop, shutdown }`) —
+- **Public surface:** `createServer(options) → Promise<RunningServer>`
+  (`{ port, waitForClient, stop, shutdown }`) — `waitForClient(ms)` answers whether anyone is holding a
+  socket yet, which is how a launcher tells a fresh start from a restart someone is already watching;
   `stop()` is synchronous resource disposal for low-level tests while `shutdown()` is the idempotent,
   bounded production lifecycle (settle sessions + drain analytics and dispose sockets/PTYS/watchers)
   every launcher must await — the public
