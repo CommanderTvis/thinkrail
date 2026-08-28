@@ -31,6 +31,7 @@ import {
 import type { ConnectionStatus } from "../transport";
 import { BrandLogo } from "./BrandLogo";
 import { CollapsedPanelRail } from "./CollapsedPanelRail";
+import { isDesktopShell, requestWindowZoomToggle } from "./electrobunShell";
 import { JbcentralQuotaTopbar } from "./JbcentralQuotaTopbar";
 import { LayoutSettings } from "./LayoutSettings";
 import { useLocalLayoutState } from "./layoutState";
@@ -50,6 +51,9 @@ const STATUS_DOT: Record<ConnectionStatus, string> = {
 	disconnected: "text-feedback-error",
 };
 
+const NON_DRAGGABLE_HEADER =
+	".electrobun-webkit-app-region-no-drag, a, button, input, select, textarea, [role='button'], [role='tab']";
+
 export function Shell() {
 	useLocalLayoutState();
 	const status = useAppStore((s) => s.status);
@@ -59,6 +63,22 @@ export function Shell() {
 	const contextProject = useAppStore(selectContextProject);
 	const { review: openReview } = useOpenBranchReview(activeWorkspace, status);
 	const hasActiveWorkspace = activeWorkspaceId != null;
+	const nativeShell = isDesktopShell();
+	const titleBarRef = useRef<HTMLElement>(null);
+	// Bound natively rather than as a JSX handler: this is a window-chrome gesture, not a control, so the
+	// bar stays a plain landmark to assistive tech instead of taking an interactive role.
+	useEffect(() => {
+		const titleBar = titleBarRef.current;
+		if (!titleBar || !nativeShell) return;
+		const zoomOnDoubleClick = (event: MouseEvent) => {
+			// Mirrors electrobun's own drag-region test: anywhere on the bar except a control.
+			const target = event.target as HTMLElement | null;
+			if (target?.closest(NON_DRAGGABLE_HEADER)) return;
+			requestWindowZoomToggle();
+		};
+		titleBar.addEventListener("dblclick", zoomOnDoubleClick);
+		return () => titleBar.removeEventListener("dblclick", zoomOnDoubleClick);
+	}, [nativeShell]);
 
 	const welcomeCenterRef = useRef<HTMLDivElement>(null);
 	const welcomeProjects = useCollapsibleRegion(welcomeCenterRef, "welcome-left");
@@ -111,7 +131,14 @@ export function Shell() {
 	});
 	return (
 		<div data-testid="shell" className="grid h-full grid-rows-[auto_1fr]">
-			<header className="flex items-center justify-between border-b border-border-default bg-container-header-bg px-16 py-8">
+			<header
+				ref={titleBarRef}
+				className={`flex items-center justify-between border-b border-border-default bg-container-header-bg py-8 pr-16 ${
+					nativeShell
+						? "electrobun-webkit-app-region-drag pl-[var(--native-titlebar-inset)]"
+						: "pl-16"
+				}`}
+			>
 				<div className="flex min-w-0 items-center gap-12">
 					<BrandLogo />
 					{contextProject ? (
@@ -162,21 +189,23 @@ export function Shell() {
 				</div>
 				<div className="flex shrink-0 items-center gap-12">
 					<JbcentralQuotaTopbar />
-					<span
-						data-testid="connection-status"
-						data-status={status}
-						role="status"
-						aria-label={STATUS_LABEL[status]}
-						className="inline-flex items-center gap-8 tr-text-ui text-text-muted"
-					>
-						<StatusDot
-							aria-hidden="true"
-							className={`size-8 shrink-0 fill-current ${STATUS_DOT[status]}`}
-						/>
-						<span aria-hidden="true" className="hidden sm:inline">
-							{STATUS_LABEL[status]}
+					{nativeShell && status === "connected" ? null : (
+						<span
+							data-testid="connection-status"
+							data-status={status}
+							role="status"
+							aria-label={STATUS_LABEL[status]}
+							className="inline-flex items-center gap-8 tr-text-ui text-text-muted"
+						>
+							<StatusDot
+								aria-hidden="true"
+								className={`size-8 shrink-0 fill-current ${STATUS_DOT[status]}`}
+							/>
+							<span aria-hidden="true" className="hidden sm:inline">
+								{STATUS_LABEL[status]}
+							</span>
 						</span>
-					</span>
+					)}
 					<IconTooltip label="Settings">
 						<button
 							type="button"

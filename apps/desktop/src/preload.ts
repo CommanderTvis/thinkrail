@@ -50,6 +50,10 @@ Object.defineProperty(globals, STABLE_PREFERENCES_GLOBAL, {
 	enumerable: false,
 });
 
+// The web app depends on contracts alone, so the desktop marks itself with plain globals rather than
+// having `apps/web` import anything from here. See apps/web/src/shell/SPEC.md.
+window.__thinkrailDesktop = true;
+window.__thinkrailToggleWindowZoom = () => electroview.rpc?.send.zoomToggle({});
 const sendRoute = () => electroview.rpc?.send.routeChanged({ hash: window.location.hash });
 const replaceState = history.replaceState.bind(history);
 history.replaceState = (...args: Parameters<History["replaceState"]>) => {

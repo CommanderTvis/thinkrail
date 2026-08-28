@@ -60,7 +60,12 @@ export class BrowserWindow {
 		hidden: boolean;
 		navigationRules: string | null;
 		frame: { x: number; y: number; width: number; height: number };
+		titleBarStyle?: "default" | "hidden" | "hiddenInset";
+		trafficLightOffset?: { x: number; y: number };
 	});
+	isMaximized(): boolean;
+	maximize(): void;
+	unmaximize(): void;
 }
 
 export const PATHS: {

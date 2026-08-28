@@ -64,6 +64,10 @@ async function start(): Promise<void> {
 				routeChanged: ({ hash }) => {
 					if (!neutral) routes.write(BACKEND_PROFILE_ID, WINDOW_ID, hash);
 				},
+				zoomToggle: () => {
+					if (mainWindow.isMaximized()) mainWindow.unmaximize();
+					else mainWindow.maximize();
+				},
 				preferenceWrite: (payload) => {
 					if (neutral) return;
 					const preference = readDesktopPreferenceWrite(payload);
@@ -100,6 +104,9 @@ async function start(): Promise<void> {
 			process.env.THINKRAIL_DESKTOP_E2E_HOST === "1",
 		navigationRules: neutral ? null : JSON.stringify(["^*", `${origin}/*`]),
 		frame: { x: 80, y: 60, width: 1440, height: 920 },
+		// The app's own header is the title bar; macOS keeps only the traffic lights, inset to clear it.
+		titleBarStyle: "hiddenInset",
+		trafficLightOffset: { x: 20, y: 16 },
 	});
 	const openExternal = (detail: unknown) => {
 		const url = externalNavigationUrl(detail, origin);

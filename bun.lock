@@ -40,19 +40,11 @@
       "version": "0.0.0",
       "dependencies": {
         "@thinkrail/server": "workspace:*",
-<<<<<<< HEAD
         "@thinkrail/shared": "workspace:*",
-=======
->>>>>>> 737b7536 (Discord Rich Presence for the desktop app, and a compacted Claude Code settings row)
         "electrobun": "1.18.1",
       },
       "devDependencies": {
         "@types/bun": "catalog:",
-<<<<<<< HEAD
-=======
-        "@types/three": "0.166.0",
-        "bun-pty": "0.4.10",
->>>>>>> 737b7536 (Discord Rich Presence for the desktop app, and a compacted Claude Code settings row)
         "typescript": "catalog:",
       },
     },

@@ -5,6 +5,8 @@ export type DesktopRpc = {
 			routeChanged: { hash: string };
 			preferenceWrite: { key: string; value: string };
 			preferenceRemove: { key: string };
+			/** Our titlebar is the window's; double-clicking it has to reach the window call. */
+			zoomToggle: Record<string, never>;
 		};
 	};
 	webview: {

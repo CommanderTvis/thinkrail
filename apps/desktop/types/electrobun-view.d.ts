@@ -19,6 +19,13 @@ export class Electroview<T extends RpcShape = RpcShape> {
 	readonly rpc?: { readonly send: MessageSenders<T> };
 }
 
+declare global {
+	interface Window {
+		__thinkrailDesktop?: boolean;
+		__thinkrailToggleWindowZoom?: () => void;
+	}
+}
+
 declare const Electrobun: {
 	Electroview: typeof Electroview;
 };

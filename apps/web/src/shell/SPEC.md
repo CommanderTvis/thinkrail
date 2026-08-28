@@ -38,7 +38,15 @@ The topbar keeps ThinkRail identity, connection state, Settings, and compact loc
 itself, so a permanent "Connected" reports on a localhost socket the user never chose and cannot act on —
 it reads as status where there is none. A *problem* state still shows, in every shell: a host that died
 under the desktop app is exactly the case the indicator exists for. The element keeps its `data-status`
-hook in the browser, which is what the e2e suite waits on. The identity
+hook in the browser, which is what the e2e suite waits on. **The topbar *is* the desktop
+window's title bar**: `apps/desktop` opens the window `hiddenInset`, so this header runs beside the
+traffic lights — it reserves their width (`--native-titlebar-inset`), marks itself an
+`electrobun-webkit-app-region-drag` region, and answers a double-click with the window's own zoom, the
+gesture Electrobun's drag region does not wire. `electrobunShell.ts` is the whole seam, and it is two
+globals the desktop preload sets (`__thinkrailDesktop`, `__thinkrailToggleWindowZoom`) rather than an
+import: `apps/web` still depends on nothing but contracts, and in a browser tab both are absent, so the
+bar is an ordinary header and every call here is inert. Packaging the app is `apps/desktop`'s; the
+chrome inside the window is ours. The identity
 is the icon-only ThinkRail mark—the same vector served as `public/favicon.svg`, inlined at 32×32 and rendered
 through semantic `text-primary`—with no divider before location. An active workspace shows one line of
 `project / workspace  branch · from baseBranch` plus optional review metadata on `tr-text-ui`; project and
