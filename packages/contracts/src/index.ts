@@ -18,6 +18,11 @@ export {
 	CLAUDE_WRITABLE_SCOPES,
 	claudeEditScopes,
 } from "./claudeConfig";
+export type * from "./discord";
+export {
+	DEFAULT_DISCORD_SETTINGS,
+	DISCORD_APPLICATION_ID,
+} from "./discord";
 export type * from "./domain";
 export {
 	ACCEPTED_IMAGE_TYPES,

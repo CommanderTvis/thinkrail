@@ -2,6 +2,7 @@ import type {
 	AppConfig,
 	BlueprintChangedPayload,
 	ClaudeCodeStatusPush,
+	DiscordStatus,
 	ExtUiRequest,
 	IdeActionRequest,
 	LoginPush,
@@ -158,6 +159,10 @@ export function initTransport(): WsTransport {
 
 	transport.subscribe(WS_CHANNELS.blueprintChanged, (data) => {
 		useAppStore.getState().applyBlueprintChanged((data as BlueprintChangedPayload).state);
+	});
+
+	transport.subscribe(WS_CHANNELS.discordStatusChanged, (data) => {
+		useAppStore.getState().applyDiscordStatus(data as DiscordStatus);
 	});
 
 	transport.subscribe(WS_CHANNELS.reviewChanged, (data) => {

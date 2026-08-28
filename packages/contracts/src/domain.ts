@@ -1,3 +1,4 @@
+import { DEFAULT_DISCORD_SETTINGS, type DiscordSettings } from "./discord";
 import type { ThinkingLevel, WireModel } from "./piProtocol";
 
 export type TabStatus = "idle" | "running" | "waiting" | "error";
@@ -517,6 +518,7 @@ export interface AppConfig extends ThemePreference {
 	 * spaces, and `claude --model opus` are all the same kind of value.
 	 */
 	claudeCommand: string;
+	discord: DiscordSettings;
 	analyticsEnabled: boolean;
 	terminalReplayKb: number;
 	composerGrowthLimit: ComposerGrowthLimit;
@@ -557,6 +559,7 @@ export const DEFAULT_CONFIG: AppConfig = {
 	themeMode: "fixed",
 	claudeCodeEnabled: false,
 	claudeCommand: "claude",
+	discord: DEFAULT_DISCORD_SETTINGS,
 	analyticsEnabled: true,
 	terminalReplayKb: TERMINAL_REPLAY_KB.default,
 	composerGrowthLimit: "half-chat",

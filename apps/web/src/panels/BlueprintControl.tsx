@@ -1,5 +1,9 @@
+import {
+	RiCheckLine as Check,
+	RiArrowDownSLine as ChevronDown,
+	RiLockLine as Lock,
+} from "@remixicon/react";
 import type { BlueprintControl, BlueprintOption } from "@thinkrail/contracts";
-import { Check, ChevronDown, Lock } from "lucide-react";
 import {
 	DropdownMenu,
 	DropdownMenuContent,

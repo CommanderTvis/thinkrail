@@ -1,4 +1,4 @@
-import { FileSymlink, PanelLeft } from "lucide-react";
+import { RiFileTransferLine as FileSymlink, RiLayoutLeftLine as PanelLeft } from "@remixicon/react";
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { IconTooltip } from "@/components/ui/tooltip";
 import { abbreviateHomePath, isMarkdownPath, isPdfPath } from "@/lib/utils";

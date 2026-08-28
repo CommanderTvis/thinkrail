@@ -1,4 +1,9 @@
-import { Minus, Plus, RefreshCw as Refresh, RotateCcw } from "lucide-react";
+import {
+	RiSubtractLine as Minus,
+	RiAddLine as Plus,
+	RiRefreshLine as Refresh,
+	RiArrowGoBackLine as RotateCcw,
+} from "@remixicon/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { IconTooltip } from "@/components/ui/tooltip";
 import { worktreeFileUrl } from "./filesUrl";

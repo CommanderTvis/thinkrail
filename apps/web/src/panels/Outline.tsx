@@ -1,4 +1,7 @@
-import { ChevronDown, ChevronRight } from "lucide-react";
+import {
+	RiArrowDownSLine as ChevronDown,
+	RiArrowRightSLine as ChevronRight,
+} from "@remixicon/react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { buildOutlineTree, type HeadingEntry, type OutlineNode } from "./outlineTree";

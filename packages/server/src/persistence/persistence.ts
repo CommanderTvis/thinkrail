@@ -5,6 +5,8 @@ import { join } from "node:path";
 import {
 	type AppConfig,
 	DEFAULT_CONFIG,
+	DEFAULT_DISCORD_SETTINGS,
+	DISCORD_APPLICATION_ID,
 	isComposerGrowthLimit,
 	isJbcentralQuotaRefreshSeconds,
 	normalizeThemePreference,
@@ -94,6 +96,10 @@ export function loadConfig(): AppConfig {
 	delete extensions.layout;
 	delete extensions.themeMode;
 	delete extensions.systemThemePair;
+	const discordValue =
+		value.discord && typeof value.discord === "object" && !Array.isArray(value.discord)
+			? (value.discord as Record<string, unknown>)
+			: {};
 	return {
 		...extensions,
 		...normalizeThemePreference(value),
@@ -103,6 +109,20 @@ export function loadConfig(): AppConfig {
 				: DEFAULT_CONFIG.analyticsEnabled,
 		claudeCodeEnabled: value.claudeCodeEnabled === true,
 		claudeCommand: normalizeClaudeCommand(value.claudeCommand),
+		discord: {
+			enabled: discordValue.enabled === true,
+			applicationId:
+				typeof discordValue.applicationId === "string" &&
+				DISCORD_APPLICATION_ID.test(discordValue.applicationId)
+					? discordValue.applicationId
+					: DEFAULT_DISCORD_SETTINGS.applicationId,
+			blockedProjectIds: Array.isArray(discordValue.blockedProjectIds)
+				? discordValue.blockedProjectIds.filter(
+						(id): id is string => typeof id === "string" && id.length > 0,
+					)
+				: [],
+			shareFileName: discordValue.shareFileName !== false,
+		},
 		terminalReplayKb:
 			typeof value.terminalReplayKb === "number" && Number.isFinite(value.terminalReplayKb)
 				? value.terminalReplayKb

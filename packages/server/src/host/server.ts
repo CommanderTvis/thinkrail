@@ -54,6 +54,7 @@ import {
 	noteBlueprintFileChanged,
 	setBlueprintPublisher,
 } from "../blueprint";
+import { setDiscordStatusPublisher, stopDiscord } from "../discord";
 import { redeliverInterview, releaseInterview, setFeedbackPublisher } from "../feedback";
 import { resolveWorktreeFile } from "../fs";
 import {
@@ -264,6 +265,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 				ws.subscribe(WS_CHANNELS.settingsChanged);
 				ws.subscribe(WS_CHANNELS.reviewChanged);
 				ws.subscribe(WS_CHANNELS.blueprintChanged);
+				ws.subscribe(WS_CHANNELS.discordStatusChanged);
 				ws.subscribe(WS_CHANNELS.ideBridgeAction);
 				const hostPlatform: HostPlatform =
 					process.platform === "darwin" || process.platform === "win32"
@@ -485,6 +487,13 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		publishFsChanged({ workspaceId, paths: [], truncated: false, skillChange: "none" });
 	});
 
+	setDiscordStatusPublisher((status) => {
+		server.publish(
+			WS_CHANNELS.discordStatusChanged,
+			JSON.stringify({ channel: WS_CHANNELS.discordStatusChanged, data: status }),
+		);
+	});
+
 	setBlueprintCheckTool({ description: BLUEPRINT_CHECK_DESCRIPTION, run: checkBlueprint });
 
 	setBlueprintPublisher((payload) => {
@@ -620,6 +629,8 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		stopping = true;
 		void shutdownAnalytics();
 		setResumeRunPolicy(null);
+		stopDiscord();
+		setDiscordStatusPublisher(null);
 		void stopIdeBridge();
 		setIdeBridgeDeps(null);
 		cancelAllLogins();

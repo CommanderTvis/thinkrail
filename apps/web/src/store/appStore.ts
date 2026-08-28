@@ -5,6 +5,8 @@ import type {
 	BlueprintState,
 	ClaudeCodeStatus,
 	ComposerGrowthLimit,
+	DiscordSettings,
+	DiscordStatus,
 	ExtUiRequest,
 	GitDiffScope,
 	HostPlatform,
@@ -339,6 +341,7 @@ export const SettingsSection = {
 	Layout: "layout",
 	Terminal: "terminal",
 	ClaudeCode: "claude-code",
+	Discord: "discord",
 	Templates: "templates",
 	Review: "review",
 	Privacy: "privacy",
@@ -865,6 +868,8 @@ interface AppState {
 	themeMode: ThemeMode;
 	systemThemePair: SystemThemePair | undefined;
 	claudeCodeEnabled: boolean;
+	discordSettings: DiscordSettings;
+	discordStatus: DiscordStatus | null;
 	claudeCommand: string;
 	analyticsEnabled: boolean;
 	subagentsEnabled: boolean;
@@ -1103,6 +1108,7 @@ interface AppState {
 	applyReviewChanged: (payload: ReviewChangedPayload) => void;
 	setWorkspaceBlueprint: (state: BlueprintState) => void;
 	applyBlueprintChanged: (state: BlueprintState) => void;
+	applyDiscordStatus: (status: DiscordStatus) => void;
 	pushToast: (toast: Omit<Toast, "id">) => string;
 	dismissToast: (id: string) => void;
 }
@@ -1117,6 +1123,7 @@ function configPatch(config: AppConfig) {
 		...themePreference,
 		systemThemePair: themePreference.systemThemePair,
 		claudeCodeEnabled: config.claudeCodeEnabled,
+		discordSettings: config.discord ?? DEFAULT_CONFIG.discord,
 		claudeCommand: config.claudeCommand ?? DEFAULT_CONFIG.claudeCommand,
 		analyticsEnabled: config.analyticsEnabled,
 		subagentsEnabled: config.subagentsEnabled ?? DEFAULT_CONFIG.subagentsEnabled,
@@ -1764,6 +1771,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 	themeMode: DEFAULT_CONFIG.themeMode,
 	systemThemePair: DEFAULT_CONFIG.systemThemePair,
 	claudeCodeEnabled: DEFAULT_CONFIG.claudeCodeEnabled,
+	discordSettings: DEFAULT_CONFIG.discord,
+	discordStatus: null,
 	claudeCommand: DEFAULT_CONFIG.claudeCommand,
 	analyticsEnabled: DEFAULT_CONFIG.analyticsEnabled,
 	subagentsEnabled: DEFAULT_CONFIG.subagentsEnabled,
@@ -3422,6 +3431,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 				? {}
 				: { blueprintByWorkspace: { ...s.blueprintByWorkspace, [state.workspaceId]: state } },
 		),
+	applyDiscordStatus: (status) => set({ discordStatus: status }),
 	pushToast: (toast) => {
 		const twin = get().toasts.find(
 			(t) => t.variant === toast.variant && t.title === toast.title && t.message === toast.message,

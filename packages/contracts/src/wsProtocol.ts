@@ -15,6 +15,7 @@ import type {
 	ClaudeWritableScope,
 	ThinkrailPluginStatus,
 } from "./claudeConfig";
+import type { DiscordPresence, DiscordStatus } from "./discord";
 import type {
 	AppConfig,
 	AppConfigUpdate,
@@ -257,6 +258,8 @@ export const WS_METHODS = {
 	providerJbcentralQuota: "provider.jbcentralQuota",
 	settingsUpdate: "settings.update",
 	feedbackRespond: "feedback.respond",
+	discordPresence: "discord.presence",
+	discordStatus: "discord.status",
 	historySearch: "history.search",
 	reviewGet: "review.get",
 	reviewCommentAdd: "review.commentAdd",
@@ -304,6 +307,7 @@ export const WS_CHANNELS = {
 	reviewChanged: "review.changed",
 	ideBridgeAction: "ideBridge.action",
 	blueprintChanged: "blueprint.changed",
+	discordStatusChanged: "discord.statusChanged",
 } as const;
 
 export type WsMethod = (typeof WS_METHODS)[keyof typeof WS_METHODS];
@@ -667,6 +671,9 @@ export interface WsMethodMap {
 	"provider.jbcentralQuota": { params: { force?: boolean }; result: JbcentralQuotaSnapshot };
 	"settings.update": { params: { config: AppConfigUpdate }; result: AppConfig };
 	"feedback.respond": { params: { action: InterviewResponse }; result: Ack };
+	"discord.presence": { params: { presence: DiscordPresence | null }; result: DiscordStatus };
+	"discord.status": { params: Record<string, never>; result: DiscordStatus };
+
 	"history.search": {
 		params: { query: string; scope: HistoryScope; limit?: number };
 		result: HistorySearchResult;

@@ -12,7 +12,9 @@ import {
 	RiEqualizerLine as SlidersHorizontal,
 	RiTerminalBoxLine as SquareTerminal,
 } from "@remixicon/react";
-import type { ReactNode } from "react";
+import type { ComponentType, ReactNode } from "react";
+import { ClaudeMark } from "@/components/ClaudeMark";
+import { DiscordMark } from "@/components/DiscordMark";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib";
 import { SettingsSection, useAppStore } from "@/store";
@@ -20,6 +22,7 @@ import { AppearanceSettings } from "./AppearanceSettings";
 import { ChatSettings } from "./ChatSettings";
 import { ClaudeCodeSettings } from "./ClaudeCodeSettings";
 import { FeedbackSettings } from "./FeedbackSettings";
+import { DiscordSettings } from "./DiscordSettings";
 import { GithubSettings } from "./GithubSettings";
 import { PrivacySettings } from "./PrivacySettings";
 import { ProvidersSettings } from "./ProvidersSettings";
@@ -27,14 +30,17 @@ import { ReviewSettings } from "./ReviewSettings";
 import { TemplatesSettings } from "./TemplatesSettings";
 import { TerminalSettings } from "./TerminalSettings";
 
-const SECTIONS: { id: SettingsSection; label: string; icon: LucideIcon }[] = [
+type SectionIcon = ComponentType<{ className?: string | undefined }>;
+
+const SECTIONS: { id: SettingsSection; label: string; icon: SectionIcon }[] = [
 	{ id: SettingsSection.Providers, label: "Providers", icon: KeyRound },
 	{ id: SettingsSection.Github, label: "GitHub", icon: GitBranch },
 	{ id: SettingsSection.Appearance, label: "Appearance", icon: Palette },
 	{ id: SettingsSection.Chat, label: "Chat", icon: MessageSquareText },
 	{ id: SettingsSection.Layout, label: "Layout", icon: LayoutPanelTop },
 	{ id: SettingsSection.Terminal, label: "Terminal", icon: SquareTerminal },
-	{ id: SettingsSection.ClaudeCode, label: "Claude Code", icon: Bot },
+	{ id: SettingsSection.ClaudeCode, label: "Claude Code", icon: ClaudeMark },
+	{ id: SettingsSection.Discord, label: "Discord", icon: DiscordMark },
 	{ id: SettingsSection.Templates, label: "Templates", icon: LayoutTemplate },
 	{ id: SettingsSection.Review, label: "Review", icon: ScanEye },
 	{ id: SettingsSection.Privacy, label: "Privacy", icon: ShieldCheck },
@@ -114,6 +120,8 @@ export function SettingsDialog({ layoutSettings }: { layoutSettings: ReactNode }
 							<TerminalSettings />
 						) : section === SettingsSection.ClaudeCode ? (
 							<ClaudeCodeSettings />
+						) : section === SettingsSection.Discord ? (
+							<DiscordSettings />
 						) : section === SettingsSection.Templates ? (
 							<TemplatesSettings />
 						) : section === SettingsSection.Review ? (

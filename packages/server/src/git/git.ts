@@ -159,7 +159,7 @@ async function numstat(
 	const out = await gitAsync(worktreePath, changedFileArgs(range, "--numstat", true), {
 		raw: true,
 	});
-	if (!out.ok) throw diffFailure(out.err);
+	if (!out.ok) throw diffFailure(worktreePath, out.err);
 	const fields = nulFields(out.out);
 	for (let index = 0; index < fields.length; ) {
 		const header = fields[index++] ?? "";
@@ -234,11 +234,11 @@ export function gitUncommittedPaths(workspaceId: string): string[] {
 		["diff", "--name-only", "-z", "--no-ext-diff", "--end-of-options", "HEAD", "--"],
 		{ raw: true },
 	);
-	if (!tracked.ok) throw diffFailure(tracked.err);
+	if (!tracked.ok) throw diffFailure(cwd, tracked.err);
 	const untracked = git(cwd, ["ls-files", "-z", "--others", "--exclude-standard"], {
 		raw: true,
 	});
-	if (!untracked.ok) throw diffFailure(untracked.err);
+	if (!untracked.ok) throw diffFailure(cwd, untracked.err);
 	return [...new Set([...nulFields(tracked.out), ...nulFields(untracked.out)])].sort();
 }
 
@@ -250,7 +250,7 @@ export async function gitStatus(workspaceId: string, scope?: GitDiffScope): Prom
 		numstat(ws.worktreePath, range),
 		gitAsync(ws.worktreePath, changedFileArgs(range, "--name-status", true), { raw: true }),
 	]);
-	if (!tracked.ok) throw diffFailure(tracked.err);
+	if (!tracked.ok) throw diffFailure(ws.worktreePath, tracked.err);
 	for (const { code, path } of parseNameStatus(tracked.out)) {
 		changes.push({ path, status: mapStatus(code), ...counts.get(path) });
 	}
@@ -261,7 +261,7 @@ export async function gitStatus(workspaceId: string, scope?: GitDiffScope): Prom
 			["ls-files", "-z", "--others", "--exclude-standard"],
 			{ raw: true },
 		);
-		if (!untracked.ok) throw diffFailure(untracked.err);
+		if (!untracked.ok) throw diffFailure(ws.worktreePath, untracked.err);
 		for (const path of nulFields(untracked.out)) {
 			if (!path) continue;
 			const added = untrackedAdded(ws.worktreePath, path);

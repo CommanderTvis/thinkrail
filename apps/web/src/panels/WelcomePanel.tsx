@@ -2,8 +2,8 @@ import {
 	RiFolderOpenLine as FolderOpen,
 	RiFolderAddLine as FolderPlus,
 	RiHome2Line as House,
-	RiPencilRuler2Line as PencilRuler,
 	type RemixiconComponentType as LucideIcon,
+	RiPencilRuler2Line as PencilRuler,
 	RiRocketLine as Rocket,
 	RiSparkling2Line as Sparkles,
 } from "@remixicon/react";
@@ -138,21 +138,16 @@ export function WelcomePanel() {
 
 			<div className="mt-24 flex flex-wrap justify-center gap-12">
 				{noProjects ? (
-<<<<<<< HEAD
-					openProjectCard()
+					<>
+						{openProjectCard()}
+						{newProjectCard()}
+					</>
 				) : hasSpecs === null ? (
 					<>
 						<CardSkeleton />
 						<CardSkeleton />
 					</>
 				) : hasSpecs ? (
-=======
-					<>
-						{openProjectCard()}
-						{newProjectCard()}
-					</>
-				) : hasSpecs === null ? null : hasSpecs ? (
->>>>>>> 4e0ccfb3 (A spec you can argue with, written by an agent you can talk to)
 					<>
 						<Card
 							cta
@@ -174,20 +169,9 @@ export function WelcomePanel() {
 							icon={Sparkles}
 							title="Draft a blueprint"
 							tag="spec-first"
-<<<<<<< HEAD
-							subtitle="Draft the project's specs with the agent before building, starting from its goal."
-							onClick={() =>
-								setDialog({
-									projectId: project.id,
-									prompt: SETUP_PROMPT,
-									note: SETUP_NOTE,
-								})
-							}
-							className="motion-safe:animate-reveal"
-=======
 							subtitle="Describe the idea; the agent drafts a spec whose decisions you can change."
 							onClick={() => setBlueprintStart(project.id)}
->>>>>>> 4e0ccfb3 (A spec you can argue with, written by an agent you can talk to)
+							className="motion-safe:animate-reveal"
 						/>
 						<Card
 							icon={Rocket}

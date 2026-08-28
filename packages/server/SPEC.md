@@ -91,6 +91,7 @@ internals**. The edges between them are owned here (see the dependency graph), n
 | `history` | prompt recall + conversation search over pi's session files | [history/SPEC.md](src/history/SPEC.md) |
 | `templates` | file CRUD over pi's prompt-template dirs (global + project scoped) | [templates/SPEC.md](src/templates/SPEC.md) |
 | `blueprint` | the interactive-spec format + its streaming generator + the change reactor, on two agent hosts | [blueprint/SPEC.md](src/blueprint/SPEC.md) |
+| `discord` | Rich Presence over Discord's local IPC, gated + redacted before anything leaves the machine | [discord/SPEC.md](src/discord/SPEC.md) |
 
 `src/index.ts` re-exports `host` + the `agent` barrel's `registerBundledRuntime` seam; explicit package
 subpaths expose build support and artifact probes without widening the runtime barrel. `src/dev.ts` boots
@@ -101,6 +102,7 @@ the host from env via `bootHost` for dev/e2e.
 `host` is the **only composition root** — it wires each feature's handlers into the WS registry.
 
 - `host` → `projects`, `workspaces`, `git`, `github`, `branch-review`, `pr`, `fs`, `spec`, `todos`, `reviews`, `watch`, `terminal`, `dialog`, `editors`, `agent`, `auth`, `assist`, `blueprint`, `settings`, `history`, `templates`, `analytics`, `feedback`, `log`, `persistence` (`dataDir`, for the crash report)
+- `host` → `projects`, `workspaces`, `git`, `github`, `branch-review`, `pr`, `fs`, `spec`, `todos`, `reviews`, `watch`, `terminal`, `dialog`, `editors`, `agent`, `auth`, `assist`, `blueprint`, `discord`, `settings`, `history`, `templates`, `analytics`, `log`, `persistence` (`dataDir`, for the crash report)
 - `workspaces` → `projects`, `git`, `persistence`
 - `branch-review` → `git`, `subprocess`
 - `pr` → `workspaces`, `git`, `todos`, `branch-review` (provider detection + gh-output parsing + the shared CLI runner), `github` (`ghSetupProblem` — the named compare-fallback reason)
@@ -125,6 +127,8 @@ the host from env via `bootHost` for dev/e2e.
 - `blueprint` → `agent` (the streaming primitive for the in-process runner), `settings` (the Claude Code
   gate + command for the external runner), `log`. It reaches no repo module: a blueprint is written
   before there is a project to attach it to
+- `discord` → `settings` (`getConfig().discord`), `log`. It reaches no repo module: presence is pushed to
+  it by `host`, never read by it
 - `auth` → `agent` (the current runtime/auth facade plus candidate prepare/activate; one-way, `agent` never imports `auth`)
 - `agent` → `log`, `persistence` (`dataDir` — the static state-root resolver; the delegation store lives at
   `<dataDir>/delegation`, bound in the agent's delegation embedding) — otherwise the pi runtime alone; auth
@@ -139,6 +143,7 @@ own never import `host` either: they expose a **publisher-injection seam** (`set
 `workspace.created`/`updated`/`removed` lifecycle trio, `settings`' `setSettingsPublisher` for
 `settings.changed`, `feedback`'s addressed invitation publisher, and auth's Central action analytics +
 `provider.changed` invalidation publishers) that
+`settings.changed`, `discord`'s `setDiscordStatusPublisher` for `discord.statusChanged`, and auth's Central action analytics + `provider.changed` invalidation publishers) that
 `host` installs at `createServer`—so channel/analytics wiring lives only in `host`. Current layout has no
 host module, persistence, method, or publisher.
 
