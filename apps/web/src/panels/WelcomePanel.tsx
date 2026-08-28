@@ -2,8 +2,8 @@ import {
 	RiFolderOpenLine as FolderOpen,
 	RiFolderAddLine as FolderPlus,
 	RiHome2Line as House,
-	RiPencilRuler2Line as PencilRuler,
 	type RemixiconComponentType as LucideIcon,
+	RiPencilRuler2Line as PencilRuler,
 	RiRocketLine as Rocket,
 	RiSparkling2Line as Sparkles,
 } from "@remixicon/react";

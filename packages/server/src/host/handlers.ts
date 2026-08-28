@@ -10,6 +10,7 @@ import type {
 	ClaudeEditRequest,
 	ClaudeMarketplaceAction,
 	ClaudeWritableScope,
+	DiscordPresence,
 	ExtUiResponse,
 	GitDiffScope,
 	HistoryScope,
@@ -120,6 +121,7 @@ import {
 	writeClaudeConfigFile,
 } from "../claudeConfig";
 import { selectDirectory, selectFile } from "../dialog";
+import { applyDiscordSettings, getDiscordStatus, publishPresence } from "../discord";
 import {
 	listAvailableEditors,
 	openEditor,
@@ -1023,12 +1025,18 @@ const handlers: Record<string, Handler> = {
 			if (updated.claudeCodeEnabled) void startIdeBridge().catch(() => {});
 			else void stopIdeBridge();
 		}
+		if (config.discord !== undefined) applyDiscordSettings();
 		return updated;
 	},
 	"feedback.respond": (params) => {
 		respondToInterview((params as { action: InterviewResponse }).action);
 		return { ok: true } as const;
 	},
+	"discord.presence": (params) => {
+		const { presence } = params as { presence: DiscordPresence | null };
+		return publishPresence(presence);
+	},
+	"discord.status": () => getDiscordStatus(),
 	"history.search": (params) => {
 		const p = params as { query: string; scope: HistoryScope; limit?: number };
 		const { filter, labels } = buildHistoryScope(p.scope, listProjects(), (projectId) =>

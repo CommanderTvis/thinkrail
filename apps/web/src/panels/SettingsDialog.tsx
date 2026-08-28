@@ -14,13 +14,16 @@ import {
 	RiTerminalBoxLine as SquareTerminal,
 	RiTextWrap as TextWrap,
 } from "@remixicon/react";
-import type { ReactNode } from "react";
+import type { ComponentType, ReactNode } from "react";
+import { ClaudeMark } from "@/components/ClaudeMark";
+import { DiscordMark } from "@/components/DiscordMark";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib";
 import { SettingsSection, useAppStore } from "@/store";
 import { AppearanceSettings } from "./AppearanceSettings";
 import { ChatSettings } from "./ChatSettings";
 import { ClaudeCodeSettings } from "./ClaudeCodeSettings";
+import { DiscordSettings } from "./DiscordSettings";
 import { FeedbackSettings } from "./FeedbackSettings";
 import { GithubSettings } from "./GithubSettings";
 import { LineWidthSettings } from "./LineWidthSettings";
@@ -30,10 +33,12 @@ import { ReviewSettings } from "./ReviewSettings";
 import { TemplatesSettings } from "./TemplatesSettings";
 import { TerminalSettings } from "./TerminalSettings";
 
+type SectionIcon = ComponentType<{ className?: string | undefined }>;
+
 const SECTIONS: {
 	id: SettingsSection;
 	label: string;
-	icon: LucideIcon;
+	icon: SectionIcon;
 	requiresInjectedContent?: true;
 }[] = [
 	{ id: SettingsSection.Providers, label: "Providers", icon: KeyRound },
@@ -49,7 +54,8 @@ const SECTIONS: {
 		requiresInjectedContent: true,
 	},
 	{ id: SettingsSection.Terminal, label: "Terminal", icon: SquareTerminal },
-	{ id: SettingsSection.ClaudeCode, label: "Claude Code", icon: Bot },
+	{ id: SettingsSection.ClaudeCode, label: "Claude Code", icon: ClaudeMark },
+	{ id: SettingsSection.Discord, label: "Discord", icon: DiscordMark },
 	{ id: SettingsSection.Templates, label: "Templates", icon: LayoutTemplate },
 	{ id: SettingsSection.Review, label: "Review", icon: ScanEye },
 	{ id: SettingsSection.Privacy, label: "Privacy", icon: ShieldCheck },
@@ -153,6 +159,8 @@ export function SettingsDialog({
 							<TerminalSettings />
 						) : selectedSection === SettingsSection.ClaudeCode ? (
 							<ClaudeCodeSettings />
+						) : selectedSection === SettingsSection.Discord ? (
+							<DiscordSettings />
 						) : selectedSection === SettingsSection.Templates ? (
 							<TemplatesSettings />
 						) : selectedSection === SettingsSection.Review ? (

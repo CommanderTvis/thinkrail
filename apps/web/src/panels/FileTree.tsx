@@ -1,6 +1,10 @@
+import {
+	RiClipboardLine as Clipboard,
+	RiFileCodeLine as FileCode,
+	RiFolderOpenLine as FolderOpen,
+} from "@remixicon/react";
 import type { FileNode } from "@thinkrail/contracts";
 import { BLUEPRINT_FILE } from "@thinkrail/contracts";
-import { Clipboard, FileCode, FolderOpen } from "lucide-react";
 import { useRef, useState } from "react";
 import {
 	ContextMenu,

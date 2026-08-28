@@ -911,7 +911,7 @@ test("includeDiffStats: false keeps membership/order/Default ensure while skippi
 	}
 });
 
-test("a workspace git cannot answer for says why: no repository, or no commits yet", () => {
+test("a workspace git cannot answer for says why: no repository, or no commits yet", async () => {
 	const plain = join(dataDir, "plain");
 	const unborn = join(dataDir, "unborn");
 	mkdirSync(plain);
@@ -926,8 +926,8 @@ test("a workspace git cannot answer for says why: no repository, or no commits y
 		]),
 	);
 
-	expect(listWorkspaces("p2")[0]?.vcs).toBe("none");
-	expect(listWorkspaces("p3")[0]?.vcs).toBe("unborn");
+	expect((await listWorkspaces("p2"))[0]?.vcs).toBe("none");
+	expect((await listWorkspaces("p3"))[0]?.vcs).toBe("unborn");
 	// The ordinary case says nothing, and never pays for the extra look.
-	expect(listWorkspaces("p1")[0]).not.toHaveProperty("vcs");
+	expect((await listWorkspaces("p1"))[0]).not.toHaveProperty("vcs");
 });
