@@ -1,6 +1,7 @@
 import {
 	assistantToolCallsAreExecutable,
 	type DelegationRunDetails,
+	type LayoutToolId,
 	type UserMessage,
 } from "@thinkrail/contracts";
 import type { ChatMessageOrder } from "./chatPreferences";
@@ -101,7 +102,7 @@ export function deriveRows(
 	turns: ChatTurn[],
 	toolResults: Record<string, ToolResultState>,
 	isStreaming: boolean,
-	isSpec?: (path: string) => boolean,
+	groupFor?: WrittenPathGroupResolver,
 ): ChatRow[] {
 	const rows: ChatRow[] = [];
 	let run: ActivityStep[] = [];
@@ -202,7 +203,7 @@ export function deriveRows(
 			(turns[i + 1]?.kind === "user" || (i === turns.length - 1 && !isStreaming));
 		if (roundEnded) {
 			flushRun();
-			const data = turnDivider(turns, i, isSpec);
+			const data = turnDivider(turns, i, groupFor);
 			if (data) rows.push({ kind: "divider", id: `${turn.id}:divider`, data });
 		}
 	}
@@ -210,21 +211,41 @@ export function deriveRows(
 	return rows;
 }
 
+export interface TurnDividerGroupSpec {
+	id: string;
+	label: (count: number) => string;
+	tool: LayoutToolId;
+}
+
+export interface TurnDividerGroup extends TurnDividerGroupSpec {
+	paths: string[];
+}
+
 export interface TurnDividerData {
 	elapsedMs: number | null;
 	toolCount: number;
-	specs: string[];
-	changedFiles: string[];
+	groups: TurnDividerGroup[];
 }
 
-const SPEC_WRITER_TOOL = "spec_create";
+/** Which group a written path belongs to — `toolName` lets the core default keep spec_create's force-classify
+ * behaviour without rows.ts naming that tool itself; `null` lands the path in the default "changed files" group. */
+export type WrittenPathGroupResolver = (
+	toolName: string,
+	path: string,
+) => TurnDividerGroupSpec | null;
 
-const FILE_WRITER_TOOLS = new Set(["write", "edit"]);
+const WRITE_TOOLS = new Set(["write", "edit", "spec_create"]);
+
+const CHANGED_FILES_GROUP: TurnDividerGroupSpec = {
+	id: "files",
+	label: (n) => `${n} ${n === 1 ? "file changed" : "files changed"}`,
+	tool: "changes",
+};
 
 export function turnDivider(
 	turns: ChatTurn[],
 	endIndex: number,
-	isSpec: (path: string) => boolean = () => false,
+	groupFor: WrittenPathGroupResolver = () => null,
 ): TurnDividerData | null {
 	let userIdx = -1;
 	for (let i = endIndex; i >= 0; i--) {
@@ -236,7 +257,7 @@ export function turnDivider(
 	if (userIdx < 0) return null;
 
 	let toolCount = 0;
-	const written = new Map<string, boolean>();
+	const written = new Map<string, TurnDividerGroupSpec>();
 	let endMs: number | null = null;
 	for (let i = userIdx + 1; i <= endIndex; i++) {
 		const turn = turns[i];
@@ -245,12 +266,12 @@ export function turnDivider(
 			for (const block of turn.message.content) {
 				if (block.type !== "toolCall") continue;
 				toolCount++;
-				const specWrite = block.name === SPEC_WRITER_TOOL;
-				if (!specWrite && !FILE_WRITER_TOOLS.has(block.name)) continue;
+				if (!WRITE_TOOLS.has(block.name)) continue;
 				const path = strArg(block.arguments, "path");
 				if (!path) continue;
-				if (specWrite || isSpec(path)) written.set(path, true);
-				else if (!written.has(path)) written.set(path, false);
+				const group = groupFor(block.name, path);
+				if (group) written.set(path, group);
+				else if (!written.has(path)) written.set(path, CHANGED_FILES_GROUP);
 			}
 		} else if (turn?.kind === "system" && turn.endedAt != null) {
 			endMs = turn.endedAt;
@@ -261,10 +282,13 @@ export function turnDivider(
 	const startMs = user?.kind === "user" ? user.message.timestamp : null;
 	const elapsedMs = startMs != null && endMs != null ? endMs - startMs : null;
 
-	const specs: string[] = [];
-	const changedFiles: string[] = [];
-	for (const [path, isSpecPath] of written) (isSpecPath ? specs : changedFiles).push(path);
-	return { elapsedMs, toolCount, specs, changedFiles };
+	const groupsById = new Map<string, TurnDividerGroup>();
+	for (const [path, spec] of written) {
+		const existing = groupsById.get(spec.id);
+		if (existing) existing.paths.push(path);
+		else groupsById.set(spec.id, { ...spec, paths: [path] });
+	}
+	return { elapsedMs, toolCount, groups: [...groupsById.values()] };
 }
 
 export function rowIndexForTurn(rows: ChatRow[], turnId: string): number {
