@@ -43,6 +43,7 @@
 	--font-mono: var(--tr-font-family-code);
 
 	--spacing-panel-header-row: var(--panel-header-row-height);
+	--spacing-native-titlebar-inset: var(--native-titlebar-inset);
 
 	/* A block appearing in place (e.g. the ask-question card's atomic reveal once its args are final). */
 	--animate-reveal: reveal 150ms ease-out;
