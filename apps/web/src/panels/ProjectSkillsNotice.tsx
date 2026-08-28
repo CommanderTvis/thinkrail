@@ -74,7 +74,7 @@ export function ProjectSkillsNotice({ projectId }: { projectId: string }) {
 			<span className="min-w-0 flex-1 tr-text-ui text-text-default">
 				{isPending
 					? `${pending.length} new skill${plural(pending.length)} appeared since you trusted this project.`
-					: `This project ships ${count} skill${plural(count)} — off until you trust it.`}
+					: `This project ships ${count} skill${plural(count)}, off until you trust it.`}
 			</span>
 			<Button
 				size="sm"
