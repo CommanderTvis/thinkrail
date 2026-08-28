@@ -8,11 +8,18 @@ import {
 } from "../store";
 import { errorText, getSessionMessagesWithSkillBaseline } from "../transport";
 
+export interface OpenChatOptions {
+	/** Place the chat without making it the active tab. */
+	background?: boolean;
+	/** Leave focus alone — for an opener that puts the caret somewhere of its own. */
+	focusTab?: boolean;
+}
+
 export async function openChatInTab(
 	workspaceId: string,
 	sessionId: string,
 	requestedNavigation?: CenterNavigationStamp | null,
-	background = false,
+	{ background = false, focusTab = true }: OpenChatOptions = {},
 ): Promise<void> {
 	const initial = useAppStore.getState();
 	const requestConnectionGeneration =
@@ -29,9 +36,11 @@ export async function openChatInTab(
 			: requestedNavigation;
 	const store = useAppStore.getState();
 	const routedOptions = layoutOpenOptionsForNavigation(store, workspaceId, navigation);
-	const options: LayoutOpenOptions = background
-		? { ...routedOptions, activate: false }
-		: routedOptions;
+	const options: LayoutOpenOptions = {
+		...routedOptions,
+		...(background ? { activate: false } : {}),
+		...(focusTab ? {} : { focusTab: false }),
+	};
 	const tab = (store.tabsByWorkspace[workspaceId] ?? []).find(
 		(t) => t.kind === "chat" && t.sessionId === sessionId,
 	);
@@ -56,12 +65,14 @@ export async function openChatInTab(
 			!current.removedWorkspaceIds[workspaceId] &&
 			!current.deletedSessionsByWorkspace[workspaceId]?.[sessionId]
 		) {
-			return openChatInTab(workspaceId, sessionId, navigation, background);
+			return openChatInTab(workspaceId, sessionId, navigation, { background, focusTab });
 		}
 		const routed = layoutOpenOptionsForNavigation(current, workspaceId, navigation);
-		const effectiveOptions: LayoutOpenOptions = background
-			? { ...routed, activate: false }
-			: routed;
+		const effectiveOptions: LayoutOpenOptions = {
+			...routed,
+			...(background ? { activate: false } : {}),
+			...(focusTab ? {} : { focusTab: false }),
+		};
 		current.hydrateSession(
 			summary,
 			messagesToRuntime(messages, summary.lastSettlement),

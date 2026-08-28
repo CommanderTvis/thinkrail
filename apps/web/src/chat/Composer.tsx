@@ -140,6 +140,8 @@ interface ComposerProps {
 	commands: SlashCommandItem[];
 	templatePending: boolean;
 	mentionCandidates: MentionCandidate[];
+	/** What the editor is holding for this chat, shown so it is never a silent attachment. */
+	selectionChip?: { label: string; title: string; onRemove: () => void } | null;
 	recentPrompts: string[];
 	models: WireModel[];
 	modelsRefreshing: boolean;
@@ -169,6 +171,8 @@ export interface ComposerHandle {
 	restoreAttachments: (attachments: ChatAttachment[]) => void;
 	openHistory: () => void;
 	refocus: () => void;
+	/** Takes the caret with the draft's end under it — for text put there by something else. */
+	focusDraftEnd: () => void;
 }
 
 export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Composer(
@@ -180,6 +184,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 		commands,
 		templatePending,
 		mentionCandidates,
+		selectionChip,
 		recentPrompts,
 		models,
 		modelsRefreshing,
@@ -384,6 +389,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 			if (slot) focusSelection(slot.start, slot.end);
 			else focusSelection(caret);
 		},
+		focusDraftEnd: () => focusSelection(value.length),
 	}));
 
 	const addFiles = async (files: File[]) => {
@@ -592,6 +598,27 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 					onNext={() => stepSlot(1)}
 					className="absolute bottom-full left-12 mb-4"
 				/>
+			) : null}
+
+			{selectionChip ? (
+				<div className="flex flex-wrap gap-4 px-12 pt-12" data-testid="composer-context">
+					<FileChip
+						data-testid="composer-selection"
+						label={selectionChip.label}
+						title={selectionChip.title}
+						trailing={
+							<button
+								type="button"
+								data-testid="composer-selection-remove"
+								aria-label="Don't send this selection"
+								onClick={selectionChip.onRemove}
+								className="text-text-muted hover:text-text-default"
+							>
+								<X className="size-12" />
+							</button>
+						}
+					/>
+				</div>
 			) : null}
 
 			{images.length > 0 || pendingImages > 0 || attachErrors.length > 0 || submitError ? (
