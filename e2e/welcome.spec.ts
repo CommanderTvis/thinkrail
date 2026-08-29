@@ -5,6 +5,7 @@ import {
 	createWorkspaceViaDialog,
 	openAppFresh,
 	openFixtureProject,
+	requestOverWire,
 	stagePlainFolder,
 	worktreeRows,
 } from "./fixtures/app";
@@ -36,8 +37,16 @@ test("the Welcome provider warning only shows when no provider is connected, and
 }) => {
 	await openAppFresh(page);
 
+	// The banner renders nothing until `provider.status` answers, so asking the host first is what makes
+	// this deterministic: `isVisible()` reads a screen the answer has not reached yet.
+	const { providers } = await requestOverWire<{ providers: { configured: boolean }[] }>(
+		page,
+		"provider.status",
+		{},
+	);
 	const banner = page.getByTestId("welcome-provider-warning");
-	if (await banner.isVisible()) {
+	if (!providers.some((provider) => provider.configured)) {
+		await expect(banner).toBeVisible();
 		await expect(banner).toContainText("No model provider connected");
 		await page.getByTestId("welcome-connect-provider").click();
 		await expect(page.getByTestId("settings-dialog")).toBeVisible();

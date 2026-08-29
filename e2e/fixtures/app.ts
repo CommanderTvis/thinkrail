@@ -314,3 +314,44 @@ export async function runInTerminal(page: Page, command: string): Promise<void> 
 	await page.keyboard.type(command);
 	await page.keyboard.press("Enter");
 }
+
+/** A host request made without the app's own transport — for state the UI does not surface. */
+export async function requestOverWire<T>(
+	page: Page,
+	method: string,
+	params: Record<string, unknown>,
+): Promise<T> {
+	return page.evaluate(
+		async ({ requestMethod, requestParams }) => {
+			const protocol = location.protocol === "https:" ? "wss:" : "ws:";
+			const socket = new WebSocket(`${protocol}//${location.host}/ws`);
+			await new Promise<void>((resolve) => {
+				socket.onopen = () => resolve();
+			});
+			const id = `e2e_${Math.random()}`;
+			const result = await new Promise<unknown>((resolve, reject) => {
+				socket.addEventListener("message", (event: MessageEvent<string>) => {
+					const message = JSON.parse(event.data) as {
+						id?: string;
+						result?: unknown;
+						error?: string | { message?: string };
+					};
+					if (message.id !== id) return;
+					if (message.error)
+						reject(
+							new Error(
+								typeof message.error === "string"
+									? message.error
+									: (message.error.message ?? "request failed"),
+							),
+						);
+					else resolve(message.result);
+				});
+				socket.send(JSON.stringify({ id, method: requestMethod, params: requestParams }));
+			});
+			socket.close();
+			return result;
+		},
+		{ requestMethod: method, requestParams: params },
+	) as Promise<T>;
+}
