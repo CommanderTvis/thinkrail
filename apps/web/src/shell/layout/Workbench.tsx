@@ -54,6 +54,7 @@ import {
 	useState,
 } from "react";
 import { CustomIcon } from "../../components/CustomIcon";
+import { FileTypeIcon } from "../../components/FileTypeIcon";
 import {
 	Command,
 	CommandEmpty,
@@ -462,7 +463,8 @@ function tabIcon(
 	const cls = "size-14 shrink-0";
 	switch (tab.kind) {
 		case "file":
-			return active ? <RiFileFill className={cls} /> : <File className={cls} />;
+		case "external-file":
+			return <FileTypeIcon path={tab.path} className={cls} />;
 		case "diff":
 			return active ? (
 				<RiGitPullRequestFill className={cls} />

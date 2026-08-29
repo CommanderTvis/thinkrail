@@ -132,7 +132,11 @@ Architecture decisions live as spec-graph nodes, dogfooding the spec layer the p
   come from a four-step alpha scale as tokens, never Tailwind's `/40` modifier. `styles/COLOR.md` is
   the system, `styles/colorUsage.test.ts` the gate — Tailwind drops an unknown utility *silently*, so
   a token that isn't published renders as nothing.
-- **Icons: `@remixicon/react` (Remix Icon; outline `Line` by default, solid `Fill` when the item is active/selected) only. UI primitives: shadcn/ui** (Radix), copied into
+- **Icons: `@remixicon/react` (Remix Icon; outline `Line` by default, solid `Fill` when the item is active/selected) for everything the UI *does*.** What a *file* **is** is the one exception: file-type
+  glyphs come from **material-icon-theme** (MIT), recoloured to `currentColor` at build time
+  (`apps/web/scripts/generate-file-icons.ts`) and rendered through `components/FileTypeIcon`. Remix has no
+  vocabulary for `.kt` vs `.tsx` vs `Dockerfile`, and inventing one per language is not a UI kit's job.
+  **UI primitives: shadcn/ui** (Radix), copied into
   `apps/web/src/components/ui/` (we own them) and themed with our token utilities — *not* shadcn's
   default palette. `cn()` lives in `apps/web/src/lib/utils.ts`.
 - The transport's **host endpoint is a parameter** (default same-origin); `server.welcome` carries a

@@ -1,5 +1,6 @@
 import { RiFileLine as FileIcon } from "@remixicon/react";
 import type { ReactNode } from "react";
+import { FileTypeIcon } from "@/components/FileTypeIcon";
 
 const CHIP_BASE =
 	"flex max-w-full items-center gap-4 rounded-[var(--radius-sm)] border bg-clip-padding px-8 py-4 tr-text-metadata";
@@ -15,6 +16,8 @@ interface FileChipProps {
 	onClick?: () => void;
 	tone?: keyof typeof CHIP_TONE;
 	icon?: boolean;
+	/** The file this chip stands for, so it wears that type's icon rather than the generic one. */
+	path?: string;
 	title?: string;
 	"aria-label"?: string;
 	"data-testid"?: string;
@@ -30,12 +33,19 @@ export function FileChip({
 	onClick,
 	tone = "default",
 	icon = true,
+	path,
 	...rest
 }: FileChipProps) {
 	const chip = `${CHIP_BASE} ${CHIP_TONE[tone]}`;
 	const content = (
 		<>
-			{icon ? <FileIcon className="size-12 shrink-0" /> : null}
+			{icon ? (
+				path ? (
+					<FileTypeIcon path={path} className="size-12" />
+				) : (
+					<FileIcon className="size-12 shrink-0" />
+				)
+			) : null}
 			<span className="min-w-0 truncate">{label}</span>
 			{meta ? <span className="shrink-0">{meta}</span> : null}
 			{trailing ? <span className="flex shrink-0 items-center">{trailing}</span> : null}

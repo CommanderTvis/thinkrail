@@ -946,6 +946,10 @@ from `main.tsx` through `transport`'s `setIdeActionHandler` seam, since `transpo
   writes: dirty is a real buffer's state, and a save runs the same path Ctrl+S does, reporting `saved`
   only when the buffer actually settled — a save refused by a conflict says so rather than claiming
   success.
+- **File rows and the attach picker wear the file's own icon** (`components/FileTypeIcon`, via `TreeRow`'s
+  `iconPath`), so a tree reads as its types rather than as a column of identical glyphs. Folders keep the
+  Remix folder pair, which still has to say open/closed and selected/not — a state a type icon cannot
+  carry.
 - **`MonacoEditor` reports its selection** (`onDidChangeCursorSelection` → `transport.reportIdeSelection`)
   and reports the document closed on unmount, which is also what makes `getLatestSelection` outlive the
   tab. It reports only when given a `workspaceId`, so a Monaco instance rendered outside a workspace tab

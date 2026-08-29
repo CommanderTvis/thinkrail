@@ -1,7 +1,6 @@
 import {
 	RiArrowUpLine as ArrowUp,
 	RiArrowUpSLine as ChevronUp,
-	RiFileLine as FileIcon,
 	RiFolderLine as FolderIcon,
 	RiHistoryLine as History,
 	RiSparkling2Line as Sparkles,
@@ -26,6 +25,7 @@ import {
 	useRef,
 	useState,
 } from "react";
+import { FileTypeIcon } from "@/components/FileTypeIcon";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib";
 import { FileChip } from "./FileChip";
@@ -602,7 +602,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 							{candidate.kind === "dir" ? (
 								<FolderIcon className="size-14 shrink-0" />
 							) : (
-								<FileIcon className="size-14 shrink-0" />
+								<FileTypeIcon path={candidate.path} className="size-14" />
 							)}
 							<span className="truncate">{candidate.path}</span>
 						</button>
@@ -650,6 +650,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 				<div className="flex flex-wrap gap-4 px-12 pt-12" data-testid="composer-context">
 					<FileChip
 						data-testid="composer-selection"
+						path={selectionChip.label}
 						label={selectionChip.label}
 						title={selectionChip.title}
 						trailing={
@@ -703,6 +704,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 						<FileChip
 							key={img.id}
 							data-testid="composer-image"
+							path={img.name}
 							data-width={img.width}
 							data-height={img.height}
 							data-mime={img.content.mimeType}
