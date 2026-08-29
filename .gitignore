@@ -9,6 +9,8 @@ playwright-report/
 blob-report/
 playwright/.cache/
 e2e/screenshots/
+# Recoloured file-type icons: build output rewritten from material-icon-theme, not 1251 reviewed files.
+apps/web/public/file-icons/
 # Workflow-test run log — local evidence, deliberately not a committed record (see e2e/workflows/SPEC.md).
 e2e/.workflow-runs.jsonl
 

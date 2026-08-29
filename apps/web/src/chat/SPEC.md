@@ -447,6 +447,11 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   percentages without moving a below-Trigger response. Initial/order placement is direct, and reduced motion
   makes every programmatic destination immediate while preserving identical state and final geometry.
 
+**A file in the chat wears its type.** The composer's chips and its `@`-mention menu draw
+`components/FileTypeIcon` for the path they name. Tool cards deliberately do not: their glyph says what
+happened to the file — read, written, edited, and coloured accordingly — which is the more useful of the
+two, and two icons on one line is a worse card.
+
 **What the editor is holding rides with the message.** While a workspace's editor has something
 highlighted, the composer shows it as a chip (`composer-selection`, `path:lines`) and `ChatView` prefixes
 the quote to the text it sends — the optimistic user turn included, so the transcript shows exactly what
