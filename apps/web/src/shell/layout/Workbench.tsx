@@ -93,6 +93,7 @@ import {
 	readLayoutSelection,
 	tupleKey,
 } from "../../lib";
+import { GroupPlacementPicker, type PlacementGroup, type PlacementRegion } from "./GroupPlacement";
 import {
 	type CenterSplitDirection,
 	canCreateAuxiliaryGroup,
@@ -1126,7 +1127,6 @@ function WorkbenchTab({
 		data: { target: { kind: "insert", location, index: index + 1 } satisfies DropTarget },
 		disabled: !acceptsAfter,
 	});
-	const groups = collectAllGroups(document);
 	const missingTools = revealable(unplacedTools(document), useContext(UnofferedToolsContext));
 	const splitReason = (direction: CenterSplitDirection): string | null => {
 		if (location.area !== "center") return "Only center tabs can split the center.";
@@ -1142,18 +1142,57 @@ function WorkbenchTab({
 		}
 		return null;
 	};
-	const moveTargets = groups.filter(
-		(group) =>
-			group.location.groupId !== location.groupId &&
-			(tab.kind === "terminal" || group.location.area === "center"
-				? tab.kind !== "tool"
-				: tab.kind === "tool"),
+	const placementRegions: PlacementRegion[] = (["left", "right", "bottom"] as const).map(
+		(region) => {
+			const limit = region === "bottom" ? maxBottomGroups : maxSideGroups;
+			const roomForMore = canCreateAuxiliaryGroup(document, region, tab, limit);
+			const groups = document[region].groups;
+			const edgeName = (index: number) =>
+				index === 0
+					? region === "bottom"
+						? "left"
+						: "top"
+					: region === "bottom"
+						? "right"
+						: "bottom";
+			const groupLabel = (index: number) =>
+				groups.length > 1 ? `${REGION_NAME[region]} ${index + 1}` : REGION_NAME[region];
+			return {
+				region,
+				allowed: canPlaceLayoutTab(tab, region),
+				groups: groups.map((group, index) => ({
+					groupId: group.id,
+					label: groupLabel(index),
+					...(group.tabs[0] ? { holds: layoutTabName(group.tabs[0]) } : {}),
+					current: group.id === location.groupId,
+				})),
+				slots: Array.from({ length: groups.length + 1 }, (_, index) => {
+					const available = canCreateAuxiliaryGroup(document, region, tab, limit, index);
+					const label =
+						index === 0 || index === groups.length
+							? `New ${region} group at ${edgeName(index)}`
+							: `New ${region} group before ${groupLabel(index)}`;
+					return {
+						index,
+						label,
+						available,
+						unavailable: available
+							? null
+							: roomForMore
+								? `This tab is already here, at the ${edgeName(index)} of ${region}`
+								: `The ${region} region is limited to ${limit} groups`,
+					};
+				}),
+			};
+		},
 	);
-	const currentAuxiliary = location.area === "center" ? null : location.area;
-	const currentAuxiliaryGroupIndex = currentAuxiliary
-		? document[currentAuxiliary].groups.findIndex((group) => group.id === location.groupId)
-		: -1;
-	const currentAuxiliaryLimit = currentAuxiliary === "bottom" ? maxBottomGroups : maxSideGroups;
+	const centerGroups = collectCenterGroups(document.center);
+	const centerPlacements: PlacementGroup[] = centerGroups.map((group, index) => ({
+		groupId: group.id,
+		label: centerGroups.length > 1 ? `Main ${index + 1}` : "Main column",
+		...(group.tabs[0] ? { holds: layoutTabName(group.tabs[0]) } : {}),
+		current: group.id === location.groupId,
+	}));
 	const name = layoutTabName(tab);
 	const groupRemoval = removeLayoutGroup(document, location);
 
@@ -1301,23 +1340,19 @@ function WorkbenchTab({
 			</IconTooltip>
 			<ContextMenuContent>
 				<ContextMenuItem onSelect={() => focusTab()}>Focus tab</ContextMenuItem>
-				<ContextMenuItem
-					disabled={!canFocusAdjacentGroup}
-					onSelect={() => onFocusAdjacentGroup(-1, location.groupId)}
-				>
-					{canFocusAdjacentGroup
-						? "Focus previous group"
-						: "Focus previous group — no other visible group"}
-				</ContextMenuItem>
-				<ContextMenuItem
-					disabled={!canFocusAdjacentGroup}
-					onSelect={() => onFocusAdjacentGroup(1, location.groupId)}
-				>
-					{canFocusAdjacentGroup ? "Focus next group" : "Focus next group — no other visible group"}
-				</ContextMenuItem>
-				<ContextMenuItem disabled={!preview} onSelect={() => focusTab(true)}>
-					{preview ? "Keep preview" : "Keep preview — already kept"}
-				</ContextMenuItem>
+				{canFocusAdjacentGroup ? (
+					<>
+						<ContextMenuItem onSelect={() => onFocusAdjacentGroup(-1, location.groupId)}>
+							Focus previous group
+						</ContextMenuItem>
+						<ContextMenuItem onSelect={() => onFocusAdjacentGroup(1, location.groupId)}>
+							Focus next group
+						</ContextMenuItem>
+					</>
+				) : null}
+				{preview ? (
+					<ContextMenuItem onSelect={() => focusTab(true)}>Keep preview</ContextMenuItem>
+				) : null}
 				{(ownPane ? ownPane.tabIds.indexOf(tab.id) > 0 : index > 0) ? (
 					<ContextMenuItem onSelect={() => reorder(index - 1)}>
 						{inPane
@@ -1383,15 +1418,16 @@ function WorkbenchTab({
 									: "Put this group in columns"}
 							</ContextMenuItem>
 						) : null}
-						<ContextMenuItem
-							disabled={!inPane}
-							onSelect={() => {
-								const result = ungroupTab(document, location.groupId, tab.id);
-								if (!isLayoutUnavailable(result)) onApply(result);
-							}}
-						>
-							{inPane ? "Show on its own" : "Show on its own — not grouped"}
-						</ContextMenuItem>
+						{inPane ? (
+							<ContextMenuItem
+								onSelect={() => {
+									const result = ungroupTab(document, location.groupId, tab.id);
+									if (!isLayoutUnavailable(result)) onApply(result);
+								}}
+							>
+								Show on its own
+							</ContextMenuItem>
+						) : null}
 					</>
 				) : null}
 				{/* With vertical tabs on, splitting is not a thing this layout does — grouping is. A verb the
@@ -1419,111 +1455,19 @@ function WorkbenchTab({
 						</ContextMenuItem>
 					);
 				})}
-				{moveTargets.length > 0 ? <ContextMenuSeparator /> : null}
-				{moveTargets.map((group) => (
-					<ContextMenuItem
-						key={tupleKey("move-target", group.location.area, group.location.groupId)}
-						onSelect={() => move(group.location)}
-					>
-						Move to {group.location.area} group {group.location.groupId.slice(-4)}
-					</ContextMenuItem>
-				))}
-				{currentAuxiliary &&
-				currentAuxiliaryGroupIndex >= 0 &&
-				(tab.kind === "terminal" || tab.kind === "tool") ? (
-					<>
-						<ContextMenuSeparator />
-						{(["before", "after"] as const).map((position) => {
-							const insertAt = currentAuxiliaryGroupIndex + (position === "after" ? 1 : 0);
-							const countAvailable = canCreateAuxiliaryGroup(
-								document,
-								currentAuxiliary,
-								tab,
-								currentAuxiliaryLimit,
-							);
-							const available = canCreateAuxiliaryGroup(
-								document,
-								currentAuxiliary,
-								tab,
-								currentAuxiliaryLimit,
-								insertAt,
-							);
-							const unavailable = countAvailable
-								? "already at this position"
-								: `limited to ${currentAuxiliaryLimit}`;
-							const positionLabel =
-								currentAuxiliary === "bottom"
-									? position === "before"
-										? "left"
-										: "right"
-									: position === "before"
-										? "above"
-										: "below";
-							return (
-								<ContextMenuItem
-									key={position}
-									disabled={!available}
-									title={available ? undefined : unavailable}
-									onSelect={() => {
-										const result = createAuxiliaryGroup(
-											document,
-											currentAuxiliary,
-											tab,
-											insertAt,
-											currentAuxiliaryLimit,
-										);
-										if (!isLayoutUnavailable(result)) onApply(result);
-									}}
-								>
-									New group {positionLabel}
-									{available ? "" : ` — ${unavailable}`}
-								</ContextMenuItem>
-							);
-						})}
-					</>
-				) : null}
-				{tab.kind === "terminal" || tab.kind === "tool" ? (
-					<>
-						<ContextMenuSeparator />
-						{(["left", "right", "bottom"] as const).map((region) => {
-							const limit = region === "bottom" ? maxBottomGroups : maxSideGroups;
-							const countAvailable = canCreateAuxiliaryGroup(document, region, tab, limit);
-							const startAvailable = canCreateAuxiliaryGroup(document, region, tab, limit, 0);
-							const endIndex = document[region].groups.length;
-							const endAvailable = canCreateAuxiliaryGroup(document, region, tab, limit, endIndex);
-							const unavailableSuffix = (available: boolean, edge: "start" | "end") =>
-								available ? null : countAvailable ? `already at ${edge}` : `limited to ${limit}`;
-							const startUnavailable = unavailableSuffix(startAvailable, "start");
-							const endUnavailable = unavailableSuffix(endAvailable, "end");
-							return (
-								<Fragment key={region}>
-									<ContextMenuItem
-										disabled={!startAvailable}
-										title={startUnavailable ?? undefined}
-										onSelect={() => {
-											const result = createAuxiliaryGroup(document, region, tab, 0, limit);
-											if (!isLayoutUnavailable(result)) onApply(result);
-										}}
-									>
-										New {region} group at {region === "bottom" ? "left" : "top"}
-										{startUnavailable ? ` — ${startUnavailable}` : ""}
-									</ContextMenuItem>
-									<ContextMenuItem
-										disabled={!endAvailable}
-										title={endUnavailable ?? undefined}
-										onSelect={() => {
-											const result = createAuxiliaryGroup(document, region, tab, endIndex, limit);
-											if (!isLayoutUnavailable(result)) onApply(result);
-										}}
-									>
-										New {region} group at {region === "bottom" ? "right" : "bottom"}
-										{endUnavailable ? ` — ${endUnavailable}` : ""}
-									</ContextMenuItem>
-								</Fragment>
-							);
-						})}
-					</>
-				) : null}
+				<ContextMenuSeparator />
+				<GroupPlacementPicker
+					center={centerPlacements}
+					centerAllowed={canPlaceLayoutTab(tab, "center")}
+					regions={placementRegions}
+					onMove={(area, groupId) => move({ area, groupId })}
+					onCreate={(region, index) => {
+						if (tab.kind !== "terminal" && tab.kind !== "tool") return;
+						const limit = region === "bottom" ? maxBottomGroups : maxSideGroups;
+						const result = createAuxiliaryGroup(document, region, tab, index, limit);
+						if (!isLayoutUnavailable(result)) onApply(result);
+					}}
+				/>
 				{location.area !== "center" && missingTools.length > 0 ? (
 					<>
 						<ContextMenuSeparator />
@@ -1561,6 +1505,13 @@ function WorkbenchTab({
 		</ContextMenu>
 	);
 }
+
+/** A group is named by where it is, not by what happens to be open in it — see shell/layout/SPEC.md. */
+const REGION_NAME: Record<LayoutAuxiliaryRegion, string> = {
+	left: "Left",
+	right: "Right",
+	bottom: "Bottom",
+};
 
 function findLayoutGroupTabs(
 	document: WorkspaceLayoutDocument,

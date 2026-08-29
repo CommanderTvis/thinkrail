@@ -223,6 +223,48 @@ one at all. Orientation also flips what the tab chrome means: the active marker 
 a left one, insertion targets from left/right halves to top/bottom, and the horizontal scroll affordances
 give way to ordinary vertical scrolling.
 
+**Where a tab can go is a picture, not a list of sentences.** The context menu draws the workbench —
+side columns, the editor, the bottom strip — with a cell for every existing group and a `+` slot in every
+gap, including the ends (`GroupPlacement.tsx`). A cell moves the tab into that group; a slot makes a new
+one at that index. It replaced eleven-odd rows that each spelled out one edge ("New left group at top",
+"Move to bottom group db90") and still could not say what the layout looked like or which group the tab
+was already in — the picture says both. Cells are named by **where they are** ("Left", "Right 2", "Main
+column", "Bottom"), not by what is open in them: a session title in a 60px box wraps to three lines of
+nothing, and the position is the part that does not change while you read the menu. What a group holds is
+in its tooltip, which is where "which one is that?" belongs. Regions this kind of tab cannot enter are drawn as dashed outlines rather than
+offered: a tool has no business in the centre, and a file none in a side rail.
+
+Every cell is still a `ContextMenuItem`, so the keyboard, the roving focus and a screen reader read exactly
+the list it replaced — each carries the sentence as its accessible name, and an unavailable one keeps its
+reason in the tooltip where a picture cannot spell it out.
+
+**An action that is only "already done" is not shown at all.** Keep preview on a kept tab, Move left on
+the first tab, Show on its own outside a pane, Focus next group with no other group — a row saying
+"already first" is a row that will never do anything, and six of them ahead of the ones that will is how
+a menu stops being read. A *limit* still shows and says so (the placement picture's disabled slots keep
+their reason in a tooltip): "you cannot have a fourth bottom group" teaches something, "you are where you
+are" does not.
+
+Pointer is never the sole arrangement path. Keyboard controls and the shadcn menu surface cover group/tab
+focus, select/close/keep/reorder/move, directional center splits, absolute and adjacent auxiliary-group
+creation, fold/show/hide/tool restore, bottom alignment, and keyboard separator resize, always with an
+unavailable reason. A tab can reproduce any interior pointer placement from the placement picture. Tab strips implement the WAI-ARIA tabs pattern and visible
+roving focus; a folded auxiliary group retains its linked native-hidden tabpanel while unmounting the body,
+and its named restore control is the group focus endpoint when no tab control is rendered. A local bottom-fold
+transition moves focus onto that restore control and expansion returns it to the selected tab. Separators expose
+orientation and current/min/max values. `Ctrl+F6` visits upper-row groups in visual
+order, then visible bottom groups left-to-right. One-row strips have bounded readable tab widths and no
+fixed previous/next controls: wheel, trackpad, touch, roving-keyboard navigation, active reveal, and the
+searchable keyboard overflow list all scroll the same tab list. Its native scrollbar stays hidden; subtle,
+pointer-transparent edge fades appear only on directions with clipped tabs and update with scroll, resize, and
+tab changes without altering the fixed 32 px strip or tab geometry. Full-height strip actions share that 32 px
+width, keeping search, creation, alignment, and fold controls square. A strip control renders only when it
+can act: the searchable overflow list while the tab list overflows its scroller, the fold button while the
+side holds more than one group (or the group is already folded) — folding a lone group buys no space from a
+neighbour. Singleton tool tabs
+(Projects, Specs, Files, Changes, Review) carry no inline close glyph; Close remains in their context menu
+and on the Delete key, while terminals and center resources retain the direct glyph.
+
 ## Presets and local persistence
 
 Balanced, Focus, and Review are web-owned resource-free frame definitions with a below-center bottom slot:

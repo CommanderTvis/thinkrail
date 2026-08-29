@@ -620,12 +620,10 @@ test("bottom groups arrange left-to-right, resize, fold to 27px, restore, and en
 	await expect(bottomGroups(page)).toHaveCount(3);
 	await expect(bottomGroups(page).nth(0)).toContainText("Files");
 	await page.getByTestId("tab-specs").click({ button: "right" });
-	await expect(
-		page.getByRole("menuitem", { name: /New bottom group at left — limited to 3/ }),
-	).toBeDisabled();
-	await expect(
-		page.getByRole("menuitem", { name: /New bottom group at right — limited to 3/ }),
-	).toBeDisabled();
+	const atLeft = page.getByRole("menuitem", { name: "New bottom group at left" });
+	await expect(atLeft).toBeDisabled();
+	await expect(atLeft).toHaveAttribute("title", "The bottom region is limited to 3 groups");
+	await expect(page.getByRole("menuitem", { name: "New bottom group at right" })).toBeDisabled();
 });
 
 test("a narrow viewport locally compresses bottom groups without rewriting their topology", async ({
