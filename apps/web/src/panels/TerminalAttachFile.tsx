@@ -1,6 +1,7 @@
-import { RiAttachment2, RiFileLine, RiFolderLine } from "@remixicon/react";
+import { RiAttachment2, RiFolderLine } from "@remixicon/react";
 import type { FileNode } from "@thinkrail/contracts";
 import { useEffect, useState } from "react";
+import { FileTypeIcon } from "../components/FileTypeIcon";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../components/ui/dialog";
 import { toast } from "../store";
 import { errorText, getTransport } from "../transport";
@@ -142,7 +143,7 @@ export function TerminalAttachFile({
 								{entry.kind === "dir" ? (
 									<RiFolderLine className="size-16 shrink-0 text-text-muted" />
 								) : (
-									<RiFileLine className="size-16 shrink-0 text-text-muted" />
+									<FileTypeIcon path={entry.name} className="size-16 text-text-muted" />
 								)}
 								<span className="truncate">{entry.name}</span>
 							</button>
