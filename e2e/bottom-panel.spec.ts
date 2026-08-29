@@ -6,6 +6,7 @@ import {
 	enterDefaultWorkspace,
 	openFixtureProject,
 	pressPlatformShortcut,
+	requestOverWire,
 	revealFirstProjectWorkspaces,
 	runInTerminal,
 	visibleTerminal,
@@ -107,48 +108,6 @@ async function setBottomAlignment(page: Page, name: string): Promise<void> {
 	await page.getByRole("button", { name: "Bottom panel alignment" }).click();
 	await page.getByRole("menuitemradio", { name, exact: true }).click();
 	await waitForLayoutSettled(page);
-}
-
-async function requestOverWire<T>(
-	page: Page,
-	method: string,
-	params: Record<string, unknown>,
-): Promise<T> {
-	return page.evaluate(
-		async ({ requestMethod, requestParams }) => {
-			const protocol = location.protocol === "https:" ? "wss:" : "ws:";
-			const socket = new WebSocket(`${protocol}//${location.host}/ws`);
-			await new Promise<void>((resolve) => {
-				socket.onopen = () => resolve();
-			});
-			const id = `bottom_${Math.random()}`;
-			try {
-				return await new Promise<unknown>((resolve, reject) => {
-					socket.addEventListener("message", (event: MessageEvent<string>) => {
-						const message = JSON.parse(event.data) as {
-							id?: string;
-							result?: unknown;
-							error?: string | { message?: string };
-						};
-						if (message.id !== id) return;
-						if (message.error) {
-							reject(
-								new Error(
-									typeof message.error === "string"
-										? message.error
-										: (message.error.message ?? "request failed"),
-								),
-							);
-						} else resolve(message.result);
-					});
-					socket.send(JSON.stringify({ id, method: requestMethod, params: requestParams }));
-				});
-			} finally {
-				socket.close();
-			}
-		},
-		{ requestMethod: method, requestParams: params },
-	) as Promise<T>;
 }
 
 async function readPersistedSideWidths(page: Page): Promise<{ left: number; right: number }> {
