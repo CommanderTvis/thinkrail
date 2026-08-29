@@ -88,6 +88,11 @@ const NON_COLOR = new Set([
 	"clip-padding",
 	"none",
 	"inset",
+	// Border *styles* read like colours to the pattern above; they are not.
+	"solid",
+	"dashed",
+	"dotted",
+	"double",
 ]);
 
 const COLOR_PREFIX =

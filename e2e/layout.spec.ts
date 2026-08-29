@@ -502,9 +502,9 @@ test("a terminal can move to its own side group; resize, fold, and visibility ga
 	await expect(page.getByTestId("terminal-tab")).toHaveCount(1);
 	await expect(page.getByTestId("terminal-instance")).toHaveCount(1);
 	await page.getByTestId("terminal-tab").click({ button: "right" });
-	await expect(
-		page.getByRole("menuitem", { name: "New left group at bottom", exact: true }),
-	).toBeEnabled();
+	// A group outlives the tabs in it, so moving this terminal into a new row of its own is a real move
+	// at either end of the column, not the no-op it used to be while a vacated group dissolved.
+	await expect(page.getByRole("menuitem", { name: "New left group at bottom" })).toBeEnabled();
 	await expect(page.getByRole("menuitem", { name: "New left group at top" })).toBeEnabled();
 	await page.keyboard.press("Escape");
 
@@ -549,8 +549,9 @@ test("side groups expose broad per-panel above and below split targets", async (
 	const files = page.getByTestId("tab-files");
 
 	await files.click({ button: "right" });
-	await expect(page.getByRole("menuitem", { name: "New group above", exact: true })).toBeEnabled();
-	await expect(page.getByRole("menuitem", { name: "New group below", exact: true })).toBeEnabled();
+	// The same two placements, now cells of the picture rather than two sentences about edges.
+	await expect(page.getByRole("menuitem", { name: "New right group at top" })).toBeEnabled();
+	await expect(page.getByRole("menuitem", { name: "New right group at bottom" })).toBeEnabled();
 	await page.keyboard.press("Escape");
 
 	let changesGroup = sideGroups(page, "right").filter({ has: page.getByTestId("tab-changes") });
@@ -1022,12 +1023,11 @@ test("an accepted side-group overage is grandfathered without allowing further g
 	await page.keyboard.press("Escape");
 
 	await page.getByTestId("terminal-tab").click({ button: "right" });
-	await expect(
-		page.getByRole("menuitem", { name: /New right group at bottom — limited to 2/ }),
-	).toBeDisabled();
-	await expect(
-		page.getByRole("menuitem", { name: /New right group at top — limited to 2/ }),
-	).toBeDisabled();
+	const overLimit = page.getByRole("menuitem", { name: "New right group at top" });
+	await expect(overLimit).toBeDisabled();
+	// The picture has no room to spell the limit out in a cell, so hovering it is what says why.
+	await expect(overLimit).toHaveAttribute("title", "The right region is limited to 2 groups");
+	await expect(page.getByRole("menuitem", { name: "New right group at bottom" })).toBeDisabled();
 	await page.keyboard.press("Escape");
 	await expect(sideGroups(page, "right")).toHaveCount(3);
 });
@@ -1531,4 +1531,42 @@ test("the hidden bottom drop zone wins overlapping terminal targets and reveals 
 	await expect(page.getByTestId("bottom-panel")).toBeVisible();
 	await expect(page.getByTestId("bottom-group").getByTestId("terminal-tab")).toHaveCount(1);
 	await expect(page.getByTestId("center-group").getByTestId("terminal-tab")).toHaveCount(0);
+});
+
+test("the placement picker draws the workbench: a cell per group, a slot at every edge", async ({
+	page,
+}) => {
+	await openDefaultWorkbench(page);
+	await page.getByTestId("tab-files").click({ button: "right" });
+
+	// Left has one group, right has two, bottom has one — and each gets a slot before it and after it.
+	const slots = page.getByTestId("placement-slot");
+	await expect(slots.first()).toBeVisible();
+	const shape = await slots.evaluateAll((nodes) =>
+		nodes.map((node) => `${node.getAttribute("data-region")}#${node.getAttribute("data-index")}`),
+	);
+	expect(shape).toEqual([
+		"left#0",
+		"left#1",
+		"bottom#0",
+		"bottom#1",
+		"right#0",
+		"right#1",
+		"right#2",
+	]);
+
+	// The group this tab already lives in is where it stands, not somewhere to go.
+	const current = page.getByTestId("placement-group").and(page.locator("[data-current]"));
+	await expect(current).toHaveCount(1);
+	await expect(current).toBeDisabled();
+	// Named by where it is — the second of the two right groups — with its contents left to the tooltip.
+	await expect(current).toContainText("Right 1");
+	await expect(current).toHaveAttribute("title", "This tab is already here");
+	const other = page.getByRole("menuitem", { name: "Move to right group: Right 2" });
+	await expect(other).toHaveAttribute("title", "Move to Right 2 — Changes");
+
+	// And a cell moves it, which is what the six sentences used to say.
+	await page.getByRole("menuitem", { name: "Move to left group: Left" }).click();
+	await expect(sideGroups(page, "left").getByTestId("tab-files")).toBeVisible();
+	await expect(sideGroups(page, "right").getByTestId("tab-files")).toHaveCount(0);
 });
