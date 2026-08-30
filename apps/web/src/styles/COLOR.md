@@ -175,8 +175,8 @@ because High Contrast Light shipped `hover` at 1.05:1 against its own sidebar â€
 project/workspace rows were indistinguishable from the panel â€” while every legibility check stayed
 green; review of that fix then found Light shipping `hover == content` outright, so PlanPane's
 hovered rows vanished the same way. 1.15 is the line that separates a visible fill from an invisible
-one; every bundled theme clears it on all six surfaces (the weakest live pair is Light's
-hover-on-content at 1.165).
+one; every bundled theme clears it on all six surfaces (the weakest live pair is Dark's hover on
+content/header/input at 1.189).
 
 `themes/runtime.test.ts` pins application; `themes/shiki.test.ts` pins the syntax-variable map. See [`themes/SPEC.md`](../themes/SPEC.md) for the manifest itself and
 [TYPOGRAPHY.md](./TYPOGRAPHY.md) for the parallel type system.
