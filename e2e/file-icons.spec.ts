@@ -1,3 +1,5 @@
+import { writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { expect, test } from "@playwright/test";
 import { createWorkspaceViaDialog, openFixtureProject } from "./fixtures/app";
 
@@ -24,4 +26,20 @@ test("a file row wears its own type's icon, drawn in the theme's colour", async 
 	await expect(
 		page.getByTestId("editor-tab").filter({ hasText: "README.md" }).getByTestId("file-type-icon"),
 	).toHaveAttribute("data-icon", "readme");
+});
+
+test("a change row wears the icon too, in both of the panel's views", async ({ page }) => {
+	await openFixtureProject(page);
+	const workspace = await createWorkspaceViaDialog(page);
+	writeFileSync(join(workspace.worktreePath, "server.py"), "print('hi')\n");
+
+	await page.getByTestId("tab-changes").click();
+	const row = page.getByTestId("change-item").filter({ hasText: "server.py" });
+	await expect(row).toBeVisible({ timeout: 10_000 });
+	await expect(row.getByTestId("file-type-icon")).toHaveAttribute("data-icon", "python");
+
+	await page.getByTestId("changes-toggle-tree").click();
+	await expect(
+		page.getByTestId("change-node").filter({ hasText: "server.py" }).getByTestId("file-type-icon"),
+	).toHaveAttribute("data-icon", "python");
 });

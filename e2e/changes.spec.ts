@@ -686,3 +686,25 @@ test("Closing a diff tab disposes Monaco cleanly — no 'TextModel got disposed'
 	await page.waitForTimeout(100);
 	expect(monacoErrors).toEqual([]);
 });
+
+test("a change row can open the file itself, not the diff of it", async ({ page }) => {
+	await openFixtureProject(page);
+	await createWorkspaceViaDialog(page);
+	const worktree = join(E2E_DATA_DIR, "worktrees", "sample-project", "workspace-1");
+	writeFileSync(join(worktree, "README.md"), "# sample-project\n\nchanged for the jump\n");
+
+	await page.getByTestId("tab-changes").click();
+	const row = page.getByTestId("change-item").filter({ hasText: "README.md" });
+	await expect(row).toBeVisible({ timeout: 10_000 });
+
+	// The row's own click is still the diff; the menu is what opens the file.
+	await row.click();
+	await expect(page.getByTestId("diff-pane")).toBeVisible();
+	const fileTab = page
+		.locator('[data-testid="editor-tab"][data-kind="file"]')
+		.filter({ hasText: "README.md" });
+	await page.getByTestId("change-row-menu").first().click();
+	await page.getByTestId("change-action-jump").click();
+	await expect(fileTab).toBeVisible();
+	await expect(page.getByTestId("markdown-preview")).toContainText("changed for the jump");
+});
