@@ -9,16 +9,24 @@ import { TreeRow } from "./TreeRow";
 export function ChangesTree({
 	changes,
 	onOpen,
+	onJumpToSource,
 	isActive,
 }: {
 	changes: readonly GitFileChange[];
 	onOpen: (path: string, intent: TabIntent) => void;
+	onJumpToSource: (path: string) => void;
 	isActive: (path: string) => boolean;
 }) {
 	return (
 		<ul className="flex flex-col motion-safe:animate-reveal">
 			{buildChangesTree(changes).map((node) => (
-				<ChangeNodeRow key={node.path} node={node} onOpen={onOpen} isActive={isActive} />
+				<ChangeNodeRow
+					key={node.path}
+					node={node}
+					onOpen={onOpen}
+					onJumpToSource={onJumpToSource}
+					isActive={isActive}
+				/>
 			))}
 		</ul>
 	);
@@ -27,10 +35,12 @@ export function ChangesTree({
 function ChangeNodeRow({
 	node,
 	onOpen,
+	onJumpToSource,
 	isActive,
 }: {
 	node: ChangeTreeNode;
 	onOpen: (path: string, intent: TabIntent) => void;
+	onJumpToSource: (path: string) => void;
 	isActive: (path: string) => boolean;
 }) {
 	const [expanded, setExpanded] = useState(true);
@@ -42,6 +52,7 @@ function ChangeNodeRow({
 					path={node.path}
 					active={isActive(node.path)}
 					onView={() => onOpen(node.path, "preview")}
+					onJumpToSource={() => onJumpToSource(node.path)}
 				>
 					{({ onContextMenu }) => (
 						<TreeRow
@@ -79,7 +90,13 @@ function ChangeNodeRow({
 			{expanded && (
 				<ul className="flex flex-col pl-12">
 					{node.children.map((child) => (
-						<ChangeNodeRow key={child.path} node={child} onOpen={onOpen} isActive={isActive} />
+						<ChangeNodeRow
+							key={child.path}
+							node={child}
+							onOpen={onOpen}
+							onJumpToSource={onJumpToSource}
+							isActive={isActive}
+						/>
 					))}
 				</ul>
 			)}

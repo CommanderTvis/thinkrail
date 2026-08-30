@@ -946,6 +946,9 @@ from `main.tsx` through `transport`'s `setIdeActionHandler` seam, since `transpo
   writes: dirty is a real buffer's state, and a save runs the same path Ctrl+S does, reporting `saved`
   only when the buffer actually settled — a save refused by a conflict says so rather than claiming
   success.
+- **Change rows wear it too, in both views** — the tree view gets it from `TreeRow`, and the list view
+  draws it beside the path. A changed file is still a file, and a column of them is exactly where the
+  eye is scanning for one.
 - **File rows and the attach picker wear the file's own icon** (`components/FileTypeIcon`, via `TreeRow`'s
   `iconPath`), so a tree reads as its types rather than as a column of identical glyphs. Folders keep the
   Remix folder pair, which still has to say open/closed and selected/not — a state a type icon cannot
@@ -1636,7 +1639,12 @@ tab — `external-file` when the path escaped the worktree, which is most of Cla
 - **Row actions: one menu, two triggers.** Every **file** row (both views) is wrapped in
   **`ChangeRowActions`**: a hover/focus-revealed `⌄` button *and* right-click on the row open the same
   dropdown. The `⌄` is not garnish — it is the **touch path**, where right-click does not exist (mobile-first).
-  Items: **View** (the same action as a plain click) and **Copy path** (worktree-relative). Deliberately
+  Items: **Show diff** (the same action as a plain click), **Jump to source**, and **Copy path**
+  (worktree-relative). Jump to source opens the *file*, not the diff of it, **kept** rather than previewed —
+  leaving the changes list to edit something is not browsing — and takes IntelliJ's name for it. It is a
+  menu item and nothing else: no chord, because the app's key bindings are a shared surface and this panel
+  does not get to claim one on its own. The row's own click stays the diff: reading a change is what the
+  panel is for, and editing it is the second thing you want, not the first. Deliberately
   nothing else: the panel is **read-only** — no discard-file/-folder/-all — and no “Open in ‹external app›”,
   which a host-side `open` would make silently wrong for every remote/phone client (Copy path is the portable
   escape hatch). **Folder rows get no menu** — nothing in that list applies to a folder. Built on the existing

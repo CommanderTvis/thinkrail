@@ -10,14 +10,9 @@ tags: [v1, ui, resilience]
 ## Responsibility
 
 The app's dependency-light shared React primitives: the error boundary that keeps one failed region from
-<<<<<<< HEAD
-unmounting the root, project-custom icons, the quiet-scroll frame used by shell and feature panels, and
-the shared loading-skeleton primitive. Also houses the `ui/` sub-module (shadcn primitives), which has
-its own spec.
-=======
-unmounting the root, project-custom icons, `FileTypeIcon` (what a file wears), and the quiet-scroll frame
-used by shell and feature panels. Also houses the `ui/` sub-module (shadcn primitives), which has its own
-spec.
+unmounting the root, project-custom icons, `FileTypeIcon` (what a file wears), the quiet-scroll frame
+used by shell and feature panels, and the shared loading-skeleton primitive. Also houses the `ui/`
+sub-module (shadcn primitives), which has its own spec.
 
 ## File-type icons
 
@@ -45,7 +40,6 @@ and a few thousand more — in whatever colour it inherits.
   HTML, so nothing here needs a `dangerouslySetInnerHTML` exemption. An external `<use>` sprite would have
   been one request instead of many, but external sprites do not inherit `currentColor` in WebKit — which
   is the desktop app.
->>>>>>> 3e76dfd2 (File-type icons, in the theme's own colour)
 
 ## Boundary
 
@@ -76,23 +70,16 @@ and a few thousand more — in whatever colour it inherits.
   and removes the cosmetic curtains; reduced motion removes both optical and third-party controller opacity
   transitions. Surface colour is an explicit semantic prop (`sidebar` or `terminal`), never inferred from
   arrangement.
-<<<<<<< HEAD
 - **Also owns:** `Skeleton.tsx` — `SkeletonRows`, the one pulsing-rows placeholder every loading surface
   uses, and `LoadingRegion`, the sized-wrapper shape around it that most call sites actually want (a
   `className` for the region's own padding/sizing, an optional `label` threaded to `SkeletonRows`'
   `role="status"` region rather than opening a second one, and an optional `testId`). The full loading
   vocabulary and its rules are below.
 - **Public surface:** `ErrorBoundary`, `isChunkLoadError`, `SkeletonRows`, `LoadingRegion` — imported
-  directly via `@/components/ErrorBoundary` / `@/components/Skeleton` (no barrel); `CustomIcon`,
-  `CustomIconName` via `@/components/CustomIcon`; `QuietScrollArea`, `QuietScrollFrame`, and the
-  `QuietScrollEdges` type via `@/components/QuietScrollArea`. The `ui/` primitives are their own sub-module
-=======
-- **Public surface:** `ErrorBoundary`, `isChunkLoadError` — imported directly via
-  `@/components/ErrorBoundary` (no barrel); `FileTypeIcon`, `MaterialIcon` via
-  `@/components/FileTypeIcon`; `CustomIcon`, `CustomIconName` via `@/components/CustomIcon`;
-  `QuietScrollArea`, `QuietScrollFrame`, and the `QuietScrollEdges` type via
+  directly via `@/components/ErrorBoundary` / `@/components/Skeleton` (no barrel); `FileTypeIcon`,
+  `MaterialIcon` via `@/components/FileTypeIcon`; `CustomIcon`, `CustomIconName` via
+  `@/components/CustomIcon`; `QuietScrollArea`, `QuietScrollFrame`, and the `QuietScrollEdges` type via
   `@/components/QuietScrollArea`. The `ui/` primitives are their own sub-module
->>>>>>> 3e76dfd2 (File-type icons, in the theme's own colour)
   ([components/ui/SPEC.md](ui/SPEC.md)).
 - **Allowed deps:** React, `@remixicon/react`, `lib` (`shallowEqualArrays` — the reset-keys comparison, shared
   rather than re-stated). Kept dependency-light on purpose, and `lib` is a leaf, so *any* region (shell,
