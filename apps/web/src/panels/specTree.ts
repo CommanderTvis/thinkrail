@@ -1,22 +1,10 @@
 import type { SpecGraphNode } from "@thinkrail/contracts";
+import { SPEC_ROLES } from "./specDocument";
 
 export interface SpecTreeNode {
 	node: SpecGraphNode;
 	children: SpecTreeNode[];
 }
-
-interface SpecRole {
-	label: string;
-	tag: string;
-}
-
-const SPEC_ROLES = {
-	"goal-and-requirements": { label: "Goal", tag: "GOAL" },
-	"architecture-design": { label: "Architecture", tag: "ARCH" },
-	"module-design": { label: "Module", tag: "MODULE" },
-	"submodule-design": { label: "Submodule", tag: "SUBMODULE" },
-	"task-spec": { label: "Task", tag: "TASK" },
-} as const satisfies Record<string, SpecRole>;
 
 type KnownSpecType = keyof typeof SPEC_ROLES;
 
