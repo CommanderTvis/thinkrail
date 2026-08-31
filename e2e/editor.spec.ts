@@ -1,7 +1,12 @@
 import { renameSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, test } from "@playwright/test";
-import { createWorkspaceViaDialog, openFixtureProject } from "./fixtures/app";
+import {
+	createWorkspaceViaDialog,
+	enterDefaultWorkspace,
+	openFixtureProject,
+} from "./fixtures/app";
+import { E2E_FIXTURE_REPO } from "./fixtures/paths";
 import { minimalPdf } from "./fixtures/repo";
 
 test("opens a file in a center Monaco tab, focuses on re-open, and closes", async ({ page }) => {
@@ -206,4 +211,38 @@ test("a rewritten PDF shows its new bytes without reopening the tab", async ({ p
 	writeFileSync(target, minimalPdf().replace("(ThinkRail PDF)", "(By hand)"), "latin1");
 	await page.getByTestId("pdf-reload").click();
 	await expect(firstWord).toContainText("By hand", { timeout: 10_000 });
+});
+
+test("word wrap is a setting, and the editor follows it live", async ({ page }) => {
+	writeFileSync(
+		join(E2E_FIXTURE_REPO, "long-line.txt"),
+		`${"длинная строка про шпеци и дегустацию ".repeat(40).trim()}\n`,
+	);
+	await openFixtureProject(page);
+	await enterDefaultWorkspace(page);
+	await page.getByTestId("tab-files").click();
+	await page.getByTestId("file-node").filter({ hasText: "long-line.txt" }).dblclick();
+
+	const line = page.locator(".monaco-editor .view-line").first();
+	await expect(line).toBeVisible();
+	const unwrapped = await page.locator(".monaco-editor .view-line").count();
+
+	await page.getByTestId("open-settings").click();
+	await page.getByTestId("settings-nav-editor").click();
+	await page.getByTestId("editor-word-wrap").click();
+	// Controlled by host-saved settings, so the box only ticks once the round trip lands.
+	await expect(page.getByTestId("editor-word-wrap")).toBeChecked();
+	await page.keyboard.press("Escape");
+	await expect(page.getByTestId("settings-dialog")).toHaveCount(0);
+
+	// One logical line becomes many view lines only when the editor soft-wraps it.
+	await expect
+		.poll(async () => page.locator(".monaco-editor .view-line").count())
+		.toBeGreaterThan(unwrapped);
+
+	await page.getByTestId("open-settings").click();
+	await page.getByTestId("settings-nav-editor").click();
+	await page.getByTestId("editor-word-wrap").click();
+	await expect(page.getByTestId("editor-word-wrap")).not.toBeChecked();
+	await page.keyboard.press("Escape");
 });

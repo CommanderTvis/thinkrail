@@ -219,7 +219,7 @@ of the host.
   **`SUBAGENT_SETTINGS_PROTOCOL_VERSION`** pins the global/workspace controls to their v57 wire
   introduction so a later web client hides them against an older host without comparing against the moving
   latest protocol; **`JBCENTRAL_QUOTA_PROTOCOL_VERSION`** likewise pins the v59 quota read + settings;
-  **`AppConfig`** (`{ theme, themeMode, systemThemePair?, claudeCommand, analyticsEnabled,
+  **`AppConfig`** (`{ theme, themeMode, systemThemePair?, editorWordWrap, claudeCommand, analyticsEnabled,
   terminalReplayKb, composerGrowthLimit, customLayoutPresets, reviewModel?, reviewEffort?, reviewAutoFix,
   subagentsEnabled, jbcentralQuotaEnabled, jbcentralQuotaRefreshSeconds }` — an extensible bag;
   `themeMode` defaults to `"fixed"` and no pair, preserving both legacy configs and the explicit Dark

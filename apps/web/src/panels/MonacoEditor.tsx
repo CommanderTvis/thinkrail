@@ -219,6 +219,7 @@ export default function MonacoEditor({
 		[],
 	);
 
+	const wordWrap = useAppStore((s) => s.editorWordWrap);
 	return (
 		<MonacoReact
 			height="100%"
@@ -229,7 +230,7 @@ export default function MonacoEditor({
 			onMount={onMount}
 			loading={<LoadingRegion rows={12} className="h-full w-full p-12" />}
 			onChange={(value) => onChange?.(value ?? "")}
-			options={{ ...sharedEditorOptions(), readOnly: !editable }}
+			options={{ ...sharedEditorOptions(), readOnly: !editable, wordWrap: wordWrap ? "on" : "off" }}
 		/>
 	);
 }

@@ -522,6 +522,8 @@ export interface AppConfig extends ThemePreference {
 	analyticsEnabled: boolean;
 	terminalReplayKb: number;
 	composerGrowthLimit: ComposerGrowthLimit;
+	/** Soft-wrap long lines in the file editor. Prose is unreadable without it; code defaults to off. */
+	editorWordWrap: boolean;
 	customLayoutPresets: LayoutPreset[];
 	/** The model the plan reviewer + reflector run on; unset ⇒ the pi default. */
 	reviewModel?: WireModel;
@@ -563,6 +565,7 @@ export const DEFAULT_CONFIG: AppConfig = {
 	analyticsEnabled: true,
 	terminalReplayKb: TERMINAL_REPLAY_KB.default,
 	composerGrowthLimit: "half-chat",
+	editorWordWrap: false,
 	customLayoutPresets: [],
 	reviewAutoFix: true,
 	subagentsEnabled: true,

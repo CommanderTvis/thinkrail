@@ -7,6 +7,7 @@ import {
 import type { editor } from "monaco-editor";
 import { useCallback, useEffect, useRef } from "react";
 import { LoadingRegion } from "../components/Skeleton";
+import { useAppStore } from "../store";
 import { decorateEditorContextMenus } from "./monacoMenuIcons";
 import {
 	defineThinkrailTheme,
@@ -135,6 +136,7 @@ export default function MonacoDiff({
 		[],
 	);
 
+	const wordWrap = useAppStore((s) => s.editorWordWrap);
 	return (
 		<DiffEditor
 			height="100%"
@@ -151,6 +153,7 @@ export default function MonacoDiff({
 			loading={<LoadingRegion rows={12} className="h-full w-full p-12" />}
 			options={{
 				...sharedEditorOptions(),
+				wordWrap: wordWrap ? "on" : "off",
 				renderSideBySide: view === "split",
 				useInlineViewWhenSpaceIsLimited: false,
 				hideUnchangedRegions: { enabled: true },

@@ -7,6 +7,7 @@ import {
 	type RemixiconComponentType as LucideIcon,
 	RiChat2Line as MessageSquareText,
 	RiPaletteLine as Palette,
+	RiPencilLine as Pencil,
 	RiSearchEyeLine as ScanEye,
 	RiShieldCheckLine as ShieldCheck,
 	RiEqualizerLine as SlidersHorizontal,
@@ -21,8 +22,9 @@ import { SettingsSection, useAppStore } from "@/store";
 import { AppearanceSettings } from "./AppearanceSettings";
 import { ChatSettings } from "./ChatSettings";
 import { ClaudeCodeSettings } from "./ClaudeCodeSettings";
-import { FeedbackSettings } from "./FeedbackSettings";
 import { DiscordSettings } from "./DiscordSettings";
+import { EditorSettings } from "./EditorSettings";
+import { FeedbackSettings } from "./FeedbackSettings";
 import { GithubSettings } from "./GithubSettings";
 import { PrivacySettings } from "./PrivacySettings";
 import { ProvidersSettings } from "./ProvidersSettings";
@@ -38,6 +40,7 @@ const SECTIONS: { id: SettingsSection; label: string; icon: SectionIcon }[] = [
 	{ id: SettingsSection.Appearance, label: "Appearance", icon: Palette },
 	{ id: SettingsSection.Chat, label: "Chat", icon: MessageSquareText },
 	{ id: SettingsSection.Layout, label: "Layout", icon: LayoutPanelTop },
+	{ id: SettingsSection.Editor, label: "Editor", icon: Pencil },
 	{ id: SettingsSection.Terminal, label: "Terminal", icon: SquareTerminal },
 	{ id: SettingsSection.ClaudeCode, label: "Claude Code", icon: ClaudeMark },
 	{ id: SettingsSection.Discord, label: "Discord", icon: DiscordMark },
@@ -116,6 +119,8 @@ export function SettingsDialog({ layoutSettings }: { layoutSettings: ReactNode }
 							<ChatSettings />
 						) : section === SettingsSection.Layout ? (
 							layoutSettings
+						) : section === SettingsSection.Editor ? (
+							<EditorSettings />
 						) : section === SettingsSection.Terminal ? (
 							<TerminalSettings />
 						) : section === SettingsSection.ClaudeCode ? (

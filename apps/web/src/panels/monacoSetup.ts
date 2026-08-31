@@ -58,6 +58,9 @@ export function sharedEditorOptions() {
 		automaticLayout: true,
 		fontSize,
 		fontFamily: cssVar("--tr-font-family-code") ?? "monospace",
+		// Cyrillic prose is not a homoglyph attack: flagging every с and о makes non-Latin documents
+		// unreadable, and this editor's files are the user's own worktree, not untrusted paste.
+		unicodeHighlight: { ambiguousCharacters: false },
 		...(lineHeight && lineHeight > 0 ? { lineHeight } : {}),
 	} as const;
 }

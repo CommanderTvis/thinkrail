@@ -346,6 +346,7 @@ export const SettingsSection = {
 	Appearance: "appearance",
 	Chat: "chat",
 	Layout: "layout",
+	Editor: "editor",
 	Terminal: "terminal",
 	ClaudeCode: "claude-code",
 	Discord: "discord",
@@ -886,6 +887,7 @@ interface AppState {
 	jbcentralQuotaEnabled: boolean;
 	jbcentralQuotaRefreshSeconds: number;
 	terminalReplayKb: number;
+	editorWordWrap: boolean;
 	composerGrowthLimit: ComposerGrowthLimit;
 	chatMessageOrder: ChatMessageOrder;
 	streamingResponseMovement: StreamingResponseMovement;
@@ -1146,6 +1148,7 @@ function configPatch(config: AppConfig) {
 		jbcentralQuotaRefreshSeconds:
 			config.jbcentralQuotaRefreshSeconds ?? DEFAULT_CONFIG.jbcentralQuotaRefreshSeconds,
 		terminalReplayKb: config.terminalReplayKb,
+		editorWordWrap: config.editorWordWrap,
 		composerGrowthLimit: config.composerGrowthLimit ?? DEFAULT_CONFIG.composerGrowthLimit,
 		customLayoutPresets: config.customLayoutPresets ?? DEFAULT_CONFIG.customLayoutPresets,
 		reviewModel: config.reviewModel,
@@ -1797,6 +1800,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	jbcentralQuotaEnabled: DEFAULT_CONFIG.jbcentralQuotaEnabled,
 	jbcentralQuotaRefreshSeconds: DEFAULT_CONFIG.jbcentralQuotaRefreshSeconds,
 	terminalReplayKb: DEFAULT_CONFIG.terminalReplayKb,
+	editorWordWrap: DEFAULT_CONFIG.editorWordWrap,
 	composerGrowthLimit: DEFAULT_CONFIG.composerGrowthLimit,
 	chatMessageOrder: "oldest-first",
 	streamingResponseMovement: { ...DEFAULT_STREAMING_RESPONSE_MOVEMENT },

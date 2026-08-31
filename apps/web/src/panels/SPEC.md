@@ -1852,6 +1852,12 @@ tab — `external-file` when the path escaped the worktree, which is most of Cla
   nullable editor selection-foreground override when provided. `MonacoDiff` re-themes exactly like
   `MonacoEditor` — both consume `monacoSetup.ts`'s define + observer, so a palette swap lands in the
   diff tab too.
+- **The editor speaks prose, not only source.** Word wrap is a host-synced setting
+  (`AppConfig.editorWordWrap`, Settings → Editor, off by default), read live by both `MonacoEditor` and
+  `MonacoDiff` — long Cyrillic paragraphs are unreadable behind a horizontal scrollbar. And Monaco's
+  ambiguous-Unicode highlight is off in `sharedEditorOptions`: flagging every Cyrillic с and о as a
+  homoglyph attack punishes non-Latin documents, and the editor's files are the user's own worktree, not
+  untrusted paste.
 - **The terminal is built one commit after the tab switch.** Constructing xterm (four addons, `open()`)
   costs ~90ms before it can even send `terminal.attach`, and doing it in the commit that selects the tab
   makes the switch itself wait on all of it — the old tab stays on screen for the duration. Mounting is
