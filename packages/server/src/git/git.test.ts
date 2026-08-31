@@ -213,6 +213,33 @@ test("listBranches surfaces origin branches and the origin default", async () =>
 	expect(defaultBranch).toBe("origin/main");
 });
 
+test("a second remote's branches, default, and fetch are first-class, not origin-shaped noise", async () => {
+	const originRepo = join(dataDir, "origin.git");
+	const upstreamRepo = join(dataDir, "upstream.git");
+	git(repo, "init", "--bare", originRepo);
+	git(repo, "init", "--bare", upstreamRepo);
+	git(repo, "remote", "add", "origin", originRepo);
+	git(repo, "remote", "add", "upstream", upstreamRepo);
+	git(repo, "push", "origin", "main");
+	git(repo, "push", "upstream", "main:trunk");
+	git(repo, "fetch", "upstream");
+	git(repo, "remote", "set-head", "upstream", "trunk");
+
+	const { remote, defaultBranch } = await listBranches("p1");
+	expect(remote).toContain("origin/main");
+	expect(remote).toContain("upstream/trunk");
+	expect(remote).not.toContain("upstream/HEAD");
+	// Origin has no HEAD here, so the other remote's default is the answer rather than a blind origin/main.
+	expect(defaultBranch).toBe("upstream/trunk");
+
+	// A fetch of the second remote's ref reaches that remote, not origin.
+	git(repo, "update-ref", "-d", "refs/remotes/upstream/trunk");
+	expect(await prefetchBranch("p1", "upstream/trunk")).toEqual({ ok: true, moved: true });
+	// A local branch that merely wears a remote-looking prefix is refused, same as before.
+	git(repo, "branch", "upstairs/trunk");
+	expect(await prefetchBranch("p1", "upstairs/trunk")).toEqual({ ok: false, moved: false });
+});
+
 test("listBranches throws on an unknown project", async () => {
 	await expect(listBranches("nope")).rejects.toThrow(/Unknown project/);
 });

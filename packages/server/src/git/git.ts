@@ -13,7 +13,7 @@ import { logger } from "../log";
 import { loadProjects, loadWorkspaces } from "../persistence";
 import { changedFileArgs, type DiffRange, diffBaseRef, resolveDiffRange } from "./diffScope";
 import { git, gitAsync, nonInteractiveGitEnv } from "./gitExec";
-import { isSafeRef, remoteTrackingRef } from "./refs";
+import { isSafeRef, remoteNameOf } from "./refs";
 
 const log = logger("git");
 
@@ -76,9 +76,11 @@ export async function listBranches(projectId: string): Promise<BranchList> {
 	if (!project) throw new Error(`Unknown project: ${projectId}`);
 	const repo = project.path;
 
+	// Every remote, not only origin: a fork workflow lives on two, and a branch picker that hides
+	// `upstream/main` hides the one ref such a repo branches from. Each remote's HEAD symref is skipped.
 	const [localRefs, remoteRefs] = await Promise.all([
 		gitAsync(repo, ["for-each-ref", "--format=%(refname:short)", "refs/heads"]),
-		gitAsync(repo, ["for-each-ref", "--format=%(refname:short)\t%(symref)", "refs/remotes/origin"]),
+		gitAsync(repo, ["for-each-ref", "--format=%(refname:short)\t%(symref)", "refs/remotes"]),
 	]);
 	if (!localRefs.ok)
 		throw new Error(`Could not list local branches: ${localRefs.err || "git failed"}`);
@@ -94,9 +96,17 @@ export async function listBranches(projectId: string): Promise<BranchList> {
 	return { local, remote, defaultBranch: resolveDefaultBranch(repo) };
 }
 
+export function listRemotes(repoPath: string): string[] {
+	return lines(git(repoPath, ["remote"]).out);
+}
+
 export function resolveDefaultBranch(repoPath: string): string {
-	const head = git(repoPath, ["symbolic-ref", "--short", "refs/remotes/origin/HEAD"]);
-	if (head.ok && head.out) return head.out;
+	const remotes = listRemotes(repoPath);
+	// Origin keeps its precedence; another remote's HEAD only answers when origin has nothing to say.
+	for (const remote of ["origin", ...remotes.filter((name) => name !== "origin")]) {
+		const head = git(repoPath, ["symbolic-ref", "--short", `refs/remotes/${remote}/HEAD`]);
+		if (head.ok && head.out) return head.out;
+	}
 	if (remoteRefOid(repoPath, "origin/main") !== null) return "origin/main";
 	return currentBranch(repoPath);
 }
@@ -121,8 +131,10 @@ export function currentBranch(repoPath: string): string {
 }
 
 export function remoteRefOid(repoPath: string, ref: string): string | null {
-	const remote = remoteTrackingRef(ref);
-	if (!remote) return null;
+	// The full refs/remotes path is probed directly: whether the ref RESOLVES is the fact this answers,
+	// and a tracking ref can outlive its remote's configuration.
+	if (!isSafeRef(ref)) return null;
+	const remote = `refs/remotes/${ref}`;
 	const result = git(repoPath, ["rev-parse", "--verify", "--quiet", "--end-of-options", remote]);
 	return result.ok && result.out !== "" ? result.out : null;
 }
@@ -132,11 +144,13 @@ export async function prefetchBranch(
 	ref: string,
 ): Promise<{ ok: boolean; moved: boolean }> {
 	const project = loadProjects().find((p) => p.id === projectId);
-	if (!project || !ref.startsWith("origin/") || !isSafeRef(ref)) return { ok: false, moved: false };
+	if (!project || !isSafeRef(ref)) return { ok: false, moved: false };
+	const remoteName = remoteNameOf(ref, listRemotes(project.path));
+	if (!remoteName) return { ok: false, moved: false };
 	const before = remoteRefOid(project.path, ref);
 	const result = await gitAsync(
 		project.path,
-		["fetch", "origin", "--", ref.slice("origin/".length)],
+		["fetch", remoteName, "--", ref.slice(`${remoteName}/`.length)],
 		{ network: true },
 	);
 	const after = remoteRefOid(project.path, ref);

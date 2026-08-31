@@ -189,8 +189,15 @@ treatment.
   `onOpen`/`isActive` by `ChangesPanel`), together with the **diff-tab identity + scope vocabulary**:
   `scopeKey` / `diffTabId(workspaceId, scope, path)` / `diffTabName` / `scopeLabel` and the `splitPath`
   used by both the flat list's path rows and the diff header's path chip. The **branch combobox** is the
-  shared **`BranchPicker`** (searchable, grouped Remote/Local, current pick check-marked, refreshed on every
-  open with an explicit Refresh control as well) — one component for the New-Workspace dialog's *base* branch
+  shared **`BranchPicker`** (searchable, grouped **one heading per remote** then Local, current pick
+  check-marked, refreshed on every
+  open with an explicit Refresh control as well). The remote headings come from the pure
+  **`branchGroups.ts`** (`groupBranchesByRemote`, unit-tested): one group per remote in the order the host
+  listed them, each row carrying the branch alone. Repeating `origin/` down every row of a 320px popover
+  spends on a prefix the width the branch name needs, and it is a fork's *second* remote that the reader
+  is scanning for. The full ref stays the row's `value` and `data-branch`, so a search for `upstream/main`
+  still finds it and the trigger still names the remote it picked. It is
+  one component for the New-Workspace dialog's *base* branch
   and the Changes header's *target* branch; the whole state *around* it — the list, `refreshing`, `refresh()` —
   is the shared
   **`useBranchList(projectId, onLoaded?)`** (`branches.ts`, over the offline-degrading

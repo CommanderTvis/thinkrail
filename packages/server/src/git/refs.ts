@@ -24,6 +24,14 @@ export function assertSafeRef(ref: string): void {
 	if (!isSafeRef(ref)) throw new Error(`Not a usable git ref: ${ref}`);
 }
 
-export function remoteTrackingRef(ref: string): string | null {
-	return ref.startsWith("origin/") ? `refs/remotes/${ref}` : null;
+/**
+ * `upstream/main` and `feature/main` are the same shape, so remote-ness cannot be read off the string:
+ * a ref is remote when its first component names one of the repository's remotes. See SPEC.md.
+ */
+export function remoteNameOf(ref: string, remotes: readonly string[]): string | null {
+	return remotes.find((remote) => ref.startsWith(`${remote}/`)) ?? null;
+}
+
+export function remoteTrackingRef(ref: string, remotes: readonly string[]): string | null {
+	return remoteNameOf(ref, remotes) ? `refs/remotes/${ref}` : null;
 }

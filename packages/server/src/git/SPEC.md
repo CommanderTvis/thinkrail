@@ -33,8 +33,14 @@ ref off the workspace-create critical path.
   execution failure, so semantic probes can distinguish "ref absent" from "Git never answered". The
   reads take that same 55s default (`opts.timeoutMs` overrides it): a local read that has to be *bounded*
   at all is a wedged git, and every one of them was unbounded before it moved off the loop;
-  **`remoteTrackingRef(ref)`** → `refs/remotes/<ref>` for an `origin/` ref, else `null` — **the one place
-  that spelling is built**, so the probe below and `workspaces`' `worktree add` cannot drift apart. Its
+  **`remoteTrackingRef(ref, remotes)`** → `refs/remotes/<ref>` when the ref's first component names one
+  of the repository's remotes (`remoteNameOf`, fed by `listRemotes`), else `null` — **the one place that
+  spelling is built**, so the probe below and `workspaces`' `worktree add` cannot drift apart.
+  Remote-ness is decided against the actual remote list, never the string's shape: `upstream/main` and a
+  local `feature/main` are the same shape, and a repository with a fork workflow lives on two remotes —
+  `listBranches` therefore enumerates all of `refs/remotes` (each remote's HEAD symref skipped),
+  `prefetchBranch` fetches from whichever remote the ref names, and `resolveDefaultBranch` asks origin's
+  HEAD first, then any other remote's, before the `origin/main` guess. Its
   reach is **creation only**, and `resolveDiffRange` is the named survivor: `diffBaseRef` hands git the
   `origin/<b>` shorthand recorded in `baseBranch`, so in the very setup create now guards against — a local
   branch literally named `origin/main` — the worktree is cut from `refs/remotes/origin/main` while the diff
@@ -201,7 +207,7 @@ ref off the workspace-create critical path.
   `gitCommitPaths`, `gitHeadSha`, `listCommits`,
   `resolveDiffRange`, `changedFileArgs`, `diffBaseRef`, `resolveCommitOid`, `DiffRange`, `isSafeRef`,
   `assertSafeRef`, `listBranches`, `resolveDefaultBranch`, `tryCurrentBranch`, `currentBranch`,
-  `canonicalPath`, `prefetchBranch`, `countUnpushedCommits`.
+  `canonicalPath`, `prefetchBranch`, `countUnpushedCommits`, `listRemotes`, `remoteNameOf`.
 - **Allowed deps:** `persistence` (workspace + project lookup), `log`; `contracts` (`Git*`/`BranchList` types);
   `subprocess` (`runBounded`, the bounded child behind `gitAsync`);
   `@thinkrail/shared/codedError` (naming a failure for the wire); Bun (spawn, for the sync runner).
