@@ -18,6 +18,8 @@ const SPEC_ROLES = {
 	"task-spec": { label: "Task", tag: "TASK" },
 } as const satisfies Record<string, SpecRole>;
 
+export const SPEC_TYPES = Object.keys(SPEC_ROLES);
+
 type KnownSpecType = keyof typeof SPEC_ROLES;
 
 function isKnownSpecType(type: string): type is KnownSpecType {

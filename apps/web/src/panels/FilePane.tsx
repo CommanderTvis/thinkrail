@@ -237,6 +237,9 @@ function FilePaneBody({ tab }: { tab: FileTab | ExternalFileTab }) {
 						<div className="h-full motion-safe:animate-reveal">
 							<MarkdownPreview
 								content={buffer}
+								onContentEdit={(next) =>
+									useAppStore.getState().setFileTabDraft(tab.workspaceId, tab.id, next)
+								}
 								workspaceId={tab.workspaceId}
 								path={tab.path}
 								review={review}

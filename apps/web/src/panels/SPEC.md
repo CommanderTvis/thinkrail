@@ -1700,7 +1700,29 @@ tab — `external-file` when the path escaped the worktree, which is most of Cla
   `chat/SPEC.md`; the rendered *diff* keeps the source-code degradation, like shiki) — in
   a centered reading column; strips a leading YAML frontmatter block via
   `lib.stripFrontmatter` so a spec's metadata doesn't render as a stray heading — source view still shows
-  it) and source being the lazy read-only `MonacoEditor`. The choice
+  it) and source being the lazy read-only `MonacoEditor`.
+- **Frontmatter is an editable properties table at the top of the Preview** (`FrontmatterProperties`, an
+  Obsidian-style block: key/value rows, list values as chips, add/rename/remove, collapsible per mount).
+  It sits **inside** the scrolling document — first child of the scroller on both the plain and the
+  reviewed path — so it scrolls away with the prose instead of holding a frozen band of the pane. Metadata
+  is what a reader passes on the way in, not something worth the height on every screen of a long spec.
+  Text, sequences, and one-level mappings — `frontmatter.ts` parses top-level `key: scalar`,
+  `key: [a, b]`, block lists of scalars, and one level of `sub: scalar` entries; any other YAML shape
+  (deeper nesting, duplicate sub-keys, anchors, multiline) keeps the **whole block read-only** rather
+  than risking a rewrite that drops what it did not understand; a duplicate-key rename is refused for
+  the same reason. An edit rebuilds the frontmatter through `withFrontmatter` and lands as
+  the tab's **draft** — the same lifecycle as typing in Monaco (dirty dot, save, conflict bar), which is
+  why the block only renders when `onContentEdit` is wired and why removing the last property removes the
+  fence. A `type` or `status` value carries a native `datalist` with the spec-node vocabulary (`type`
+  from `specTree`'s known roles) — suggestions, not constraints, since the properties view is for any
+  markdown and only spec nodes speak that vocabulary. Each row leads with a **value-type menu** named in
+  YAML's vocabulary — Text, Sequence, Mapping — that converts on switch, loss-visible rather than
+  lossless: a structure becomes its inline reading as text (`[a, b]` / `{k: v}`, quoted on serialize so
+  it stays a scalar), a text becomes one item, and mapping ⇄ sequence goes through `key: value` items so
+  a round trip survives (ordinal keys when items don't split). Picking the type a row already has
+  changes nothing — not even formatting.
+  `frontmatter.test.ts` pins the round-trips; `e2e/frontmatter.spec.ts` drives edit→draft→Source,
+  chips, folding, the type suggestions, and the read-only fallback. The choice
   is a per-tab `store.setFileTabView` (survives tab switches; not persisted across reload). Non-markdown
   files render Monaco directly with no header, exactly as before.
 - **PDF tabs render bytes over their own route, not tab content.** `FilePane` gates on `lib.isPdfPath`
