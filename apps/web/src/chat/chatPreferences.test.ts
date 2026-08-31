@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import type { StablePreferenceAdapter } from "../clientPreferences";
 import { STORAGE_PREFIX } from "../constants/branding";
 import { useAppStore } from "../store";
 import {
@@ -12,7 +13,6 @@ import {
 	parseChatMessageOrder,
 	parseStreamingResponseMovement,
 	STREAMING_RESPONSE_MOVEMENT_PREFERENCE_KEY,
-	type StablePreferenceAdapter,
 	streamingResponseMovementFromStorageEvent,
 	streamingResponseMovementStorageKey,
 } from "./chatPreferences";
