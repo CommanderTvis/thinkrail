@@ -407,7 +407,8 @@ function parsePreferences(value: unknown): LocalLayoutPreferences | undefined {
 		!Number.isFinite(value.verticalCenterTabsWidth) ||
 		Number(value.verticalCenterTabsWidth) < VERTICAL_TABS_WIDTH.min ||
 		Number(value.verticalCenterTabsWidth) > VERTICAL_TABS_WIDTH.max ||
-		(value.defaultPaneDirection !== "horizontal" && value.defaultPaneDirection !== "vertical")
+		(value.defaultPaneDirection !== "horizontal" && value.defaultPaneDirection !== "vertical") ||
+		typeof value.previewTabs !== "boolean"
 	) {
 		return undefined;
 	}
@@ -418,6 +419,7 @@ function parsePreferences(value: unknown): LocalLayoutPreferences | undefined {
 		verticalCenterTabs: value.verticalCenterTabs,
 		verticalCenterTabsWidth: Number(value.verticalCenterTabsWidth),
 		defaultPaneDirection: value.defaultPaneDirection,
+		previewTabs: value.previewTabs,
 	};
 }
 

@@ -416,6 +416,29 @@ export function LayoutSettings() {
 					<span className="min-w-0 flex-1">Show editor tabs vertically</span>
 				</label>
 
+				<label className="flex w-full items-start gap-8 tr-text-ui text-text-default">
+					<input
+						type="checkbox"
+						data-testid="preview-tabs"
+						checked={preferences.previewTabs}
+						onChange={(event) =>
+							useAppStore.getState().setLocalLayoutPreferences({
+								...preferences,
+								previewTabs: event.target.checked,
+							})
+						}
+						className="mt-2 size-16 shrink-0 accent-primary"
+					/>
+					<span className="min-w-0 flex-1">
+						Open a file in a preview tab first
+						<span className="block tr-text-metadata text-text-muted">
+							One click previews in a reusable slot and a double click keeps the tab. With this off
+							every click opens a tab of its own, and none of them waits out the double-click
+							window.
+						</span>
+					</span>
+				</label>
+
 				<div className="flex flex-col gap-4">
 					<span
 						className={
