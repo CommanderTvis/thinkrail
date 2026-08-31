@@ -46,12 +46,17 @@ async function openReadTab<T>(
 	workspaceId: string,
 	id: string,
 	resourceIdentity: string,
-	intent: TabIntent,
+	requestedIntent: TabIntent,
 	read: () => Promise<T>,
 	build: (payload: T, loadedTick: number) => EditorTab,
 	requestedNavigation?: CenterNavigationStamp | null,
 	extraOptions?: Partial<LayoutOpenOptions>,
 ): Promise<void> {
+	// With the preview slot turned off every open keeps: nothing claims the slot, and no open waits out
+	// the double-click window to find out whether it was one. See panels/SPEC.md.
+	const intent: TabIntent = useAppStore.getState().localLayoutPreferences.previewTabs
+		? requestedIntent
+		: "keep";
 	const navigation =
 		requestedNavigation === undefined
 			? useAppStore.getState().beginCenterNavigation(workspaceId)
