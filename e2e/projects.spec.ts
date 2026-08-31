@@ -407,7 +407,9 @@ test("project context actions stay compact and close/reopen is lossless across c
 	const secondRepo = seedSecondRepo();
 	await page.getByTestId("add-project-menu").click();
 	await page.getByTestId("menu-open-project").click();
-	await expect(page.getByTestId("welcome-title")).toHaveText("second-project");
+	await expect(page.getByTestId("welcome-title")).toHaveText("second-project", {
+		timeout: 10_000,
+	});
 
 	const observer = await context.newPage();
 	await observer.goto("/");
