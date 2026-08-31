@@ -1,7 +1,12 @@
 import { renameSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, test } from "@playwright/test";
-import { createWorkspaceViaDialog, openFixtureProject } from "./fixtures/app";
+import {
+	createWorkspaceViaDialog,
+	enterDefaultWorkspace,
+	openFixtureProject,
+} from "./fixtures/app";
+import { E2E_FIXTURE_REPO } from "./fixtures/paths";
 import { minimalPdf } from "./fixtures/repo";
 
 test("opens a file in a center Monaco tab, focuses on re-open, and closes", async ({ page }) => {
