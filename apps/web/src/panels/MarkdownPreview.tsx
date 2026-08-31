@@ -3,6 +3,7 @@ import type { Components } from "react-markdown";
 import { stripFrontmatter } from "@/lib/utils";
 import { Markdown, type MarkdownRehypePlugins } from "../chat/Markdown";
 import { reportIdeSelection } from "../transport";
+import { FrontmatterProperties } from "./FrontmatterProperties";
 import { alertComponents, remarkGithubAlerts } from "./markdownAlerts";
 import { documentComponents, remarkHeadingIds } from "./markdownLinks";
 import { Outline } from "./Outline";
@@ -203,12 +204,14 @@ export default function MarkdownPreview({
 	path,
 	review,
 	outlineOpen,
+	onContentEdit,
 }: {
 	content: string;
 	workspaceId: string;
 	path: string;
 	review?: EditorReview;
 	outlineOpen?: boolean;
+	onContentEdit?: ((next: string) => void) | undefined;
 }) {
 	const components = useMemo(() => documentComponents({ workspaceId, path }), [path, workspaceId]);
 	const documentRef = useRef<HTMLDivElement>(null);
@@ -216,15 +219,21 @@ export default function MarkdownPreview({
 	const headings = useRenderedHeadings(documentRef, showOutline);
 	useReportedPreviewSelection(documentRef, workspaceId, path);
 
+	const properties = onContentEdit ? (
+		<FrontmatterProperties content={content} onEdit={onContentEdit} />
+	) : null;
+
 	const body = review ? (
 		<ReviewedDocument
 			content={content}
 			review={review}
 			components={components}
 			documentRef={documentRef}
+			properties={properties}
 		/>
 	) : (
 		<div ref={documentRef} className="h-full overflow-auto bg-container-workspace-bg">
+			{properties}
 			<article className="mx-auto max-w-[78ch] px-24 py-16">
 				<MarkdownDocument content={content} workspaceId={workspaceId} path={path} />
 			</article>
@@ -241,7 +250,9 @@ export default function MarkdownPreview({
 			{showOutline ? <OutlineColumn headings={headings} /> : null}
 			{/* `min-w-0` is load-bearing: a flex item defaults to `min-width:auto` and so refuses to shrink
 			    below its content, which makes the scroller grow instead of scrolling a wide table sideways. */}
-			<div className="min-h-0 min-w-0 flex-1">{body}</div>
+			<div className="flex min-h-0 min-w-0 flex-1 flex-col">
+				<div className="min-h-0 flex-1">{body}</div>
+			</div>
 		</div>
 	);
 }
@@ -251,11 +262,13 @@ function ReviewedDocument({
 	review,
 	components,
 	documentRef,
+	properties,
 }: {
 	content: string;
 	review: EditorReview;
 	components: Components;
 	documentRef: React.RefObject<HTMLDivElement | null>;
+	properties: React.ReactNode;
 }) {
 	const stripped = stripFrontmatter(content);
 	const rawOffset = frontmatterOffset(content, stripped);
@@ -278,14 +291,19 @@ function ReviewedDocument({
 					: threadInserts;
 				const segments = splicedSegments(stripped, rawOffset, inserts);
 				return (
-					<article ref={documentRef} className="mx-auto max-w-[78ch] px-24 py-16">
-						{segments.map((segment) => (
-							<div key={segment.key}>
-								{segment.text && <Markdown text={segment.text} {...mdProps(segment.stampOffset)} />}
-								{segment.nodes}
-							</div>
-						))}
-					</article>
+					<>
+						{properties}
+						<article ref={documentRef} className="mx-auto max-w-[78ch] px-24 py-16">
+							{segments.map((segment) => (
+								<div key={segment.key}>
+									{segment.text && (
+										<Markdown text={segment.text} {...mdProps(segment.stampOffset)} />
+									)}
+									{segment.nodes}
+								</div>
+							))}
+						</article>
+					</>
 				);
 			}}
 		</PreviewCommenting>
