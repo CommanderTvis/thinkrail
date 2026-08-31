@@ -20,6 +20,7 @@ import {
 	E2E_PI_AGENT_DIR,
 	E2E_PI_MODELS_SEED,
 	E2E_PICK_DIR_POINTER,
+	E2E_PICK_FILE_POINTER,
 	E2E_PLAIN_DIR,
 } from "./paths";
 import { fixtureRepoHealthy, seedFixtureRepo } from "./repo";
@@ -63,6 +64,10 @@ function resetState(): void {
 	rmSync(E2E_CENTRAL_LOG, { force: true });
 
 	if (!fixtureRepoHealthy()) seedFixtureRepo();
+	// The picker pointers are cross-spec mutable state: a spec that aimed one at its own transient dir
+	// must not decide what the next spec's "open project" opens. Every test starts from the seeds.
+	writeFileSync(E2E_PICK_DIR_POINTER, E2E_FIXTURE_REPO);
+	writeFileSync(E2E_PICK_FILE_POINTER, join(E2E_DATA_DIR, "outside.md"));
 
 	try {
 		const head = gitText(E2E_FIXTURE_REPO, "symbolic-ref", "--short", "HEAD").trim();
@@ -148,9 +153,12 @@ export async function openFixtureProject(page: Page): Promise<void> {
 	await openAppFresh(page);
 	await page.getByTestId("add-project-menu").click();
 	await page.getByTestId("menu-open-project").click();
-	await expect(page.getByTestId("project-item").first()).toBeVisible();
-	await expect(page.getByTestId("welcome")).toBeVisible();
-	await expect(defaultWorkspaceRow(page)).toBeVisible();
+	// Opening fans out git subprocesses before the projects push lands; under six parallel lanes that
+	// round trip can outlive the default expectation window, so these wait like live-refresh does.
+	const hostExpect = expect.configure({ timeout: 10_000 });
+	await hostExpect(page.getByTestId("project-item").first()).toBeVisible();
+	await hostExpect(page.getByTestId("welcome")).toBeVisible();
+	await hostExpect(defaultWorkspaceRow(page)).toBeVisible();
 }
 
 export async function enterDefaultWorkspace(page: Page): Promise<void> {
