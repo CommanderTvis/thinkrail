@@ -2,7 +2,7 @@
 
 import { existsSync, globSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { delimiter, join, resolve } from "node:path";
 import {
 	type ArtifactHostAdapter,
 	type RunningArtifactHost,
@@ -36,6 +36,69 @@ async function readServingUrl(stdout: ReadableStream<Uint8Array>): Promise<strin
 		if (match?.[1]) return match[1];
 	}
 	throw new Error(`stdout closed without a serving URL: ${JSON.stringify(buffered)}`);
+}
+
+interface AcpFrame {
+	id?: number;
+	result?: unknown;
+	error?: { code: number; message: string };
+}
+
+async function acpInitializeHandshake(env: Record<string, string>, label: string): Promise<void> {
+	const proc = Bun.spawn([binary, "acp-pi"], {
+		env,
+		stdin: "pipe",
+		stdout: "pipe",
+		stderr: "inherit",
+	});
+	const reader = proc.stdout.getReader();
+	const decoder = new TextDecoder();
+	let buffered = "";
+
+	async function readFrame(): Promise<AcpFrame> {
+		while (true) {
+			const newline = buffered.indexOf("\n");
+			if (newline === -1) {
+				const { value, done } = await reader.read();
+				if (done) throw new Error(`${label}: stdout closed before an initialize response arrived`);
+				buffered += decoder.decode(value, { stream: true });
+				continue;
+			}
+			const line = buffered.slice(0, newline);
+			buffered = buffered.slice(newline + 1);
+			if (line.trim().length === 0) continue;
+			return JSON.parse(line) as AcpFrame;
+		}
+	}
+
+	try {
+		proc.stdin.write(
+			`${JSON.stringify({
+				jsonrpc: "2.0",
+				id: 1,
+				method: "initialize",
+				params: {
+					protocolVersion: 1,
+					clientCapabilities: {
+						fs: { readTextFile: false, writeTextFile: false },
+						terminal: false,
+					},
+					clientInfo: { name: "thinkrail-smoke", version: "0.0.0" },
+				},
+			})}\n`,
+		);
+		let frame = await within(readFrame(), 30_000, `${label} ACP initialize`);
+		while (frame.id !== 1) frame = await within(readFrame(), 30_000, `${label} ACP initialize`);
+		if (frame.error) throw new Error(`${label}: initialize answered ${frame.error.message}`);
+		const result = frame.result as { protocolVersion?: unknown } | undefined;
+		if (typeof result?.protocolVersion !== "number") {
+			throw new Error(`${label}: initialize answered no protocolVersion`);
+		}
+	} finally {
+		reader.releaseLock();
+		proc.kill("SIGTERM");
+		await within(proc.exited, 10_000, `${label} shutdown`).catch(() => proc.kill("SIGKILL"));
+	}
 }
 
 let launchSequence = 0;
@@ -122,8 +185,26 @@ try {
 	if (existsSync(join(cache, "thinkrail"))) {
 		throw new Error("exit-only subcommand staged embedded assets");
 	}
+	const noPiPath = (process.env.PATH ?? "")
+		.split(delimiter)
+		.filter((entry) => entry.length > 0 && !Bun.which("pi", { PATH: entry }))
+		.join(delimiter);
+	if (Bun.which("pi", { PATH: noPiPath })) throw new Error("smoke PATH still contains pi");
+	const agentEnv = {
+		HOME: home,
+		USERPROFILE: home,
+		PATH: noPiPath,
+		PI_OFFLINE: "1",
+		THINKRAIL_NO_ANALYTICS: "1",
+		XDG_CACHE_HOME: cache,
+	};
+	await acpInitializeHandshake(agentEnv, "acp-pi (default agent dir)");
+	await acpInitializeHandshake(
+		{ ...agentEnv, PI_CODING_AGENT_DIR: join(temp, "pi-agent") },
+		"acp-pi (custom agent dir)",
+	);
 	await runArtifactHostProbes(adapter);
-	console.log(`smoke OK: ${binary} passed CLI-only and shared artifact probes.`);
+	console.log(`smoke OK: ${binary} passed CLI-only, acp-pi and shared artifact probes.`);
 } catch (error) {
 	console.error(`smoke FAILED: ${error instanceof Error ? error.message : error}`);
 	process.exitCode = 1;

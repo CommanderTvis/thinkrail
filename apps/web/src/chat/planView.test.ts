@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import type { AssistantMessage, TodoGroupItem, TodoItem } from "@thinkrail/contracts";
+import type { ChatMessage, TodoGroupItem, TodoItem } from "@thinkrail/contracts";
 import type { AskState } from "./askState";
 import {
 	flatItems,
@@ -19,7 +19,6 @@ import {
 	stripStatus,
 	verificationStatus,
 } from "./planView";
-import type { ChatTurn } from "./types";
 
 const item = (title: string, status: TodoItem["status"] = "pending"): TodoItem => ({
 	id: `t_${title}`,
@@ -124,20 +123,25 @@ test("shouldNudgeOnAdd: never wake an agent waiting on a question; wake it other
 });
 
 test("sessionGlance derives the glance straight from a runtime (deriveAskStates + planGlance)", () => {
-	const askTurn: ChatTurn = {
-		kind: "assistant",
+	const askMessage: ChatMessage = {
+		role: "assistant",
 		id: "a1",
-		streaming: false,
-		message: {
-			role: "assistant",
-			content: [{ type: "toolCall", id: "q1", name: "ask_user_question", arguments: {} }],
-		} as unknown as AssistantMessage,
+		timestamp: 0,
+		blocks: [
+			{
+				type: "toolCall",
+				toolCallId: "q1",
+				toolName: "ask_user_question",
+				title: "Ask a question",
+				kind: "other",
+				status: "pending",
+				arguments: {},
+			},
+		],
 	};
-	expect(sessionGlance({ isStreaming: true, turns: [askTurn], askAnswers: {} })).toBe("working");
-	expect(sessionGlance({ isStreaming: false, turns: [askTurn], askAnswers: {} })).toBe(
-		"waiting_question",
-	);
-	expect(sessionGlance({ isStreaming: false, turns: [], askAnswers: {} })).toBe("waiting");
+	expect(sessionGlance({ isStreaming: true, messages: [askMessage] })).toBe("working");
+	expect(sessionGlance({ isStreaming: false, messages: [askMessage] })).toBe("waiting_question");
+	expect(sessionGlance({ isStreaming: false, messages: [] })).toBe("waiting");
 });
 
 test("itemChangeSet: the LATEST resolvable commit wins; live change paths (a fallback redo) win over commits", () => {

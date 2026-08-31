@@ -7,11 +7,15 @@ import { ChatTurnView } from "./turns";
 const tool = (id: string, toolName: string): RoutineToolStep => ({
 	kind: "tool",
 	id,
-	toolCallId: id,
-	toolName,
-	args: {},
-	tool: undefined,
-	dead: false,
+	block: {
+		type: "toolCall",
+		toolCallId: id,
+		toolName,
+		title: toolName,
+		kind: "execute",
+		status: "running",
+		arguments: {},
+	},
 	streaming: false,
 });
 

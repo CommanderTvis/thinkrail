@@ -69,6 +69,10 @@ export function loadConfig(): AppConfig {
 	return {
 		...extensions,
 		theme: typeof value.theme === "string" ? value.theme : DEFAULT_CONFIG.theme,
+		defaultAgentId:
+			typeof value.defaultAgentId === "string" && value.defaultAgentId.length > 0
+				? value.defaultAgentId
+				: DEFAULT_CONFIG.defaultAgentId,
 		analyticsEnabled:
 			typeof value.analyticsEnabled === "boolean"
 				? value.analyticsEnabled

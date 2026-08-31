@@ -10,52 +10,44 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
-import { ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
-import {
-	configurePiRuntime,
-	configurePiRuntimeFactory,
-	createSession,
-	disposeAllSessions,
-	getSessionMessages,
-	listAvailableModels,
-	setSessionManagerFactory,
-	usePiRuntime,
-} from "../agent";
 import {
 	connectJbcentral,
 	disconnectJbcentral,
 	getJbcentralStatus,
-	initializeJbcentralRuntime,
+	isJbcentralUsable,
 	jbcentralLogin,
 	resetJbcentralStateForTests,
 	setJbcentralChangedPublisher,
+	startJbcentralWatch,
 	startProxyJbcentral,
 	updateJbcentral,
 } from "./jbcentral";
-import { getProviderStatus } from "./providerStatus";
 
-function syntheticExtension(modelId: string): string {
-	return `
-const model = {
-  id: ${JSON.stringify(modelId)},
-  name: ${JSON.stringify(modelId)},
-  reasoning: false,
-  input: ["text"],
-  cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-  contextWindow: 100000,
-  maxTokens: 4096,
-};
-export default function syntheticCentralExtension(pi) {
-  pi.registerProvider("central-test", {
-    api: "openai-completions",
-    baseUrl: "https://synthetic-central.invalid",
-    apiKey: "synthetic-test-key",
-    models: [{ ...model, api: "openai-completions" }],
-  });
-}
-`;
-}
+describe("isJbcentralUsable", () => {
+	test("is true only for a signed-in configured proxy", () => {
+		expect(isJbcentralUsable({ state: "absent" })).toBe(false);
+		expect(isJbcentralUsable({ state: "outdated", version: "1.0" })).toBe(false);
+		expect(isJbcentralUsable({ state: "supported", version: "1.0", signedOut: false })).toBe(false);
+		expect(
+			isJbcentralUsable({
+				state: "configured",
+				version: "1.0",
+				signedOut: true,
+				proxyStopped: false,
+			}),
+		).toBe(false);
+		expect(
+			isJbcentralUsable({
+				state: "configured",
+				version: "1.0",
+				signedOut: false,
+				proxyStopped: false,
+			}),
+		).toBe(true);
+	});
+});
+
+const syntheticExtension = "export default function syntheticCentralExtension() {}\n";
 
 const fakeCentral = `#!/bin/sh
 set -eu
@@ -120,7 +112,6 @@ esac
 
 let root: string;
 let home: string;
-let agentDir: string;
 let controlDir: string;
 let logPath: string;
 let extensionSource: string;
@@ -158,31 +149,18 @@ async function waitFor(predicate: () => boolean | Promise<boolean>): Promise<voi
 	throw new Error("condition was not reached");
 }
 
-async function emptyRuntime(): Promise<ModelRuntime> {
-	return ModelRuntime.create({
-		credentials: new InMemoryCredentialStore(),
-		modelsPath: null,
-		allowModelNetwork: false,
-	});
-}
-
 beforeEach(async () => {
 	priorEnv = {
 		HOME: process.env.HOME,
 		PATH: process.env.PATH,
-		PI_CODING_AGENT_DIR: process.env.PI_CODING_AGENT_DIR,
-		PI_OFFLINE: process.env.PI_OFFLINE,
 		THINKRAIL_CENTRAL_TEST_LOG: process.env.THINKRAIL_CENTRAL_TEST_LOG,
 		THINKRAIL_CENTRAL_TEST_CONTROL: process.env.THINKRAIL_CENTRAL_TEST_CONTROL,
 		THINKRAIL_CENTRAL_TEST_EXTENSION_SOURCE: process.env.THINKRAIL_CENTRAL_TEST_EXTENSION_SOURCE,
 	};
 	await resetJbcentralStateForTests();
-	configurePiRuntimeFactory();
-	configurePiRuntime(null);
 
 	root = mkdtempSync(join(tmpdir(), "thinkrail-central-auth-"));
 	home = join(root, "home");
-	agentDir = join(root, "custom-agent");
 	controlDir = join(root, "control");
 	logPath = join(root, "central.log");
 	extensionSource = join(root, "synthetic-central.ts");
@@ -190,29 +168,21 @@ beforeEach(async () => {
 	const binDir = join(root, "bin");
 	mkdirSync(binDir, { recursive: true });
 	mkdirSync(home, { recursive: true });
-	mkdirSync(agentDir, { recursive: true });
 	mkdirSync(controlDir, { recursive: true });
-	writeFileSync(extensionSource, syntheticExtension("central-model"));
+	writeFileSync(extensionSource, syntheticExtension);
 	writeFileSync(join(binDir, "central"), fakeCentral);
 	chmodSync(join(binDir, "central"), 0o755);
 
 	process.env.HOME = home;
 	process.env.PATH = `${binDir}:${priorEnv.PATH ?? ""}`;
-	process.env.PI_CODING_AGENT_DIR = agentDir;
-	process.env.PI_OFFLINE = "1";
 	process.env.THINKRAIL_CENTRAL_TEST_LOG = logPath;
 	process.env.THINKRAIL_CENTRAL_TEST_CONTROL = controlDir;
 	process.env.THINKRAIL_CENTRAL_TEST_EXTENSION_SOURCE = extensionSource;
-	setSessionManagerFactory(() => SessionManager.inMemory(root));
-	await initializeJbcentralRuntime();
+	startJbcentralWatch();
 });
 
 afterEach(async () => {
-	disposeAllSessions();
 	await resetJbcentralStateForTests();
-	configurePiRuntimeFactory();
-	configurePiRuntime(null);
-	setSessionManagerFactory((cwd) => SessionManager.create(cwd));
 	for (const [name, value] of Object.entries(priorEnv)) {
 		if (value === undefined) delete process.env[name];
 		else process.env[name] = value;
@@ -220,143 +190,45 @@ afterEach(async () => {
 	rmSync(root, { recursive: true, force: true });
 });
 
-describe("watched native Central runtime", () => {
-	test("connect loads the global opaque artifact with a custom PI agent dir", async () => {
+describe("native Central orchestration", () => {
+	test("connect writes the global opaque artifact the pi agent loads", async () => {
 		expect(await connectJbcentral()).toEqual({ outcome: "applied" });
 		expect(existsSync(artifactPath)).toBe(true);
 		expect((await getJbcentralStatus()).state).toBe("configured");
-		expect((await listAvailableModels()).map((model) => model.id)).toContain("central-model");
-		expect((await getProviderStatus()).providers.map((provider) => provider.id)).not.toContain(
-			"central-test",
-		);
 		expect(commandLog()).toContain("add pi");
 	});
 
-	test("disconnect affects new work while an existing Central chat keeps its generation", async () => {
+	test("disconnect removes the artifact and reports the plain state", async () => {
 		expect(await connectJbcentral()).toEqual({ outcome: "applied" });
-		const centralModel = (await listAvailableModels()).find(
-			(model) => model.id === "central-model",
-		);
-		if (!centralModel) throw new Error("synthetic Central model missing");
-		const session = await createSession({
-			cwd: root,
-			workspaceId: "workspace-existing",
-			model: centralModel,
-		});
-
 		expect(await disconnectJbcentral()).toEqual({ outcome: "applied" });
+		expect(existsSync(artifactPath)).toBe(false);
 		expect((await getJbcentralStatus()).state).toBe("supported");
-		expect((await listAvailableModels()).map((model) => model.id)).not.toContain("central-model");
-		const hydrated = await getSessionMessages(session.sessionId, "workspace-existing", root);
-		expect(hydrated.summary.model).toMatchObject({
-			provider: "central-test",
-			id: "central-model",
-		});
 	});
 
-	test("watches external add, replacement, and remove", async () => {
+	test("an already-absent artifact is the complete Disconnect postcondition", async () => {
+		expect(await disconnectJbcentral()).toEqual({ outcome: "applied" });
+		expect(commandLog()).not.toContain("remove pi");
+	});
+
+	test("an out-of-band artifact change moves the status and invalidates open cards", async () => {
+		control("signed-out", true);
+		let invalidations = 0;
+		setJbcentralChangedPublisher(() => {
+			invalidations += 1;
+		});
+
 		mkdirSync(join(home, ".pi", "agent", "extensions"), { recursive: true });
-		writeFileSync(artifactPath, syntheticExtension("external-one"));
-		await pollStatus("configured");
-		expect((await listAvailableModels()).map((model) => model.id)).toContain("external-one");
+		writeFileSync(artifactPath, syntheticExtension);
+		await waitFor(async () => {
+			const status = await getJbcentralStatus();
+			return status.state === "configured" && status.signedOut;
+		});
+		await waitFor(() => invalidations >= 2);
 
-		writeFileSync(artifactPath, syntheticExtension("external-two"));
-		await waitFor(async () =>
-			(await listAvailableModels()).some((model) => model.id === "external-two"),
-		);
-		expect((await listAvailableModels()).map((model) => model.id)).not.toContain("external-one");
-
+		const settled = invalidations;
 		rmSync(artifactPath);
 		await pollStatus("supported");
-		expect((await listAvailableModels()).map((model) => model.id)).not.toContain("external-two");
-	});
-
-	test("rejects a stale candidate when the watched artifact changes again", async () => {
-		const stale = await emptyRuntime();
-		const newest = await emptyRuntime();
-		let releaseFirst: (() => void) | undefined;
-		const firstRelease = new Promise<void>((resolve) => {
-			releaseFirst = resolve;
-		});
-		let reportFirst: (() => void) | undefined;
-		const firstStarted = new Promise<void>((resolve) => {
-			reportFirst = resolve;
-		});
-		let calls = 0;
-		configurePiRuntimeFactory(async () => {
-			calls += 1;
-			if (calls === 1) {
-				reportFirst?.();
-				await firstRelease;
-				return stale;
-			}
-			return newest;
-		});
-
-		mkdirSync(join(home, ".pi", "agent", "extensions"), { recursive: true });
-		writeFileSync(artifactPath, syntheticExtension("stale"));
-		await firstStarted;
-		writeFileSync(artifactPath, syntheticExtension("newest"));
-		releaseFirst?.();
-		await waitFor(() => usePiRuntime((runtime) => runtime === newest));
-		expect((await getJbcentralStatus()).state).toBe("configured");
-		expect(await usePiRuntime((runtime) => runtime === stale)).toBe(false);
-	});
-
-	test("retains the current runtime on candidate failure and Disconnect repairs it", async () => {
-		const current = await usePiRuntime((runtime) => runtime);
-		configurePiRuntimeFactory(async () => {
-			throw new Error("synthetic-private-loader-diagnostic");
-		});
-		mkdirSync(join(home, ".pi", "agent", "extensions"), { recursive: true });
-		writeFileSync(artifactPath, syntheticExtension("broken-candidate"));
-		await pollStatus("load-failed");
-		expect(await usePiRuntime((runtime) => runtime === current)).toBe(true);
-		expect(await getJbcentralStatus()).toEqual({
-			state: "load-failed",
-			configured: true,
-			reason: "candidate-failed",
-		});
-
-		configurePiRuntimeFactory();
-		expect(await disconnectJbcentral()).toEqual({ outcome: "applied" });
-		expect((await getJbcentralStatus()).state).toBe("supported");
-	});
-
-	test("retries a failed plain candidate after Central itself disappears", async () => {
-		expect(await connectJbcentral()).toEqual({ outcome: "applied" });
-		configurePiRuntimeFactory(async () => {
-			throw new Error("synthetic-private-plain-runtime-diagnostic");
-		});
-		expect(await disconnectJbcentral()).toEqual({
-			outcome: "failed",
-			reason: "candidate-failed",
-		});
-		await pollStatus("load-failed");
-		expect(await getJbcentralStatus()).toMatchObject({
-			state: "load-failed",
-			configured: false,
-		});
-
-		configurePiRuntimeFactory();
-		process.env.PATH = "";
-		expect(await disconnectJbcentral()).toEqual({ outcome: "applied" });
-		expect(await getJbcentralStatus()).toEqual({ state: "absent" });
-	});
-
-	test("falls back to a plain runtime when the configured extension fails at boot", async () => {
-		await resetJbcentralStateForTests();
-		configurePiRuntime(null);
-		mkdirSync(join(home, ".pi", "agent", "extensions"), { recursive: true });
-		writeFileSync(artifactPath, "this is not valid TypeScript {{{");
-
-		await initializeJbcentralRuntime();
-		expect(await getJbcentralStatus()).toMatchObject({
-			state: "load-failed",
-			configured: true,
-			reason: "candidate-failed",
-		});
-		expect(Array.isArray(await listAvailableModels())).toBe(true);
+		await waitFor(() => invalidations > settled);
 	});
 
 	test("single-flights in-app actions and publishes closed invalidations", async () => {
@@ -409,14 +281,13 @@ describe("watched native Central runtime", () => {
 		});
 	});
 
-	test("reports and starts a positively stopped proxy without rebuilding the runtime", async () => {
+	test("reports and starts a positively stopped proxy", async () => {
 		control("proxy-stopped", true);
 		expect(await connectJbcentral()).toEqual({ outcome: "applied" });
 		await waitFor(async () => {
 			const status = await getJbcentralStatus();
 			return status.state === "configured" && status.proxyStopped;
 		});
-		const runtime = await usePiRuntime((current) => current);
 
 		expect(await startProxyJbcentral()).toEqual({ outcome: "applied" });
 		expect(commandLog()).toContain("proxy start --ensure-updated");
@@ -426,7 +297,6 @@ describe("watched native Central runtime", () => {
 			signedOut: false,
 			proxyStopped: false,
 		});
-		expect(await usePiRuntime((current) => current === runtime)).toBe(true);
 	});
 
 	test("keeps Start proxy single-flighted and closed when the proxy remains stopped", async () => {
@@ -447,6 +317,14 @@ describe("watched native Central runtime", () => {
 		});
 	});
 
+	test("Start proxy is refused while Central is not configured", async () => {
+		expect(await startProxyJbcentral()).toEqual({
+			outcome: "failed",
+			reason: "central-action-failed",
+		});
+		expect(commandLog()).not.toContain("proxy start --ensure-updated");
+	});
+
 	test("collapses a burst of status reads into a single status probe", async () => {
 		await getJbcentralStatus();
 		await waitFor(() => probeCount() >= 1);
@@ -455,7 +333,7 @@ describe("watched native Central runtime", () => {
 		expect(probeCount()).toBe(settled);
 	});
 
-	test("never probes Central status while an action or rebuild is in flight", async () => {
+	test("never probes Central status while an action is in flight", async () => {
 		await getJbcentralStatus();
 		await waitFor(() => probeCount() >= 1);
 		expect(await jbcentralLogin()).toEqual({ outcome: "launched" });

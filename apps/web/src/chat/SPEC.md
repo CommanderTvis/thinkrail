@@ -2,7 +2,7 @@
 id: submodule-web-chat
 type: submodule-design
 status: active
-title: chat — pi conversation UI primitives
+title: chat — conversation UI primitives
 parent: module-web
 depends-on: [module-contracts]
 tags: [v1, chat]
@@ -10,14 +10,186 @@ tags: [v1, chat]
 
 ## Responsibility
 
-The chat/agent conversation UI: **presentational React primitives** that render pi's **canonical
-message / content-block model**, a **tool-renderer registry** (the extension point), and `ChatView`
-(the app-integration layer). Hand-rolled — pi ships no web UI, and the official
-`@earendil-works/pi-web-ui` (MIT, **Lit**, runs the agent in-browser / "Direct Mode") is the canonical
-event→render *reference* we learn from but do **not** adopt (architecture + framework mismatch with our
-host-runs-pi / typed-WS / React+shadcn model). Built so others can reuse/contribute (extraction-ready as
-a future `packages/chat-ui`). Built-in tool renderers live in the child
-[tools/SPEC.md](tools/SPEC.md).
+The chat/agent conversation UI: **presentational React primitives** that render **ThinkRail's own
+canonical message / content-block model** (`ChatMessage`/`ChatBlock`/`ChatMarker` in
+[[module-contracts]]) — agent-agnostic by construction, since `packages/acp` translates whatever an ACP
+agent reports into this one wire shape before it reaches the browser, and these renderers have no idea
+what protocol the host spoke to produce it — plus a **tool-renderer registry** (the extension point) and
+`ChatView` (the app-integration layer). Hand-rolled — no ACP agent ships a web UI of its own, and the
+bundled pi agent's own `@earendil-works/pi-web-ui` (MIT, **Lit**, runs pi in-browser / "Direct Mode") is
+the canonical event→render *reference* we learn from but do **not** adopt (architecture + framework
+mismatch with our host-spawns-agents / typed-WS / React+shadcn model). Built so others can
+reuse/contribute (extraction-ready as a future `packages/chat-ui`). Built-in tool renderers live in the
+child [tools/SPEC.md](tools/SPEC.md).
+
+## ACP migration status (read this before the rest of the document)
+
+This module is mid-migration from pi's in-process transcript to the ACP wire's own `ChatMessage` /
+`ChatBlock` / `ChatMarker` model ([[module-contracts]]). Two files are already migrated and are the
+current source of truth for the data layer:
+
+- **`types.ts`** now exports only `ChatAttachment { name, content: ImageBlock }` — a composer-side
+  filename-plus-image-block pairing with no wire equivalent (`ImageBlock` itself carries no filename).
+  `ChatTurn`, `CompactionState`, `ToolResultState`, and `ExtUiDialogRequest` are gone, not renamed: the
+  wire's own `ChatMessage[]` is now turn-ready by construction (a `TurnSettledMarker` message already
+  carries what `ChatTurn`'s `system`/`error` kinds used to synthesize; a `ToolCallBlock` carries its own
+  status/output/error, so there is no side result table; elicitation and permission replace the
+  extension-UI dialog kinds directly — see `store/SPEC.md`'s chat-runtime paragraph for the full
+  rationale). A future renderer reads `ChatMessage`/`ChatBlock`/`ChatMarker` from `@thinkrail/contracts`
+  directly.
+- **`hydrate.ts`** now exports `hydrateRuntime(messages, configOptions, capabilities, plan) →
+  HydratedRuntime`, a near-passthrough: the pi-era version had to reinterpret a raw transcript (drop
+  control messages, detect and hide retried attempts, synthesize compaction/error turns, build a
+  toolResult/askAnswer side index, maintain a position→turn-id map for jump-to-message). None of that
+  survives, because the host's transcript store now performs the identical fold the live client does and
+  persists the result — a superseded retry already carries `AssistantMessage.superseded`, a settled
+  turn's outcome already arrived as a durable `TurnSettledMarker` message, and `MessageId` is the stable,
+  already-correct jump anchor (see `store/SPEC.md`).
+
+**Second wave: the row/turn/chrome renderers now read the wire directly too.** `rows.ts`, `turns.tsx`,
+`ChatView.tsx`, `ChatHeader.tsx`, `SessionStatsBar.tsx`, `askState.ts`, `SlashCommandCompletion.tsx`,
+`ModelSelector.tsx`, `ThinkingSelector.tsx`, `useModelCatalog.ts`, `useChatTodos.ts`, `imageAttachment.ts`,
+`HistoryOverlay.tsx` and `useHistorySearch.ts` are migrated. What changed, concretely:
+
+- **`deriveRows(messages: ChatMessage[], isStreaming, progress, isSpec?)`** (`rows.ts`) replaces
+  `deriveRows(turns, toolResults, isStreaming, isSpec?)`: no more second `toolResults` map — a
+  `ToolCallBlock` already carries its own `status`/`output`/`result`/`error`, so an `ActivityStep`'s tool
+  variant and a `"tool"` row now carry the block itself (`{ block: ToolCallBlock; streaming: boolean }`)
+  rather than a `{ toolCallId, toolName, args, tool, dead }` bundle assembled from two sources. `dead` is
+  gone with it: an outran call reads `status: "abandoned"`, computed host-side, never a client heuristic
+  off the owning message's `stopReason` (assistant messages carry no `stopReason` any more — only a turn
+  does, via its settlement). The **third parameter is `{ retries, compacting }`**, sourced from
+  `SessionRuntime`'s ephemeral fields rather than positions in the message array (a live retry/compaction
+  pass is process state, not a durable transcript entry), and renders as trailing `"retry"` /
+  `"compacting"` rows appended after everything else, one row per active `RetryScope`.
+- **The row vocabulary is now sourced from `ChatMarker`, not synthesized client-side.** `"system"` +
+  `"error"` collapse into one `"settled"` row over a `TurnSettledMarker` (`stopReason` + optional
+  `error`; `completed`/`cancelled` render muted, the rest render as the tinted failure box, copy keyed by
+  `stopReason`) — the host now classifies a turn's outcome once and the client renders it, rather than a
+  live/hydrate-path failure classifier (`assistantFailure.ts`, deleted) re-deriving it. `"notice"` is new,
+  over a `NoticeMarker` (`info`/`warning`/`error`) — the durable form of a rejected send
+  (`store.appendNotice`) and any future host-to-user aside. `"compaction"` reads a `CompactionMarker`
+  directly (`reason`, `summary`, optional `tokensBefore` — no more `status`/`tokensAfter`/`resuming`
+  sub-states baked into the row; the durable record is success-only by construction, and a *running* pass
+  is the separate ephemeral `"compacting"` row above). A `QuestionAnswersMarker` message is consumed
+  silently (no row) — the questionnaire card pairs it by `toolCallId` via `askState.ts` instead.
+  `turnDivider` now takes the settled marker's own index and reads `elapsedMs` off
+  `marker.timestamp - marker.startedAt` directly (no more backward scan to a `"✓ Done"` system turn or a
+  last-assistant-timestamp fallback); it returns `null` when the index it's given isn't a settled marker.
+- **Tool dispatch is `toolName`-keyed, full stop.** `resolveProminence`/`getToolChrome`/`getToolRenderer`
+  already took a bare string, so the only real change is reading `block.toolName` instead of `block.name`;
+  `toolName` is required on the wire (`isSyntheticToolName` gates the *display* fallback to `title`,
+  applied inside the still-historical `ToolCard`/`ActivityGroup`, not here).
+- **`askState.ts`'s `deriveAskStates(messages: ChatMessage[])`** drops the second `askAnswers` parameter —
+  a `QuestionAnswersMarker` message supplies the answer directly, scanned in the same pass as the
+  `ask_user_question` tool calls, so there is no second side-index to keep in sync.
+- **`ModelSelector`/`ThinkingSelector`** are `ConfigOption`-driven now: both take
+  `option: ConfigOption | undefined` (found by category, `"model"` / `"thinkingLevel"`) and
+  `onSelect: (value: string) => void`, and render nothing when the option is absent or its `groups` list
+  is empty — the capability check and the "does a real option exist" check collapse into one gate, held by
+  the caller (`Composer.tsx` computes `modelOption`/`thinkingOption` from `capabilities.modelPicker` /
+  `.thinkingLevel` before ever handing a `ConfigOption` down), per [[architecture]] Decision #16. They stay
+  two independent components (not one shared generic), because their established UX and their
+  `e2e/*.spec.ts` hooks differ (`model-option`/`data-model-id` + a searchable grouped `Command` palette vs.
+  `thinking-option`/`data-level` + a flat button list) and forcing one shape onto both would have broken
+  those hooks for no behavioral gain. **`useModelCatalog(sessionId)`** no longer owns a shared, freshness-
+  tracked model list (there is no global catalog left to track — Decision #16's config options are
+  session-scoped) — it is now a thin two-method hook (`refresh`, `selectOption`) that calls
+  `agent.refreshConfig` / `session.setConfigOption` and folds the returned `ConfigOption[]` back through
+  `applyChatEvent(sessionId, { type: "config_options", options })`, the same path the push event uses.
+- **`SessionStatsBar`** takes `usage: SessionUsage | null` + a `Pick<ChatCapabilityFlags, "cost" |
+  "tokenBreakdown" | "contextWindow">`, gating each piece of the strip independently (a missing capability
+  hides that piece, not the whole bar) rather than reading a pre-formatted `SessionStats`/`ContextUsage`
+  pair; `contextPart` now computes the percent from raw `contextUsed`/`contextWindow` itself; `Money`
+  renders as a `$`-prefixed amount regardless of `currency`, per [[module-contracts]]. **`ChatHeader`**
+  drops `statusEntries` entirely (the extension-UI `setStatus` frames it rendered are gone per
+  [[architecture]] Decision #17) and passes `usage`/`capabilities` through to it. It also takes a required
+  `agent: AgentDescriptor` and renders it via **`AgentBadge`** (icon-or-dot + name) — with ThinkRail now a
+  generic ACP client, the toolbar names which agent is running the chat rather than leaving that implicit.
+- **`SlashCommandCompletion.tsx`** is a name-only migration (`SlashCommand`, `sourceInfo`/`source` now
+  optional, handled with a fallback rather than an assumed-present access) — the *capability* gating
+  (`ChatCapabilities.slashCommands`; host-provided prompt templates are unconditional per the type's own
+  doc comment) lives in `ChatView.tsx`'s `mergedCommands`, not in this file.
+- **`HistoryOverlay.tsx` / `useHistorySearch.ts`** address a jump target by `messageId: MessageId`
+  (`PromptHit`/`MessageHit`), not `messageIndex`; `ChatLocationRequest` carries the same field, and
+  `ChatView.tsx`'s jump effect resolves it with a direct `messages.find(m => m.id === messageId)` — no more
+  `turnIdByMessageIndex` map (`hydrate.ts` never built one; `MessageId` is the anchor by construction).
+- **`useChatTodos.ts`** subscribes `WS_CHANNELS.chatEvent` (`ChatEventPayload`) instead of the retired
+  `pi.event`/`PiEvent`; `shouldRefreshTodos` now fires on a **terminal** `tool_call_update`
+  (`status` ∈ `done | error | abandoned` — the wire's equivalent of "a tool execution ended", regardless of
+  outcome, matching the old unconditional `tool_execution_end` trigger) or a `turn_settled` event, in place
+  of `tool_execution_end` / `agent_settled`. Its nudge-glance check calls `planGlance` +
+  `deriveAskStates(session.messages)` directly rather than `planView.ts`'s `sessionGlance` wrapper, which
+  still takes the pre-migration `{ turns, askAnswers }` shape (`planView.ts` is unmigrated — see below).
+- **`imageAttachment.ts`** is a rename only: `ImageContent` → `ImageBlock` (identical fields), per the
+  house rule to leave `IMAGE_MAX_BASE64_BYTES`/`fitWithin`/the JPEG quality ladder untouched.
+- **Genuinely dropped, not carried forward:** per-attachment filenames on a hydrated or live user bubble
+  (`ChatRow`'s `"user"` variant no longer carries `attachmentNames` — `UserMessage`/`ImageBlock` have no
+  filename field on the wire, so every attachment chip now reads its mime type, live or hydrated alike);
+  `pendingExtUi`/`extUiStatus`/`extUiWidget` and the `<ExtUiDialog>` mount in `ChatView.tsx` (the fields no
+  longer exist on `SessionRuntime`, and `ExtUiDialog.tsx` itself is **deleted**: it rendered exactly the
+  `select`/`confirm`/`input`/`editor` dialog kinds [[architecture]] Decision #17 retires, it had no
+  remaining importer once the mount was removed, and nothing in ACP replaces those kinds one-for-one —
+  elicitation and permission are their own surfaces, below). Global elicitation
+  (`AppState.activeElicitation` / `elicitationQueue`) and inline per-tool-call permission
+  (`SessionRuntime.permissions`) are **not** wired into any renderer yet: elicitation is app-wide, not
+  session-scoped, so it belongs at the shell root, not in a component that mounts once per open chat tab;
+  permission is meant to render inline on the tool card it names. Both are next-phase work.
+
+**Third wave: the activity/tool chrome and the plan glance now read the wire too.** `ActivityGroup.tsx`,
+`ToolCard.tsx`, `toolRegistry.tsx` and `StreamIndicator.tsx` are migrated, `ExtUiDialog.tsx` is deleted
+(above), and `planView.ts` is migrated:
+
+- **`ActivityGroup.tsx` / `ToolCard.tsx`** now read a `ToolStepData`'s `block: ToolCallBlock` directly
+  instead of a `{ toolCallId, toolName, args, tool: ToolResultState | undefined, dead }` bundle assembled
+  from two sources — `ToolCard`'s props collapse to `{ block, streaming, workspaceRoot? }`, dropping the
+  `toolCallId`/`toolName`/`args` fields `turns.tsx` used to pass redundantly alongside the block that
+  already carried them. `dead` is gone with it: `block.status === "abandoned"` is the host's own call,
+  computed when a turn settles with a call still in flight, never a client-side heuristic. Both files
+  bucket the five `ToolCallStatus` values into the three-icon language the old three-state model already
+  had — `"running"` and `"pending"` spin, `"error"` and `"abandoned"` draw the red X and tint the expanded
+  body, `"done"` is the only checkmark case, since the wire gives no reason yet to draw `"abandoned"`
+  differently from `"error"` — but `data-status` still carries the exact value for anything that wants to
+  key off it later.
+- **`toolRegistry.tsx`'s `ToolRenderProps.status`** is `ToolCallStatus` from `@thinkrail/contracts`,
+  replacing the deleted `ToolStatus` from `types.ts`. The built-in renderers under `tools/` (`BashCard`,
+  `ReadCard`, `WriteCard`, `EditCard`, `AskUserQuestionCard`, `ResolveCommentCard`, `visualize/`, `web/`)
+  needed no code change for this — they only ever compared `status === "error"` / `"running"`, both still
+  valid members — but none has been individually taught to render `"pending"` or `"abandoned"` distinctly;
+  today both fall through to each card's "done" branch. Noted as follow-up polish, not a migration
+  blocker.
+- **`StreamIndicator.tsx`'s `streamStatus(messages: ChatMessage[], currentAssistantId)`** replaces the
+  `ChatTurn[]`-walking version; the active message is found by id, or (the only way `ChatView.tsx` calls
+  it — `SessionRuntime` carries no "current assistant id" the way the old runtime did) falls back to a
+  trailing assistant message when `currentAssistantId` is `null`, and its last block's `type` picks the
+  phase. The `"compacting"` phase is **dropped from `StreamPhase` entirely**, not reimplemented: a running
+  compaction pass is `SessionRuntime.compacting`, which `rows.ts` already renders as its own trailing
+  `"compacting"` row (`CompactingNotice` in `turns.tsx`) independent of `isStreaming` — keeping it in
+  `StreamIndicator` too would have the footer and the transcript say the same thing at once. See
+  "Streaming model" below.
+- **`planView.ts`'s `sessionGlance(rt)`** takes `{ isStreaming, messages: ChatMessage[] }` — a
+  `SessionRuntime` satisfies it directly — and calls `deriveAskStates(rt.messages)` against `askState.ts`'s
+  current one-argument signature. `ChatPlan.tsx` / `TodoList.tsx` needed no change at all: they only ever
+  consumed `planView.ts`'s `PlanGlance`/`planSummary`/`stripStatus` and ThinkRail's own `TodoPlan`, never a
+  `ChatTurn`.
+
+**Nothing left pre-migration in this module's data layer.** Every file that read `ChatTurn`-shaped data,
+subscribed the retired `pi.event`, or rendered an `ExtUiDialog` kind is now either migrated (above) or
+deleted (above). Composer's own slot-session/image-attach/mention machinery was unaffected by the wire
+change and left as-is; only its model/thinking-picker props were migrated (see `Composer.tsx` above).
+Genuinely still open, tracked as next-phase work rather than broken code: the global elicitation modal and
+the inline per-tool-call permission prompt have no renderer anywhere yet (above), and the `tools/`
+renderers' `"pending"`/`"abandoned"` handling is unaudited (above).
+
+The **prose** in "Rendering model", most of "Extension point" and all of "Interaction seams" below still
+narrates the pre-migration vocabulary in detail (`ChatTurn`, `deriveRows(turns, toolResults, isStreaming,
+isSpec?)`, `pi.extensionUi` → `ExtUiDialog`, `ErrorTurn`, a four-state `CompactionNotice`) describing
+*shapes* that no longer exist even though the *behavior* they describe mostly still holds (rows still fold
+the same way; tool cards still collapse the same way) — resyncing that prose to `rows.ts` / `turns.tsx`'s
+actual current shape is a full pass this change did not take on, since it did not design those renderers.
+Treat everything from "Rendering model" through "Interaction seams" as historical pending that pass,
+**except** "Streaming model" below, which this change did resync (it is exactly what `StreamIndicator.tsx`
+now does).
 
 ## Rendering model — rows and progressive disclosure
 
@@ -198,8 +370,10 @@ the **capability** registers with the pi session server-side (custom tool or pi 
   **`resolveProminence`** seam — where a per-user override map (settings) can plug in later.
 
 Unregistered tools fall back to `DefaultToolRenderer`. Tools needing user input mid-run either route
-through the extension-UI bridge (`pi.extensionUi` → `ExtUiDialog`) or — for a rich inline card — render
-from their `toolCall` args and reply through **`ChatActions`** (see below). Worked example: the
+through **permission** (`agent.permission`, rendered inline on the tool card it names — no renderer yet,
+see "ACP migration status" above) or — for a rich inline card — render from their `toolCall` args and
+reply through **`ChatActions`** (see below); the old extension-UI bridge (`pi.extensionUi` →
+`ExtUiDialog`) is retired, with nothing that replaces it one-for-one. Worked example: the
 `ask_user_question` flow in [tools/SPEC.md](tools/SPEC.md).
 
 ## Interaction seams
@@ -397,7 +571,7 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   and constrained widths clip/truncate TODO + status/usage text while preserving the trailing Skills
   action. Its `left` slot carries the plan strip; its **Skills** button is the presentational **`SkillsButton`**
   primitive — a `BookOpen` pill, badged when a skill dir changed on disk — also shared with
-  `NewWorkspaceDialog` so the two triggers cannot drift), `ExtUiDialog`, and **`SkillsDialog`** (the **Skills manager**: a catalog
+  `NewWorkspaceDialog` so the two triggers cannot drift), and **`SkillsDialog`** (the **Skills manager**: a catalog
   grouped by source with **sticky section headers** — the first-party **ThinkRail** and **Pi** groups lead
   (above the All-plugins master, which governs only the plugin groups), then Personal / **a group per
   installed Claude plugin** / the repo's Project skills last — each with its admission verdict,
@@ -887,35 +1061,29 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   tracking (see `styles/TYPOGRAPHY.md`); a caller may
   also **extend** the render with extra `remarkPlugins` + `components`, e.g. the file view's GitHub
   alert callouts), the view types
-  (`types.ts`,
-  incl. `ToolResultState` + `ExtUiDialogRequest`), and `ChatView` (lazy-mounted by the shell workbench
+  (`types.ts`, now just `ChatAttachment` — see "ACP migration status" above), and `ChatView` (lazy-mounted by the shell workbench
   resource renderer;
   it wires `SkillsDialog` + the header Skills trigger, resolving the owning `projectId` from the store and
   reading the reload badge from the store selector `selectSkillsStale(state, workspaceId, sessionId)` —
   per-session and store-derived, so it survives the tab-switch remount; a successful reload calls
-  `markSkillsSynced` to clear only this chat).
+  `markSkillsSynced` to clear only this chat. The trigger is passed to `ChatHeader` only when
+  `capabilities.skills` is true — an agent that never advertised the ThinkRail `skills` extension gets no
+  button, per [[architecture]] Decision #16, rather than a dialog that opens onto a permanent
+  "no skills discovered").
   **No `index.ts` barrel** — chat pulls **shiki**, so per the code-splitting exception imports stay
   **per-file**; the registry is importable from `chat/toolRegistry` **without** pulling shiki.
-- **Allowed deps:** `contracts` (pi message/content-block types, **type-only**); `store` + `transport`
-  (**app-integration files only** — a renderer that takes props must never reach for either. Today that
-  is `ChatView.tsx`, `messageOrder.ts` (the client-local persistence adapter), plus the hooks and dialogs
-  it composes: `useChatTodos.ts`, `useHistorySearch.ts`,
-  `useModelCatalog.ts`, **`useTranscriptSync.ts`** (successful-compaction + connection-generation canonical
-  transcript reconciliation), `SkillsDialog.tsx`, `TemplateEditorDialog.tsx`,
-  `SubagentTranscriptDialog.tsx`. `useModelCatalog` is the shared
-  models-catalog seam `panels/NewWorkspaceDialog` also imports per-file, so the two pickers cannot
-  drift; on activation it **drops catalog authority synchronously** (a flag an earlier consumer set says
-  nothing about the list this one inherited) and reads `model.list` only when the shared list is **empty** —
-  a read per activation would hang a full host `runtime.refresh()` off every chat-tab switch, and the picker's
-  Refresh row is the currency path. It reports **`fresh`** — read straight off the store's `modelsFresh`,
-  because catalog authority belongs to the **shared list**, not to a consumer: true only for the installed
-  result of an awaited forced refresh **the host reported `complete`** (its wait is capped, so an unsettled
-  pass still answers — with a list to render, not a verdict), and dropped by the next `model.list` install
-  from *any* consumer. `model.list` answers from *before* the
-  detached refresh it triggers, so it is never a basis for concluding a model is gone);
-  `react-markdown` / `remark-gfm` / `shiki` (via `lib/highlighter`); `mermaid`
-  (**lazy, `tools/visualize` only** — `Markdown` consumes the `MermaidView` *component*, never the
-  package); `react-virtuoso`; `@remixicon/react`; `components/ui`; `lib`.
+- **Allowed deps:** `contracts` (the wire's transcript/content-block/config types, **type-only**);
+  `store` + `transport` (**app-integration files only** — a renderer that takes props must never reach for
+  either. Today that is `ChatView.tsx` plus the hooks and dialogs it composes: `useChatTodos.ts`,
+  `useHistorySearch.ts`, `useModelCatalog.ts`, `SkillsDialog.tsx`, `TemplateEditorDialog.tsx`.
+  **`useModelCatalog(sessionId)`** is session-scoped, not a shared cross-tab seam any more — Decision #16
+  moved config options onto the session (`session.create`/`session.getMessages`/`agent.refreshConfig`/
+  `session.setConfigOption` all key by `sessionId`), so there is no global catalog left to hold freshness
+  authority over. `panels/NewWorkspaceDialog`'s pre-session reuse of `ModelSelector`/`ThinkingSelector`/
+  `useModelCatalog` (no session exists yet to own a `ConfigOption[]`) is stale and pending that panel's own
+  migration — not a boundary this module still holds); `react-markdown` / `remark-gfm` / `shiki` (via
+  `lib/highlighter`); `mermaid` (**lazy, `tools/visualize` only** — `Markdown` consumes the `MermaidView`
+  *component*, never the package); `react-virtuoso`; `@remixicon/react`; `components/ui`; `lib`.
 - **Forbidden:** value-importing any `pi` package; a **presentational** renderer importing
   `store`/`transport` (only the app-integration files enumerated above may — keep the renderers reusable).
 - **`ChatView`** is the primary app-integration file: wires this session's runtime
@@ -924,39 +1092,41 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   receives the single path the user picked) plus its view switch (`onReveal` → the tool-reveal intent), and the
   `isSpec` classifier it builds from the store's `specsByWorkspace` snapshot (subscribed as the stored array
   — a stable ref — and memoized into a matcher here, never a fresh Set inside the selector) — together with
-  **`useHistorySearch.ts`** (the Ctrl+R history-recall overlay's store/transport edge),
-  **`useTranscriptSync.ts`** (the guarded authoritative read that converges an existing runtime), and
-  **`TemplateEditorDialog.tsx`** (the shared template save form), the other integration points. A
-  **rejected** send (`prompt`/`steer`/`followUp`) lands in the chat via the store's `appendErrorTurn` —
-  never swallowed and never given the settlement-only Try again affordance; *streaming* faults arrive as pi
-  events instead.
+  **`useHistorySearch.ts`** (the Ctrl+R history-recall overlay's store/transport edge) and
+  **`TemplateEditorDialog.tsx`** (the shared template save form), the other two integration points. A
+  **rejected** send (`prompt`/`steer`/`followUp`) lands in the chat via the store's `appendNotice` (a
+  `NoticeMarker` message, level `"error"`) — never swallowed; *streaming* faults arrive as `chat.event`
+  frames instead.
 
 ## Streaming model
 
-The `store` folds pi events into pi-canonical turns **per session**: the in-flight assistant turn **is**
-the latest `assistantMessageEvent.partial` snapshot (replaced each update — not hand-accumulated). A
-message's true terminal is **`message_end`**: the reducer adopts the final message (it carries
-`stopReason`, how renderers spot dead tool calls) and clears that message's `streaming` flag **there**.
-`agent_end` is only an attempt boundary (for a tool-calling message it arrives after its tools ran, but
-it can still precede auto-compaction/retry); `agent_settled` alone closes the automatic run, clears the
-session loader, and appends one success/error marker. A successful overflow `compaction_end` with
-`willRetry: true` removes the superseded errored/truncated attempt, matching Pi's rebuilt context. Tool results are
-indexed by `toolCallId` in `toolResults`; `ask-user-answers` custom messages index into `askAnswers`
-(never the turn list — the questionnaire card is their rendering); `subagent-completion` custom messages
-append a `subagentCompletion` turn (the shared contracts guard narrows both, on the live and read paths). The view re-derives rows each render
-(`deriveRows` is pure; `ChatView` memoizes) — stable row/step ids keep fold state across snapshots.
+`store/SPEC.md` owns the fold itself (`applyChatEvent` → the pure `reduceChatEvent`, one switch arm per
+`ChatEvent` member); this section is only the chat module's own reading of it.
 
-**One live indicator, always.** pi splits a run into several assistant messages, so the reducer sweeps
-the per-message `streaming` flag on new-message start and the final `agent_settled` (at most one turn is
-ever flagged). The session remains live across attempt-level `agent_end` events. The loader
-is a **single footer** (`StreamIndicator`: typing-dots + a phase label from the pure `streamStatus`
-deriver — `working` → `thinking` → `running-tool` → `writing`, plus `compacting` while the transcript's
-trailing turn is a running compaction) — not a per-turn cursor — so it can't
-duplicate and it fills the post-send gap. Outside the streaming window (a manual compact, or the
-pre-prompt compaction pi runs inside `prompt()` before `agent_start`) the footer is absent by design —
-the running `CompactionNotice` row itself carries the spinner, so the beat is never dead air. The trailing Activity fold's live ticker is a *status* line (spinner,
-like a running card header), not a second loader. `data-testid="stream-indicator"` + `data-phase` make
-the lifecycle assertable.
+A turn's terminal is **`turn_settled`**, not a message-level event: it is the one moment
+`SessionRuntime.isStreaming` clears, every retry countdown and any running-compaction flag clear with it,
+and the durable `TurnSettledMarker` message lands — one event, one fact, replacing the old attempt-level
+`agent_end` / whole-run `agent_settled` split (ACP has no attempt boundary; `session/prompt` resolving
+with a `stopReason` **is** settlement). `message_start` / `chunk` / `block` build the in-flight
+`AssistantMessage` directly inside `messages` (chunk APPENDs onto a block's `text`, block SETs a whole
+block) rather than replacing a separate `partial` snapshot each update; `tool_call_update` REPLACES only
+the named fields on the matching `ToolCallBlock` in place. There is no side `toolResults` table any more,
+and no side `askAnswers` table either — a `QuestionAnswersMarker` message supplies the answer, read by
+`askState.ts` in the same pass as the `ask_user_question` calls. The view re-derives rows each render
+(`deriveRows` is pure; `ChatView` memoizes) — stable row/step ids (message ids, tool-call ids) keep fold
+state across snapshots.
+
+**One live indicator, always.** `SessionRuntime.isStreaming` is a single per-session flag, set by
+`turn_start` and cleared by `turn_settled` (at most one turn is ever flagged), so the loader is a
+**single footer** (`StreamIndicator`: typing-dots + a phase label from the pure `streamStatus` deriver —
+`working` → `thinking` → `running-tool` → `writing`, read off the trailing assistant message's last
+block) — not a per-turn cursor — so it can't duplicate and it fills the post-send gap. A **running
+compaction pass is not a `StreamIndicator` phase**: `SessionRuntime.compacting` is its own ephemeral flag,
+independent of `isStreaming` (a compaction pass can run outside an active prompt turn), and `rows.ts`
+renders it as its own trailing `"compacting"` row (`CompactingNotice` in `turns.tsx`) so the beat is never
+dead air without the footer saying the same thing twice. The activity fold's live ticker is a *status*
+line (spinner, like a running card header), not a second loader. `data-testid="stream-indicator"` +
+`data-phase` make the lifecycle assertable.
 
 ## Get right
 

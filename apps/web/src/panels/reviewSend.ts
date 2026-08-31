@@ -24,8 +24,8 @@ async function showReviewChat(
 	store.openChatSession(
 		workspaceId,
 		sent.sessionId,
-		sent.model,
-		sent.thinkingLevel,
+		sent.capabilities,
+		sent.configOptions,
 		undefined,
 		background ? { ...routed, activate: false } : routed,
 	);

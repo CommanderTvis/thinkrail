@@ -1,9 +1,8 @@
 export {
 	type AnalyticsEvent,
+	type AuthMethodKind,
 	type BuildKind,
-	bucketProvider,
-	bucketProviderModel,
-	type LoginMethod,
+	bucketAgent,
 	type SendMode,
 } from "./events";
 export {

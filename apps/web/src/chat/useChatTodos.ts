@@ -1,14 +1,22 @@
-import type { PiEvent, SessionEventPayload, TodoPlan } from "@thinkrail/contracts";
+import type { ChatEvent, ChatEventPayload, TodoPlan, ToolCallStatus } from "@thinkrail/contracts";
 import { TODO_NUDGE_PREFIX, WS_CHANNELS } from "@thinkrail/contracts";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { tupleKey } from "../lib";
 import { isConnectedGeneration, selectChatTitle, useAppStore } from "../store";
 import { errorText, getSessionMessagesWithSkillBaseline, getTransport } from "../transport";
-import { messagesToRuntime } from "./hydrate";
-import { sessionGlance, shouldNudgeOnAdd } from "./planView";
+import { deriveAskStates } from "./askState";
+import { hydrateRuntime } from "./hydrate";
+import { planGlance, shouldNudgeOnAdd } from "./planView";
 
-export function shouldRefreshTodos(event: PiEvent): boolean {
-	return event.type === "tool_execution_end" || event.type === "agent_settled";
+const TERMINAL_TOOL_STATUSES = new Set<ToolCallStatus>(["done", "error", "abandoned"]);
+
+export function shouldRefreshTodos(event: ChatEvent): boolean {
+	if (event.type === "turn_settled") return true;
+	return (
+		event.type === "tool_call_update" &&
+		!!event.patch.status &&
+		TERMINAL_TOOL_STATUSES.has(event.patch.status)
+	);
 }
 
 export interface ChatTodos {
@@ -90,10 +98,10 @@ export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos 
 			if (refetch) clearTimeout(refetch);
 			refetch = setTimeout(() => load(false), 250);
 		};
-		const unsubscribe = getTransport().subscribe(WS_CHANNELS.piEvent, (payload) => {
-			const event = payload as SessionEventPayload;
-			if (event.sessionId !== sessionId && event.sessionId !== reviewerRef.current) return;
-			if (shouldRefreshTodos(event.event)) scheduleRefetch();
+		const unsubscribe = getTransport().subscribe(WS_CHANNELS.chatEvent, (payload) => {
+			const { sessionId: eventSessionId, event } = payload as ChatEventPayload;
+			if (eventSessionId !== sessionId) return;
+			if (shouldRefreshTodos(event)) scheduleRefetch();
 		});
 		return () => {
 			cancelled = true;
@@ -228,18 +236,24 @@ async function nudgeAgent(workspaceId: string, sessionId: string, title: string)
 		return;
 	}
 	const session = initial.sessions[sessionId];
-	if (session && !shouldNudgeOnAdd(sessionGlance(session))) return;
+	if (
+		session &&
+		!shouldNudgeOnAdd(planGlance(session.isStreaming, deriveAskStates(session.messages)))
+	) {
+		return;
+	}
 	const streaming = session?.isStreaming ?? false;
 	const text = `${TODO_NUDGE_PREFIX}A TODO was added to the list: "${title}". Read the TODO list with todo_list and work any pending items, marking each done with todo_update as you finish.`;
+	const content = [{ type: "text" as const, text }];
 	try {
 		await getTransport().request(streaming ? "session.followUp" : "session.prompt", {
 			sessionId,
-			text,
+			content,
 		});
 	} catch {
 		try {
 			const {
-				result: { summary, messages },
+				result: { summary, messages, configOptions, capabilities, plan },
 				syncedTick,
 			} = await getSessionMessagesWithSkillBaseline({ sessionId, workspaceId });
 			const current = useAppStore.getState();
@@ -251,7 +265,7 @@ async function nudgeAgent(workspaceId: string, sessionId: string, title: string)
 			}
 			current.hydrateSession(
 				summary,
-				messagesToRuntime(messages, summary.lastSettlement),
+				hydrateRuntime(messages, configOptions, capabilities, plan),
 				false,
 				summary.live ? undefined : syncedTick,
 				{ activate: false },
@@ -262,11 +276,11 @@ async function nudgeAgent(workspaceId: string, sessionId: string, title: string)
 				hydrated.removedWorkspaceIds[workspaceId] ||
 				hydrated.deletedSessionsByWorkspace[workspaceId]?.[sessionId] ||
 				!recovered ||
-				!shouldNudgeOnAdd(sessionGlance(recovered))
+				!shouldNudgeOnAdd(planGlance(recovered.isStreaming, deriveAskStates(recovered.messages)))
 			) {
 				return;
 			}
-			await getTransport().request("session.prompt", { sessionId, text });
+			await getTransport().request("session.prompt", { sessionId, content });
 		} catch (err) {
 			console.warn("todo nudge skipped:", errorText(err));
 		}

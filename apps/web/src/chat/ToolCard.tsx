@@ -4,38 +4,30 @@ import {
 	RiLoader4Line as Loader2,
 	RiCloseLine as X,
 } from "@remixicon/react";
+import type { ToolCallBlock } from "@thinkrail/contracts";
 import { cn } from "@/lib";
 import { useFold } from "./foldState";
 import { ToolRendererBody } from "./ToolRendererBody";
 import { getToolSummary, resolveProminence } from "./toolRegistry";
-import type { ToolResultState } from "./types";
 
 export function ToolCard({
-	toolCallId,
-	toolName,
-	args,
-	tool,
-	dead = false,
+	block,
 	streaming,
 	workspaceRoot,
 	onOpenFile,
 }: {
-	toolCallId: string;
-	toolName: string;
-	args: Record<string, unknown>;
-	tool: ToolResultState | undefined;
-	dead?: boolean;
+	block: ToolCallBlock;
 	streaming: boolean;
 	workspaceRoot?: string | undefined;
 	onOpenFile?: ((path: string) => void) | undefined;
 }) {
-	const status = tool?.status ?? (dead ? "error" : "running");
-	const isError = status === "error";
+	const { toolCallId, toolName, status } = block;
+	const isError = status === "error" || status === "abandoned";
 	const renderProps = {
 		toolCallId,
 		toolName,
-		args,
-		result: tool?.raw,
+		args: block.arguments,
+		result: block.result,
 		status,
 		workspaceRoot,
 		onOpenFile,
@@ -61,7 +53,7 @@ export function ToolCard({
 				onClick={toggle}
 				className="flex w-full cursor-pointer select-none items-center gap-4 px-8 py-4 text-left tr-text-metadata outline-none focus-visible:ring-2 focus-visible:ring-primary"
 			>
-				{status === "running" ? (
+				{status === "running" || status === "pending" ? (
 					<Loader2 className="size-12 shrink-0 animate-spin text-text-muted motion-reduce:animate-none" />
 				) : isError ? (
 					<X className="size-12 shrink-0 text-feedback-error" />

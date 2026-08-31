@@ -77,7 +77,8 @@ place as `kind: "external"` — outside the data dir, never created or mutated h
   `renameWorkspace` (**sync**; sets the **display `name`** (sanitized, casing preserved) and derives the
   **git branch** from it via `toBranch`, uniqued against refs + worktree dirs, `git branch -m` from the
   project repo — the branch ref moves and the worktree's HEAD follows, but the **worktree dir never moves**
-  (pi keys sessions by exact cwd; terminals/tabs are cwd'd there — the stale dir name is the accepted cost);
+  (an ACP session is bound to the exact cwd it was created with, and terminals/tabs are cwd'd there — the
+  stale dir name is the accepted cost);
   **`name` and `branch` deliberately differ** (e.g. `Fix Auth Redirect` / `fix-auth-redirect`) — the name
   is display-only, never a path/id; only the branch is uniqued (display names may repeat, the branch
   shown beneath the name in the nav disambiguates — see [[submodule-web-panels]]); **re-points sibling
@@ -131,7 +132,13 @@ place as `kind: "external"` — outside the data dir, never created or mutated h
   `Workspace.diffStats` field is simply absent, and `workspaceDiffStats` rejects,
   `getWorkspace` (by-id lookup, throws on unknown — anchors a chat session's cwd),
   and the **archive** primitives, split so the fast record-drop
-  and the slow git reclaim are separable (the host archives off the request's critical path):
+  and the slow git reclaim are separable (the host archives off the request's critical path).
+  **Archiving drops the worktree and keeps the chats** ([[architecture]] Decision #16): the host's
+  teardown calls the session manager's `releaseWorkspace`, which closes the live ACP sessions and hands
+  the workspace's transcripts to `TranscriptStore.releaseWorkspace` — they stay listed, searchable and
+  readable as history. This module owns none of that; it is named here because it reverses what archive
+  used to mean, when the chats died with the directory. The git branch stays too, so the code is
+  recoverable and the conversation about it still reads.
   `forgetWorkspace(id)` (drop the persistence record, return the removed record or `null` — gone from
   `listWorkspaces` immediately), `reclaimWorktree(ws)` (the slow half — `git worktree remove --force`,
   keeps the branch; hardened: rm + `prune` if git fails; **refuses both user-owned kinds and,

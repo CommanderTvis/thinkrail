@@ -1,61 +1,49 @@
 import type {
+	AgentDescriptor,
+	AgentPlan,
+	AgentStatus,
 	AppConfig,
-	AskUserQuestionResult,
+	ChatCapabilities,
+	ChatEvent,
+	ChatMessage,
+	CompactionReason,
 	ComposerGrowthLimit,
-	ExtUiRequest,
+	ConfigOption,
+	ElicitationPush,
+	ElicitationRequest,
 	GitDiffScope,
 	HostPlatform,
 	LayoutPreset,
-	LoginFrame,
-	LoginPush,
-	PiEvent,
+	MessageId,
+	NoticeLevel,
+	PermissionPush,
+	PermissionRequest,
 	Project,
-	RefreshedModels,
+	RetryScope,
 	ReviewChangedPayload,
 	ReviewSnapshot,
-	SessionEventPayload,
 	SessionQueueState,
-	SessionStats,
 	SessionSummary,
-	SlashCommandInfo,
+	SessionUsage,
+	SlashCommand,
 	SpecGraphNode,
 	TerminalTabInfo,
 	ThemeId,
-	ThinkingLevel,
-	UserMessage,
-	WireModel,
+	ToolCallId,
 	Workspace,
 	WorkspaceFsChangedPayload,
 } from "@thinkrail/contracts";
-import {
-	customMessageText,
-	DEFAULT_CONFIG,
-	isAskUserAnswersMessage,
-	isControlMessage,
-	isSubagentCompletionMessage,
-} from "@thinkrail/contracts";
+import { DEFAULT_CONFIG } from "@thinkrail/contracts";
 import { create } from "zustand";
-import type { LoginState } from "../auth";
-import { assistantFailureText } from "../chat/assistantFailure";
 import type { HydratedRuntime } from "../chat/hydrate";
 import type { ChatMessageOrder } from "../chat/messageOrder";
-import type {
-	ChatAttachment,
-	ChatTurn,
-	CompactionState,
-	ExtUiDialogRequest,
-	ToolResultState,
-} from "../chat/types";
 import {
 	type LayoutAttention,
 	layoutResourceIdentity,
-	matchesSkillInvocationCommand,
-	parseSkillInvocation,
 	randomId,
 	readLayoutNavigationClock,
 	shallowEqualArrays,
 	tupleKey,
-	userText,
 } from "../lib";
 import type {
 	LayoutAuxiliaryRegion,
@@ -249,7 +237,7 @@ export type LayoutIntentInput = LayoutIntent extends infer Intent
 	: never;
 
 export const SettingsSection = {
-	Providers: "providers",
+	Agents: "agents",
 	Github: "github",
 	Appearance: "appearance",
 	Chat: "chat",
@@ -288,411 +276,254 @@ export interface ChatLocationRequest {
 	workspaceId: string;
 	projectId: string;
 	sessionId: string;
-	messageIndex: number;
+	messageId: MessageId;
 	anchorText: string;
 	navigation?: CenterNavigationStamp | null;
 }
 
+export interface RetryProgress {
+	attempt: number;
+	maxAttempts: number;
+	delayMs: number;
+	error?: string;
+}
+
 export interface SessionRuntime {
-	turns: ChatTurn[];
-	turnIdByMessageIndex?: (string | null)[];
-	toolResults: Record<string, ToolResultState>;
-	askAnswers: Record<string, AskUserQuestionResult>;
-	currentAssistantId: string | null;
-	attemptAssistantId: string | null;
+	messages: ChatMessage[];
 	isStreaming: boolean;
-	queue: SessionQueueState;
-	model: WireModel | null;
-	thinkingLevel: ThinkingLevel;
-	eventRevision: number;
-	syncedConnectionGeneration: number;
-	stats: SessionStats | null;
-	commands: SlashCommandInfo[];
+	configOptions: ConfigOption[];
+	commands: SlashCommand[];
+	usage: SessionUsage | null;
+	plan: AgentPlan | null;
+	capabilities: ChatCapabilities;
+	agentStatus: AgentStatus | null;
+	retries: Partial<Record<RetryScope, RetryProgress>>;
+	compacting: CompactionReason | null;
+	queue: QueueRuntime;
+	permissions: Record<ToolCallId, PermissionRequest>;
 	draft: string;
-	pendingExtUi: ExtUiDialogRequest | null;
-	extUiQueue: ExtUiDialogRequest[];
-	extUiStatus: Record<string, string>;
-	extUiWidget: Record<string, string[]>;
 }
 
-const EMPTY_QUEUE: SessionQueueState = { steering: [], followUp: [] };
+export interface QueueRuntime {
+	steering: number;
+	followUp: number;
+	messages: SessionQueueState | null;
+}
 
-function newRuntime(
-	model: WireModel | null,
-	thinkingLevel: ThinkingLevel,
-	syncedConnectionGeneration = 0,
-): SessionRuntime {
+const EMPTY_QUEUE: QueueRuntime = { steering: 0, followUp: 0, messages: null };
+
+function emptyCapabilities(): ChatCapabilities {
 	return {
-		turns: [],
-		toolResults: {},
-		askAnswers: {},
-		currentAssistantId: null,
-		attemptAssistantId: null,
+		agent: { id: "", name: "", origin: "bundled" },
+		derivedFrom: {},
+		imageInput: false,
+		embeddedContext: false,
+		steering: "none",
+		followUp: false,
+		slashCommands: false,
+		promptTemplates: false,
+		modelPicker: false,
+		thinkingLevel: false,
+		modes: false,
+		configRefresh: false,
+		cost: false,
+		tokenBreakdown: false,
+		contextWindow: false,
+		plan: "none",
+		elicitation: false,
+		permissions: false,
+		skills: false,
+		workflowSkills: false,
+		mcpTools: "none",
+		fileDelegation: false,
+		terminalDelegation: false,
+		sessionList: false,
+		sessionLoad: false,
+		sessionFork: false,
+		sessionClose: false,
+		retryVisibility: false,
+		compactionVisibility: false,
+		queueDepth: false,
+		authentication: false,
+		logout: false,
+		providerConfig: false,
+		jetbrainsCentral: false,
+	};
+}
+
+function newRuntime(capabilities: ChatCapabilities, configOptions: ConfigOption[]): SessionRuntime {
+	return {
+		messages: [],
 		isStreaming: false,
-		queue: EMPTY_QUEUE,
-		model,
-		thinkingLevel,
-		eventRevision: 0,
-		syncedConnectionGeneration,
-		stats: null,
+		configOptions,
 		commands: [],
+		usage: null,
+		plan: null,
+		capabilities,
+		agentStatus: null,
+		retries: {},
+		compacting: null,
+		queue: EMPTY_QUEUE,
+		permissions: {},
 		draft: "",
-		pendingExtUi: null,
-		extUiQueue: [],
-		extUiStatus: {},
-		extUiWidget: {},
 	};
 }
 
-export const EMPTY_RUNTIME: SessionRuntime = newRuntime(null, "medium");
+export const EMPTY_RUNTIME: SessionRuntime = newRuntime(emptyCapabilities(), []);
 
-function clearTurnStreaming(turns: ChatTurn[]): ChatTurn[] {
-	if (!turns.some((t) => t.kind === "assistant" && t.streaming)) return turns;
-	return turns.map((t) => (t.kind === "assistant" && t.streaming ? { ...t, streaming: false } : t));
+function upsertMessage(messages: ChatMessage[], message: ChatMessage): ChatMessage[] {
+	const index = messages.findIndex((candidate) => candidate.id === message.id);
+	return index < 0 ? [...messages, message] : messages.with(index, message);
 }
 
-function consumeFailureRecoveries(turns: ChatTurn[]): ChatTurn[] {
-	if (!turns.some((turn) => turn.kind === "error" && turn.recovery)) return turns;
-	return turns.map((turn) => {
-		if (turn.kind !== "error" || !turn.recovery) return turn;
-		const { recovery, ...rest } = turn;
-		return rest;
-	});
-}
-
-function removeSupersededAssistant(
-	turns: ChatTurn[],
-	attemptAssistantId: string | null,
-): ChatTurn[] {
-	if (!attemptAssistantId) return turns;
-	const index = turns.findIndex(
-		(turn) =>
-			turn.id === attemptAssistantId &&
-			turn.kind === "assistant" &&
-			assistantFailureText(turn.message) !== null,
-	);
-	return index < 0 ? turns : [...turns.slice(0, index), ...turns.slice(index + 1)];
-}
-
-function compactionOutcome(event: Extract<PiEvent, { type: "compaction_end" }>): CompactionState {
-	if (event.aborted) return { status: "cancelled" };
-	if (event.errorMessage) return { status: "failed", detail: event.errorMessage };
-	const tokensBefore = event.result?.tokensBefore;
-	const tokensAfter = event.result?.estimatedTokensAfter;
-	return {
-		status: "done",
-		...(typeof tokensBefore === "number" ? { tokensBefore } : {}),
-		...(typeof tokensAfter === "number" ? { tokensAfter } : {}),
-		...(event.willRetry ? { resuming: true } : {}),
-	};
-}
-
-function clearCompactionResuming(turns: ChatTurn[]): ChatTurn[] {
-	if (!turns.some((t) => t.kind === "compaction" && t.resuming)) return turns;
-	return turns.map((t) => {
-		if (t.kind !== "compaction" || !t.resuming) return t;
-		const { resuming, ...rest } = t;
-		return rest;
-	});
-}
-
-function settleCompactionTurn(
-	turns: ChatTurn[],
-	event: Extract<PiEvent, { type: "compaction_end" }>,
-): ChatTurn[] {
-	const outcome = compactionOutcome(event);
-	const index = turns.findLastIndex((t) => t.kind === "compaction" && t.status === "running");
-	if (index < 0) return [...turns, { kind: "compaction", id: crypto.randomUUID(), ...outcome }];
-	return turns.map((t, i) => (i === index ? { kind: "compaction", id: t.id, ...outcome } : t));
-}
-
-function reconcileCompactionTurns(
-	current: ChatTurn[],
-	hydrated: ChatTurn[],
-	isStreaming: boolean,
-): ChatTurn[] {
-	const live = current.findLast(
-		(turn) => turn.kind === "compaction" && turn.status === "done" && turn.summary === undefined,
-	);
-	if (live?.kind !== "compaction") return hydrated;
-	const index = hydrated.findLastIndex(
-		(turn) =>
-			turn.kind === "compaction" &&
-			turn.summary !== undefined &&
-			(live.tokensBefore === undefined || turn.tokensBefore === live.tokensBefore),
-	);
-	if (index < 0) return hydrated;
-	return hydrated.map((turn, turnIndex) =>
-		turnIndex === index && turn.kind === "compaction"
-			? {
-					...turn,
-					id: live.id,
-					...(live.tokensAfter !== undefined ? { tokensAfter: live.tokensAfter } : {}),
-					...(isStreaming && live.resuming ? { resuming: true as const } : {}),
-				}
-			: turn,
-	);
-}
-
-type RetrySource = Extract<ChatTurn, { kind: "retry" }>["source"];
-
-function appendRetryTurn(
+function patchAssistantMessage(
 	rt: SessionRuntime,
-	source: RetrySource,
-	event: { attempt: number; maxAttempts: number; delayMs: number },
+	messageId: MessageId,
+	patch: (
+		message: Extract<ChatMessage, { role: "assistant" }>,
+	) => Extract<ChatMessage, { role: "assistant" }>,
 ): SessionRuntime {
-	return {
-		...rt,
-		turns: [
-			...rt.turns.filter((t) => !(t.kind === "retry" && t.source === source)),
-			{
-				kind: "retry",
-				id: crypto.randomUUID(),
-				source,
-				attempt: event.attempt,
-				maxAttempts: event.maxAttempts,
-				delayMs: event.delayMs,
-			},
-		],
-	};
+	const index = rt.messages.findIndex((candidate) => candidate.id === messageId);
+	const message = rt.messages[index];
+	if (message?.role !== "assistant") return rt;
+	return { ...rt, messages: rt.messages.with(index, patch(message)) };
 }
 
-function clearRetryTurns(rt: SessionRuntime, source: RetrySource): SessionRuntime {
-	return rt.turns.some((t) => t.kind === "retry" && t.source === source)
-		? { ...rt, turns: rt.turns.filter((t) => !(t.kind === "retry" && t.source === source)) }
-		: rt;
+function setBlock<T>(blocks: T[], index: number, block: T): T[] {
+	return index < blocks.length ? blocks.with(index, block) : [...blocks, block];
 }
 
-export function reduceSessionEvent(rt: SessionRuntime, event: PiEvent): SessionRuntime {
+export function reduceChatEvent(rt: SessionRuntime, event: ChatEvent): SessionRuntime {
 	switch (event.type) {
-		case "agent_start":
+		case "turn_start":
+			return { ...rt, isStreaming: true };
+		case "turn_settled":
 			return {
 				...rt,
-				turns: consumeFailureRecoveries(rt.turns),
-				isStreaming: true,
-				attemptAssistantId: null,
+				messages: upsertMessage(rt.messages, event.message),
+				isStreaming: false,
+				retries: {},
+				compacting: null,
 			};
-		case "queue_update":
+		case "message_start":
+			return { ...rt, messages: upsertMessage(rt.messages, event.message) };
+		case "message_end":
+			return patchAssistantMessage(rt, event.messageId, (message) => ({
+				...message,
+				endedAt: event.endedAt,
+			}));
+		case "message_superseded":
+			return patchAssistantMessage(rt, event.messageId, (message) => ({
+				...message,
+				superseded: true,
+			}));
+		case "chunk":
+			return patchAssistantMessage(rt, event.messageId, (message) => {
+				const existing = message.blocks[event.index];
+				const prior =
+					existing?.type === event.kind &&
+					(existing.type === "text" || existing.type === "thinking")
+						? existing.text
+						: "";
+				return {
+					...message,
+					blocks: setBlock(message.blocks, event.index, {
+						type: event.kind,
+						text: prior + event.delta,
+					}),
+				};
+			});
+		case "block":
+			return patchAssistantMessage(rt, event.messageId, (message) => ({
+				...message,
+				blocks: setBlock(message.blocks, event.index, event.block),
+			}));
+		case "tool_call_update": {
+			let changed = false;
+			const messages = rt.messages.map((message) => {
+				if (message.role !== "assistant") return message;
+				const index = message.blocks.findIndex(
+					(candidate) => candidate.type === "toolCall" && candidate.toolCallId === event.toolCallId,
+				);
+				const block = message.blocks[index];
+				if (block?.type !== "toolCall") return message;
+				changed = true;
+				return { ...message, blocks: message.blocks.with(index, { ...block, ...event.patch }) };
+			});
+			return changed ? { ...rt, messages } : rt;
+		}
+		case "config_options":
+			return { ...rt, configOptions: event.options };
+		case "commands":
+			return { ...rt, commands: event.commands };
+		case "usage":
+			return { ...rt, usage: event.usage };
+		case "session_info":
+			return rt;
+		case "plan":
+			return { ...rt, plan: event.plan };
+		case "capabilities":
+			return { ...rt, capabilities: event.capabilities };
+		case "agent_status":
+			return { ...rt, agentStatus: event.status };
+		case "retry_scheduled":
+			return {
+				...rt,
+				retries: {
+					...rt.retries,
+					[event.scope]: {
+						attempt: event.attempt,
+						maxAttempts: event.maxAttempts,
+						delayMs: event.delayMs,
+						...(event.error !== undefined ? { error: event.error } : {}),
+					},
+				},
+			};
+		case "retry_cleared": {
+			const { [event.scope]: _dropped, ...rest } = rt.retries;
+			return { ...rt, retries: rest };
+		}
+		case "compaction_start":
+			return { ...rt, compacting: event.reason };
+		case "compaction_end":
+			return { ...rt, compacting: null };
+		case "queue_changed":
 			return {
 				...rt,
 				queue: {
 					steering: event.steering,
 					followUp: event.followUp,
-					...(event.hasImages ? { hasImages: true as const } : {}),
+					messages: event.queue ?? null,
 				},
 			};
-		case "message_start": {
-			if (event.message.role === "assistant")
-				return {
-					...rt,
-					currentAssistantId: crypto.randomUUID(),
-					attemptAssistantId: null,
-					turns: clearTurnStreaming(rt.turns),
-				};
-			if (event.message.role === "user") {
-				const message = event.message as UserMessage;
-				const text = userText(message.content);
-				if (isControlMessage(text)) return rt;
-				const last = rt.turns[rt.turns.length - 1];
-				if (last?.kind === "user") {
-					const optimisticText = userText(last.message.content);
-					if (optimisticText === text) return rt;
-					const invocation = parseSkillInvocation(text);
-					if (invocation && matchesSkillInvocationCommand(optimisticText, invocation)) {
-						return {
-							...rt,
-							turns: [...rt.turns.slice(0, -1), { kind: "user", id: last.id, message }],
-						};
-					}
-				}
-				return {
-					...rt,
-					turns: [...rt.turns, { kind: "user", id: crypto.randomUUID(), message }],
-				};
-			}
-			return rt;
-		}
-		case "message_update": {
-			const ame = event.assistantMessageEvent;
-			const snapshot =
-				"partial" in ame
-					? ame.partial
-					: ame.type === "done"
-						? ame.message
-						: ame.type === "error"
-							? ame.error
-							: null;
-			if (!snapshot) return rt;
-			const id = rt.currentAssistantId ?? crypto.randomUUID();
-			const streaming = !(ame.type === "done" || ame.type === "error");
-			const turn: ChatTurn = { kind: "assistant", id, message: snapshot, streaming };
-			return {
-				...rt,
-				currentAssistantId: streaming ? id : null,
-				attemptAssistantId: streaming ? rt.attemptAssistantId : id,
-				turns: rt.turns.some((t) => t.id === id)
-					? rt.turns.map((t) => (t.id === id ? turn : t))
-					: [...rt.turns, turn],
-			};
-		}
-		case "message_end": {
-			if (isAskUserAnswersMessage(event.message)) {
-				const { toolCallId, result } = event.message.details;
-				return { ...rt, askAnswers: { ...rt.askAnswers, [toolCallId]: result } };
-			}
-			if (isSubagentCompletionMessage(event.message)) {
-				return {
-					...rt,
-					turns: [
-						...rt.turns,
-						{
-							kind: "subagentCompletion",
-							id: crypto.randomUUID(),
-							details: event.message.details,
-							text: customMessageText(event.message.content),
-						},
-					],
-				};
-			}
-			if (event.message.role !== "assistant" || !rt.currentAssistantId) return rt;
-			const id = rt.currentAssistantId;
-			const turn: ChatTurn = { kind: "assistant", id, message: event.message, streaming: false };
-			return {
-				...rt,
-				currentAssistantId: null,
-				attemptAssistantId: id,
-				turns: rt.turns.some((t) => t.id === id)
-					? rt.turns.map((t) => (t.id === id ? turn : t))
-					: [...rt.turns, turn],
-			};
-		}
-		case "tool_execution_start":
-			return {
-				...rt,
-				toolResults: {
-					...rt.toolResults,
-					[event.toolCallId]: { status: "running", raw: undefined },
-				},
-			};
-		case "tool_execution_update":
-			return {
-				...rt,
-				toolResults: {
-					...rt.toolResults,
-					[event.toolCallId]: { status: "running", raw: event.partialResult },
-				},
-			};
-		case "tool_execution_end":
-			return {
-				...rt,
-				toolResults: {
-					...rt.toolResults,
-					[event.toolCallId]: { status: event.isError ? "error" : "done", raw: event.result },
-				},
-			};
-		case "agent_end":
-			return rt;
-		case "agent_settled": {
-			const failure = assistantFailureText(event.terminal);
-			const closer: ChatTurn = failure
-				? {
-						kind: "error",
-						id: crypto.randomUUID(),
-						text: failure,
-						recovery: "try-again",
-					}
-				: { kind: "system", id: crypto.randomUUID(), text: "✓ Done", endedAt: Date.now() };
-			return {
-				...rt,
-				turns: [
-					...clearCompactionResuming(clearTurnStreaming(rt.turns)).filter(
-						(turn) => turn.kind !== "retry",
-					),
-					closer,
-				],
-				isStreaming: false,
-				currentAssistantId: null,
-				attemptAssistantId: null,
-			};
-		}
-		case "compaction_start":
-			return {
-				...rt,
-				turns: [...rt.turns, { kind: "compaction", id: crypto.randomUUID(), status: "running" }],
-			};
-		case "compaction_end": {
-			const settled = settleCompactionTurn(rt.turns, event);
-			return event.reason === "overflow" && event.willRetry
-				? {
-						...rt,
-						turns: removeSupersededAssistant(settled, rt.attemptAssistantId),
-						attemptAssistantId: null,
-					}
-				: { ...rt, turns: settled };
-		}
-		case "auto_retry_start":
-			return appendRetryTurn(
-				{
-					...rt,
-					turns: removeSupersededAssistant(rt.turns, rt.attemptAssistantId),
-					attemptAssistantId: null,
-				},
-				"turn",
-				event,
-			);
-		case "auto_retry_end":
-			return clearRetryTurns(rt, "turn");
-		case "summarization_retry_scheduled":
-			return appendRetryTurn(rt, "summarization", event);
-		case "summarization_retry_finished":
-			return clearRetryTurns(rt, "summarization");
-		case "thinking_level_changed":
-			return { ...rt, thinkingLevel: event.level };
 		default:
 			return rt;
 	}
 }
 
-function reduceExtUi(
-	rt: SessionRuntime,
-	request: Exclude<ExtUiRequest, { kind: "setTitle" }>,
-): SessionRuntime {
-	switch (request.kind) {
-		case "dismiss":
-			if (rt.pendingExtUi?.id === request.id) {
-				const [next, ...rest] = rt.extUiQueue;
-				return { ...rt, pendingExtUi: next ?? null, extUiQueue: rest };
-			}
-			if (rt.extUiQueue.some((q) => q.id === request.id))
-				return { ...rt, extUiQueue: rt.extUiQueue.filter((q) => q.id !== request.id) };
-			return rt;
-		case "select":
-		case "confirm":
-		case "input":
-		case "editor":
-			return rt.pendingExtUi
-				? { ...rt, extUiQueue: [...rt.extUiQueue, request] }
-				: { ...rt, pendingExtUi: request };
-		case "notify": {
-			const kind = request.level === "error" ? "error" : "system";
+function reducePermission(rt: SessionRuntime, request: PermissionRequest): SessionRuntime {
+	return { ...rt, permissions: { ...rt.permissions, [request.toolCallId]: request } };
+}
+
+function reduceElicitation(
+	state: Pick<AppState, "activeElicitation" | "elicitationQueue">,
+	push: ElicitationPush,
+): Partial<AppState> {
+	if (push.type === "cancel") {
+		if (state.activeElicitation?.id === push.id) {
+			const [next, ...rest] = state.elicitationQueue;
+			return { activeElicitation: next ?? null, elicitationQueue: rest };
+		}
+		if (state.elicitationQueue.some((request) => request.id === push.id)) {
 			return {
-				...rt,
-				turns: [...rt.turns, { kind, id: crypto.randomUUID(), text: request.message }],
+				elicitationQueue: state.elicitationQueue.filter((request) => request.id !== push.id),
 			};
 		}
-		case "setStatus": {
-			if (request.text === null)
-				return { ...rt, extUiStatus: omitKey(rt.extUiStatus, request.key) };
-			return { ...rt, extUiStatus: { ...rt.extUiStatus, [request.key]: request.text } };
-		}
-		case "setWidget": {
-			if (request.content === null)
-				return { ...rt, extUiWidget: omitKey(rt.extUiWidget, request.key) };
-			return { ...rt, extUiWidget: { ...rt.extUiWidget, [request.key]: request.content } };
-		}
-		default:
-			return rt;
+		return {};
 	}
+	return state.activeElicitation
+		? { elicitationQueue: [...state.elicitationQueue, push.request] }
+		: { activeElicitation: push.request };
 }
 
 interface AppState {
@@ -701,6 +532,10 @@ interface AppState {
 	welcomeGeneration: number;
 	protocolVersion: number | null;
 	hostPlatform: HostPlatform | null;
+	defaultAgent: AgentDescriptor | null;
+	agentProtocolVersion: number | null;
+	defaultAgentId: string | null;
+	agentChangeTick: number;
 	projects: Project[];
 	recentProjects: Project[];
 	workspaces: Record<string, Workspace[]>;
@@ -728,12 +563,9 @@ interface AppState {
 	terminalsByWorkspace: Record<string, TerminalTab[]>;
 	activeTerminalByWorkspace: Record<string, string | null>;
 	sessions: Record<string, SessionRuntime>;
-	extUiOrphans: ExtUiRequest[];
-	models: WireModel[];
-	providerVersion: number;
+	activeElicitation: ElicitationRequest | null;
+	elicitationQueue: ElicitationRequest[];
 	templatesVersion: number;
-	modelsRefreshing: boolean;
-	modelsFresh: boolean;
 	changesRequest: {
 		workspaceId: string;
 		path: string;
@@ -753,7 +585,6 @@ interface AppState {
 	fsChangesByWorkspace: Record<string, { tick: number; paths: string[]; truncated: boolean }>;
 	skillChangeTickByWorkspace: Record<string, number>;
 	skillsSyncedTickBySession: Record<string, number>;
-	activeLogin: LoginState | null;
 	settingsOpen: boolean;
 	settingsSection: SettingsSection;
 	theme: ThemeId;
@@ -761,8 +592,8 @@ interface AppState {
 	terminalReplayKb: number;
 	composerGrowthLimit: ComposerGrowthLimit;
 	chatMessageOrder: ChatMessageOrder;
-	reviewModel: WireModel | undefined;
-	reviewEffort: ThinkingLevel | undefined;
+	reviewModel: string | undefined;
+	reviewEffort: string | undefined;
 	reviewAutoFix: boolean;
 	customLayoutPresets: LayoutPreset[];
 	toasts: Toast[];
@@ -771,6 +602,8 @@ interface AppState {
 		protocolVersion: number,
 		projects: Project[],
 		recentProjects: Project[],
+		defaultAgent: AgentDescriptor | null,
+		agentProtocolVersion: number | null,
 		config?: AppConfig,
 		hostPlatform?: HostPlatform,
 	) => void;
@@ -863,8 +696,8 @@ interface AppState {
 	openChatSession: (
 		workspaceId: string,
 		sessionId: string,
-		model: WireModel | null,
-		thinkingLevel: ThinkingLevel,
+		capabilities: ChatCapabilities,
+		configOptions: ConfigOption[],
 		syncedTick?: number,
 		options?: LayoutOpenOptions,
 	) => void;
@@ -896,38 +729,15 @@ interface AppState {
 		syncedTick?: number,
 		options?: LayoutOpenOptions,
 	) => void;
-	reconcileSession: (
-		summary: SessionSummary,
-		hydrated: HydratedRuntime,
-		expectedEventRevision: number,
-		connectionGeneration: number,
-	) => boolean;
-	appendUserMessage: (sessionId: string, text: string, attachments?: ChatAttachment[]) => void;
-	appendErrorTurn: (sessionId: string, text: string) => void;
-	appendCompactionFailureUnlessObserved: (
-		sessionId: string,
-		observedTurnIds: ReadonlySet<string>,
-		detail: string,
-	) => void;
-	handlePiEvent: (event: PiEvent, sessionId: string) => void;
-	handlePiEvents: (payloads: readonly SessionEventPayload[]) => void;
-	setModelsForProviderVersion: (providerVersion: number, models: WireModel[]) => void;
-	noteProviderChanged: () => void;
-	bumpTemplatesVersion: () => void;
-	beginModelsRefresh: () => number;
-	finishModelsRefresh: (providerVersion: number, result: RefreshedModels | null) => void;
-	dropModelsFreshness: () => void;
-	setCurrentModel: (sessionId: string, model: WireModel) => void;
-	setThinkingLevel: (sessionId: string, level: ThinkingLevel) => void;
-	setStats: (sessionId: string, stats: SessionStats) => void;
-	setCommands: (sessionId: string, commands: SlashCommandInfo[]) => void;
+	applyChatEvent: (sessionId: string, event: ChatEvent) => void;
+	appendNotice: (sessionId: string, level: NoticeLevel, text: string) => void;
 	setChatDraft: (sessionId: string, text: string) => void;
-	clearPendingExtUi: (sessionId: string, id: string) => void;
-	applyExtUi: (request: ExtUiRequest) => void;
-	beginLogin: (loginId: string, providerId: string) => void;
-	applyLoginFrame: (push: LoginPush) => void;
-	clearLoginInput: () => void;
-	clearLogin: () => void;
+	applyElicitation: (push: ElicitationPush) => void;
+	clearActiveElicitation: (id: string) => void;
+	applyPermission: (push: PermissionPush) => void;
+	clearPermission: (sessionId: string, toolCallId: string) => void;
+	noteAgentChanged: () => void;
+	bumpTemplatesVersion: () => void;
 	openSettings: (section?: SettingsSection) => void;
 	closeSettings: () => void;
 	setSettingsSection: (section: SettingsSection) => void;
@@ -962,6 +772,7 @@ function configPatch(config: AppConfig) {
 		terminalReplayKb: config.terminalReplayKb,
 		composerGrowthLimit: config.composerGrowthLimit ?? DEFAULT_CONFIG.composerGrowthLimit,
 		customLayoutPresets: config.customLayoutPresets ?? DEFAULT_CONFIG.customLayoutPresets,
+		defaultAgentId: config.defaultAgentId,
 		reviewModel: config.reviewModel,
 		reviewEffort: config.reviewEffort,
 		reviewAutoFix: config.reviewAutoFix ?? DEFAULT_CONFIG.reviewAutoFix,
@@ -1332,33 +1143,7 @@ function sameReviewSnapshot(prev: ReviewSnapshot | undefined, next: ReviewSnapsh
 	return prev !== undefined && JSON.stringify(prev) === JSON.stringify(next);
 }
 
-const EXT_UI_ORPHAN_LIMIT = 64;
-const REPLAYABLE_EXT_UI: ReadonlySet<ExtUiRequest["kind"]> = new Set([
-	"notify",
-	"setStatus",
-	"setWidget",
-	"setTitle",
-]);
-
-function bufferExtUiOrphan(s: AppState, request: ExtUiRequest): Partial<AppState> {
-	return REPLAYABLE_EXT_UI.has(request.kind)
-		? { extUiOrphans: [...s.extUiOrphans, request].slice(-EXT_UI_ORPHAN_LIMIT) }
-		: {};
-}
-
-function replayExtUiOrphans(
-	sessionId: string,
-	set: (updater: (s: AppState) => Partial<AppState>) => void,
-	get: () => AppState,
-): void {
-	if (!get().sessions[sessionId]) return;
-	const replay = get().extUiOrphans.filter((frame) => frame.sessionId === sessionId);
-	if (replay.length === 0) return;
-	set((s) => ({ extUiOrphans: s.extUiOrphans.filter((frame) => frame.sessionId !== sessionId) }));
-	for (const frame of replay) get().applyExtUi(frame);
-}
-
-function renameChat(s: AppState, sessionId: string, title: string): Partial<AppState> | null {
+function _renameChat(s: AppState, sessionId: string, title: string): Partial<AppState> | null {
 	let found = false;
 	for (const [wsId, tabs] of Object.entries(s.tabsByWorkspace)) {
 		const chat = tabs.find(
@@ -1437,55 +1222,69 @@ function withRuntime(
 	return next === rt ? {} : { sessions: { ...s.sessions, [sessionId]: next } };
 }
 
-function newLoginState(loginId: string, providerId: string): LoginState {
-	return { loginId, providerId, status: "active" };
-}
-
-function foldLoginFrame(state: LoginState, frame: LoginFrame): LoginState {
-	switch (frame.kind) {
-		case "authUrl":
-			return {
-				...state,
-				url: frame.url,
-				...(frame.instructions ? { instructions: frame.instructions } : {}),
-			};
-		case "deviceCode":
-			return {
-				...state,
-				deviceCode: {
-					userCode: frame.userCode,
-					verificationUri: frame.verificationUri,
-					...(frame.expiresInSeconds ? { expiresInSeconds: frame.expiresInSeconds } : {}),
-				},
-			};
-		case "select": {
-			const { progress: _p, ...rest } = state;
-			return { ...rest, input: { kind: "select", message: frame.message, options: frame.options } };
-		}
-		case "prompt": {
-			const { progress: _p, ...rest } = state;
-			return {
-				...rest,
-				input: {
-					kind: "prompt",
-					message: frame.message,
-					...(frame.placeholder ? { placeholder: frame.placeholder } : {}),
-					...(frame.allowEmpty ? { allowEmpty: true } : {}),
-					...(frame.secret ? { secret: true } : {}),
-				},
-			};
-		}
-		case "progress":
-			return { ...state, progress: frame.message };
-		case "success": {
-			const { input: _i, progress: _p, ...rest } = state;
-			return { ...rest, status: "success" };
-		}
-		case "error": {
-			const { input: _i, progress: _p, ...rest } = state;
-			return { ...rest, status: "error", error: frame.message };
-		}
+function renameChatTab(s: AppState, sessionId: string, title: string): Partial<AppState> {
+	for (const [wsId, tabs] of Object.entries(s.tabsByWorkspace)) {
+		const chat = tabs.find(
+			(tab): tab is ChatTab => tab.kind === "chat" && tab.sessionId === sessionId,
+		);
+		if (!chat) continue;
+		const cacheChanged = chat.name !== title;
+		const renamed = cacheChanged ? { ...chat, name: title } : chat;
+		const matchesQueuedOpen = (
+			intent: LayoutIntent,
+		): intent is Extract<LayoutIntent, { kind: "open" }> =>
+			intent.kind === "open" &&
+			intent.workspaceId === wsId &&
+			intent.tab.kind === "chat" &&
+			intent.tab.sessionId === sessionId;
+		const queuedOpen = s.layoutIntents.find(matchesQueuedOpen);
+		const placement = selectLayoutResourcePlacement(s, wsId, chat);
+		const queuedChanged = queuedOpen !== undefined && queuedOpen.tab.name !== title;
+		const placementChanged = placement !== null && placement.tab.name !== title;
+		if (!cacheChanged && !queuedChanged && !placementChanged) continue;
+		return {
+			layoutIntents: queuedOpen
+				? queuedChanged || placementChanged
+					? s.layoutIntents.map((intent) =>
+							matchesQueuedOpen(intent)
+								? {
+										...intent,
+										tab: {
+											...intent.tab,
+											...(placementChanged && placement ? { id: placement.tabId } : {}),
+											name: title,
+										},
+									}
+								: intent,
+						)
+					: s.layoutIntents
+				: placementChanged && placement
+					? appendLayoutIntent(s.layoutIntents, {
+							kind: "open",
+							workspaceId: wsId,
+							tab: { ...renamed, id: placement.tabId },
+							intent: "keep",
+							activate: false,
+						})
+					: s.layoutIntents,
+			tabsByWorkspace: cacheChanged
+				? {
+						...s.tabsByWorkspace,
+						[wsId]: tabs.map((tab) => (tab.id === chat.id ? renamed : tab)),
+					}
+				: s.tabsByWorkspace,
+		};
 	}
+	for (const [wsId, chats] of Object.entries(s.closedChatsByWorkspace)) {
+		if (!chats.some((chat) => chat.sessionId === sessionId)) continue;
+		return {
+			closedChatsByWorkspace: {
+				...s.closedChatsByWorkspace,
+				[wsId]: chats.map((chat) => (chat.sessionId === sessionId ? { ...chat, title } : chat)),
+			},
+		};
+	}
+	return {};
 }
 
 function nextTerminalTitle(list: TerminalTab[]): string {
@@ -1501,6 +1300,10 @@ export const useAppStore = create<AppState>((set, get) => ({
 	welcomeGeneration: 0,
 	protocolVersion: null,
 	hostPlatform: null,
+	defaultAgent: null,
+	agentProtocolVersion: null,
+	defaultAgentId: DEFAULT_CONFIG.defaultAgentId,
+	agentChangeTick: 0,
 	projects: [],
 	recentProjects: [],
 	workspaces: {},
@@ -1528,12 +1331,9 @@ export const useAppStore = create<AppState>((set, get) => ({
 	terminalsByWorkspace: {},
 	activeTerminalByWorkspace: {},
 	sessions: {},
-	extUiOrphans: [],
-	models: [],
-	providerVersion: 0,
+	activeElicitation: null,
+	elicitationQueue: [],
 	templatesVersion: 0,
-	modelsRefreshing: false,
-	modelsFresh: false,
 	changesRequest: null,
 	specRequest: null,
 	specsByWorkspace: {},
@@ -1546,9 +1346,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 	fsChangesByWorkspace: {},
 	skillChangeTickByWorkspace: {},
 	skillsSyncedTickBySession: {},
-	activeLogin: null,
 	settingsOpen: false,
-	settingsSection: SettingsSection.Providers,
+	settingsSection: SettingsSection.Agents,
 	theme: DEFAULT_CONFIG.theme,
 	analyticsEnabled: DEFAULT_CONFIG.analyticsEnabled,
 	terminalReplayKb: DEFAULT_CONFIG.terminalReplayKb,
@@ -1565,13 +1364,23 @@ export const useAppStore = create<AppState>((set, get) => ({
 			connectionGeneration:
 				status === "connected" ? state.connectionGeneration + 1 : state.connectionGeneration,
 		})),
-	installWelcomeSnapshot: (protocolVersion, projects, recentProjects, config, hostPlatform) =>
+	installWelcomeSnapshot: (
+		protocolVersion,
+		projects,
+		recentProjects,
+		defaultAgent,
+		agentProtocolVersion,
+		config,
+		hostPlatform,
+	) =>
 		set((state) => {
 			const openProjects = sortProjects(projects.filter((project) => project.closed !== true));
 			return {
 				protocolVersion,
 				projects: openProjects,
 				recentProjects: sortProjects(recentProjects),
+				defaultAgent,
+				agentProtocolVersion,
 				hostPlatform: hostPlatform ?? null,
 				...(config ? configPatch(config) : {}),
 				...reconcileProjectNavigation(state, openProjects),
@@ -2165,14 +1974,14 @@ export const useAppStore = create<AppState>((set, get) => ({
 		set((s) => {
 			if (s.removedWorkspaceIds[workspaceId]) return {};
 			const list = s.terminalsByWorkspace[workspaceId] ?? [];
-			const tabKey = requestedTabKey ?? randomId("terminal");
-			if (list.some((tab) => tab.tabKey === tabKey)) return {};
+			const key = requestedTabKey ?? randomId("terminal");
+			if (list.some((tab) => tab.tabKey === key)) return {};
 			const navigation =
 				targetGroupId && targetArea === "center"
 					? advanceCenterNavigation(s, workspaceId, targetGroupId)
 					: null;
 			const tab: TerminalTab = {
-				tabKey,
+				tabKey: key,
 				workspaceId,
 				title: nextTerminalTitle(list),
 				reservationPending: true,
@@ -2183,7 +1992,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 				layoutIntents: appendLayoutIntent(s.layoutIntents, {
 					kind: "place-terminal",
 					workspaceId,
-					tabKey,
+					tabKey: key,
 					title: tab.title,
 					...(targetGroupId
 						? {
@@ -2195,7 +2004,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 					...(reveal ? {} : { reveal: false as const }),
 				}),
 				terminalsByWorkspace: { ...s.terminalsByWorkspace, [workspaceId]: [...list, tab] },
-				activeTerminalByWorkspace: { ...s.activeTerminalByWorkspace, [workspaceId]: tabKey },
+				activeTerminalByWorkspace: { ...s.activeTerminalByWorkspace, [workspaceId]: key },
 			};
 		}),
 	setWorkspaceTerminals: (workspaceId, tabs) =>
@@ -2320,7 +2129,14 @@ export const useAppStore = create<AppState>((set, get) => ({
 						activeTerminalByWorkspace: { ...s.activeTerminalByWorkspace, [workspaceId]: tabKey },
 					},
 		),
-	openChatSession: (workspaceId, sessionId, model, thinkingLevel, syncedTick, options = {}) => {
+	openChatSession: (
+		workspaceId,
+		sessionId,
+		capabilities,
+		configOptions,
+		syncedTick,
+		options = {},
+	) =>
 		set((s) => {
 			if (s.removedWorkspaceIds[workspaceId] || isSessionDeleted(s, workspaceId, sessionId)) {
 				return {};
@@ -2368,10 +2184,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 						? s.navTickByWorkspace
 						: bumpNav(s, workspaceId),
 				sessions: fresh
-					? {
-							...s.sessions,
-							[sessionId]: newRuntime(model, thinkingLevel, s.connectionGeneration),
-						}
+					? { ...s.sessions, [sessionId]: newRuntime(capabilities, configOptions) }
 					: s.sessions,
 				...(fresh
 					? {
@@ -2382,9 +2195,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 						}
 					: {}),
 			};
-		});
-		replayExtUiOrphans(sessionId, set, get);
-	},
+		}),
 	closeChatRuntime: (sessionId) =>
 		set((s) => {
 			if (!s.sessions[sessionId]) return {};
@@ -2585,38 +2396,40 @@ export const useAppStore = create<AppState>((set, get) => ({
 				},
 			};
 		}),
-	hydrateSession: (summary, hydrated, activate = false, syncedTick, options = {}) => {
+	hydrateSession: (summary, hydrated, activate = false, syncedTick, options = {}) =>
 		set((s) => {
-			if (
-				s.removedWorkspaceIds[summary.workspaceId] ||
-				isSessionDeleted(s, summary.workspaceId, summary.sessionId)
-			) {
+			const wsId = summary.record.workspaceId;
+			const sessionId = summary.record.sessionId;
+			if (s.removedWorkspaceIds[wsId] || isSessionDeleted(s, wsId, sessionId)) {
 				return {};
 			}
-			if (s.sessions[summary.sessionId]) return {};
-			const wsId = summary.workspaceId;
+			if (s.sessions[sessionId]) return {};
 			const runtime: SessionRuntime = {
-				...newRuntime(summary.model, summary.thinkingLevel, s.connectionGeneration),
-				turns: hydrated.turns,
-				toolResults: hydrated.toolResults,
-				askAnswers: hydrated.askAnswers,
+				...newRuntime(hydrated.capabilities, hydrated.configOptions),
+				messages: hydrated.messages,
+				plan: hydrated.plan,
 				isStreaming: summary.isStreaming,
-				...(summary.queue ? { queue: summary.queue } : {}),
-				...(hydrated.turnIdByMessageIndex
-					? { turnIdByMessageIndex: hydrated.turnIdByMessageIndex }
+				...(summary.queue
+					? {
+							queue: {
+								steering: summary.queue.steering.length,
+								followUp: summary.queue.followUp.length,
+								messages: summary.queue,
+							},
+						}
 					: {}),
 			};
 			const tabs = s.tabsByWorkspace[wsId] ?? [];
 			const existing = tabs.find(
 				(candidate): candidate is ChatTab =>
-					candidate.kind === "chat" && candidate.sessionId === summary.sessionId,
+					candidate.kind === "chat" && candidate.sessionId === sessionId,
 			);
 			const preferred: ChatTab = {
 				kind: "chat",
-				id: existing?.id ?? chatTabId(wsId, summary.sessionId),
+				id: existing?.id ?? chatTabId(wsId, sessionId),
 				workspaceId: wsId,
-				name: summary.title,
-				sessionId: summary.sessionId,
+				name: summary.record.title ?? "Chat",
+				sessionId,
 			};
 			const id = existing?.id ?? availableEditorTabId(tabs, preferred);
 			const tab: ChatTab = id === preferred.id ? preferred : { ...preferred, id };
@@ -2635,12 +2448,12 @@ export const useAppStore = create<AppState>((set, get) => ({
 							}),
 						}
 					: {}),
-				sessions: { ...s.sessions, [summary.sessionId]: runtime },
+				sessions: { ...s.sessions, [sessionId]: runtime },
 				...(syncedTick !== undefined
 					? {
 							skillsSyncedTickBySession: {
 								...s.skillsSyncedTickBySession,
-								[summary.sessionId]: syncedTick,
+								[sessionId]: syncedTick,
 							},
 						}
 					: {}),
@@ -2659,196 +2472,72 @@ export const useAppStore = create<AppState>((set, get) => ({
 					takesFocus && !navigationCountedAtRequest(options)
 						? bumpNav(s, wsId)
 						: s.navTickByWorkspace,
-				closedChatsByWorkspace: closed.some((c) => c.sessionId === summary.sessionId)
+				closedChatsByWorkspace: closed.some((c) => c.sessionId === sessionId)
 					? {
 							...s.closedChatsByWorkspace,
-							[wsId]: closed.filter((c) => c.sessionId !== summary.sessionId),
+							[wsId]: closed.filter((c) => c.sessionId !== sessionId),
 						}
 					: s.closedChatsByWorkspace,
 			};
-		});
-		replayExtUiOrphans(summary.sessionId, set, get);
-	},
-	reconcileSession: (summary, hydrated, expectedEventRevision, connectionGeneration) => {
-		let applied = false;
-		set((s) => {
-			const current = s.sessions[summary.sessionId];
-			if (
-				!current ||
-				current.eventRevision !== expectedEventRevision ||
-				s.removedWorkspaceIds[summary.workspaceId] ||
-				isSessionDeleted(s, summary.workspaceId, summary.sessionId) ||
-				!selectWorkspaceSessionIds(s, summary.workspaceId).includes(summary.sessionId)
-			) {
-				return {};
+		}),
+	applyChatEvent: (sessionId, event) =>
+		set((s): Partial<AppState> => {
+			if (event.type === "session_info") {
+				return event.title !== undefined ? renameChatTab(s, sessionId, event.title) : {};
 			}
-			const { turnIdByMessageIndex: _previousMessageIndex, ...preserved } = current;
-			void _previousMessageIndex;
-			const runtime: SessionRuntime = {
-				...preserved,
-				turns: reconcileCompactionTurns(current.turns, hydrated.turns, summary.isStreaming),
-				toolResults: hydrated.toolResults,
-				askAnswers: hydrated.askAnswers,
-				currentAssistantId: null,
-				attemptAssistantId: null,
-				isStreaming: summary.isStreaming,
-				queue: summary.queue ?? EMPTY_QUEUE,
-				model: summary.model,
-				thinkingLevel: summary.thinkingLevel,
-				eventRevision: current.eventRevision + 1,
-				syncedConnectionGeneration: Math.max(
-					current.syncedConnectionGeneration,
-					connectionGeneration,
-				),
-				...(hydrated.turnIdByMessageIndex
-					? { turnIdByMessageIndex: hydrated.turnIdByMessageIndex }
-					: {}),
-			};
-			applied = true;
-			return { sessions: { ...s.sessions, [summary.sessionId]: runtime } };
-		});
-		return applied;
-	},
-	appendUserMessage: (sessionId, text, attachments) =>
+			return withRuntime(s, sessionId, (rt) => reduceChatEvent(rt, event));
+		}),
+	appendNotice: (sessionId, level, text) =>
 		set((s) =>
 			withRuntime(s, sessionId, (rt) => ({
 				...rt,
-				turns: [
-					...consumeFailureRecoveries(rt.turns),
+				messages: [
+					...rt.messages,
 					{
-						kind: "user",
+						role: "marker",
 						id: crypto.randomUUID(),
-						message: {
-							role: "user",
-							content:
-								attachments && attachments.length > 0
-									? [
-											...(text ? [{ type: "text" as const, text }] : []),
-											...attachments.map((a) => a.content),
-										]
-									: text,
-							timestamp: Date.now(),
-						},
-						...(attachments && attachments.length > 0
-							? { attachmentNames: attachments.map((a) => a.name) }
-							: {}),
+						timestamp: Date.now(),
+						marker: { kind: "notice", level, text },
 					},
 				],
 			})),
 		),
-	appendErrorTurn: (sessionId, text) =>
-		set((s) =>
-			withRuntime(s, sessionId, (rt) => ({
-				...rt,
-				isStreaming: false,
-				currentAssistantId: null,
-				attemptAssistantId: null,
-				turns: [...clearTurnStreaming(rt.turns), { kind: "error", id: crypto.randomUUID(), text }],
-			})),
-		),
-	appendCompactionFailureUnlessObserved: (sessionId, observedTurnIds, detail) =>
-		set((s) =>
-			withRuntime(s, sessionId, (rt) => {
-				const lifecycleObserved = rt.turns.some(
-					(turn) => turn.kind === "compaction" && !observedTurnIds.has(turn.id),
-				);
-				return lifecycleObserved
-					? rt
-					: {
-							...rt,
-							turns: [
-								...rt.turns,
-								{ kind: "compaction", id: crypto.randomUUID(), status: "failed", detail },
-							],
-						};
-			}),
-		),
-	handlePiEvent: (event, sessionId) => get().handlePiEvents([{ event, sessionId }]),
-	handlePiEvents: (payloads) =>
-		set((s) => {
-			let sessions = s.sessions;
-			for (const { event, sessionId } of payloads) {
-				const runtime = sessions[sessionId];
-				if (!runtime) continue;
-				if (sessions === s.sessions) sessions = { ...sessions };
-				const next = reduceSessionEvent(runtime, event);
-				sessions[sessionId] = {
-					...next,
-					eventRevision: runtime.eventRevision + 1,
-				};
-			}
-			return sessions === s.sessions ? s : { sessions };
-		}),
-	setModelsForProviderVersion: (providerVersion, models) =>
-		set((s) => (s.providerVersion === providerVersion ? { models, modelsFresh: false } : s)),
-	noteProviderChanged: () =>
-		set((s) => ({
-			models: [],
-			modelsFresh: false,
-			modelsRefreshing: false,
-			providerVersion: s.providerVersion + 1,
-		})),
-	bumpTemplatesVersion: () => set((s) => ({ templatesVersion: s.templatesVersion + 1 })),
-	beginModelsRefresh: () => {
-		const providerVersion = get().providerVersion;
-		set({ modelsRefreshing: true });
-		return providerVersion;
-	},
-	dropModelsFreshness: () => set({ modelsFresh: false }),
-	finishModelsRefresh: (providerVersion, result) =>
-		set((s) =>
-			s.providerVersion === providerVersion
-				? {
-						modelsRefreshing: false,
-						models: result?.models ?? s.models,
-						modelsFresh: result ? result.complete : s.modelsFresh,
-					}
-				: s,
-		),
-	setCurrentModel: (sessionId, model) =>
-		set((s) => withRuntime(s, sessionId, (rt) => ({ ...rt, model }))),
-	setThinkingLevel: (sessionId, level) =>
-		set((s) => withRuntime(s, sessionId, (rt) => ({ ...rt, thinkingLevel: level }))),
-	setStats: (sessionId, stats) => set((s) => withRuntime(s, sessionId, (rt) => ({ ...rt, stats }))),
-	setCommands: (sessionId, commands) =>
-		set((s) => withRuntime(s, sessionId, (rt) => ({ ...rt, commands }))),
 	setChatDraft: (sessionId, draft) =>
 		set((s) => withRuntime(s, sessionId, (rt) => ({ ...rt, draft }))),
-	clearPendingExtUi: (sessionId, id) =>
-		set((s) =>
-			withRuntime(s, sessionId, (rt) => {
-				if (rt.pendingExtUi?.id !== id) return rt;
-				const [next, ...rest] = rt.extUiQueue;
-				return { ...rt, pendingExtUi: next ?? null, extUiQueue: rest };
-			}),
-		),
-	applyExtUi: (request) =>
+	applyElicitation: (push) => set((s) => reduceElicitation(s, push)),
+	clearActiveElicitation: (id) =>
+		set((s) => {
+			if (s.activeElicitation?.id !== id) return {};
+			const [next, ...rest] = s.elicitationQueue;
+			return { activeElicitation: next ?? null, elicitationQueue: rest };
+		}),
+	applyPermission: (push) =>
 		set((s): Partial<AppState> => {
-			if (request.kind === "setTitle")
-				return renameChat(s, request.sessionId, request.title) ?? bufferExtUiOrphan(s, request);
-			if (!s.sessions[request.sessionId]) return bufferExtUiOrphan(s, request);
-			return withRuntime(s, request.sessionId, (rt) => reduceExtUi(rt, request));
+			if (push.type === "request") {
+				return withRuntime(s, push.request.sessionId, (rt) => reducePermission(rt, push.request));
+			}
+			for (const [sessionId, rt] of Object.entries(s.sessions)) {
+				const match = Object.values(rt.permissions).find((request) => request.id === push.id);
+				if (match) {
+					return withRuntime(s, sessionId, (rt2) => ({
+						...rt2,
+						permissions: omitKey(rt2.permissions, match.toolCallId),
+					}));
+				}
+			}
+			return {};
 		}),
-	beginLogin: (loginId, providerId) =>
+	clearPermission: (sessionId, toolCallId) =>
 		set((s) =>
-			s.activeLogin?.loginId === loginId ? {} : { activeLogin: newLoginState(loginId, providerId) },
+			withRuntime(s, sessionId, (rt) =>
+				Object.hasOwn(rt.permissions, toolCallId)
+					? { ...rt, permissions: omitKey(rt.permissions, toolCallId) }
+					: rt,
+			),
 		),
-	applyLoginFrame: (push) =>
-		set((s) => {
-			const cur = s.activeLogin;
-			if (cur && cur.loginId !== push.loginId && cur.status === "active") return {};
-			const base =
-				cur && cur.loginId === push.loginId ? cur : newLoginState(push.loginId, push.providerId);
-			return { activeLogin: foldLoginFrame(base, push.frame) };
-		}),
-	clearLoginInput: () =>
-		set((s) => {
-			if (!s.activeLogin?.input) return {};
-			const { input: _drop, ...rest } = s.activeLogin;
-			return { activeLogin: rest };
-		}),
-	clearLogin: () => set({ activeLogin: null }),
-	openSettings: (section = SettingsSection.Providers) =>
+	noteAgentChanged: () => set((s) => ({ agentChangeTick: s.agentChangeTick + 1 })),
+	bumpTemplatesVersion: () => set((s) => ({ templatesVersion: s.templatesVersion + 1 })),
+	openSettings: (section = SettingsSection.Agents) =>
 		set({ settingsOpen: true, settingsSection: section }),
 	closeSettings: () => set({ settingsOpen: false }),
 	setSettingsSection: (section) => set({ settingsSection: section }),

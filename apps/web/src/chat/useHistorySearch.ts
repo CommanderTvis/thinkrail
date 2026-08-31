@@ -70,14 +70,14 @@ export function resolveHistorySelection(
 }
 
 export function jumpTarget(hit: PromptHit | MessageHit): ChatLocationRequest | null {
-	if (!hit.workspaceId || !hit.projectId || hit.messageIndex == null || hit.anchorText == null) {
+	if (!hit.workspaceId || !hit.projectId || hit.messageId == null || hit.anchorText == null) {
 		return null;
 	}
 	return {
 		workspaceId: hit.workspaceId,
 		projectId: hit.projectId,
 		sessionId: hit.sessionId,
-		messageIndex: hit.messageIndex,
+		messageId: hit.messageId,
 		anchorText: hit.anchorText,
 	};
 }

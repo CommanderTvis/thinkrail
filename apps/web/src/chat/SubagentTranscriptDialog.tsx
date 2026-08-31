@@ -1,13 +1,14 @@
-import type { DelegationRunStatus, TranscriptMessage } from "@thinkrail/contracts";
+import type { ChatMessage, DelegationRunStatus } from "@thinkrail/contracts";
 import { useEffect, useMemo, useState } from "react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { errorText, getTransport, wsErrorCode } from "@/transport";
 import { AskStatesContext, deriveAskStates } from "./askState";
 import { ChatActionsContext } from "./ChatActions";
-import { messagesToRuntime } from "./hydrate";
-import { deriveRows } from "./rows";
+import { deriveRows, type LiveProgress } from "./rows";
 import { startSubagentTranscriptPolling } from "./subagentTranscriptPolling";
 import { ChatTurnView } from "./turns";
+
+const NO_PROGRESS: LiveProgress = { retries: {}, compacting: null };
 
 function isLiveTranscriptStatus(status: DelegationRunStatus | undefined): boolean {
 	return status === "queued" || status === "running";
@@ -28,7 +29,7 @@ export function SubagentTranscriptDialog({
 	childSessionId: string;
 	onOpenChange: (open: boolean) => void;
 }) {
-	const [messages, setMessages] = useState<TranscriptMessage[] | null>(null);
+	const [messages, setMessages] = useState<ChatMessage[] | null>(null);
 	const [live, setLive] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 
@@ -56,23 +57,13 @@ export function SubagentTranscriptDialog({
 		[workspaceId, parentSessionId, childSessionId],
 	);
 
-	const runtime = useMemo(
-		() =>
-			messages
-				? messagesToRuntime(messages, undefined, { idScope: `subagent:${childSessionId}` })
-				: null,
-		[messages, childSessionId],
-	);
 	const rows = useMemo(
-		() => (runtime ? deriveRows(runtime.turns, runtime.toolResults, live) : []),
-		[runtime, live],
+		() => (messages ? deriveRows(messages, live, NO_PROGRESS) : []),
+		[messages, live],
 	);
 	const askContext = useMemo(
-		() => ({
-			states: runtime ? deriveAskStates(runtime.turns, runtime.askAnswers) : {},
-			focusScope: {},
-		}),
-		[runtime],
+		() => ({ states: messages ? deriveAskStates(messages) : {}, focusScope: {} }),
+		[messages],
 	);
 
 	return (

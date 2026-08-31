@@ -1,10 +1,12 @@
 import { describe, expect, test } from "bun:test";
-import { DEFAULT_HOST, DEFAULT_PORT, parseArgs, parseSubcommand } from "./args";
+import { DEFAULT_HOST, DEFAULT_PORT, parseAgentArgs, parseArgs, parseSubcommand } from "./args";
 
 describe("parseSubcommand", () => {
 	test("only a leading, exact subcommand counts", () => {
 		expect(parseSubcommand(["update"])).toBe("update");
 		expect(parseSubcommand(["uninstall", "--yes"])).toBe("uninstall");
+		expect(parseSubcommand(["acp-pi"])).toBe("acp-pi");
+		expect(parseSubcommand(["agent", "list"])).toBe("agent");
 		expect(parseSubcommand([])).toBeUndefined();
 		expect(parseSubcommand(["--no-open"])).toBeUndefined();
 		expect(parseSubcommand(["./update"])).toBeUndefined();
@@ -106,5 +108,66 @@ describe("parseArgs", () => {
 
 	test("ignores a non-numeric env port (falls back to default)", () => {
 		expect(parseArgs([], { THINKRAIL_PORT: "notanumber" }).port).toBe(DEFAULT_PORT);
+	});
+});
+
+describe("parseAgentArgs", () => {
+	test("everything after `--` is the launch command, flags before it are ours", () => {
+		expect(
+			parseAgentArgs([
+				"add",
+				"junie",
+				"--name",
+				"JetBrains Junie",
+				"--",
+				"bunx",
+				"@jetbrains/junie",
+				"--acp=true",
+			]),
+		).toEqual({
+			kind: "add",
+			entry: {
+				id: "junie",
+				name: "JetBrains Junie",
+				origin: "external",
+				launch: { command: "bunx", args: ["@jetbrains/junie", "--acp=true"] },
+			},
+		});
+	});
+
+	test("the id doubles as the name when none is given", () => {
+		expect(parseAgentArgs(["add", "junie", "--", "junie-acp"])).toMatchObject({
+			entry: { id: "junie", name: "junie", launch: { command: "junie-acp", args: [] } },
+		});
+	});
+
+	test("a registered agent is external — never installed or bundled", () => {
+		const command = parseAgentArgs(["add", "a", "--", "a-acp"]);
+		expect(command.kind === "add" && command.entry.origin).toBe("external");
+	});
+
+	test("list and remove", () => {
+		expect(parseAgentArgs(["list"])).toEqual({ kind: "list" });
+		expect(parseAgentArgs(["remove", "junie"])).toEqual({ kind: "remove", agentId: "junie" });
+	});
+
+	test("no verb, -h and --help all ask for help", () => {
+		expect(parseAgentArgs([])).toEqual({ kind: "help" });
+		expect(parseAgentArgs(["-h"])).toEqual({ kind: "help" });
+		expect(parseAgentArgs(["--help"])).toEqual({ kind: "help" });
+	});
+
+	test("refuses an add it cannot spawn", () => {
+		expect(() => parseAgentArgs(["add", "junie", "junie-acp"])).toThrow("Missing `--`");
+		expect(() => parseAgentArgs(["add", "junie", "--"])).toThrow("Missing the agent's launch");
+		expect(() => parseAgentArgs(["add", "--", "junie-acp"])).toThrow("Missing the agent id.");
+		expect(() => parseAgentArgs(["add", "a", "b", "--", "c"])).toThrow("Unexpected argument: b");
+		expect(() => parseAgentArgs(["add", "--nope", "a", "--", "c"])).toThrow("Unknown option");
+	});
+
+	test("refuses an unknown verb and stray arguments", () => {
+		expect(() => parseAgentArgs(["install", "junie"])).toThrow("Unknown agent command: install");
+		expect(() => parseAgentArgs(["list", "junie"])).toThrow("Unexpected argument: junie");
+		expect(() => parseAgentArgs(["remove"])).toThrow("Missing the agent id.");
 	});
 });

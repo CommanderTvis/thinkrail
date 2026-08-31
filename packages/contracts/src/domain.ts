@@ -1,4 +1,4 @@
-import type { ThinkingLevel, WireModel } from "./piProtocol";
+import type { MessageId } from "./chatProtocol";
 
 export type TabStatus = "idle" | "running" | "waiting" | "error";
 
@@ -9,6 +9,7 @@ export interface Project {
 	slug: string;
 	lastOpened: number;
 	closed?: true;
+	agentId?: string;
 	trusted?: boolean;
 	acknowledgedSkills?: string[];
 	disabledSkills?: string[];
@@ -278,19 +279,6 @@ export interface BranchList {
 	defaultBranch: string;
 }
 
-export type ProviderAuthKind = "oauth" | "api-key" | "env" | "other";
-
-export interface ProviderStatus {
-	id: string;
-	name: string;
-	configured: boolean;
-	kind?: ProviderAuthKind;
-	detail?: string;
-	canOAuth?: boolean;
-	canApiKey?: boolean;
-	canLogout?: boolean;
-}
-
 export interface JbcentralInstall {
 	platform: string;
 	shell: "bash" | "powershell";
@@ -334,12 +322,6 @@ export type JbcentralStatus =
 			reason: "candidate-failed";
 	  };
 
-export interface ProviderStatusReport {
-	providers: ProviderStatus[];
-	jbcentral: JbcentralStatus;
-	jbcentralInstall: JbcentralInstall;
-}
-
 export type JbcentralActionResult =
 	| { outcome: "applied" }
 	| { outcome: "failed"; reason: JbcentralActionFailureReason };
@@ -352,32 +334,6 @@ export type JbcentralLoginResult =
 			outcome: "failed";
 			reason: "not-installed" | "unsupported-version" | "version-probe-failed" | "launch-failed";
 	  };
-
-export type LoginFrame =
-	| { kind: "authUrl"; url: string; instructions?: string }
-	| { kind: "deviceCode"; userCode: string; verificationUri: string; expiresInSeconds?: number }
-	| { kind: "select"; message: string; options: { id: string; label: string }[] }
-	| {
-			kind: "prompt";
-			message: string;
-			placeholder?: string;
-			allowEmpty?: boolean;
-			secret?: boolean;
-	  }
-	| { kind: "progress"; message: string }
-	| { kind: "success" }
-	| { kind: "error"; message: string };
-
-export interface LoginPush {
-	loginId: string;
-	providerId: string;
-	frame: LoginFrame;
-}
-
-export interface LoginReply {
-	loginId: string;
-	value: string;
-}
 
 export interface GithubAuthStatus {
 	connected: boolean;
@@ -448,28 +404,30 @@ export function isComposerGrowthLimit(value: unknown): value is ComposerGrowthLi
 
 export interface AppConfig {
 	theme: ThemeId;
+	defaultAgentId: string | null;
 	analyticsEnabled: boolean;
 	terminalReplayKb: number;
 	composerGrowthLimit: ComposerGrowthLimit;
 	customLayoutPresets: LayoutPreset[];
-	/** The model the plan reviewer + reflector run on; unset ⇒ the pi default. */
-	reviewModel?: WireModel;
-	/** Reviewer + reflector thinking level; unset ⇒ the model's default. */
-	reviewEffort?: ThinkingLevel;
+	/** The agent's model config-option value the plan reviewer + reflector run on; unset ⇒ the agent's default. */
+	reviewModel?: string;
+	/** The agent's thinking-level config-option value for those sessions; unset ⇒ the agent's default. */
+	reviewEffort?: string;
 	/** When false, a `request_changes` verdict records findings and waits — no automated fix cycle. */
 	reviewAutoFix: boolean;
 }
 
 /** The `settings.update` payload: `null` clears an optional override back to unset (⇒ the default). */
 export type AppConfigUpdate = Partial<Omit<AppConfig, "reviewModel" | "reviewEffort">> & {
-	reviewModel?: WireModel | null;
-	reviewEffort?: ThinkingLevel | null;
+	reviewModel?: string | null;
+	reviewEffort?: string | null;
 };
 
 export const TERMINAL_REPLAY_KB = { min: 0, max: 1024, default: 64 } as const;
 
 export const DEFAULT_CONFIG: AppConfig = {
 	theme: "dark",
+	defaultAgentId: null,
 	analyticsEnabled: true,
 	terminalReplayKb: TERMINAL_REPLAY_KB.default,
 	composerGrowthLimit: "half-chat",
@@ -481,30 +439,6 @@ export const TODO_NUDGE_PREFIX = "[thinkrail:todo-nudge] ";
 
 export function isControlMessage(text: string): boolean {
 	return text.startsWith(TODO_NUDGE_PREFIX);
-}
-
-export const IMAGE_MAX_BASE64_BYTES = 4.5 * 1024 * 1024;
-
-export function base64EncodedLength(byteLength: number): number {
-	return Math.ceil(byteLength / 3) * 4;
-}
-
-export const ACCEPTED_IMAGE_TYPES: readonly string[] = [
-	"image/png",
-	"image/jpeg",
-	"image/gif",
-	"image/webp",
-];
-
-export const REQUEST_IMAGE_BASE64_BUDGET = 24 * 1024 * 1024;
-
-export function isRetriedAttempt(
-	messages: readonly { role: string; stopReason?: string }[],
-	index: number,
-): boolean {
-	const message = messages[index];
-	if (message?.role !== "assistant" || message.stopReason !== "error") return false;
-	return messages[index + 1]?.role === "assistant";
 }
 
 export type HistoryScope =
@@ -521,14 +455,14 @@ export interface PromptHit {
 	workspaceId?: string;
 	projectId?: string;
 	cwd: string;
-	messageIndex?: number;
+	messageId?: MessageId;
 	anchorText?: string;
 }
 
 export interface MessageHit extends PromptHit {
 	role: "user" | "assistant";
 	snippet: string;
-	messageIndex: number;
+	messageId: MessageId;
 	anchorText: string;
 }
 
@@ -625,4 +559,28 @@ export interface ReviewSnapshot {
 
 export interface ReviewChangedPayload extends ReviewSnapshot {
 	workspaceId: string;
+}
+
+export const IMAGE_MAX_BASE64_BYTES = 4.5 * 1024 * 1024;
+
+export function base64EncodedLength(byteLength: number): number {
+	return Math.ceil(byteLength / 3) * 4;
+}
+
+export const ACCEPTED_IMAGE_TYPES: readonly string[] = [
+	"image/png",
+	"image/jpeg",
+	"image/gif",
+	"image/webp",
+];
+
+export const REQUEST_IMAGE_BASE64_BUDGET = 24 * 1024 * 1024;
+
+export function isRetriedAttempt(
+	messages: readonly { role: string; stopReason?: string }[],
+	index: number,
+): boolean {
+	const message = messages[index];
+	if (message?.role !== "assistant" || message.stopReason !== "error") return false;
+	return messages[index + 1]?.role === "assistant";
 }

@@ -29,23 +29,46 @@ test("opens a clean ThinkRail with no projects imported", async ({ page }) => {
 	await expect(page.getByTestId("menu-open-project")).toBeVisible();
 });
 
-test("the Welcome provider warning only shows when no provider is connected, and opens Settings", async ({
+test("the Welcome warning names the missing piece — agent or provider — and opens Settings", async ({
 	page,
 }) => {
 	await openAppFresh(page);
 
-	const banner = page.getByTestId("welcome-provider-warning");
-	if (await banner.isVisible()) {
-		await expect(banner).toContainText("No model provider connected");
+	const noAgent = page.getByTestId("welcome-agent-warning");
+	const noProvider = page.getByTestId("welcome-provider-warning");
+
+	if (await noAgent.isVisible()) {
+		await expect(noAgent).toContainText("No agent connected");
+		await page.getByTestId("welcome-connect-agent").click();
+	} else if (await noProvider.isVisible()) {
+		await expect(noProvider).toContainText("No model provider connected");
 		await page.getByTestId("welcome-connect-provider").click();
-		await expect(page.getByTestId("settings-dialog")).toBeVisible();
-		await expect(page.getByTestId("settings-providers")).toBeVisible();
 	} else {
-		await expect(banner).toHaveCount(0);
+		await expect(noAgent).toHaveCount(0);
+		await expect(noProvider).toHaveCount(0);
+		return;
 	}
+
+	await expect(page.getByTestId("settings-dialog")).toBeVisible();
+	await expect(page.getByTestId("settings-agents")).toBeVisible();
 });
 
-test("Settings → Providers lists in-app auth options", async ({ page }) => {
+test("Settings → Agents lists the installed agents and offers the registry", async ({ page }) => {
+	await openAppFresh(page);
+
+	await page.getByTestId("open-settings").click();
+	await expect(page.getByTestId("settings-dialog")).toBeVisible();
+	await expect(page.getByTestId("settings-agents")).toBeVisible();
+
+	await expect(page.getByTestId("agent-row").first()).toBeVisible();
+	await expect(page.getByTestId("agents-error")).toHaveCount(0);
+	await expect(page.getByTestId("agents-install-new")).toBeVisible();
+
+	await expect(page.getByTestId("agent-command-readonly")).toBeVisible();
+	await expect(page.getByTestId("agent-remove")).toHaveCount(0);
+});
+
+test("Settings → Agents nests the provider ceremony under the selected agent", async ({ page }) => {
 	await openAppFresh(page);
 
 	await page.getByTestId("open-settings").click();
@@ -116,7 +139,7 @@ test("clicking Sign in (Settings) opens the in-app login dialog, and Cancel dism
 	await expect(dialog).toHaveCount(0);
 });
 
-test("Settings → Providers offers JetBrains AI with host-authoritative Central guidance", async ({
+test("Settings → Agents offers JetBrains AI with host-authoritative Central guidance", async ({
 	page,
 }) => {
 	await openAppFresh(page);

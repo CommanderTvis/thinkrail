@@ -28,6 +28,12 @@ function git(cwd: string, ...args: string[]): void {
 	if (!result.success) throw new Error(`git ${args.join(" ")} failed`);
 }
 
+function breakCommitSigning(): void {
+	git(repo, "config", "commit.gpgsign", "true");
+	git(repo, "config", "gpg.format", "openpgp");
+	git(repo, "config", "gpg.program", join(dataDir, "no-such-gpg"));
+}
+
 beforeEach(() => {
 	dataDir = mkdtempSync(join(tmpdir(), "trpi-git-test-"));
 	process.env.THINKRAIL_DATA_DIR = dataDir;
@@ -736,8 +742,7 @@ test("a failed commit restores the index — the user's staging area is never le
 	writeFileSync(join(repo, "impl.ts"), "export {};\n");
 	writeFileSync(join(repo, "mine.ts"), "export const mine = 1;\n");
 	git(repo, "add", "--", "mine.ts");
-	git(repo, "config", "commit.gpgsign", "true");
-	git(repo, "config", "gpg.program", join(dataDir, "no-such-gpg"));
+	breakCommitSigning();
 
 	const head = gitHeadSha("w1");
 	expect(gitCommitPaths("w1", "todo: unsignable", ["impl.ts"])).toBeNull();
@@ -750,8 +755,7 @@ test("a failed commit preserves index-only state — an intent-to-add entry surv
 	writeFileSync(join(repo, "impl.ts"), "export {};\n");
 	writeFileSync(join(repo, "intent.txt"), "later\n");
 	git(repo, "add", "-N", "--", "intent.txt");
-	git(repo, "config", "commit.gpgsign", "true");
-	git(repo, "config", "gpg.program", join(dataDir, "no-such-gpg"));
+	breakCommitSigning();
 
 	const head = gitHeadSha("w1");
 	expect(gitCommitPaths("w1", "todo: unsignable", ["impl.ts"])).toBeNull();

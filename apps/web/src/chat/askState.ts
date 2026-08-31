@@ -1,36 +1,38 @@
-import type { AskUserQuestionResult } from "@thinkrail/contracts";
+import type { AskUserQuestionResult, ChatMessage } from "@thinkrail/contracts";
 import { createContext, useContext } from "react";
-import type { ChatTurn } from "./types";
+
+const ASK_USER_QUESTION_TOOL = "ask_user_question";
 
 export interface AskState {
 	answer?: AskUserQuestionResult;
 	superseded: boolean;
 }
 
-export function deriveAskStates(
-	turns: ChatTurn[],
-	askAnswers: Record<string, AskUserQuestionResult>,
-): Record<string, AskState> {
-	const callTurnIndex: Record<string, number> = {};
+export function deriveAskStates(messages: ChatMessage[]): Record<string, AskState> {
+	const callMessageIndex: Record<string, number> = {};
+	const answers: Record<string, AskUserQuestionResult> = {};
 	let lastUserIndex = -1;
-	for (let i = 0; i < turns.length; i++) {
-		const turn = turns[i];
-		if (!turn) continue;
-		if (turn.kind === "user") {
+	for (let i = 0; i < messages.length; i++) {
+		const message = messages[i];
+		if (!message) continue;
+		if (message.role === "user") {
 			lastUserIndex = i;
-		} else if (turn.kind === "assistant") {
-			for (const block of turn.message.content) {
-				if (block.type === "toolCall" && block.name === "ask_user_question")
-					callTurnIndex[block.id] = i;
+		} else if (message.role === "assistant") {
+			for (const block of message.blocks) {
+				if (block.type === "toolCall" && block.toolName === ASK_USER_QUESTION_TOOL) {
+					callMessageIndex[block.toolCallId] = i;
+				}
 			}
+		} else if (message.marker.kind === "questionAnswers") {
+			answers[message.marker.toolCallId] = message.marker.result;
 		}
 	}
 	const states: Record<string, AskState> = {};
-	for (const [toolCallId, turnIndex] of Object.entries(callTurnIndex)) {
-		const answer = askAnswers[toolCallId];
+	for (const [toolCallId, messageIndex] of Object.entries(callMessageIndex)) {
+		const answer = answers[toolCallId];
 		states[toolCallId] = {
 			...(answer ? { answer } : {}),
-			superseded: !answer && lastUserIndex > turnIndex,
+			superseded: !answer && lastUserIndex > messageIndex,
 		};
 	}
 	return states;

@@ -31,9 +31,9 @@ import { useGlobalHotkeys } from "./useGlobalHotkeys";
 import { WorkspaceWorkbench } from "./WorkspaceWorkbench";
 
 const STATUS_LABEL: Record<ConnectionStatus, string> = {
-	connected: "Connected",
-	connecting: "Connecting…",
-	disconnected: "Disconnected",
+	connected: "ThinkRail app connected",
+	connecting: "Connecting to ThinkRail app…",
+	disconnected: "ThinkRail app disconnected",
 };
 
 const STATUS_DOT: Record<ConnectionStatus, string> = {
@@ -148,6 +148,7 @@ export function Shell() {
 						data-status={status}
 						role="status"
 						aria-label={STATUS_LABEL[status]}
+						title="This browser tab's link to the local ThinkRail app — not the coding agent. Each chat's agent is named in its own toolbar."
 						className="inline-flex items-center gap-8 tr-text-ui text-text-muted"
 					>
 						<StatusDot

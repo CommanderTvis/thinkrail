@@ -1,58 +1,54 @@
 import { RiCheckLine as Check, RiArrowDownSLine as ChevronDown } from "@remixicon/react";
-import type { ThinkingLevel } from "@thinkrail/contracts";
+import type { ConfigOption } from "@thinkrail/contracts";
 import { useState } from "react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { cn } from "@/lib";
 
 export function ThinkingSelector({
-	level,
-	levels,
+	option,
 	onSelect,
 	container,
-	className,
-	showLabel = true,
 }: {
-	level: ThinkingLevel;
-	levels: readonly ThinkingLevel[];
-	onSelect: (level: ThinkingLevel) => void;
+	option: ConfigOption | undefined;
+	onSelect: (value: string) => void;
 	container?: HTMLElement | null;
-	className?: string;
-	showLabel?: boolean;
 }) {
 	const [open, setOpen] = useState(false);
+	if (option?.control.type !== "select" || option.control.groups.length === 0) {
+		return null;
+	}
+	const { value: currentId, groups } = option.control;
+	const choices = groups.flatMap((group) => group.choices);
+	const current = choices.find((choice) => choice.id === currentId);
+
 	return (
 		<Popover open={open} onOpenChange={setOpen}>
 			<PopoverTrigger
 				data-testid="thinking-selector"
 				data-open={open}
-				disabled={levels.length === 0}
-				className={cn(
-					"flex h-32 items-center gap-8 rounded-[var(--radius-sm)] border border-control-border-default bg-clip-padding bg-control-bg px-8 tr-text-ui text-text-default outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary disabled:border-control-disabled-border disabled:bg-control-disabled-bg disabled:text-control-disabled-text data-[open=true]:border-control-border-active data-[open=true]:bg-control-bg-selected",
-					className,
-				)}
+				className="flex h-8 items-center gap-8 rounded-[var(--radius-sm)] border border-control-border-default bg-clip-padding bg-control-bg px-8 tr-text-ui text-text-default outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary data-[open=true]:border-control-border-active data-[open=true]:bg-control-bg-selected"
 			>
-				{showLabel ? <span className="tr-text-eyebrow text-text-muted">Effort</span> : null}
-				<span className="capitalize">{level}</span>
-				<ChevronDown className="size-16 shrink-0 text-text-muted" />
+				<span className="tr-text-eyebrow text-text-muted">{option.name}</span>
+				<span className="capitalize">{current?.name ?? currentId}</span>
+				<ChevronDown className="size-3 shrink-0 text-text-muted" />
 			</PopoverTrigger>
 			<PopoverContent align="start" container={container} className="w-[160px] p-4">
-				{levels.map((l) => (
+				{choices.map((choice) => (
 					<button
-						key={l}
+						key={choice.id}
 						type="button"
 						data-testid="thinking-option"
-						data-level={l}
-						aria-pressed={l === level}
+						data-level={choice.id}
+						aria-pressed={choice.id === currentId}
 						onClick={() => {
-							onSelect(l);
+							onSelect(choice.id);
 							setOpen(false);
 						}}
 						className="flex w-full items-center gap-8 rounded-[var(--radius-sm)] px-8 py-4 text-left tr-text-ui text-text-default capitalize outline-none transition-colors hover:bg-control-bg-hovered"
 					>
-						<span className="flex w-14 shrink-0 justify-center">
-							{l === level ? <Check className="size-14 text-primary" /> : null}
+						<span className="flex w-3.5 shrink-0 justify-center">
+							{choice.id === currentId ? <Check className="size-3.5 text-primary" /> : null}
 						</span>
-						{l}
+						{choice.name}
 					</button>
 				))}
 			</PopoverContent>

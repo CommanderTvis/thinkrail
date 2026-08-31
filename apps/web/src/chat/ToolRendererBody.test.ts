@@ -16,12 +16,15 @@ describe("tool result images", () => {
 		);
 		const markup = renderToStaticMarkup(
 			createElement(ToolCard, {
-				toolCallId: "registered-image-call",
-				toolName: "registered-image-output",
-				args: {},
-				tool: {
+				block: {
+					type: "toolCall",
+					toolCallId: "registered-image-call",
+					toolName: "registered-image-output",
+					title: "registered-image-output",
+					kind: "other",
 					status: "done",
-					raw: {
+					arguments: {},
+					result: {
 						content: [{ type: "image", data: "cG5n", mimeType: "image/png" }],
 					},
 				},
@@ -38,12 +41,15 @@ describe("tool result images", () => {
 	it("renders accepted fallback-result images in block order without dumping content JSON", () => {
 		const markup = renderToStaticMarkup(
 			createElement(ToolCard, {
-				toolCallId: "fallback-image-call",
-				toolName: "unregistered-image-output",
-				args: {},
-				tool: {
+				block: {
+					type: "toolCall",
+					toolCallId: "fallback-image-call",
+					toolName: "unregistered-image-output",
+					title: "unregistered-image-output",
+					kind: "other",
 					status: "error",
-					raw: {
+					arguments: {},
+					result: {
 						content: [
 							{ type: "text", text: "Captured two frames" },
 							{ type: "image", data: "Zmlyc3Q=", mimeType: "image/png" },

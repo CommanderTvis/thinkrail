@@ -29,13 +29,24 @@ wire response stays a bare `TodoItem` — the UI re-reads the whole plan on chan
 with the next `todo.list`.
 
 This module does **not** push: a user edit isn't broadcast to other clients. The acting client updates
-optimistically; a second viewer reconciles on the next `pi.event`-driven refetch. Fine for single-owner
+optimistically; a second viewer reconciles on the next `chat.event`-driven refetch. Fine for single-owner
 V1 (the chat-plan UX this feeds: [[submodule-web-chat]]'s "Chat TODO plan").
 
 **Change artifacts (`artifacts.ts`) — a commit-based review map.** Status stays agent-owned, but the host
 *observes* the transitions to attach an item's code changes, so the plan becomes a durable review map.
-`host/server.ts` tees `isTodoToolEnd` off the session event stream and fires
+`host/server.ts` tees `isTodoToolEnd` off the `chat.event` stream and fires
 `maybeAttachChangeArtifacts(workspaceId, sessionId)` off the publish path (`void` — it runs git writes).
+
+**`toolWatch.ts` is what makes that tee possible under ACP.** The old pi event stream carried a
+`tool_execution_end` frame with the tool's name on it; ThinkRail's transcript model does not. A tool call
+arrives as a `block` carrying the whole `ToolCallBlock` (name included) and then as `tool_call_update`
+patches that **replace only the fields they name** — and an agent restates `name` on an update only if it
+feels like it. So the watcher keeps the one thing the stream cannot re-derive: the set of *open*
+`todo_*` `toolCallId`s. A block whose name starts with `todo_` is remembered (or reported immediately if
+it already arrived settled); a later update is an end when its `status` is terminal (`done` / `error` /
+`abandoned` — an errored `todo_*` call still reconciles, because reconciliation reads what is on disk,
+not what the agent claimed). An update that names a *different* tool drops the id. Ids leave the set the
+moment they settle, so it holds only calls genuinely in flight and a repeated terminal update fires once.
 Reconciles are **serialized per workspace** (a promise chain) so two quick `todo_*` ends can't race the
 index mid-commit. Every `maybeAttachChangeArtifacts` call first inspects the fresh plan and synchronously
 captures any newly `in_progress` window **before enqueueing**; that stays true when an older reconcile
@@ -209,8 +220,8 @@ this same flow: `host/reviewQueue.ts` drives a per-(workspace, session) FIFO of 
 reviewable items one at a time, so it adds no state here (see host/SPEC.md).
 
 **The read barrier.** `listTodos` first awaits the workspace's in-flight reconciles
-(`settleChangeArtifacts` — the same per-workspace chain). A client's only refresh signal is the `pi.event`
-a `todo_*` tool end publishes, and the reconcile is enqueued *synchronously with that publish* but settles
+(`settleChangeArtifacts` — the same per-workspace chain). A client's only refresh signal is the
+`chat.event` a `todo_*` tool end publishes, and the reconcile is enqueued *synchronously with that publish* but settles
 later (it commits) — so without the barrier a commit slower than the client's refetch debounce would hand
 back a `done` item with no change set, leaving an open plan page promising an affordance it doesn't show
 until some unrelated event. Awaiting makes the read **causally after** the write it was triggered by;
@@ -240,11 +251,14 @@ it resolves immediately when nothing is in flight, and never rejects.
   `approveTodoReview(...)` / `requestTodoFix(...) → { pkg, previous }` / `rollbackTodoFix(...)` + the
   pure `renderFixPackage` (the review ops; the send itself is `host`'s composition), and the
   `TodoReviewRecord` type. **Mapping only** — no plan logic; `TodoStore` owns disk.
+  Plus `isTodoToolEnd(event)` — the `chat.event` predicate above, with `forgetTodoToolCalls()` as its
+  test seam.
 - **Allowed deps:** `workspaces` (worktree-path lookup via `getWorkspace`, which throws on unknown);
   `git` (`gitStatus` — the uncommitted changed-path set + the commit-scope DTO decoration;
   `gitCommitPaths` — the per-done-item delta commit; `gitHeadSha` — the baseline's head);
-  `contracts` (DTOs + `PiEvent` for `isTodoToolEnd`); `@thinkrail/shared/paths` (`WORKSPACE_INTERNAL_DIR`
+  `contracts` (DTOs + `ChatEvent` for `isTodoToolEnd`); `@thinkrail/shared/paths` (`WORKSPACE_INTERNAL_DIR`
   — the app-state prefix filtered out of change sets); **`pi-todos/core`** (the pi-free read/write model — a sanctioned host-side
   value-import of the extension package, the same pattern as `spec` → `pi-spec-graph/core`); `log`.
 - **Forbidden:** `host`; sibling features other than `workspaces` + `git` + `log`; `pi-todos`' extension entry or
-  `tools/` (pi-coupled); any pi package.
+  `tools/` (pi-coupled); any pi package; **any ACP type** — the watcher reads ThinkRail's own
+  `ChatEvent`, never a protocol shape.

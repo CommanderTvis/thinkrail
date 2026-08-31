@@ -1,5 +1,5 @@
 import { RiFullscreenLine as Maximize2 } from "@remixicon/react";
-import type { ImageContent } from "@thinkrail/contracts";
+import type { ImageBlock } from "@thinkrail/contracts";
 import { useState } from "react";
 import {
 	Dialog,
@@ -9,7 +9,7 @@ import {
 	DialogTrigger,
 } from "@/components/ui/dialog";
 
-function ToolResultImage({ image, label }: { image: ImageContent; label: string }) {
+function ToolResultImage({ image, label }: { image: ImageBlock; label: string }) {
 	const [open, setOpen] = useState(false);
 	const src = `data:${image.mimeType};base64,${image.data}`;
 	return (
@@ -58,7 +58,7 @@ function ToolResultImage({ image, label }: { image: ImageContent; label: string 
 	);
 }
 
-export function ToolResultImages({ images, label }: { images: ImageContent[]; label: string }) {
+export function ToolResultImages({ images, label }: { images: ImageBlock[]; label: string }) {
 	if (images.length === 0) return null;
 	return (
 		<div data-testid="tool-result-images" className="mt-4 flex flex-col gap-4">

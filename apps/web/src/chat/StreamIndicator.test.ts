@@ -1,38 +1,45 @@
 import { expect, test } from "bun:test";
+import type { ChatBlock, ChatMessage } from "@thinkrail/contracts";
 import { phaseLabel, streamStatus } from "./StreamIndicator";
-import type { ChatTurn } from "./types";
 
-type Block =
-	| { type: "text"; text: string }
-	| { type: "thinking"; thinking: string }
-	| { type: "toolCall"; id: string; name: string; arguments: Record<string, unknown> };
-
-function assistant(id: string, content: Block[]): ChatTurn {
-	return {
-		kind: "assistant",
-		id,
-		streaming: true,
-		message: { role: "assistant", content },
-	} as unknown as ChatTurn;
+function assistant(id: string, blocks: ChatBlock[]): ChatMessage {
+	return { role: "assistant", id, timestamp: 0, blocks };
 }
 
-const user: ChatTurn = {
-	kind: "user",
+function toolCall(
+	toolCallId: string,
+	toolName: string,
+	args: Record<string, unknown> = {},
+): ChatBlock {
+	return {
+		type: "toolCall",
+		toolCallId,
+		toolName,
+		title: toolName,
+		kind: "execute",
+		status: "running",
+		arguments: args,
+	};
+}
+
+const user: ChatMessage = {
+	role: "user",
 	id: "u1",
-	message: { role: "user", content: "hi", timestamp: 0 },
+	timestamp: 0,
+	content: [{ type: "text", text: "hi" }],
 };
 
-test("no in-flight assistant turn → working (the post-send gap)", () => {
+test("no in-flight assistant message → working (the post-send gap)", () => {
 	expect(streamStatus([user], null)).toEqual({ phase: "working" });
 	expect(streamStatus([user], "a1")).toEqual({ phase: "working" });
 });
 
-test("an empty (content-less) in-flight turn is still just working", () => {
+test("an empty (content-less) in-flight message is still just working", () => {
 	expect(streamStatus([assistant("a1", [])], "a1")).toEqual({ phase: "working" });
 });
 
-test("thinking / writing come from the active turn's last block", () => {
-	expect(streamStatus([assistant("a1", [{ type: "thinking", thinking: "hmm" }])], "a1")).toEqual({
+test("thinking / writing come from the active message's last block", () => {
+	expect(streamStatus([assistant("a1", [{ type: "thinking", text: "hmm" }])], "a1")).toEqual({
 		phase: "thinking",
 	});
 	expect(streamStatus([assistant("a1", [{ type: "text", text: "Here is" }])], "a1")).toEqual({
@@ -41,7 +48,7 @@ test("thinking / writing come from the active turn's last block", () => {
 });
 
 test("blank thinking/text hasn't really started → working (avoids a phantom label)", () => {
-	expect(streamStatus([assistant("a1", [{ type: "thinking", thinking: "  " }])], "a1")).toEqual({
+	expect(streamStatus([assistant("a1", [{ type: "thinking", text: "  " }])], "a1")).toEqual({
 		phase: "working",
 	});
 	expect(streamStatus([assistant("a1", [{ type: "text", text: "" }])], "a1")).toEqual({
@@ -50,40 +57,25 @@ test("blank thinking/text hasn't really started → working (avoids a phantom la
 });
 
 test("a trailing tool call surfaces the tool name for the loader", () => {
-	const turn = assistant("a1", [
-		{ type: "thinking", thinking: "let me look" },
-		{ type: "toolCall", id: "t1", name: "bash", arguments: { command: "ls" } },
+	const message = assistant("a1", [
+		{ type: "thinking", text: "let me look" },
+		toolCall("t1", "bash", { command: "ls" }),
 	]);
-	expect(streamStatus([turn], "a1")).toEqual({ phase: "running-tool", toolName: "bash" });
+	expect(streamStatus([message], "a1")).toEqual({ phase: "running-tool", toolName: "bash" });
 });
 
-test("after message_end (no current id) the phase falls back to the round's trailing assistant turn", () => {
-	const turn = assistant("a1", [
-		{ type: "toolCall", id: "t1", name: "bash", arguments: { command: "ls" } },
-	]);
-	expect(streamStatus([turn], null)).toEqual({ phase: "running-tool", toolName: "bash" });
-	expect(streamStatus([turn, user], null)).toEqual({ phase: "working" });
+test("after message_end (no current id) the phase falls back to the round's trailing assistant message", () => {
+	const message = assistant("a1", [toolCall("t1", "bash", { command: "ls" })]);
+	expect(streamStatus([message], null)).toEqual({ phase: "running-tool", toolName: "bash" });
+	expect(streamStatus([message, user], null)).toEqual({ phase: "working" });
 });
 
-test("status tracks the turn named by currentAssistantId, not merely the last turn", () => {
-	const turns = [
-		assistant("a1", [{ type: "toolCall", id: "t1", name: "read", arguments: {} }]),
+test("status tracks the message named by currentAssistantId, not merely the last message", () => {
+	const messages = [
+		assistant("a1", [toolCall("t1", "read")]),
 		assistant("a2", [{ type: "text", text: "answering" }]),
 	];
-	expect(streamStatus(turns, "a2")).toEqual({ phase: "writing" });
-});
-
-test("a trailing running compaction outranks assistant fallbacks — the footer names the beat", () => {
-	const turns: ChatTurn[] = [
-		assistant("a1", [{ type: "toolCall", id: "t1", name: "bash", arguments: {} }]),
-		{ kind: "compaction", id: "c1", status: "running" },
-	];
-	expect(streamStatus(turns, null)).toEqual({ phase: "compacting" });
-	const settled: ChatTurn[] = [
-		assistant("a1", [{ type: "toolCall", id: "t1", name: "bash", arguments: {} }]),
-		{ kind: "compaction", id: "c1", status: "done" },
-	];
-	expect(streamStatus(settled, null)).toEqual({ phase: "working" });
+	expect(streamStatus(messages, "a2")).toEqual({ phase: "writing" });
 });
 
 test("phaseLabel names every phase (and falls back to a generic tool label)", () => {
@@ -92,5 +84,4 @@ test("phaseLabel names every phase (and falls back to a generic tool label)", ()
 	expect(phaseLabel({ phase: "writing" })).toBe("Writing…");
 	expect(phaseLabel({ phase: "running-tool", toolName: "bash" })).toBe("Running bash…");
 	expect(phaseLabel({ phase: "running-tool" })).toBe("Running tool…");
-	expect(phaseLabel({ phase: "compacting" })).toBe("Compacting context…");
 });

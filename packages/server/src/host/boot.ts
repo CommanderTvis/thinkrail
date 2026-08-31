@@ -1,6 +1,6 @@
 import { findFreePort } from "@thinkrail/shared/freePort";
 import { resolveShellEnv } from "@thinkrail/shared/shellEnv";
-import { initializeJbcentralRuntime } from "../auth";
+import { startJbcentralWatch } from "../auth";
 import { initLogging, logger } from "../log";
 import { dataDir } from "../persistence";
 import { installCrashLog } from "./crashLog";
@@ -86,7 +86,7 @@ export async function bootHost(options: BootHostOptions): Promise<BootedHost> {
 		});
 		installCrashLog(options.appVersion);
 		resolveShellEnv();
-		await initializeJbcentralRuntime();
+		startJbcentralWatch();
 
 		const requested = options.port;
 		const port =

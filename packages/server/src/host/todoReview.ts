@@ -1,18 +1,6 @@
-import type { PiEvent, ReviewComment, ReviewSnapshot, TodoItem } from "@thinkrail/contracts";
+import type { ChatEvent, ReviewComment, ReviewSnapshot, TodoItem } from "@thinkrail/contracts";
 import type { Todo } from "pi-todos/core";
-import {
-	type AddReviewCommentParams,
-	createSession,
-	ensureSessionAttached,
-	followUpSession,
-	getSessionWorkspaceId,
-	notifyExtUi,
-	type ReflectFindingParams,
-	type ReviewVerdictParams,
-	setAddReviewCommentHandler,
-	setReflectFindingHandler,
-	setReviewVerdictHandler,
-} from "../agent";
+import { getAgentSessions } from "../agent";
 import { getProjects } from "../projects";
 import {
 	addComment,
@@ -39,7 +27,6 @@ import {
 	workerSessionForReviewer,
 } from "../todos";
 import { getWorkspace, listWorkspaceRecords } from "../workspaces";
-import { ackSend } from "./ackSend";
 import {
 	clearReviewerSessionWorkspaceMapping,
 	maybeCleanupStuckReviewSession,
@@ -57,6 +44,14 @@ import {
 	type StartOne,
 	seedReviewQueue,
 } from "./reviewQueue";
+import {
+	type AddReviewCommentParams,
+	type ReflectFindingParams,
+	type ReviewVerdictParams,
+	setAddReviewCommentHandler,
+	setReflectFindingHandler,
+	setReviewVerdictHandler,
+} from "./reviewTools";
 
 interface ItemRef {
 	workspaceId: string;
@@ -106,19 +101,30 @@ const pendingFix = new Map<string, PendingFix>();
 
 const DEFAULT_FIX_NOTE = "Address the reviewer's comments below.";
 
-function reviewSessionOptions() {
+async function createReviewSession(workspaceId: string): Promise<{ sessionId: string }> {
+	const created = await getAgentSessions().createSession(workspaceId);
 	const cfg = getConfig();
-	return {
-		...(cfg.reviewModel ? { model: cfg.reviewModel, modelOptional: true } : {}),
-		...(cfg.reviewEffort ? { thinkingLevel: cfg.reviewEffort } : {}),
-	};
+	for (const [optionId, value] of [
+		["model", cfg.reviewModel],
+		["thinkingLevel", cfg.reviewEffort],
+	] as const) {
+		if (value === undefined) continue;
+		await getAgentSessions()
+			.setConfigOption(created.sessionId, optionId, value)
+			.catch(() => undefined);
+	}
+	return created;
 }
 
-export type SendReviewPackage = (sessionId: string, pkg: string) => Promise<void>;
+export type SendReviewPackage = (sessionId: string, pkg: string) => void;
+
+function deliver(sessionId: string, text: string): void {
+	getAgentSessions().followUp(sessionId, [{ type: "text", text }]);
+}
 
 export async function startTodoReviewFlow(
 	p: ItemRef,
-	sendReviewPackage: SendReviewPackage = followUpSession,
+	sendReviewPackage: SendReviewPackage = deliver,
 	opts: { fromQueue?: boolean } = {},
 ): Promise<{ ok: true; reviewerSessionId: string }> {
 	const key = workerKey(p.workspaceId, p.sessionId);
@@ -136,24 +142,20 @@ export async function startTodoReviewFlow(
 		);
 	}
 	inFlightReview.set(key, p.id);
-	const ws = getWorkspace(p.workspaceId);
+	const _ws = getWorkspace(p.workspaceId);
 	try {
 		// Render first (validates the item + marks it pending); any failure below must clear the mark.
 		const { pkg, reviewedSha } = startTodoReview(p);
 		const pinned = reviewerSessionFor(p);
 		let reviewerSessionId: string;
-		if (pinned && (await ensureSessionAttached(pinned, p.workspaceId, ws.worktreePath))) {
+		if (pinned && getAgentSessions().hasSession(pinned)) {
 			reviewerSessionId = pinned;
 		} else {
 			if (pinned) {
 				clearReviewerSessionWorkspaceMapping(pinned);
 				currentReview.delete(pinned);
 			}
-			const created = await createSession({
-				cwd: ws.worktreePath,
-				workspaceId: p.workspaceId,
-				...reviewSessionOptions(),
-			});
+			const created = await createReviewSession(p.workspaceId);
 			pinReviewerSession(p, created.sessionId);
 			reviewerSessionId = created.sessionId;
 		}
@@ -257,30 +259,28 @@ function fireReviewerPrompt(
 	pkg: string,
 	sendReviewPackage: SendReviewPackage,
 ): void {
-	void ackSend(sendReviewPackage(reviewerSessionId, pkg))
-		.then(undefined, (err) => {
-			inFlightReview.delete(workerKey(p.workspaceId, p.sessionId));
-			currentReview.delete(reviewerSessionId);
-			cancelTodoReview(p);
-			notifyExtUi(
-				reviewerSessionId,
-				`Review start failed: ${err instanceof Error ? err.message : String(err)}`,
-				"error",
-			);
-			onReviewStartFailed(
-				p.workspaceId,
-				p.sessionId,
-				p.id,
-				startOneReview(p.workspaceId, p.sessionId),
-			);
-		})
-		.catch((err) => {
-			console.warn(`todo review cancel failed: ${err instanceof Error ? err.message : err}`);
-		});
+	try {
+		sendReviewPackage(reviewerSessionId, pkg);
+	} catch (err) {
+		inFlightReview.delete(workerKey(p.workspaceId, p.sessionId));
+		currentReview.delete(reviewerSessionId);
+		cancelTodoReview(p);
+		getAgentSessions().notice(
+			reviewerSessionId,
+			"error",
+			`Review start failed: ${err instanceof Error ? err.message : String(err)}`,
+		);
+		onReviewStartFailed(
+			p.workspaceId,
+			p.sessionId,
+			p.id,
+			startOneReview(p.workspaceId, p.sessionId),
+		);
+	}
 }
 
 function reviewerContext(reviewerSessionId: string): { workspaceId: string; sessionId: string } {
-	const workspaceId = getSessionWorkspaceId(reviewerSessionId);
+	const workspaceId = getAgentSessions().workspaceOf(reviewerSessionId);
 	if (!workspaceId) throw new Error("This session is not attached to a workspace.");
 	const sessionId = workerSessionForReviewer(workspaceId, reviewerSessionId);
 	if (!sessionId)
@@ -290,8 +290,8 @@ function reviewerContext(reviewerSessionId: string): { workspaceId: string; sess
 	return { workspaceId, sessionId };
 }
 
-export function handleReviewerSettled(sessionId: string, event: PiEvent): void {
-	if (event.type !== "agent_settled") return;
+export function handleReviewerSettled(sessionId: string, event: ChatEvent): void {
+	if (event.type !== "turn_settled") return;
 	const mapping = reviewerWorkerFor(sessionId);
 	const cleared = maybeCleanupStuckReviewSession(sessionId, event);
 	if (cleared) {
@@ -513,28 +513,27 @@ async function sendReflectedFix(pending: PendingFix): Promise<void> {
 				note: pending.note,
 				autoCycles: 2,
 			});
-			notifyExtUi(
+			getAgentSessions().notice(
 				pending.reviewerSessionId,
-				"Every finding was refuted on reflection — no fix was sent. They stay in Review for you to judge.",
 				"info",
+				"Every finding was refuted on reflection — no fix was sent. They stay in Review for you to judge.",
 			);
 			releaseItemFix(pending.workerSessionId, pending.item.id);
 			return;
 		}
-		void ackSend(followUpSession(pending.workerSessionId, prepared.fixText))
-			.then(undefined, (err) => {
-				if (prepared.survivingIds.length > 0)
-					rollbackSend(pending.workspaceId, prepared.survivingIds, pending.workerSessionId);
-				notifyExtUi(
-					pending.reviewerSessionId,
-					`Fix send failed: ${err instanceof Error ? err.message : String(err)}`,
-					"error",
-				);
-			})
-			.catch((err) => {
-				console.warn(`reflected fix rollback failed: ${err instanceof Error ? err.message : err}`);
-			})
-			.finally(() => releaseItemFix(pending.workerSessionId, pending.item.id));
+		try {
+			deliver(pending.workerSessionId, prepared.fixText);
+		} catch (err) {
+			if (prepared.survivingIds.length > 0)
+				rollbackSend(pending.workspaceId, prepared.survivingIds, pending.workerSessionId);
+			getAgentSessions().notice(
+				pending.reviewerSessionId,
+				"error",
+				`Fix send failed: ${err instanceof Error ? err.message : String(err)}`,
+			);
+		} finally {
+			releaseItemFix(pending.workerSessionId, pending.item.id);
+		}
 	} catch (err) {
 		releaseItemFix(pending.workerSessionId, pending.item.id);
 		console.warn(`reflected fix send skipped: ${err instanceof Error ? err.message : err}`);
@@ -542,28 +541,21 @@ async function sendReflectedFix(pending: PendingFix): Promise<void> {
 }
 
 function fireReflection(pending: PendingFix, candidates: ReviewComment[]): void {
-	const ws = getWorkspace(pending.workspaceId);
 	void (async () => {
-		const reflector = await createSession({
-			cwd: ws.worktreePath,
-			workspaceId: pending.workspaceId,
-			...reviewSessionOptions(),
-		});
+		const reflector = await createReviewSession(pending.workspaceId);
 		pendingFix.set(reflector.sessionId, pending);
 		try {
-			await ackSend(
-				followUpSession(reflector.sessionId, renderReflectionPackage(pending.item, candidates)),
-			);
+			deliver(reflector.sessionId, renderReflectionPackage(pending.item, candidates));
 		} catch (err) {
 			pendingFix.delete(reflector.sessionId);
 			void sendReflectedFix(pending);
-			notifyExtUi(
+			getAgentSessions().notice(
 				pending.reviewerSessionId,
-				`Reflection couldn't start (${err instanceof Error ? err.message : String(err)}) — the fix was sent unreflected.`,
 				"warning",
+				`Reflection couldn't start (${err instanceof Error ? err.message : String(err)}) — the fix was sent unreflected.`,
 			);
 		}
-	})().catch(() => sendReflectedFix(pending));
+	})().catch(() => void sendReflectedFix(pending));
 }
 
 export function maybeResumeReflection(settledSessionId: string): void {

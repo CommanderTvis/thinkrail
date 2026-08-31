@@ -1,3 +1,10 @@
+export type * from "./chatProtocol";
+export {
+	DURABLE_CHAT_EVENT_TYPES,
+	isDurableChatEvent,
+	isSyntheticToolName,
+	SYNTHETIC_TOOL_NAME_PREFIX,
+} from "./chatProtocol";
 export type * from "./domain";
 export {
 	ACCEPTED_IMAGE_TYPES,
@@ -15,6 +22,4 @@ export {
 	TERMINAL_REPLAY_KB,
 	TODO_NUDGE_PREFIX,
 } from "./domain";
-export type * from "./piProtocol";
-export { isTranscriptMessageRole } from "./piProtocol";
 export * from "./wsProtocol";

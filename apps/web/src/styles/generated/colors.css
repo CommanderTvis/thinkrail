@@ -1,5 +1,5 @@
 /*
- * GENERATED — do not edit. Source: `src/styles/colors.json` (v1.1.0).
+ * GENERATED — do not edit. Source: `src/styles/colors.json` (v1.2.0).
  * Regenerate with `bun run colors:generate`; `colors:check` fails when this file is stale.
  *
  * The semantic roles, then the Tailwind utility map. The palette they read is written to the
@@ -19,6 +19,7 @@
 	--container-header-bg: var(--header);
 	--container-content-bg: var(--content); /* the recessed read-a-diff/read-code canvas, NOT the document canvas (that is workspace): the Changes diff (Monaco THEME), rendered diffs, Shiki code blocks, and the center-column backdrop behind them */
 	--container-elevated-bg: var(--elevated); /* every raised surface: dialogs, popovers, menus, toasts, cards, code blocks */
+	--container-logo-chip-bg: var(--logo-chip); /* a fixed light backdrop behind a third-party agent's own logo asset — those SVGs are monochrome for an arbitrary background, so the chip stays the same near-white across every theme (including the dark ones) instead of swapping, or a dark-stroke mark disappears against a dark theme's own background */
 	--control-bg: var(--input);
 	--control-bg-hovered: var(--hover);
 	--control-bg-selected: var(--hover);
@@ -88,6 +89,7 @@
 	--color-container-header-bg: var(--container-header-bg);
 	--color-container-content-bg: var(--container-content-bg);
 	--color-container-elevated-bg: var(--container-elevated-bg);
+	--color-container-logo-chip-bg: var(--container-logo-chip-bg);
 	--color-control-bg: var(--control-bg);
 	--color-control-bg-hovered: var(--control-bg-hovered);
 	--color-control-bg-selected: var(--control-bg-selected);

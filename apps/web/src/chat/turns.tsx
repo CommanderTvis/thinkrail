@@ -4,12 +4,12 @@ import {
 	RiArrowRightSLine as ChevronRight,
 	RiTimeLine as Clock,
 	RiFileTextLine as FileText,
-	RiContractUpDownLine as FoldVertical,
+	RiInformationLine as Info,
 	RiLoopRightLine as RotateCw,
 	RiAlertLine as TriangleAlert,
 	RiToolsLine as Wrench,
 } from "@remixicon/react";
-import type { ImageContent, UserMessage } from "@thinkrail/contracts";
+import type { ImageBlock, StopReason, UserMessage } from "@thinkrail/contracts";
 import { type ReactNode, useEffect, useState } from "react";
 import { CustomIcon } from "@/components/CustomIcon";
 import { Button } from "@/components/ui/button";
@@ -31,8 +31,6 @@ import { formatElapsed, formatTokens } from "./SessionStatsBar";
 import { ToolCard } from "./ToolCard";
 import { ToolRendererBody } from "./ToolRendererBody";
 import { getToolChrome, getToolSummary, type ToolRenderProps } from "./toolRegistry";
-import { SubagentCompletionCard } from "./tools/subagent/SubagentCompletionCard";
-import type { CompactionState } from "./types";
 
 export function ChatTurnView({
 	row,
@@ -53,37 +51,35 @@ export function ChatTurnView({
 }) {
 	switch (row.kind) {
 		case "user":
-			return <UserTurn id={row.id} message={row.message} attachmentNames={row.attachmentNames} />;
-		case "system":
-			return <SystemTurn text={row.text} />;
-		case "error":
+			return <UserTurn id={row.id} message={row.message} />;
+		case "notice":
 			return (
-				<ErrorTurn
+				<NoticeTurn
+					level={row.level}
 					text={row.text}
 					onTryAgain={row.recovery === "try-again" ? onTryAgain : undefined}
 				/>
 			);
+		case "settled":
+			return <SettledTurn stopReason={row.stopReason} error={row.error} />;
 		case "compaction":
-			return row.summary !== undefined && row.tokensBefore !== undefined ? (
+			return (
 				<CompactionTurn
-					id={row.id}
 					summary={row.summary}
-					tokensBefore={row.tokensBefore}
-					tokensAfter={row.tokensAfter}
-					resuming={row.resuming}
+					{...(row.tokensBefore !== undefined ? { tokensBefore: row.tokensBefore } : {})}
 				/>
-			) : (
-				<CompactionNotice {...row} />
 			);
 		case "retry":
 			return (
 				<RetryIndicator
-					source={row.source}
+					source={row.scope}
 					attempt={row.attempt}
 					maxAttempts={row.maxAttempts}
 					delayMs={row.delayMs}
 				/>
 			);
+		case "compacting":
+			return <CompactingNotice />;
 		case "markdown":
 			return (
 				<div
@@ -94,10 +90,8 @@ export function ChatTurnView({
 					<Markdown text={row.text} />
 				</div>
 			);
-		case "subagentCompletion":
-			return <SubagentCompletionCard id={row.id} details={row.details} text={row.text} />;
 		case "tool":
-			return <ToolRow row={row} workspaceRoot={workspaceRoot} onOpenFile={onOpenFile} />;
+			return <ToolRow block={row.block} streaming={row.streaming} workspaceRoot={workspaceRoot} />;
 		case "activity":
 			return (
 				<ActivityGroup
@@ -124,23 +118,22 @@ export function ChatTurnView({
 	}
 }
 
-function userAttachments(content: UserMessage["content"], names?: string[]) {
-	if (typeof content === "string") return [];
+function userAttachments(content: UserMessage["content"]) {
 	const seen = new Map<string, number>();
 	return content
-		.filter((c) => c.type === "image")
-		.map((img, i) => {
+		.filter((c): c is ImageBlock => c.type === "image")
+		.map((img) => {
 			const tail = img.data.slice(-24);
 			const n = seen.get(tail) ?? 0;
 			seen.set(tail, n + 1);
-			return { key: `${tail}-${n}`, label: names?.[i] ?? img.mimeType, img };
+			return { key: `${tail}-${n}`, label: img.mimeType, img };
 		});
 }
 
 const USER_BUBBLE =
 	"max-w-[85%] whitespace-pre-wrap break-words rounded-[var(--radius-lg)] border border-bubble-user-border bg-clip-padding bg-bubble-user-bg px-12 py-8 tr-text-reading text-text-muted";
 
-function AttachmentChip({ label, img }: { label: string; img: ImageContent }) {
+function AttachmentChip({ label, img }: { label: string; img: ImageBlock }) {
 	const [open, setOpen] = useState(false);
 	return (
 		<>
@@ -172,17 +165,9 @@ function AttachmentChip({ label, img }: { label: string; img: ImageContent }) {
 	);
 }
 
-function UserTurn({
-	id,
-	message,
-	attachmentNames,
-}: {
-	id: string;
-	message: UserMessage;
-	attachmentNames?: string[] | undefined;
-}) {
+function UserTurn({ id, message }: { id: string; message: UserMessage }) {
 	const text = userText(message.content);
-	const attachments = userAttachments(message.content, attachmentNames);
+	const attachments = userAttachments(message.content);
 	const skill = parseSkillInvocation(text);
 	if (skill) {
 		return (
@@ -329,108 +314,74 @@ function PackageCommentRow({ foldId, item }: { foldId: string; item: ReviewPacka
 }
 
 function ToolRow({
-	row,
+	block,
+	streaming,
 	workspaceRoot,
-	onOpenFile,
 }: {
-	row: Extract<ChatRow, { kind: "tool" }>;
+	block: Extract<ChatRow, { kind: "tool" }>["block"];
+	streaming: boolean;
 	workspaceRoot?: string | undefined;
 	onOpenFile?: ((path: string) => void) | undefined;
 }) {
-	if (getToolChrome(row.toolName) === "bare") {
+	if (getToolChrome(block.toolName) === "bare") {
 		const renderProps: ToolRenderProps = {
-			toolCallId: row.toolCallId,
-			toolName: row.toolName,
-			args: row.args,
-			result: row.tool?.raw,
-			status: row.tool?.status ?? (row.dead ? "error" : "running"),
+			toolCallId: block.toolCallId,
+			toolName: block.toolName,
+			args: block.arguments,
+			result: block.result,
+			status: block.status,
 			workspaceRoot,
-			onOpenFile,
-			streaming: row.streaming,
+			streaming,
 		};
 		return (
 			<div className="tr-text-ui text-text-default">
-				<ToolRendererBody {...renderProps} imageLabel={getToolSummary(row.toolName, renderProps)} />
+				<ToolRendererBody
+					{...renderProps}
+					imageLabel={getToolSummary(block.toolName, renderProps)}
+				/>
 			</div>
 		);
 	}
-	return (
-		<ToolCard
-			toolCallId={row.toolCallId}
-			toolName={row.toolName}
-			args={row.args}
-			tool={row.tool}
-			dead={row.dead}
-			streaming={row.streaming}
-			workspaceRoot={workspaceRoot}
-			onOpenFile={onOpenFile}
-		/>
-	);
+	return <ToolCard block={block} streaming={streaming} workspaceRoot={workspaceRoot} />;
 }
 
-function SystemTurn({ text }: { text: string }) {
-	return (
-		<div
-			data-testid="chat-message"
-			data-role="system"
-			className="text-center text-text-muted tr-text-metadata"
-		>
-			{text}
-		</div>
-	);
-}
-
-function CompactionTurn({
-	id,
-	summary,
-	tokensBefore,
-	tokensAfter,
-	resuming,
+function NoticeTurn({
+	level,
+	text,
+	onTryAgain,
 }: {
-	id: string;
-	summary: string;
-	tokensBefore: number;
-	tokensAfter?: number | undefined;
-	resuming?: boolean | undefined;
+	level: "info" | "warning" | "error";
+	text: string;
+	onTryAgain?: (() => void) | undefined;
 }) {
-	const [open, toggle] = useFold(id);
-	const label = resuming ? "Context compacted — resuming…" : "Context compacted";
-	const tokens =
-		tokensAfter === undefined
-			? `${formatTokens(tokensBefore)} tokens`
-			: `${formatTokens(tokensBefore)} → ${formatTokens(tokensAfter)} tokens`;
-	return (
-		<div data-testid="chat-compaction" className="flex flex-col gap-8">
-			<button
-				type="button"
-				aria-expanded={open}
-				onClick={toggle}
-				className="flex items-center gap-8 text-text-muted tr-text-metadata hover:text-text-default"
+	if (level === "info") {
+		return (
+			<div
+				data-testid="chat-message"
+				data-role="notice"
+				data-level={level}
+				className="text-center text-text-muted tr-text-metadata"
 			>
-				<span className="h-px flex-1 bg-border-default" />
-				{open ? <ChevronDown className="size-16" /> : <ChevronRight className="size-16" />}
-				<span>
-					{label} ({tokens})
-				</span>
-				<span className="h-px flex-1 bg-border-default" />
-			</button>
-			{open ? (
-				<div className="tr-text-reading text-text-muted">
-					<Markdown text={summary} />
-				</div>
-			) : null}
-		</div>
-	);
-}
-
-function ErrorTurn({ text, onTryAgain }: { text: string; onTryAgain?: (() => void) | undefined }) {
+				{text}
+			</div>
+		);
+	}
+	const tone =
+		level === "error"
+			? "border-feedback-error-muted bg-feedback-error-subtle text-feedback-error"
+			: "border-border-default border-l-[3px] border-l-feedback-warning bg-feedback-warning-subtle text-feedback-warning";
+	const Icon = level === "error" ? TriangleAlert : Info;
 	return (
 		<div
 			data-testid="chat-message"
-			data-role="error"
-			className="flex items-start gap-8 rounded-[var(--radius-sm)] border border-feedback-error-muted bg-clip-padding bg-feedback-error-subtle px-12 py-8 text-feedback-error tr-text-ui"
+			data-role="notice"
+			data-level={level}
+			className={cn(
+				"flex items-start gap-8 rounded-[var(--radius-sm)] border bg-clip-padding px-12 py-8 tr-text-ui",
+				tone,
+			)}
 		>
-			<TriangleAlert className="mt-2 size-12 shrink-0" />
+			<Icon className="mt-2 size-4 shrink-0" />
 			<span className="min-w-0 flex-1 whitespace-pre-wrap break-words">{text}</span>
 			{onTryAgain ? (
 				<Button
@@ -448,52 +399,85 @@ function ErrorTurn({ text, onTryAgain }: { text: string; onTryAgain?: (() => voi
 	);
 }
 
-function CompactionNotice({
-	status,
-	detail,
-	tokensBefore,
-	tokensAfter,
-	resuming,
-}: CompactionState) {
-	if (status === "failed") {
+const SETTLED_COPY: Partial<Record<StopReason, string>> = {
+	maxTokens: "Stopped — reached the model's max output tokens",
+	maxRequests: "Stopped — reached the turn's request limit",
+	refused: "The agent refused to continue",
+	failed: "The turn failed",
+};
+
+function SettledTurn({
+	stopReason,
+	error,
+}: {
+	stopReason: StopReason;
+	error?: string | undefined;
+}) {
+	if (stopReason === "completed" || stopReason === "cancelled") {
 		return (
 			<div
-				data-testid="compaction-notice"
-				data-status="failed"
-				className="flex items-start gap-8 rounded-[var(--radius-md)] border border-feedback-error-muted bg-clip-padding bg-feedback-error-subtle px-12 py-8 text-feedback-error tr-text-ui"
+				data-testid="chat-message"
+				data-role="settled"
+				data-stop-reason={stopReason}
+				className="text-center text-text-muted tr-text-metadata"
 			>
-				<TriangleAlert className="mt-2 size-12 shrink-0" />
-				<span className="min-w-0 whitespace-pre-wrap break-words">
-					{detail || "Compaction failed."}
-				</span>
+				{stopReason === "completed" ? "✓ Done" : "Cancelled"}
 			</div>
 		);
 	}
-	const label =
-		status === "running"
-			? "Compacting context…"
-			: status === "cancelled"
-				? "Compaction cancelled"
-				: resuming
-					? "Context compacted — resuming…"
-					: "Context compacted";
-	const tokens =
-		tokensBefore != null && tokensAfter != null
-			? `${formatTokens(tokensBefore)} → ${formatTokens(tokensAfter)} tokens`
-			: null;
+	return (
+		<div
+			data-testid="chat-message"
+			data-role="settled"
+			data-stop-reason={stopReason}
+			className="flex items-start gap-8 rounded-[var(--radius-sm)] border border-feedback-error-muted bg-clip-padding bg-feedback-error-subtle px-12 py-8 text-feedback-error tr-text-ui"
+		>
+			<TriangleAlert className="mt-2 size-4 shrink-0" />
+			<span className="min-w-0 whitespace-pre-wrap break-words">
+				{error || SETTLED_COPY[stopReason] || "The turn ended unexpectedly"}
+			</span>
+		</div>
+	);
+}
+
+function CompactionTurn({ summary, tokensBefore }: { summary: string; tokensBefore?: number }) {
+	const [open, toggle] = useFold(`compaction:${summary.length}:${tokensBefore ?? 0}`);
+	return (
+		<div data-testid="chat-compaction" className="flex flex-col gap-8">
+			<button
+				type="button"
+				aria-expanded={open}
+				onClick={toggle}
+				className="flex items-center gap-8 text-text-muted tr-text-metadata hover:text-text-default"
+			>
+				<span className="h-px flex-1 bg-border-default" />
+				{open ? <ChevronDown className="size-16" /> : <ChevronRight className="size-16" />}
+				<span>
+					Earlier messages summarized
+					{tokensBefore !== undefined
+						? ` (${formatTokens(tokensBefore)} tokens of context compacted)`
+						: ""}
+				</span>
+				<span className="h-px flex-1 bg-border-default" />
+			</button>
+			{open ? (
+				<div className="tr-text-reading text-text-muted">
+					<Markdown text={summary} />
+				</div>
+			) : null}
+		</div>
+	);
+}
+
+function CompactingNotice() {
 	return (
 		<div
 			data-testid="compaction-notice"
-			data-status={status}
+			data-status="running"
 			className="flex items-center justify-center gap-8 text-text-muted tr-text-metadata"
 		>
-			{status === "running" ? (
-				<RotateCw className="size-12 shrink-0 animate-spin" />
-			) : (
-				<FoldVertical className="size-12 shrink-0" />
-			)}
-			<span>{label}</span>
-			{tokens ? <span>({tokens})</span> : null}
+			<RotateCw className="size-3 shrink-0 animate-spin" />
+			<span>Compacting context…</span>
 		</div>
 	);
 }

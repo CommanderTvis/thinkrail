@@ -67,12 +67,12 @@ export function JetBrainsAiCard({
 			try {
 				const result: JbcentralActionResult =
 					action === "connect"
-						? await getTransport().request("provider.jbcentralConnect", {})
+						? await getTransport().request("agent.jbcentralConnect", {})
 						: action === "disconnect"
-							? await getTransport().request("provider.jbcentralDisconnect", {})
+							? await getTransport().request("agent.jbcentralDisconnect", {})
 							: action === "start-proxy"
-								? await getTransport().request("provider.jbcentralStartProxy", {})
-								: await getTransport().request("provider.jbcentralUpdate", {});
+								? await getTransport().request("agent.jbcentralStartProxy", {})
+								: await getTransport().request("agent.jbcentralUpdate", {});
 				if (result.outcome === "failed") {
 					setNotice({ kind: "failed", action, reason: result.reason });
 				}
@@ -90,7 +90,7 @@ export function JetBrainsAiCard({
 		if (signingIn) return;
 		setSigningIn(true);
 		try {
-			const result = await getTransport().request("provider.jbcentralLogin", {});
+			const result = await getTransport().request("agent.jbcentralLogin", {});
 			setNotice(
 				result.outcome === "launched" ? { kind: "login-launched" } : { kind: "login-failed" },
 			);

@@ -1,8 +1,8 @@
 import type {
+	AgentDescriptor,
 	GitDiffScope,
 	Project,
 	SpecGraphNode,
-	WireModel,
 	Workspace,
 } from "@thinkrail/contracts";
 import {
@@ -18,13 +18,7 @@ import type {
 	LayoutTab,
 	WorkspaceLayoutDocument,
 } from "../shell/layout";
-import type {
-	ClosedChat,
-	EditorTab,
-	RouteChatTarget,
-	SessionRuntime,
-	TerminalTab,
-} from "./appStore";
+import type { ClosedChat, EditorTab, RouteChatTarget, TerminalTab } from "./appStore";
 
 interface ConnectionGenerationState {
 	status: string;
@@ -188,6 +182,10 @@ export function selectActiveWorkspace(state: ActiveWorkspaceState): Workspace | 
 	return state.activeWorkspaceId ? selectWorkspaceById(state, state.activeWorkspaceId) : null;
 }
 
+export function selectHasAnyWorkspace(state: ActiveWorkspaceState): boolean {
+	return Object.values(state.workspaces).some((workspaces) => workspaces.length > 0);
+}
+
 export function selectWorkspaceById(
 	state: ActiveWorkspaceState,
 	workspaceId: string,
@@ -206,6 +204,20 @@ export function selectActiveWorkspaceProjectId(state: ActiveWorkspaceState): str
 export function selectContextProject(state: ProjectContextState): Project | null {
 	const projectId = selectActiveWorkspace(state)?.projectId ?? state.selectedProjectId;
 	return state.projects.find((project) => project.id === projectId) ?? null;
+}
+
+interface ResolvedAgentState {
+	projects: Project[];
+	defaultAgentId: string | null;
+	defaultAgent: AgentDescriptor | null;
+}
+
+export function selectResolvedAgentId(
+	state: ResolvedAgentState,
+	projectId: string | null,
+): string | null {
+	const project = projectId ? state.projects.find((p) => p.id === projectId) : null;
+	return project?.agentId ?? state.defaultAgentId ?? state.defaultAgent?.id ?? null;
 }
 
 export interface HistoryTarget {
@@ -301,14 +313,6 @@ export function selectWorkspaceSessionIds(
 	return [...sessionIds];
 }
 
-export function selectCatalogModel(
-	models: readonly WireModel[],
-	ref: Pick<WireModel, "provider" | "id"> | null,
-): WireModel | null {
-	if (!ref) return null;
-	return models.find((m) => m.provider === ref.provider && m.id === ref.id) ?? null;
-}
-
 export const BRANCH_SCOPE: GitDiffScope = { kind: "branch" };
 
 export function selectDiffScope(
@@ -349,17 +353,6 @@ export function selectChatTitle(
 	const tabs = state.tabsByWorkspace[workspaceId] ?? [];
 	const chatTab = tabs.find((t) => t.kind === "chat" && t.sessionId === sessionId);
 	return (chatTab?.name ?? "Chat").trim() || "Chat";
-}
-
-export function selectCompactionTurnIds(
-	state: { sessions: Record<string, SessionRuntime> },
-	sessionId: string,
-): ReadonlySet<string> {
-	return new Set(
-		(state.sessions[sessionId]?.turns ?? [])
-			.filter((turn) => turn.kind === "compaction")
-			.map((turn) => turn.id),
-	);
 }
 
 export function selectWorkspaceTick(

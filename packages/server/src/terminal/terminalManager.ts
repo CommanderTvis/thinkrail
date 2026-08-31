@@ -27,6 +27,14 @@ import { hasChildProcesses } from "./shellBusy";
 
 type PushToClient = (clientKey: string, channel: string, data: unknown) => TerminalDeliveryResult;
 
+interface AgentTerminalState {
+	readonly limit: number;
+	output: string;
+	truncated: boolean;
+	exit: AgentTerminalExit | null;
+	waiters: ((exit: AgentTerminalExit) => void)[];
+}
+
 interface TerminalEntry {
 	pty: IPty;
 	workspaceId: string;
@@ -35,6 +43,7 @@ interface TerminalEntry {
 	output: OutputBatcher;
 	recorder: OutputRecorder;
 	grid: PtyGrid;
+	agent: AgentTerminalState | null;
 }
 
 interface TabRecord {
@@ -138,12 +147,20 @@ function assertTerminalCatalogCapacity(tabs: readonly TabRecord[]): void {
 	}
 }
 
+interface SpawnProgram {
+	command: string;
+	args: string[];
+	env: Record<string, string>;
+	cwd: string;
+}
+
 function spawnForTab(
 	workspaceId: string,
 	tabKey: string,
-	clientKey: string,
+	clientKey: string | null,
 	size: { cols?: number; rows?: number },
 	revived: string | undefined,
+	program?: { run: SpawnProgram; state: AgentTerminalState },
 ): { id: string; entry: TerminalEntry } {
 	const ws = loadWorkspaces().find((w) => w.id === workspaceId);
 	if (!ws) throw new Error(`Unknown workspace: ${workspaceId}`);
@@ -153,12 +170,16 @@ function spawnForTab(
 		cols: size.cols ?? DEFAULT_PTY_SIZE.cols,
 		rows: size.rows ?? DEFAULT_PTY_SIZE.rows,
 	};
-	const pty = spawn(shell, terminalShellArgs(process.platform), {
-		name: "xterm-256color",
-		cwd: ws.worktreePath,
-		...grid,
-		env: ptyEnv(),
-	});
+	const pty = spawn(
+		program?.run.command ?? shell,
+		program === undefined ? terminalShellArgs(process.platform) : program.run.args,
+		{
+			name: "xterm-256color",
+			cwd: program?.run.cwd ?? ws.worktreePath,
+			...grid,
+			env: program === undefined ? ptyEnv() : { ...ptyEnv(), ...program.run.env },
+		},
+	);
 
 	const id = randomUUID();
 	const recorder = createOutputRecorder({ maxChars: replayBudgetChars() });
@@ -180,6 +201,7 @@ function spawnForTab(
 		output,
 		recorder,
 		grid,
+		agent: program?.state ?? null,
 	};
 	terminals.set(id, entry);
 	ptyByTab.set(tabIndex(workspaceId, tabKey), id);
@@ -187,13 +209,16 @@ function spawnForTab(
 	pty.onData((data) => {
 		recorder.push(data);
 		output.push(data);
+		if (entry.agent !== null) recordAgentOutput(entry.agent, data);
 	});
-	pty.onExit(({ exitCode }) => {
+	pty.onExit(({ exitCode, signal }) => {
+		if (entry.agent !== null) settleAgentExit(entry.agent, exitCode, signal);
 		if (terminals.get(id) !== entry) return;
 		terminals.delete(id);
 		const index = tabIndex(entry.workspaceId, entry.tabKey);
 		ptyByTab.delete(index);
-		const finalScreen = recorder.snapshot();
+		const utility = entry.tabKey.startsWith(AGENT_TAB_PREFIX);
+		const finalScreen = utility ? null : recorder.snapshot();
 		if (finalScreen) pendingReplay.set(index, finalScreen);
 		recorder.dispose();
 		const finalBatch = output.finish();
@@ -203,6 +228,12 @@ function spawnForTab(
 		const exit: TerminalExitPush = { id, exitCode };
 		if (entry.attachedClient) {
 			completions.enqueue(entry.attachedClient, { ...(data ? { data } : {}), exit });
+		}
+		if (utility) {
+			const tabs = tabsFor(entry.workspaceId);
+			const position = tabs.findIndex((tab) => tab.tabKey === entry.tabKey);
+			if (position !== -1) tabs.splice(position, 1);
+			membershipChanged(entry.workspaceId);
 		}
 	});
 	return { id, entry };
@@ -325,6 +356,7 @@ export function resizeTerminal(id: string, cols: number, rows: number, caller: s
 function disposeTerminalEntry(id: string, entry: TerminalEntry): void {
 	terminals.delete(id);
 	ptyByTab.delete(tabIndex(entry.workspaceId, entry.tabKey));
+	if (entry.agent !== null) settleAgentExit(entry.agent, null, null);
 	entry.output.dispose();
 	entry.recorder.dispose();
 	entry.pty.kill();
@@ -416,4 +448,114 @@ export function resetTerminalState(): void {
 	ptyByTab.clear();
 	tabsByWorkspace.clear();
 	pendingReplay.clear();
+}
+
+export interface AgentTerminalExit {
+	exitCode: number | null;
+	signal: string | null;
+}
+
+export interface AgentTerminalOutput {
+	output: string;
+	truncated: boolean;
+	exit?: AgentTerminalExit;
+}
+
+export interface AgentTerminalRequest {
+	workspaceId: string;
+	command: string;
+	args: string[];
+	env: Record<string, string>;
+	cwd: string;
+	outputByteLimit?: number;
+}
+
+const AGENT_TAB_PREFIX = "agent:";
+const AGENT_OUTPUT_LIMIT_DEFAULT = 1_048_576;
+
+const agentTerminals = new Map<string, { state: AgentTerminalState; workspaceId: string }>();
+
+function recordAgentOutput(state: AgentTerminalState, data: string): void {
+	state.output += data;
+	if (state.output.length <= state.limit) return;
+	state.output = state.output.slice(state.output.length - state.limit);
+	state.truncated = true;
+}
+
+function settleAgentExit(
+	state: AgentTerminalState,
+	exitCode: number | null,
+	signal: number | string | null | undefined,
+): void {
+	if (state.exit !== null) return;
+	const named = signal === null || signal === undefined ? null : String(signal);
+	state.exit = { exitCode: named === null ? exitCode : null, signal: named };
+	for (const waiter of state.waiters.splice(0)) waiter(state.exit);
+}
+
+function agentTerminal(terminalId: string): { state: AgentTerminalState; workspaceId: string } {
+	const held = agentTerminals.get(terminalId);
+	if (!held) throw new Error(`Unknown terminal: ${terminalId}`);
+	return held;
+}
+
+export function createAgentTerminal(request: AgentTerminalRequest): string {
+	const tabKey = `${AGENT_TAB_PREFIX}${randomUUID()}`;
+	const tabs = tabsFor(request.workspaceId);
+	tabs.push({ tabKey, title: [request.command, ...request.args].join(" ") });
+	const state: AgentTerminalState = {
+		limit: Math.max(1, request.outputByteLimit ?? AGENT_OUTPUT_LIMIT_DEFAULT),
+		output: "",
+		truncated: false,
+		exit: null,
+		waiters: [],
+	};
+	const { id } = spawnForTab(request.workspaceId, tabKey, null, {}, undefined, {
+		run: {
+			command: request.command,
+			args: request.args,
+			env: request.env,
+			cwd: request.cwd,
+		},
+		state,
+	});
+	agentTerminals.set(id, { state, workspaceId: request.workspaceId });
+	membershipChanged(request.workspaceId);
+	return id;
+}
+
+export function readAgentTerminal(terminalId: string): AgentTerminalOutput {
+	const { state } = agentTerminal(terminalId);
+	return {
+		output: state.output,
+		truncated: state.truncated,
+		...(state.exit === null ? {} : { exit: state.exit }),
+	};
+}
+
+export function waitForAgentTerminalExit(terminalId: string): Promise<AgentTerminalExit> {
+	const { state } = agentTerminal(terminalId);
+	if (state.exit !== null) return Promise.resolve(state.exit);
+	return new Promise((resolve) => {
+		state.waiters.push(resolve);
+	});
+}
+
+export function killAgentTerminal(terminalId: string): void {
+	const { state } = agentTerminal(terminalId);
+	const entry = terminals.get(terminalId);
+	if (entry === undefined) {
+		settleAgentExit(state, null, null);
+		return;
+	}
+	entry.pty.kill();
+}
+
+export function releaseAgentTerminal(terminalId: string): void {
+	const held = agentTerminals.get(terminalId);
+	if (held === undefined) return;
+	agentTerminals.delete(terminalId);
+	settleAgentExit(held.state, null, null);
+	const entry = terminals.get(terminalId);
+	if (entry !== undefined) closeTerminalTab(entry.workspaceId, entry.tabKey, true);
 }

@@ -131,14 +131,7 @@ test("reviewAutoFix defaults on; an old config without it loads the default; tog
 });
 
 test("reviewModel/reviewEffort persist through the top-level partial merge", () => {
-	const model = {
-		id: "m",
-		name: "M",
-		provider: "p",
-		contextWindow: 1,
-		reasoning: false,
-		thinkingLevels: [],
-	};
+	const model = "anthropic/claude-opus-5";
 	updateConfig({ reviewModel: model, reviewEffort: "high" });
 	resetConfigCache();
 	expect(getConfig().reviewModel).toEqual(model);
@@ -146,14 +139,7 @@ test("reviewModel/reviewEffort persist through the top-level partial merge", () 
 });
 
 test("a null reviewModel/reviewEffort clears the override back to unset, and it stays cleared on disk", () => {
-	const model = {
-		id: "m",
-		name: "M",
-		provider: "p",
-		contextWindow: 1,
-		reasoning: false,
-		thinkingLevels: [],
-	};
+	const model = "anthropic/claude-opus-5";
 	updateConfig({ reviewModel: model, reviewEffort: "high" });
 	const next = updateConfig({ reviewModel: null, reviewEffort: null });
 	expect("reviewModel" in next).toBe(false);

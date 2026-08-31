@@ -43,10 +43,10 @@ describe("typography source", () => {
 		}
 	});
 
-	it("holds 19 canonical definitions and 30 aliases (49 styles)", () => {
+	it("holds 18 canonical definitions and 30 aliases (48 styles)", () => {
 		const styles = allStyles(typography);
-		expect(styles).toHaveLength(49);
-		expect(styles.filter((s) => !s.ref)).toHaveLength(19);
+		expect(styles).toHaveLength(48);
+		expect(styles.filter((s) => !s.ref)).toHaveLength(18);
 		expect(styles.filter((s) => s.ref)).toHaveLength(30);
 		expect(styles.filter((s) => s.prose)).toHaveLength(28);
 	});

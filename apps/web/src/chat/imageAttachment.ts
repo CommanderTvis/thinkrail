@@ -2,7 +2,7 @@ import {
 	ACCEPTED_IMAGE_TYPES,
 	base64EncodedLength,
 	IMAGE_MAX_BASE64_BYTES,
-	type ImageContent,
+	type ImageBlock,
 } from "@thinkrail/contracts";
 
 export const MAX_ATTACHMENT_EDGE = 1568;
@@ -12,7 +12,7 @@ const PROVIDER_ACCEPTED = new Set(ACCEPTED_IMAGE_TYPES);
 const JPEG_QUALITY_LADDER = [0.9, 0.8, 0.7, 0.6, 0.5];
 
 export interface AttachedImage {
-	content: ImageContent;
+	content: ImageBlock;
 	width?: number;
 	height?: number;
 }
@@ -33,13 +33,13 @@ export function fitWithin(
 
 const CANVAS_ENCODABLE = new Set(["image/png", "image/jpeg", "image/webp"]);
 
-function dataUrlToContent(dataUrl: string): ImageContent {
+function dataUrlToContent(dataUrl: string): ImageBlock {
 	const comma = dataUrl.indexOf(",");
 	const mimeType = /^data:([^;,]+)/.exec(dataUrl)?.[1] ?? "image/png";
 	return { type: "image", data: comma >= 0 ? dataUrl.slice(comma + 1) : dataUrl, mimeType };
 }
 
-function fileToRawContent(file: File): Promise<ImageContent> {
+function fileToRawContent(file: File): Promise<ImageBlock> {
 	return new Promise((resolve, reject) => {
 		const reader = new FileReader();
 		reader.onerror = () => reject(reader.error ?? new Error("failed to read image"));

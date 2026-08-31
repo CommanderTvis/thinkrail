@@ -24,8 +24,9 @@ bootstrap it into one so it can be opened.
   `lastOpened`, preserves its id, persists, and publishes the full snapshot; **`closeProject`** marks that
   same record closed and publishes it without deleting the project, repository, workspace records, or
   live runtimes. **One cwd, one ThinkRail identity:** `openProject` rejects a root already held as some
-  workspace's `worktreePath` — pi keys chat transcripts by *directory*, so a second identity on an owned
-  folder would serve that workspace's chats as its own and have them purged when either side is archived.
+  workspace's `worktreePath` — a chat's cwd is what an agent is pointed at and what its worktree-scoped
+  reads and terminals are contained to, so a second identity on an owned folder would hand one
+  workspace's directory to another's chats and reclaim it out from under them.
   Compared **canonically** (a managed worktree's stored path is composed, `--show-toplevel` answers
   symlink-resolved) and only **after** the reopen above, whose own Default workspace legitimately holds the
   project folder. The workspace-side half of the same door is `openExistingWorktree`
@@ -40,8 +41,15 @@ bootstrap it into one so it can be opened.
   so a real global identity is never overridden. ("Does the project have specs?" is **not** computed here
   — `host` answers the lazy `project.hasSpecs` query via `spec.projectHasSpecs`, keeping this module free
   of any spec dependency.)
+  It also owns the project's **agent override**: `setProjectAgent(id, agentId | null)` writes
+  `Project.agentId`, the per-project half of [[architecture]] Decision #15's "global default +
+  per-project override" (`null` clears it, falling back to `AppConfig.defaultAgentId`). The id is stored
+  **opaquely and never validated here** — `agent` resolves it against the installed catalog at the moment
+  a chat uses it, and a configured-but-missing agent is a loud `UnknownAgentError` there rather than a
+  silent re-point at a different model and a different bill ([[submodule-server-agent]]). Like every other
+  mutation here it publishes the full project snapshot.
 - **Public surface (barrel):** `openProject`, `listProjects`, `listRecentProjects`, `closeProject`,
-  `getProjects`, `setProjectPublisher`, `inspectProjectPath`, `initProject`.
+  `getProjects`, `setProjectPublisher`, `setProjectAgent`, `inspectProjectPath`, `initProject`.
 - **Allowed deps:** `persistence`; the `git` sub-module (shared `git()` runner, which now owns the
   environment its children spawn under — this module passes none); `contracts` (`Project`, `ProjectPathStatus`); Node/Bun.
 - **Forbidden:** `host`; sibling features other than `git` (`workspaces` depends on `projects`, never the

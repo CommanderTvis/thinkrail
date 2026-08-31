@@ -38,12 +38,28 @@ const WINDOWS_PICKER = [
 
 const ENCODED_WINDOWS_PICKER = Buffer.from(WINDOWS_PICKER, "utf16le").toString("base64");
 
-export function pickersFor(platform: NodeJS.Platform): Picker[] {
+const WINDOWS_FILE_PICKER = WINDOWS_PICKER.replace(
+	"$d = New-Object System.Windows.Forms.FolderBrowserDialog\n$d.Description = 'Open project'",
+	"$d = New-Object System.Windows.Forms.OpenFileDialog\n$d.Title = 'Choose the agent executable'",
+).replace("Write-Output $d.SelectedPath", "Write-Output $d.FileName");
+
+const ENCODED_WINDOWS_FILE_PICKER = Buffer.from(WINDOWS_FILE_PICKER, "utf16le").toString("base64");
+
+export type PickKind = "directory" | "file";
+
+export function pickersFor(platform: NodeJS.Platform, kind: PickKind = "directory"): Picker[] {
+	const file = kind === "file";
 	switch (platform) {
 		case "darwin":
 			return [
 				{
-					cmd: ["osascript", "-e", 'POSIX path of (choose folder with prompt "Open project")'],
+					cmd: [
+						"osascript",
+						"-e",
+						file
+							? 'POSIX path of (choose file with prompt "Choose the agent executable")'
+							: 'POSIX path of (choose folder with prompt "Open project")',
+					],
 					parse: toPath,
 					nonZeroExit: "cancel",
 				},
@@ -51,19 +67,29 @@ export function pickersFor(platform: NodeJS.Platform): Picker[] {
 		case "linux":
 			return [
 				{
-					cmd: ["zenity", "--file-selection", "--directory", "--title=Open project"],
+					cmd: file
+						? ["zenity", "--file-selection", "--title=Choose the agent executable"]
+						: ["zenity", "--file-selection", "--directory", "--title=Open project"],
 					parse: toPath,
 					nonZeroExit: "cancel",
 				},
 				{
-					cmd: ["kdialog", "--getexistingdirectory", ".", "--title", "Open project"],
+					cmd: file
+						? ["kdialog", "--getopenfilename", ".", "--title", "Choose the agent executable"]
+						: ["kdialog", "--getexistingdirectory", ".", "--title", "Open project"],
 					parse: toPath,
 					nonZeroExit: "cancel",
 				},
 			];
 		case "win32":
 			return ["powershell.exe", "pwsh.exe"].map((shell) => ({
-				cmd: [shell, "-NoProfile", "-Sta", "-EncodedCommand", ENCODED_WINDOWS_PICKER],
+				cmd: [
+					shell,
+					"-NoProfile",
+					"-Sta",
+					"-EncodedCommand",
+					file ? ENCODED_WINDOWS_FILE_PICKER : ENCODED_WINDOWS_PICKER,
+				],
 				parse: toPath,
 				nonZeroExit: "error" as const,
 			}));
@@ -72,8 +98,8 @@ export function pickersFor(platform: NodeJS.Platform): Picker[] {
 	}
 }
 
-function resolveOverride(): string | null {
-	const value = process.env.THINKRAIL_PICK_DIR;
+function resolveOverride(kind: PickKind): string | null {
+	const value = kind === "file" ? process.env.THINKRAIL_PICK_FILE : process.env.THINKRAIL_PICK_DIR;
 	if (!value) return null;
 	try {
 		if (statSync(value).isFile()) return readFileSync(value, "utf8").trim() || null;
@@ -81,22 +107,31 @@ function resolveOverride(): string | null {
 	return value;
 }
 
-export function pickerFailure(stderr: string, code: number): string {
+export function pickerFailure(stderr: string, code: number, kind: PickKind = "directory"): string {
 	const firstLine = stderr.replaceAll("\r", "").trim().split("\n")[0];
-	return `The folder picker failed: ${firstLine || `exit ${code}`}`;
+	return `The ${kind === "file" ? "file" : "folder"} picker failed: ${firstLine || `exit ${code}`}`;
 }
 
-export function noPickerMessage(platform: NodeJS.Platform): string {
+export function noPickerMessage(platform: NodeJS.Platform, kind: PickKind = "directory"): string {
+	const what = kind === "file" ? "file" : "folder";
 	return platform === "linux"
-		? "No folder picker on this host — install zenity or kdialog."
-		: `No native folder picker is available on this host (${platform}).`;
+		? `No ${what} picker on this host — install zenity or kdialog.`
+		: `No native ${what} picker is available on this host (${platform}).`;
 }
 
 export async function selectDirectory(): Promise<{ path: string | null }> {
-	const override = resolveOverride();
+	return selectPath("directory");
+}
+
+export async function selectFile(): Promise<{ path: string | null }> {
+	return selectPath("file");
+}
+
+async function selectPath(kind: PickKind): Promise<{ path: string | null }> {
+	const override = resolveOverride(kind);
 	if (override) return { path: override };
 
-	for (const picker of pickersFor(process.platform)) {
+	for (const picker of pickersFor(process.platform, kind)) {
 		let out: string;
 		let err: string;
 		let code: number;
@@ -112,7 +147,7 @@ export async function selectDirectory(): Promise<{ path: string | null }> {
 		}
 		if (code === 0) return { path: picker.parse(out) };
 		if (picker.nonZeroExit === "cancel") return { path: null };
-		throw new Error(pickerFailure(err, code));
+		throw new Error(pickerFailure(err, code, kind));
 	}
-	throw new Error(noPickerMessage(process.platform));
+	throw new Error(noPickerMessage(process.platform, kind));
 }

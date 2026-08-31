@@ -1,0 +1,205 @@
+[
+	{
+		"direction": "in",
+		"frame": {
+			"jsonrpc": "2.0",
+			"id": 100,
+			"method": "fs/read_text_file",
+			"params": {
+				"sessionId": "sess-delegation",
+				"path": "/tmp/fixture-worktree/AGENTS.md",
+				"line": 1,
+				"limit": 40
+			}
+		}
+	},
+	{
+		"direction": "out",
+		"frame": { "jsonrpc": "2.0", "id": 100, "result": { "content": "# ThinkRail\n" } }
+	},
+	{
+		"direction": "in",
+		"frame": {
+			"jsonrpc": "2.0",
+			"id": 101,
+			"method": "fs/write_text_file",
+			"params": {
+				"sessionId": "sess-delegation",
+				"path": "/tmp/fixture-worktree/NOTES.md",
+				"content": "written by the agent\n"
+			}
+		}
+	},
+	{ "direction": "out", "frame": { "jsonrpc": "2.0", "id": 101, "result": {} } },
+	{
+		"direction": "in",
+		"frame": {
+			"jsonrpc": "2.0",
+			"id": 102,
+			"method": "terminal/create",
+			"params": {
+				"sessionId": "sess-delegation",
+				"command": "bun",
+				"args": ["test"],
+				"cwd": "/tmp/fixture-worktree",
+				"env": [{ "name": "CI", "value": "1" }],
+				"outputByteLimit": 65536
+			}
+		}
+	},
+	{
+		"direction": "out",
+		"frame": { "jsonrpc": "2.0", "id": 102, "result": { "terminalId": "term-7" } }
+	},
+	{
+		"direction": "in",
+		"frame": {
+			"jsonrpc": "2.0",
+			"id": 103,
+			"method": "terminal/output",
+			"params": { "sessionId": "sess-delegation", "terminalId": "term-7" }
+		}
+	},
+	{
+		"direction": "out",
+		"frame": {
+			"jsonrpc": "2.0",
+			"id": 103,
+			"result": {
+				"output": "42 pass\n",
+				"truncated": false,
+				"exitStatus": { "exitCode": 0 }
+			}
+		}
+	},
+	{
+		"direction": "in",
+		"frame": {
+			"jsonrpc": "2.0",
+			"id": 104,
+			"method": "terminal/wait_for_exit",
+			"params": { "sessionId": "sess-delegation", "terminalId": "term-7" }
+		}
+	},
+	{
+		"direction": "out",
+		"frame": { "jsonrpc": "2.0", "id": 104, "result": { "exitCode": 0 } }
+	},
+	{
+		"direction": "in",
+		"frame": {
+			"jsonrpc": "2.0",
+			"id": 105,
+			"method": "terminal/kill",
+			"params": { "sessionId": "sess-delegation", "terminalId": "term-7" }
+		}
+	},
+	{ "direction": "out", "frame": { "jsonrpc": "2.0", "id": 105, "result": {} } },
+	{
+		"direction": "in",
+		"frame": {
+			"jsonrpc": "2.0",
+			"id": 106,
+			"method": "terminal/release",
+			"params": { "sessionId": "sess-delegation", "terminalId": "term-7" }
+		}
+	},
+	{ "direction": "out", "frame": { "jsonrpc": "2.0", "id": 106, "result": {} } },
+	{
+		"direction": "in",
+		"frame": {
+			"jsonrpc": "2.0",
+			"id": 107,
+			"method": "session/request_permission",
+			"params": {
+				"sessionId": "sess-delegation",
+				"toolCall": {
+					"toolCallId": "call-rm",
+					"title": "rm -rf build",
+					"kind": "execute",
+					"status": "pending",
+					"rawInput": { "command": "rm -rf build" }
+				},
+				"options": [
+					{ "optionId": "yes", "name": "Allow once", "kind": "allow_once" },
+					{ "optionId": "always", "name": "Always allow", "kind": "allow_always" },
+					{ "optionId": "no", "name": "Reject", "kind": "reject_once" },
+					{ "optionId": "never", "name": "Never allow", "kind": "reject_always" }
+				]
+			}
+		}
+	},
+	{
+		"direction": "out",
+		"frame": {
+			"jsonrpc": "2.0",
+			"id": 107,
+			"result": { "outcome": { "outcome": "selected", "optionId": "yes" } }
+		}
+	},
+	{
+		"direction": "in",
+		"frame": {
+			"jsonrpc": "2.0",
+			"id": 108,
+			"method": "elicitation/create",
+			"params": {
+				"mode": "form",
+				"message": "Which provider should I use?",
+				"sessionId": "sess-delegation",
+				"toolCallId": "call-rm",
+				"requestedSchema": {
+					"type": "object",
+					"title": "Provider",
+					"properties": {
+						"provider": {
+							"type": "string",
+							"title": "Provider",
+							"oneOf": [
+								{ "const": "anthropic", "title": "Anthropic" },
+								{ "const": "openai", "title": "OpenAI" }
+							]
+						},
+						"retries": {
+							"type": "integer",
+							"title": "Retries",
+							"description": "How many times to retry",
+							"minimum": 0
+						},
+						"verbose": { "type": "boolean", "title": "Verbose" }
+					},
+					"required": ["provider"]
+				}
+			}
+		}
+	},
+	{
+		"direction": "out",
+		"frame": {
+			"jsonrpc": "2.0",
+			"id": 108,
+			"result": { "action": "accept", "content": { "provider": "anthropic", "verbose": true } }
+		}
+	},
+	{
+		"direction": "in",
+		"frame": {
+			"jsonrpc": "2.0",
+			"method": "elicitation/complete",
+			"params": { "elicitationId": "elicit-1" }
+		}
+	},
+	{
+		"direction": "in",
+		"frame": {
+			"jsonrpc": "2.0",
+			"id": 109,
+			"method": "mcp/connect",
+			"params": { "serverId": "thinkrail-tools" }
+		}
+	},
+	{
+		"direction": "out",
+		"frame": { "jsonrpc": "2.0", "id": 109, "result": { "connectionId": "mcp-1" } }
+	}
+]

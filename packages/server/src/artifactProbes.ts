@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { delimiter, dirname, join } from "node:path";
-import { defaultSessionDirFor, writeFixtureSession } from "@thinkrail/server/history-test-fixtures";
+import { writeFixtureTranscript } from "@thinkrail/server/transcript-test-fixtures";
 import { removeTree } from "@thinkrail/shared/removeTree";
 
 export interface ArtifactResources {
@@ -69,25 +69,22 @@ function rpc(socket: WebSocket, method: string, params: unknown): Promise<unknow
 	});
 }
 
-function assertExternalModel(models: unknown): asserts models is Record<string, unknown>[] {
-	assert(Array.isArray(models), "model.list did not return an array");
-	assert(
-		models.some(
-			(model) =>
-				typeof model === "object" &&
-				model !== null &&
-				(model as { provider?: string; id?: string }).provider === "compiled-external" &&
-				(model as { provider?: string; id?: string }).id === "compiled-external-model",
-		),
-		"global external extension model is missing",
-	);
+function externalModelChoice(configOptions: unknown): string {
+	assert(Array.isArray(configOptions), "session.create returned no config options");
+	const model = configOptions.find((option) => (option as { id?: string }).id === "model") as
+		| { control?: { groups?: { choices?: { id?: string }[] }[] } }
+		| undefined;
+	const choices = (model?.control?.groups ?? []).flatMap((group) => group.choices ?? []);
+	const external = choices.find((choice) => choice.id?.endsWith("compiled-external-model"));
+	assert(external?.id, "external extension model is missing from the agent's model option");
+	return external.id;
 }
 
 async function assertCentralConfigured(socket: WebSocket, label: string): Promise<void> {
 	let state: unknown;
 	for (let attempt = 0; attempt < 40; attempt += 1) {
 		const status = (await within(
-			rpc(socket, "provider.status", {}),
+			rpc(socket, "agent.providers", { agentId: "pi" }),
 			10_000,
 			`${label} status`,
 		)) as {
@@ -101,63 +98,17 @@ async function assertCentralConfigured(socket: WebSocket, label: string): Promis
 	throw new Error(`${label} Central state is ${JSON.stringify(state)}, expected configured`);
 }
 
-async function assertOAuthLoginReachesAuthUrl(socket: WebSocket): Promise<void> {
-	let loginId: string | undefined;
-	const authUrl = new Promise<string>((resolve, reject) => {
-		const settle = (fn: () => void) => {
-			socket.removeEventListener("message", onPush);
-			fn();
-		};
-		const onPush = (event: MessageEvent) => {
-			if (typeof event.data !== "string") return;
-			const message = JSON.parse(event.data) as {
-				channel?: string;
-				data?: {
-					loginId?: string;
-					frame?: {
-						kind: string;
-						url?: string;
-						message?: string;
-						options?: { id: string; label: string }[];
-					};
-				};
-			};
-			if (message.channel !== "provider.login" || !message.data?.frame) return;
-			const { loginId: pushLoginId, frame } = message.data;
-			if (frame.kind === "select") {
-				const browser = frame.options?.find((option) =>
-					/browser/i.test(`${option.id} ${option.label}`),
-				);
-				const optionId = browser?.id ?? frame.options?.[0]?.id;
-				if (!optionId || !pushLoginId) {
-					settle(() => reject(new Error(`unanswerable select frame: ${JSON.stringify(frame)}`)));
-					return;
-				}
-				rpc(socket, "provider.loginReply", { loginId: pushLoginId, value: optionId }).catch(
-					(error) =>
-						settle(() => reject(error instanceof Error ? error : new Error(String(error)))),
-				);
-				return;
-			}
-			if (frame.kind === "authUrl") settle(() => resolve(frame.url ?? ""));
-			if (frame.kind === "error") {
-				settle(() => reject(new Error(`login flow failed: ${frame.message}`)));
-			}
-		};
-		socket.addEventListener("message", onPush);
-		rpc(socket, "provider.loginStart", { providerId: "openai-codex" }).then(
-			(result) => {
-				loginId = (result as { loginId?: string }).loginId;
-			},
-			(error) => settle(() => reject(error instanceof Error ? error : new Error(String(error)))),
-		);
-	});
-	try {
-		const reached = await within(authUrl, 30_000, "Codex OAuth auth URL");
-		assert(reached.includes("auth.openai.com"), `unexpected auth URL: ${reached}`);
-	} finally {
-		if (loginId !== undefined) rpc(socket, "provider.loginCancel", { loginId }).catch(() => {});
-	}
+async function assertBundledAgentAdvertisesAuth(socket: WebSocket): Promise<void> {
+	const methods = (await within(
+		rpc(socket, "agent.authMethods", { agentId: "pi" }),
+		30_000,
+		"agent.authMethods",
+	)) as { id?: string }[];
+	assert(Array.isArray(methods), "agent.authMethods did not return an array");
+	assert(
+		methods.some((method) => typeof method?.id === "string" && method.id.length > 0),
+		"the bundled agent advertised no auth method inside the artifact",
+	);
 }
 
 function hostEnvironment(
@@ -291,7 +242,6 @@ export default function syntheticExternalExtension(pi) {
 			"default host launch",
 		);
 		socket = await within(connectRpc(defaultHost.origin), 10_000, "default host WebSocket");
-		assertExternalModel(await within(rpc(socket, "model.list", {}), 20_000, "default model.list"));
 		await assertCentralConfigured(socket, "default-agent");
 		socket.close();
 		socket = undefined;
@@ -314,13 +264,7 @@ export default function syntheticExternalExtension(pi) {
 		const index = await within(fetch(customHost.origin), 10_000, "GET /");
 		assert(index.ok && (await index.text()).includes("ThinkRail"), "web UI was not served");
 		socket = await within(connectRpc(customHost.origin), 10_000, "custom host WebSocket");
-		const models = await within(rpc(socket, "model.list", {}), 20_000, "custom model.list");
-		assertExternalModel(models);
 		await assertCentralConfigured(socket, "custom-agent");
-		const externalModel = models.find(
-			(model) => model.provider === "compiled-external" && model.id === "compiled-external-model",
-		);
-		assert(externalModel, "external model lookup failed after assertion");
 
 		const project = (await within(
 			rpc(socket, "project.open", { path: projectDir }),
@@ -335,17 +279,18 @@ export default function syntheticExternalExtension(pi) {
 		)) as { id?: string; kind?: string; worktreePath?: string }[];
 		const workspace = workspaces.find((entry) => entry.kind === "default");
 		assert(workspace?.id && workspace.worktreePath, "Default workspace is missing");
-		const transcript = writeFixtureSession(defaultSessionDirFor(agentDir, workspace.worktreePath), {
+		const transcript = await writeFixtureTranscript(join(root, "data"), {
+			workspaceId: workspace.id,
 			cwd: workspace.worktreePath,
-			name: "artifact trash probe",
+			title: "artifact trash probe",
 			messages: [{ role: "user", text: "move to trash", timestamp: Date.now() }],
 		});
 		await within(
-			rpc(socket, "session.delete", { sessionId: transcript.id, workspaceId: workspace.id }),
+			rpc(socket, "session.delete", { sessionId: transcript.sessionId, workspaceId: workspace.id }),
 			10_000,
 			"session.delete",
 		);
-		assert(!existsSync(transcript.path), "session.delete left the transcript on disk");
+		assert(!existsSync(transcript.dir), "session.delete left the transcript on disk");
 		await within(
 			rpc(socket, "project.setTrust", { id: project.id, trusted: true }),
 			10_000,
@@ -375,11 +320,21 @@ export default function syntheticExternalExtension(pi) {
 			"bundled workflow skill is missing",
 		);
 		const created = (await within(
-			rpc(socket, "session.create", { workspaceId: workspace.id, model: externalModel }),
+			rpc(socket, "session.create", { workspaceId: workspace.id }),
 			30_000,
 			"session.create with bundled factories",
-		)) as { sessionId?: string };
+		)) as { sessionId?: string; configOptions?: unknown };
 		assert(created.sessionId, "session.create returned no session id");
+		const externalModelId = externalModelChoice(created.configOptions);
+		await within(
+			rpc(socket, "session.setConfigOption", {
+				sessionId: created.sessionId,
+				optionId: "model",
+				value: externalModelId,
+			}),
+			20_000,
+			"session.setConfigOption(model)",
+		);
 		const commands = await within(
 			rpc(socket, "session.getCommands", { sessionId: created.sessionId }),
 			10_000,
@@ -396,11 +351,14 @@ export default function syntheticExternalExtension(pi) {
 			"session resource loader omitted bundled skills",
 		);
 		await within(
-			rpc(socket, "session.dispose", { sessionId: created.sessionId }),
+			rpc(socket, "session.delete", {
+				sessionId: created.sessionId,
+				workspaceId: workspace.id,
+			}),
 			10_000,
-			"session.dispose",
+			"session.delete (probe session)",
 		);
-		await assertOAuthLoginReachesAuthUrl(socket);
+		await assertBundledAgentAdvertisesAuth(socket);
 
 		for (const helper of Object.values(customHost.resources.trashHelpers)) {
 			assert(existsSync(helper), `trash helper is missing: ${helper}`);

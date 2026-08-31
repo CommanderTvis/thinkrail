@@ -1,8 +1,9 @@
 import { useEffect, useRef } from "react";
-import { messagesToRuntime } from "../../chat/hydrate";
+import { hydrateRuntime } from "../../chat/hydrate";
 import { type LayoutAttention, readLayoutSelection, tupleKey } from "../../lib";
 import {
 	type CenterNavigationStamp,
+	captureCenterNavigation,
 	chatTabId,
 	type EditorTab,
 	isConnectedGeneration,
@@ -24,6 +25,9 @@ import {
 	selectTab,
 	type WorkspaceLayoutDocument,
 } from "../layout";
+
+const AUTO_OPEN_CHAT_LIMIT = 4;
+
 import { commitWorkspaceLayout } from "../layoutState";
 
 const sessionHydration = new Map<string, Promise<boolean>>();
@@ -41,7 +45,7 @@ export function hydrateChatResource(workspaceId: string, sessionId: string): Pro
 	const existing = sessionHydration.get(key);
 	if (existing) return existing;
 	const request = getSessionMessagesWithSkillBaseline({ workspaceId, sessionId })
-		.then(({ result: { summary, messages }, syncedTick }) => {
+		.then(({ result: { summary, messages, configOptions, capabilities, plan }, syncedTick }) => {
 			const current = useAppStore.getState();
 			if (current.connectionGeneration !== connectionGeneration) {
 				if (
@@ -62,7 +66,7 @@ export function hydrateChatResource(workspaceId: string, sessionId: string): Pro
 			if (!stillPlaced) return false;
 			current.hydrateSession(
 				summary,
-				messagesToRuntime(messages, summary.lastSettlement),
+				hydrateRuntime(messages, configOptions, capabilities, plan),
 				false,
 				summary.live ? undefined : syncedTick,
 				{ activate: false },
@@ -228,16 +232,18 @@ export function useWorkspaceChatCatalogReconciliation(
 			.request("session.list", { workspaceId })
 			.then(async (summaries) => {
 				if (!live()) return;
-				if (summaries.some((summary) => summary.workspaceId !== workspaceId)) {
+				if (summaries.some((summary) => summary.record.workspaceId !== workspaceId)) {
 					throw new Error("Session list did not match the requested workspace");
 				}
 				useAppStore.getState().reconcileWorkspaceSessions(
 					workspaceId,
 					baselineSessionIds,
-					summaries.map((summary) => summary.sessionId),
+					summaries.map((summary) => summary.record.sessionId),
 				);
 				let latestDocument = useAppStore.getState().layoutDocumentsByWorkspace[workspaceId];
-				const authoritativeSessionIds = new Set(summaries.map((summary) => summary.sessionId));
+				const authoritativeSessionIds = new Set(
+					summaries.map((summary) => summary.record.sessionId),
+				);
 				const missingPlacedSessionIds = baselinePlacedSessionIds.filter(
 					(sessionId) => !authoritativeSessionIds.has(sessionId),
 				);
@@ -259,7 +265,9 @@ export function useWorkspaceChatCatalogReconciliation(
 				let handledRouteSessionId: string | null = null;
 				const target = selectCurrentRouteChatTarget(useAppStore.getState());
 				if (target?.workspaceId === workspaceId) {
-					const targetSummary = summaries.find((summary) => summary.sessionId === target.sessionId);
+					const targetSummary = summaries.find(
+						(summary) => summary.record.sessionId === target.sessionId,
+					);
 					if (!targetSummary) {
 						useAppStore.getState().clearRouteChatTarget();
 					} else {
@@ -281,7 +289,7 @@ export function useWorkspaceChatCatalogReconciliation(
 									kind: "chat",
 									id: chatTabId(workspaceId, target.sessionId),
 									workspaceId,
-									name: targetSummary.title,
+									name: targetSummary.record.title ?? "Chat",
 									sessionId: target.sessionId,
 								},
 								"keep",
@@ -293,12 +301,12 @@ export function useWorkspaceChatCatalogReconciliation(
 							if (!live()) return;
 							const currentTarget = selectCurrentRouteChatTarget(useAppStore.getState());
 							if (currentTarget?.sessionId === target.sessionId && loaded) {
-								const { summary, messages } = loaded.result;
+								const { summary, messages, configOptions, capabilities, plan } = loaded.result;
 								useAppStore
 									.getState()
 									.hydrateSession(
 										summary,
-										messagesToRuntime(messages, summary.lastSettlement),
+										hydrateRuntime(messages, configOptions, capabilities, plan),
 										true,
 										summary.live ? undefined : loaded.syncedTick,
 										targetOptions,
@@ -307,21 +315,91 @@ export function useWorkspaceChatCatalogReconciliation(
 						}
 					}
 				}
-				const history = [...summaries]
-					.sort((a, b) => b.updatedAt - a.updatedAt)
-					.filter(
-						(summary) =>
-							summary.sessionId !== handledRouteSessionId &&
-							!placed.has(summary.sessionId) &&
-							!useAppStore.getState().sessions[summary.sessionId],
+				let sawKnown = false;
+				const toOpen: typeof summaries = [];
+				const toHistory: typeof summaries = [];
+				for (const summary of [...summaries].sort(
+					(a, b) => b.record.updatedAt - a.record.updatedAt,
+				)) {
+					if (
+						summary.record.sessionId === handledRouteSessionId ||
+						placed.has(summary.record.sessionId)
+					)
+						continue;
+					if (useAppStore.getState().sessions[summary.record.sessionId]) {
+						sawKnown = true;
+						continue;
+					}
+					if (
+						(summary.live || (summary.openTodos ?? 0) > 0) &&
+						toOpen.length < AUTO_OPEN_CHAT_LIMIT
+					) {
+						toOpen.push(summary);
+					} else {
+						toHistory.push(summary);
+					}
+				}
+				if (
+					handledRouteSessionId === null &&
+					placed.size === 0 &&
+					toOpen.length === 0 &&
+					!sawKnown
+				) {
+					const fallback = toHistory.shift();
+					if (fallback) toOpen.push(fallback);
+				}
+				const navigation =
+					toOpen.length > 0 ? captureCenterNavigation(useAppStore.getState(), workspaceId) : null;
+				const loads = toOpen.map((summary) => ({
+					summary,
+					result: fetchMessages(summary.record.sessionId),
+				}));
+				let openedCount = 0;
+				const failedToOpen: typeof summaries = [];
+				for (const load of loads) {
+					const loaded = await load.result;
+					if (!live()) continue;
+					if (!loaded) {
+						failedToOpen.push(load.summary);
+						continue;
+					}
+					const { summary, messages, configOptions, capabilities, plan } = loaded.result;
+					useAppStore
+						.getState()
+						.hydrateSession(
+							summary,
+							hydrateRuntime(messages, configOptions, capabilities, plan),
+							false,
+							summary.live ? undefined : loaded.syncedTick,
+							{ activate: false },
+						);
+					const state = useAppStore.getState();
+					const cache = state.tabsByWorkspace[workspaceId]?.find(
+						(tab): tab is Extract<EditorTab, { kind: "chat" }> =>
+							tab.kind === "chat" && tab.sessionId === summary.record.sessionId,
 					);
+					if (!state.sessions[summary.record.sessionId] || !cache) continue;
+					const activate = handledRouteSessionId === null && openedCount === 0;
+					openedCount += 1;
+					const routed = layoutOpenOptionsForNavigation(state, workspaceId, navigation);
+					state.enqueueLayoutIntent({
+						kind: "open",
+						workspaceId,
+						tab: cache,
+						intent: "keep",
+						...routed,
+						activate: activate && routed.activate !== false,
+						countNavigation: false,
+					});
+				}
+				const history = [...toHistory, ...failedToOpen];
 				if (!live() || history.length === 0) return;
 				useAppStore.getState().noteClosedChats(
 					workspaceId,
 					history.map((summary) => ({
-						sessionId: summary.sessionId,
-						title: summary.title,
-						closedAt: summary.updatedAt,
+						sessionId: summary.record.sessionId,
+						title: summary.record.title ?? "Chat",
+						closedAt: summary.record.updatedAt,
 					})),
 				);
 			})
@@ -487,7 +565,7 @@ export function useChatLocationReconciliation(
 		if (status !== "connected" || !isConnectedGeneration(state, connectionGeneration)) return;
 		let current = true;
 		void getSessionMessagesWithSkillBaseline({ workspaceId, sessionId })
-			.then(({ result: { summary, messages }, syncedTick }) => {
+			.then(({ result: { summary, messages, configOptions, capabilities, plan }, syncedTick }) => {
 				if (!current) return;
 				const currentState = useAppStore.getState();
 				if (
@@ -499,7 +577,7 @@ export function useChatLocationReconciliation(
 				}
 				currentState.hydrateSession(
 					summary,
-					messagesToRuntime(messages, summary.lastSettlement),
+					hydrateRuntime(messages, configOptions, capabilities, plan),
 					true,
 					summary.live ? undefined : syncedTick,
 					layoutOpenOptionsForNavigation(currentState, workspaceId, navigation),

@@ -25,7 +25,6 @@ import {
 	E2E_PICK_DIR_POINTER,
 } from "./fixtures/paths";
 import { seedFixtureRepo } from "./fixtures/repo";
-import { seedExternalCwdSessions } from "./fixtures/sessions";
 import { seedTemplateFixtures } from "./fixtures/templates";
 import { E2eWire } from "./fixtures/wire";
 

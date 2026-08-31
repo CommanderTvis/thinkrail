@@ -9,10 +9,11 @@ import {
 	RiCloseLine as X,
 } from "@remixicon/react";
 import {
+	type ChatCapabilityFlags,
 	type ComposerGrowthLimit,
+	type ConfigOption,
+	type ConfigValue,
 	REQUEST_IMAGE_BASE64_BUDGET,
-	type ThinkingLevel,
-	type WireModel,
 } from "@thinkrail/contracts";
 import {
 	type ClipboardEvent,
@@ -158,6 +159,11 @@ function highlightTint(state: SlotHighlightState): string {
 	}
 }
 
+export type ComposerConfigCapabilities = Pick<
+	ChatCapabilityFlags,
+	"modelPicker" | "thinkingLevel" | "configRefresh"
+>;
+
 interface ComposerProps {
 	value: string;
 	onChange: (value: string) => void;
@@ -166,15 +172,13 @@ interface ComposerProps {
 	commands: SlashCommandItem[];
 	mentionCandidates: MentionCandidate[];
 	recentPrompts: string[];
-	models: WireModel[];
-	modelsRefreshing: boolean;
-	onRefreshModels: (force: boolean) => void;
-	currentModel: WireModel | null;
-	thinkingLevel: ThinkingLevel;
+	configOptions: ConfigOption[];
+	configCapabilities: ComposerConfigCapabilities;
+	configRefreshing: boolean;
+	onRefreshConfig: (force: boolean) => void;
+	onSelectConfigOption: (optionId: string, value: ConfigValue) => void;
 	onMentionQuery: (query: string | null) => void;
 	onSlashActive: (active: boolean) => void;
-	onSelectModel: (model: WireModel) => void;
-	onSelectThinking: (level: ThinkingLevel) => void;
 	onSubmit: (
 		text: string,
 		attachments: ChatAttachment[],
@@ -205,15 +209,13 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 		commands,
 		mentionCandidates,
 		recentPrompts,
-		models,
-		modelsRefreshing,
-		onRefreshModels,
-		currentModel,
-		thinkingLevel,
+		configOptions,
+		configCapabilities,
+		configRefreshing,
+		onRefreshConfig,
+		onSelectConfigOption,
 		onMentionQuery,
 		onSlashActive,
-		onSelectModel,
-		onSelectThinking,
 		onSubmit,
 		onAbort,
 		onHistoryOpen,
@@ -282,6 +284,13 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 	useLayoutEffect(() => {
 		syncBackdropScroll();
 	});
+
+	const modelOption = configCapabilities.modelPicker
+		? configOptions.find((option) => option.category === "model")
+		: undefined;
+	const thinkingOption = configCapabilities.thinkingLevel
+		? configOptions.find((option) => option.category === "thinkingLevel")
+		: undefined;
 
 	const { token, start } = activeToken(value, caret);
 	const mentionQuery = token.startsWith("@") ? token.slice(1) : null;
@@ -704,30 +713,107 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 				</div>
 			) : null}
 
-			<div className="p-12">
-				<div
-					data-testid="chat-composer-shell"
-					className={cn(
-						"relative grid grid-cols-[auto_minmax(0,1fr)_auto] grid-rows-[minmax(0,1fr)_auto] items-end gap-x-4 gap-y-4 overflow-hidden rounded-[var(--radius-md)] border border-control-border-default bg-control-bg bg-clip-padding p-4 transition-colors focus-within:border-control-border-active",
-						expanded && growthLimit === "half-chat" && "max-h-[50cqh]",
-					)}
-				>
-					<div className="col-start-1 row-start-2 flex min-w-0 items-center gap-4 self-end sm:gap-8">
-						<ModelSelector
-							models={models}
-							current={currentModel}
-							refreshing={modelsRefreshing}
-							onRefresh={onRefreshModels}
-							onSelect={onSelectModel}
-							className="max-w-80 gap-4 px-4 sm:max-w-144"
-						/>
-						<ThinkingSelector
-							level={thinkingLevel}
-							levels={currentModel?.thinkingLevels ?? []}
-							onSelect={onSelectThinking}
-							showLabel={false}
-							className="gap-4 px-4"
-						/>
+			<div className="flex flex-col gap-8 p-8">
+				<div className="relative rounded-[var(--radius-md)] border border-control-border-default bg-control-bg bg-clip-padding transition-colors focus-within:border-control-border-active">
+					{slots ? (
+						<div
+							ref={attachBackdrop}
+							data-testid="slot-backdrop"
+							aria-hidden
+							className="pointer-events-none absolute inset-0 overflow-hidden rounded-[var(--radius-md)]"
+						>
+							<div className="w-full whitespace-pre-wrap break-words px-12 py-8 tr-text-ui">
+								{withOffsets(highlightSegments(value, slots, slotIdx)).map((seg) => (
+									<span
+										key={seg.start}
+										data-testid={seg.state === "plain" ? undefined : "slot-highlight"}
+										data-slot-state={seg.state === "plain" ? undefined : seg.state}
+										className={`text-transparent ${highlightTint(seg.state)}`}
+									>
+										{seg.text}
+									</span>
+								))}
+							</div>
+						</div>
+					) : null}
+					<textarea
+						ref={ref}
+						data-testid="chat-input"
+						value={value}
+						onScroll={(e) => {
+							const backdrop = backdropRef.current;
+							if (backdrop) {
+								backdrop.scrollLeft = e.currentTarget.scrollLeft;
+								backdrop.scrollTop = e.currentTarget.scrollTop;
+							}
+						}}
+						onChange={(e) => {
+							const next = e.target.value;
+							const nextCaret = e.target.selectionStart;
+							const recalled = recallIdxRef.current;
+							if (recalled !== null && next !== recentPrompts[recalled]) {
+								recallIdxRef.current = null;
+							}
+							if (slots) {
+								const { editStart, removedLen, insertedLen } = diffValues(value, next, nextCaret);
+								if (editStart === 0 && removedLen === value.length) {
+									setSlots(null);
+								} else {
+									const editEnd = editStart + removedLen;
+									const active = slots[slotIdx];
+									const growing =
+										removedLen === 0 &&
+										insertedLen > 0 &&
+										active !== undefined &&
+										active.end === editStart;
+									const shifted = shiftSlots(slots, editStart, removedLen, insertedLen).map(
+										(slot, i) => {
+											const grown =
+												growing && i === slotIdx
+													? { ...slot, end: slot.end + insertedLen, filled: true, edited: true }
+													: slot;
+											const original = slots[i];
+											return original && touches(original, editStart, editEnd)
+												? { ...grown, filled: true, edited: true }
+												: grown;
+										},
+									);
+									setSlots(shifted);
+								}
+							}
+							onChange(next);
+							setCaret(nextCaret);
+						}}
+						onKeyUp={(e) => setCaret(e.currentTarget.selectionStart)}
+						onClick={(e) => setCaret(e.currentTarget.selectionStart)}
+						onKeyDown={onKeyDown}
+						onPaste={onPaste}
+						onDrop={onDrop}
+						rows={4}
+						placeholder={
+							isStreaming
+								? "Enter steers at the next step · Cmd/Ctrl+Enter queues for when it finishes"
+								: "Message the agent…  (@ files · / commands · Enter to send)"
+						}
+						className="relative min-h-[108px] w-full resize-none rounded-[var(--radius-sm)] bg-transparent px-12 py-8 tr-text-ui text-text-default outline-none placeholder:text-text-muted"
+					/>
+				</div>
+				<div className="flex flex-wrap items-center gap-8">
+					<div className="flex min-w-0 flex-1 flex-wrap items-center gap-8">
+						{modelOption ? (
+							<ModelSelector
+								option={modelOption}
+								onSelect={(value) => onSelectConfigOption(modelOption.id, value)}
+								refreshing={configRefreshing}
+								{...(configCapabilities.configRefresh ? { onRefresh: onRefreshConfig } : {})}
+							/>
+						) : null}
+						{thinkingOption ? (
+							<ThinkingSelector
+								option={thinkingOption}
+								onSelect={(value) => onSelectConfigOption(thinkingOption.id, value)}
+							/>
+						) : null}
 					</div>
 					<div
 						className={cn(

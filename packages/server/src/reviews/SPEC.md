@@ -117,42 +117,37 @@ imports `agent`): reanchor → render the package (one structured user message w
 fragment + surrounding context per comment — never the full diff; the agent reads the worktree with its
 own tools; **each side reads its own content** — the worktree for worktree anchors, the anchor's
 `baseRef` blob for base ones, since base line numbers index the pre-change file) →
-`agent.createSession` (or `followUp` into the client's **last open chat** when the send names one —
-the conversation already on the user's screen — else the chat already pinned for that KEY, **re-attached
-from disk when it isn't live**, since review state and pi transcripts both survive a host restart; a
+the session manager's `createSession` (or `followUp` into the client's **last open chat** when the send
+names one — the conversation already on the user's screen — else the chat already pinned for that KEY; a
 batch spanning several keys sends each group separately and answers with all of them, so none is left
-running unseen; whatever received the package becomes the key's pin) → `markSent` → prompt. `markSent`
+running unseen; whatever received the package becomes the key's pin) → `markSent`. `markSent`
 requires every requested id to still name a draft in the active snapshot — it never silently marks a
-partial set after lifecycle drift. The whole sequence is **serialized per workspace together with every
-review mutation** (`host`'s `withReviewLock`): the draft/session check
-happens *before* the awaited session creation, so in that gap two concurrent sends would both see
-"drafts, no session" and fork the review — and a concurrent `review.close` Clear would invalidate the
-package already built, leaving the agent with comment ids no open review contains.
-**The prompt is fired DETACHED** (`fireReviewPrompt`): the handler returns the
-moment the session exists so the client opens the chat immediately — awaiting the ack meant sitting
-out pi's 10s acceptance window on every send. Because `markSent` is awaited inside the lock, before the
-turn is known-accepted — it must be, so the key's pin exists inside the lock and a concurrent send can't
-fork the chat — a pre-turn rejection (bad model, missing/expired key) both surfaces INSIDE the just-opened chat
-as an extension-UI notice AND **rolls the comments back to `draft`** (`rollbackSend`, keyed off
-`ackSend`'s accept-vs-reject window): a review the agent never received stays retryable instead of
-stranding as `sent` with its send/edit/delete actions gone, and a chat spun up solely for that failed
-send is unpinned unless another comment still backs it. A fault AFTER acceptance is a real turn fault
-(the package *was* delivered) and rides the event stream, leaving the `sent` state correct. The
-rollback runs DETACHED (after the send's lock released) and fully synchronously, so — like
-`reanchorWorkspace` — it stays correct unlocked, and it reads with `load` (never `ensureSnapshot`): a
-`review.close` Clear that lands first makes it a clean no-op against the fresh review instead of
-resurrecting the cleared comments. The **`resolve_comment`** capability is an agent-module custom tool
-(`agent/reviewTool.ts`, registered on every session like `ask_user_question`) whose execution is
-delegated back here through a host-installed seam — the agent module stays dependency-free. **Session-bound**:
-the tool thread's `ctx.sessionManager.getSessionId()` through to `resolveCommentFromAgent`, and
-`applyAgentResolution` only resolves a comment whose `status === "sent"` AND `sessionId` equals the
-caller — the chat `markCommentsSent` recorded as the actual recipient. A `draft` comment is
-unconditionally unresolvable through this tool (a comment resolves only the chat it was truly delivered
-to can call it; nothing, agent or human, resolves its own unsent draft) — this is what keeps a reviewer
-agent from filing a finding and immediately clearing it itself (see [[submodule-server-host]]'s approve
-gate). Resolution
-searches the active snapshots first, then closed archives, so a tool call already in flight when Clear
-lands can still finish its record; archived updates persist without publishing an inactive snapshot.
+partial set after lifecycle drift. The whole sequence is
+**serialized per workspace together with every review mutation** (`host`'s `withReviewLock`): the
+draft/session check happens *before* the awaited session creation, so in that gap two concurrent sends
+would both see "drafts, no session" and fork the review — and a concurrent `review.close` Clear would
+invalidate the package already built, leaving the agent with comment ids no open review contains.
+
+**A pinned chat is reused only while it is LIVE.** Under [[architecture]] Decision #13 the transcript
+outlives the process but an ACP `SessionId` does not: a chat whose agent is gone reads fine and cannot be
+continued. So a pinned chat the manager still holds is followed up into; anything else starts a new chat
+and says so in the log. This replaces the old re-attach-from-disk path, which existed because pi owned
+the record and could be re-opened from it.
+
+**There is no send acceptance window any more, so there is no rollback.** The manager's `prompt` /
+`followUp` are **synchronous**: they mint the message id, take ownership of the message and answer
+immediately, whether the turn starts now or at the end of the one in flight. The only synchronous
+failure is "no such chat", which throws before `markSent` runs. Every later fault is a real turn fault —
+the package *was* delivered — and settles in the chat as a `turnSettled` marker the user can see.
+`rollbackSend` stays on this module's surface for that pre-mark failure path and is exercised by its own
+tests; nothing on the wire calls it today.
+
+The **`resolve_comment`** capability is no longer a seam the agent module installs: it is an **MCP tool**
+an agent calls back through ThinkRail's own MCP server ([[architecture]] Decision #17), which executes
+`resolveCommentFromAgent` here. Resolution searches the active snapshots first, then closed archives, so
+a tool call already in flight when Clear lands can still finish its record; archived updates persist
+without publishing an inactive snapshot. **The MCP server does not exist yet**, so nothing calls
+`resolveCommentFromAgent` today — the function and its tests stay, waiting for the one call site.
 
 ## Boundary
 
@@ -174,7 +169,8 @@ lands can still finish its record; archived updates persist without publishing a
 - **Allowed deps:** `contracts` (types), `persistence` (data dir), `log`, `workspaces` (worktree path lookup),
   `git` (the review's `baseSha` resolve, the diff range behind a base anchor's `baseRef`, and blob
   reads for the base side), Node `fs`/`crypto`.
-- **Forbidden:** importing `host`/`agent` or any pi package; publishing except through the seam.
+- **Forbidden:** importing `host`/`agent`; **any pi package**; **any ACP type**; publishing except
+  through the seam.
 
 ## Get right
 

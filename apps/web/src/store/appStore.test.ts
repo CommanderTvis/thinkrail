@@ -1,23 +1,26 @@
 import { beforeEach, expect, test } from "bun:test";
-import {
-	DEFAULT_CONFIG,
-	type ExtUiRequest,
-	type PiEvent,
-	type Project,
-	type SessionEventPayload,
-	type SessionSummary,
-	type SpecGraphNode,
-	type WireModel,
-	type Workspace,
-	type WorkspaceFsChangedPayload,
-	type WorkspaceSkillChange,
+import type {
+	AgentPlan,
+	ChatEvent,
+	ChatMessage,
+	ConfigOption,
+	ElicitationRequest,
+	PermissionRequest,
+	Project,
+	SessionRecord,
+	SessionSummary,
+	SpecGraphNode,
+	Workspace,
+	WorkspaceFsChangedPayload,
+	WorkspaceLayoutDocument,
+	WorkspaceSkillChange,
 } from "@thinkrail/contracts";
-import type { ChatTurn, FailureRecovery } from "../chat/types";
-import { userText } from "../lib";
-import type { WorkspaceLayoutDocument } from "../shell/layout";
+import { DEFAULT_CONFIG } from "@thinkrail/contracts";
+import type { HydratedRuntime } from "../chat/hydrate";
 import {
 	captureCenterNavigation,
 	chatTabId,
+	EMPTY_RUNTIME,
 	type FileTab,
 	isCenterNavigationCurrent,
 	layoutOpenOptionsForNavigation,
@@ -27,7 +30,6 @@ import {
 	useAppStore,
 } from "./appStore";
 import {
-	selectCompactionTurnIds,
 	selectCurrentRouteChatTarget,
 	selectDiffScope,
 	selectLastOpenChatSession,
@@ -37,67 +39,106 @@ import {
 	selectWorkspaceTick,
 } from "./selectors";
 
-const agentStart = { type: "agent_start" } as unknown as PiEvent;
-const agentEnd = { type: "agent_end", willRetry: false, messages: [] } as unknown as PiEvent;
-const agentSettled = (terminal: Extract<PiEvent, { type: "agent_settled" }>["terminal"] = null) =>
-	({ type: "agent_settled", terminal }) as PiEvent;
-const recoveredOverflow: PiEvent = {
-	type: "compaction_end",
-	reason: "overflow",
-	result: {},
-	aborted: false,
-	willRetry: true,
-};
-const toolStart = (toolCallId: string) =>
-	({ type: "tool_execution_start", toolCallId, toolName: "bash" }) as unknown as PiEvent;
-const toolUpdate = (toolCallId: string, partialResult: unknown) =>
-	({ type: "tool_execution_update", toolCallId, partialResult }) as unknown as PiEvent;
-const toolEnd = (toolCallId: string, result: unknown, isError = false) =>
-	({ type: "tool_execution_end", toolCallId, result, isError }) as unknown as PiEvent;
-const retryStart = (attempt: number, maxAttempts: number, delayMs: number) =>
-	({
-		type: "auto_retry_start",
-		attempt,
-		maxAttempts,
-		delayMs,
-		errorMessage: "rate limit",
-	}) as unknown as PiEvent;
-const retryEnd = { type: "auto_retry_end", success: true, attempt: 1 } as unknown as PiEvent;
-const summarizationScheduled = (
-	attempt: number,
-	maxAttempts: number,
-	delayMs: number,
-): PiEvent => ({
-	type: "summarization_retry_scheduled",
-	attempt,
-	maxAttempts,
-	delayMs,
-	errorMessage: "stream dropped",
-});
-const summarizationFinished: PiEvent = { type: "summarization_retry_finished" };
-const agentEndError = (errorMessage: string) =>
-	({
-		type: "agent_end",
-		willRetry: false,
-		messages: [{ role: "assistant", content: [], stopReason: "error", errorMessage }],
-	}) as unknown as PiEvent;
-const assistantStart = {
-	type: "message_start",
-	message: { role: "assistant" },
-} as unknown as PiEvent;
-const userStart = (text: string) =>
-	({
-		type: "message_start",
-		message: { role: "user", content: [{ type: "text", text }], timestamp: 1 },
-	}) as unknown as PiEvent;
-const assistantText = (text: string) =>
-	({
-		type: "message_update",
-		assistantMessageEvent: {
-			type: "text",
-			partial: { role: "assistant", content: [{ type: "text", text }] },
+function userMessage(id: string, text: string): ChatMessage {
+	return { role: "user", id, timestamp: 0, content: [{ type: "text", text }] };
+}
+
+function assistantMessage(id: string): ChatMessage {
+	return { role: "assistant", id, timestamp: 0, blocks: [] };
+}
+
+function toolCall(
+	toolCallId: string,
+	status: "pending" | "running" | "done" | "error" | "abandoned" = "pending",
+) {
+	return {
+		type: "toolCall" as const,
+		toolCallId,
+		toolName: "bash",
+		title: "Run ls",
+		kind: "execute" as const,
+		status,
+		arguments: { command: "ls" },
+	};
+}
+
+function turnSettled(
+	id: string,
+	stopReason: "completed" | "failed" | "cancelled" = "completed",
+	error?: string,
+): ChatEvent {
+	return {
+		type: "turn_settled",
+		message: {
+			role: "marker",
+			id,
+			timestamp: 0,
+			marker: { kind: "turnSettled", stopReason, ...(error !== undefined ? { error } : {}) },
 		},
-	}) as unknown as PiEvent;
+	};
+}
+
+function summary(
+	sessionId: string,
+	workspaceId: string,
+	recordOver: Partial<SessionRecord> = {},
+	summaryOver: Partial<Omit<SessionSummary, "record">> = {},
+): SessionSummary {
+	return {
+		record: {
+			sessionId,
+			workspaceId,
+			cwd: `/tmp/${workspaceId}`,
+			agentId: "pi",
+			title: "Chat",
+			createdAt: 0,
+			updatedAt: 0,
+			messageCount: 0,
+			promptCount: 0,
+			lastSettlement: null,
+			usage: null,
+			config: [],
+			...recordOver,
+		},
+		agent: { id: "pi", name: "pi", origin: "bundled" },
+		isStreaming: false,
+		live: true,
+		...summaryOver,
+	};
+}
+
+function hydrated(messages: ChatMessage[] = [], plan: AgentPlan | null = null): HydratedRuntime {
+	return { messages, configOptions: [], capabilities: EMPTY_RUNTIME.capabilities, plan };
+}
+
+function elicitationRequest(id: string, sessionId?: string): ElicitationRequest {
+	return {
+		kind: "url",
+		id,
+		...(sessionId ? { sessionId } : {}),
+		message: "Sign in",
+		url: "https://example.com/auth",
+	};
+}
+
+function permissionRequest(id: string, sessionId: string, toolCallId: string): PermissionRequest {
+	return {
+		id,
+		sessionId,
+		toolCallId,
+		call: {
+			type: "toolCall",
+			toolCallId,
+			toolName: "bash",
+			title: "Run",
+			kind: "execute",
+			status: "pending",
+			arguments: {},
+		},
+		options: [{ id: "allow", name: "Allow", kind: "allowOnce" }],
+	};
+}
+
 const emptyBottomRegion = (): WorkspaceLayoutDocument["bottom"] => ({
 	visible: false,
 	height: 0.3,
@@ -114,7 +155,10 @@ beforeEach(() => {
 		routeChatTarget: null,
 		routeChatTargetGeneration: 0,
 		sessions: {},
-		extUiOrphans: [],
+		activeElicitation: null,
+		elicitationQueue: [],
+		workspaceSelectionHistory: [],
+		layoutSnapshotsByWorkspace: {},
 		workbenchFrame: null,
 		workspaceViewsByWorkspace: {},
 		layoutStateReady: false,
@@ -140,10 +184,8 @@ beforeEach(() => {
 		expandedProjectIds: {},
 		selectedProjectId: null,
 		activeWorkspaceId: null,
-		workspaceSelectionHistory: [],
-		activeLogin: null,
 		settingsOpen: false,
-		settingsSection: "providers",
+		settingsSection: "agents",
 		chatMessageOrder: "oldest-first",
 		toasts: [],
 	});
@@ -155,9 +197,10 @@ function rt(sessionId: string): SessionRuntime {
 	return runtime;
 }
 
-function failureRecovery(sessionId: string): FailureRecovery | undefined {
-	const error = rt(sessionId).turns.find((turn) => turn.kind === "error");
-	return error?.kind === "error" ? error.recovery : undefined;
+function blocksOf(sessionId: string, index = 0) {
+	const message = rt(sessionId).messages[index];
+	if (message?.role !== "assistant") throw new Error("expected an assistant message");
+	return message.blocks;
 }
 
 test("each connected status advances the reconnect generation atomically", () => {
@@ -174,1004 +217,363 @@ test("each connected status advances the reconnect generation atomically", () =>
 test("selectLastOpenChatSession: active chat tab first, then the most recent chat tab, else null", () => {
 	const store = useAppStore.getState();
 	expect(selectLastOpenChatSession(useAppStore.getState(), "ws1")).toBeNull();
-	store.openChatSession("ws1", "s1", null, "medium");
-	store.openChatSession("ws1", "s2", null, "medium");
+	store.openChatSession("ws1", "s1", EMPTY_RUNTIME.capabilities, []);
+	store.openChatSession("ws1", "s2", EMPTY_RUNTIME.capabilities, []);
 	expect(selectLastOpenChatSession(useAppStore.getState(), "ws1")).toBe("s2");
 	useAppStore.getState().openTab(fileTab("ws1", "a.ts"), "keep");
 	expect(selectLastOpenChatSession(useAppStore.getState(), "ws1")).toBe("s2");
 });
 
-test("pi events route to the right session runtime; chats stay independent", () => {
+test("chat events route to the right session runtime; chats stay independent", () => {
 	const store = useAppStore.getState();
-	store.openChatSession("ws1", "a", null, "medium");
-	store.openChatSession("ws1", "b", null, "high");
+	store.openChatSession("ws1", "a", EMPTY_RUNTIME.capabilities, []);
+	store.openChatSession("ws1", "b", EMPTY_RUNTIME.capabilities, []);
 
-	store.handlePiEvent(agentStart, "a");
-	store.handlePiEvent(toolStart("t1"), "a");
+	store.applyChatEvent("a", { type: "turn_start" });
 	expect(rt("a").isStreaming).toBe(true);
-	expect(rt("a").toolResults.t1?.status).toBe("running");
 	expect(rt("b").isStreaming).toBe(false);
-	expect(Object.keys(rt("b").toolResults)).toHaveLength(0);
 
-	store.handlePiEvent(agentStart, "b");
+	store.applyChatEvent("b", { type: "turn_start" });
 	expect(rt("a").isStreaming).toBe(true);
 	expect(rt("b").isStreaming).toBe(true);
 
-	store.handlePiEvent(agentEnd, "a");
-	expect(rt("a").isStreaming).toBe(true);
-	expect(rt("a").turns.some((t) => t.kind === "system" && t.text === "✓ Done")).toBe(false);
-	store.handlePiEvent(agentSettled(), "a");
+	store.applyChatEvent("a", turnSettled("s1"));
 	expect(rt("a").isStreaming).toBe(false);
-	expect(rt("a").turns.some((t) => t.kind === "system" && t.text === "✓ Done")).toBe(true);
+	expect(rt("a").messages).toHaveLength(1);
 	expect(rt("b").isStreaming).toBe(true);
-	expect(rt("b").turns).toHaveLength(0);
+	expect(rt("b").messages).toHaveLength(0);
 });
 
-test("an ordered Pi-event batch commits once while preserving every session revision", () => {
+test("message_start appends a new message, and REPLACES in place for a known id (the optimistic-echo + host-rewrite mechanism)", () => {
 	const store = useAppStore.getState();
-	store.openChatSession("ws1", "a", null, "medium");
-	store.openChatSession("ws1", "b", null, "high");
-	const partial = { content: [{ type: "text", text: "partial" }] };
-	const payloads: SessionEventPayload[] = [
-		{ sessionId: "a", event: agentStart },
-		{ sessionId: "a", event: toolStart("t1") },
-		{ sessionId: "b", event: agentStart },
-		{ sessionId: "a", event: toolUpdate("t1", partial) },
-		{ sessionId: "a", event: agentEnd },
-		{ sessionId: "missing", event: agentStart },
-	];
-	let commits = 0;
-	const unsubscribe = useAppStore.subscribe(() => {
-		commits += 1;
+	store.openChatSession("ws1", "a", EMPTY_RUNTIME.capabilities, []);
+
+	store.applyChatEvent("a", {
+		type: "message_start",
+		message: userMessage("u1", "/skill:review go"),
+	});
+	expect(rt("a").messages).toHaveLength(1);
+
+	store.applyChatEvent("a", {
+		type: "message_start",
+		message: userMessage("u1", '<skill name="review">…</skill>\n\ngo'),
+	});
+	const messages = rt("a").messages;
+	expect(messages).toHaveLength(1);
+	expect(messages[0]?.role === "user" && messages[0].content[0]).toEqual({
+		type: "text",
+		text: '<skill name="review">…</skill>\n\ngo',
 	});
 
-	store.handlePiEvents(payloads);
-	unsubscribe();
-
-	expect(commits).toBe(1);
-	expect(rt("a").eventRevision).toBe(4);
-	expect(rt("a").isStreaming).toBe(true);
-	expect(rt("a").toolResults.t1).toEqual({ status: "running", raw: partial });
-	expect(rt("b").eventRevision).toBe(1);
-	expect(rt("b").isStreaming).toBe(true);
+	store.applyChatEvent("a", {
+		type: "message_start",
+		message: userMessage("u2", "second message"),
+	});
+	expect(rt("a").messages).toHaveLength(2);
 });
 
-test("a host-fired USER message folds into the transcript; the composer's optimistic twin doesn't duplicate", () => {
+test("chunk appends text at (messageId, index), creating the block on first arrival", () => {
 	const store = useAppStore.getState();
-	store.openChatSession("ws1", "a", null, "medium");
+	store.openChatSession("ws1", "a", EMPTY_RUNTIME.capabilities, []);
+	store.applyChatEvent("a", { type: "message_start", message: assistantMessage("m1") });
 
-	store.handlePiEvent(userStart("<review pkg>"), "a");
-	expect(rt("a").turns).toHaveLength(1);
-	expect(rt("a").turns[0]?.kind).toBe("user");
+	store.applyChatEvent("a", {
+		type: "chunk",
+		messageId: "m1",
+		index: 0,
+		kind: "text",
+		delta: "po",
+	});
+	store.applyChatEvent("a", {
+		type: "chunk",
+		messageId: "m1",
+		index: 0,
+		kind: "text",
+		delta: "ng",
+	});
 
-	store.appendUserMessage("a", "fix the tests");
-	store.handlePiEvent(userStart("fix the tests"), "a");
-	expect(rt("a").turns.filter((t) => t.kind === "user")).toHaveLength(2);
-
-	store.handlePiEvent(userStart("[thinkrail:todo-nudge] plan changed"), "a");
-	expect(rt("a").turns.filter((t) => t.kind === "user")).toHaveLength(2);
+	expect(blocksOf("a")).toEqual([{ type: "text", text: "pong" }]);
 });
 
-test("queue_update folds pi's queue into the runtime; the canonical echo lands the turn at its true position", () => {
-	const queueUpdate = (steering: string[], followUp: string[], hasImages = false) =>
-		({
-			type: "queue_update",
-			steering,
-			followUp,
-			...(hasImages ? { hasImages: true } : {}),
-		}) as unknown as PiEvent;
+test("chunk for an unknown message id is a no-op — the message must already exist", () => {
 	const store = useAppStore.getState();
-	store.openChatSession("ws1", "a", null, "medium");
-	store.handlePiEvent(agentStart, "a");
-	store.handlePiEvent(assistantStart, "a");
-	store.handlePiEvent(assistantText("first reply"), "a");
+	store.openChatSession("ws1", "a", EMPTY_RUNTIME.capabilities, []);
+	const beforeMessages = rt("a").messages;
 
-	store.handlePiEvent(queueUpdate(["course-correct"], ["queued question"], true), "a");
-	expect(rt("a").queue).toEqual({
+	store.applyChatEvent("a", {
+		type: "chunk",
+		messageId: "ghost",
+		index: 0,
+		kind: "text",
+		delta: "x",
+	});
+	expect(rt("a").messages).toBe(beforeMessages);
+});
+
+test("block SETs a whole block at an index — replacing what was there, appending past the end", () => {
+	const store = useAppStore.getState();
+	store.openChatSession("ws1", "a", EMPTY_RUNTIME.capabilities, []);
+	store.applyChatEvent("a", { type: "message_start", message: assistantMessage("m1") });
+
+	store.applyChatEvent("a", {
+		type: "block",
+		messageId: "m1",
+		index: 0,
+		block: { type: "image", data: "aGk=", mimeType: "image/png" },
+	});
+	expect(blocksOf("a")).toEqual([{ type: "image", data: "aGk=", mimeType: "image/png" }]);
+
+	store.applyChatEvent("a", {
+		type: "block",
+		messageId: "m1",
+		index: 1,
+		block: { type: "text", text: "appended" },
+	});
+	expect(blocksOf("a")).toEqual([
+		{ type: "image", data: "aGk=", mimeType: "image/png" },
+		{ type: "text", text: "appended" },
+	]);
+});
+
+test("tool_call_update REPLACES only the named fields (and output wholesale), leaving siblings untouched", () => {
+	const store = useAppStore.getState();
+	store.openChatSession("ws1", "a", EMPTY_RUNTIME.capabilities, []);
+	store.applyChatEvent("a", { type: "message_start", message: assistantMessage("m1") });
+	store.applyChatEvent("a", { type: "block", messageId: "m1", index: 0, block: toolCall("t1") });
+	store.applyChatEvent("a", {
+		type: "block",
+		messageId: "m1",
+		index: 1,
+		block: { type: "text", text: "prose" },
+	});
+
+	store.applyChatEvent("a", {
+		type: "tool_call_update",
+		toolCallId: "t1",
+		patch: { status: "done", output: [{ type: "text", text: "ok" }] },
+	});
+
+	expect(blocksOf("a")).toEqual([
+		{ ...toolCall("t1"), status: "done", output: [{ type: "text", text: "ok" }] },
+		{ type: "text", text: "prose" },
+	]);
+});
+
+test("tool_call_update for an unknown toolCallId is a no-op", () => {
+	const store = useAppStore.getState();
+	store.openChatSession("ws1", "a", EMPTY_RUNTIME.capabilities, []);
+	store.applyChatEvent("a", { type: "message_start", message: assistantMessage("m1") });
+	store.applyChatEvent("a", { type: "block", messageId: "m1", index: 0, block: toolCall("t1") });
+	const before = rt("a");
+
+	store.applyChatEvent("a", {
+		type: "tool_call_update",
+		toolCallId: "ghost",
+		patch: { status: "error" },
+	});
+	expect(rt("a")).toBe(before);
+});
+
+test("message_end sets endedAt on the named assistant message; a non-assistant or unknown id is a no-op", () => {
+	const store = useAppStore.getState();
+	store.openChatSession("ws1", "a", EMPTY_RUNTIME.capabilities, []);
+	store.applyChatEvent("a", { type: "message_start", message: assistantMessage("m1") });
+
+	store.applyChatEvent("a", { type: "message_end", messageId: "m1", endedAt: 1234 });
+	const message = rt("a").messages[0];
+	expect(message?.role === "assistant" && message.endedAt).toBe(1234);
+
+	const before = rt("a");
+	store.applyChatEvent("a", { type: "message_end", messageId: "ghost", endedAt: 5678 });
+	expect(rt("a")).toBe(before);
+});
+
+test("message_superseded flags the message rather than removing it", () => {
+	const store = useAppStore.getState();
+	store.openChatSession("ws1", "a", EMPTY_RUNTIME.capabilities, []);
+	store.applyChatEvent("a", { type: "message_start", message: assistantMessage("m1") });
+
+	store.applyChatEvent("a", { type: "message_superseded", messageId: "m1" });
+	expect(rt("a").messages).toHaveLength(1);
+	const message = rt("a").messages[0];
+	expect(message?.role === "assistant" && message.superseded).toBe(true);
+});
+
+test("turn_settled appends its marker message and clears isStreaming, every retry countdown, and the compaction flag", () => {
+	const store = useAppStore.getState();
+	store.openChatSession("ws1", "a", EMPTY_RUNTIME.capabilities, []);
+	store.applyChatEvent("a", { type: "turn_start" });
+	store.applyChatEvent("a", {
+		type: "retry_scheduled",
+		scope: "turn",
+		attempt: 1,
+		maxAttempts: 3,
+		delayMs: 500,
+	});
+	store.applyChatEvent("a", { type: "compaction_start", reason: "threshold" });
+
+	store.applyChatEvent("a", turnSettled("settled-1", "failed", "boom"));
+
+	const after = rt("a");
+	expect(after.isStreaming).toBe(false);
+	expect(after.retries).toEqual({});
+	expect(after.compacting).toBeNull();
+	expect(after.messages).toHaveLength(1);
+	const marker = after.messages[0];
+	expect(marker?.role === "marker" && marker.marker).toEqual({
+		kind: "turnSettled",
+		stopReason: "failed",
+		error: "boom",
+	});
+});
+
+test("retry_scheduled/retry_cleared track one RetryScope key each; overlapping scopes never clear each other", () => {
+	const store = useAppStore.getState();
+	store.openChatSession("ws1", "a", EMPTY_RUNTIME.capabilities, []);
+
+	store.applyChatEvent("a", {
+		type: "retry_scheduled",
+		scope: "turn",
+		attempt: 1,
+		maxAttempts: 3,
+		delayMs: 1000,
+	});
+	store.applyChatEvent("a", {
+		type: "retry_scheduled",
+		scope: "summarization",
+		attempt: 1,
+		maxAttempts: 2,
+		delayMs: 2000,
+	});
+	expect(rt("a").retries).toEqual({
+		turn: { attempt: 1, maxAttempts: 3, delayMs: 1000 },
+		summarization: { attempt: 1, maxAttempts: 2, delayMs: 2000 },
+	});
+
+	store.applyChatEvent("a", { type: "retry_cleared", scope: "turn" });
+	expect(rt("a").retries).toEqual({ summarization: { attempt: 1, maxAttempts: 2, delayMs: 2000 } });
+
+	store.applyChatEvent("a", { type: "retry_cleared", scope: "summarization" });
+	expect(rt("a").retries).toEqual({});
+});
+
+test("compaction_start/compaction_end only drive the ephemeral progress flag — the durable outcome is a separate message", () => {
+	const store = useAppStore.getState();
+	store.openChatSession("ws1", "a", EMPTY_RUNTIME.capabilities, []);
+
+	store.applyChatEvent("a", { type: "compaction_start", reason: "overflow" });
+	expect(rt("a").compacting).toBe("overflow");
+	expect(rt("a").messages).toHaveLength(0);
+
+	store.applyChatEvent("a", { type: "compaction_end", reason: "overflow" });
+	expect(rt("a").compacting).toBeNull();
+	expect(rt("a").messages).toHaveLength(0);
+
+	store.applyChatEvent("a", {
+		type: "message_start",
+		message: {
+			role: "marker",
+			id: "c1",
+			timestamp: 0,
+			marker: { kind: "compaction", reason: "overflow", summary: "trimmed the history" },
+		},
+	});
+	expect(rt("a").messages).toHaveLength(1);
+});
+
+test("config_options / commands / usage / plan / capabilities / agent_status each replace their field wholesale", () => {
+	const store = useAppStore.getState();
+	store.openChatSession("ws1", "a", EMPTY_RUNTIME.capabilities, []);
+
+	const options: ConfigOption[] = [
+		{
+			id: "model",
+			name: "Model",
+			category: "model",
+			control: { type: "select", value: "opus", groups: [] },
+		},
+	];
+	store.applyChatEvent("a", { type: "config_options", options });
+	expect(rt("a").configOptions).toBe(options);
+
+	store.applyChatEvent("a", { type: "commands", commands: [{ name: "review" }] });
+	expect(rt("a").commands).toEqual([{ name: "review" }]);
+
+	store.applyChatEvent("a", {
+		type: "usage",
+		usage: { contextUsed: 1200, contextWindow: 200_000 },
+	});
+	expect(rt("a").usage).toEqual({ contextUsed: 1200, contextWindow: 200_000 });
+
+	const plan = { entries: [{ text: "ship it", status: "active" as const }] };
+	store.applyChatEvent("a", { type: "plan", plan });
+	expect(rt("a").plan).toBe(plan);
+	store.applyChatEvent("a", { type: "plan", plan: null });
+	expect(rt("a").plan).toBeNull();
+
+	const capabilities = { ...EMPTY_RUNTIME.capabilities, cost: true };
+	store.applyChatEvent("a", { type: "capabilities", capabilities });
+	expect(rt("a").capabilities).toBe(capabilities);
+
+	store.applyChatEvent("a", { type: "agent_status", status: { phase: "restarting", attempt: 2 } });
+	expect(rt("a").agentStatus).toEqual({ phase: "restarting", attempt: 2 });
+});
+
+test("queue_changed replaces the depths, and the rows when the host owns the queue", () => {
+	const store = useAppStore.getState();
+	store.openChatSession("ws1", "a", EMPTY_RUNTIME.capabilities, []);
+	expect(rt("a").queue).toEqual({ steering: 0, followUp: 0, messages: null });
+
+	store.applyChatEvent("a", { type: "queue_changed", steering: 1, followUp: 2 });
+	expect(rt("a").queue).toEqual({ steering: 1, followUp: 2, messages: null });
+
+	store.applyChatEvent("a", {
+		type: "queue_changed",
+		steering: 1,
+		followUp: 1,
+		queue: { steering: ["course-correct"], followUp: ["queued question"] },
+	});
+	expect(rt("a").queue.messages).toEqual({
 		steering: ["course-correct"],
 		followUp: ["queued question"],
-		hasImages: true,
 	});
-	expect(rt("a").turns.filter((t) => t.kind === "user")).toHaveLength(0);
 
-	store.handlePiEvent(queueUpdate([], ["queued question"]), "a");
-	store.handlePiEvent(userStart("course-correct"), "a");
-	store.handlePiEvent(queueUpdate([], []), "a");
-	store.handlePiEvent(userStart("queued question"), "a");
-
-	const turns = rt("a").turns;
-	expect(turns.map((t) => t.kind)).toEqual(["assistant", "user", "user"]);
-	expect(rt("a").queue).toEqual({ steering: [], followUp: [] });
+	store.applyChatEvent("a", {
+		type: "queue_changed",
+		steering: 0,
+		followUp: 0,
+		queue: { steering: [], followUp: [] },
+	});
+	expect(rt("a").queue).toEqual({
+		steering: 0,
+		followUp: 0,
+		messages: { steering: [], followUp: [] },
+	});
 });
 
-test("hydrateSession seeds the queue from the summary snapshot", () => {
+test("hydrateSession seeds the pending strip from the summary's queue snapshot", () => {
 	const store = useAppStore.getState();
 	useAppStore.setState({ activeWorkspaceId: "ws1" });
-	const summary: SessionSummary = {
-		sessionId: "q1",
-		workspaceId: "ws1",
-		title: "Chat",
-		model: null,
-		thinkingLevel: "medium",
-		isStreaming: true,
-		messageCount: 1,
-		updatedAt: 0,
-		live: true,
-		queue: { steering: [], followUp: ["waiting in line"] },
-	};
-	store.hydrateSession(summary, { turns: [], toolResults: {}, askAnswers: {} });
-	expect(rt("q1").queue).toEqual({ steering: [], followUp: ["waiting in line"] });
 
-	const { queue, ...bare } = summary;
-	void queue;
 	store.hydrateSession(
-		{ ...bare, sessionId: "q2" },
-		{ turns: [], toolResults: {}, askAnswers: {} },
+		summary("q1", "ws1", {}, { queue: { steering: [], followUp: ["waiting in line"] } }),
+		hydrated(),
 	);
-	expect(rt("q2").queue).toEqual({ steering: [], followUp: [] });
-});
-
-test("Pi's expanded skill echo replaces its matching optimistic slash command in place", () => {
-	const expanded =
-		'<skill name="review" location="/repo/.pi/skills/review/SKILL.md">\nReferences are relative to /repo/.pi/skills/review.\n\n# Review\n\nInspect the diff.\n</skill>\n\nFocus on src/app.ts.';
-	const store = useAppStore.getState();
-	store.openChatSession("ws1", "skill", null, "medium");
-	store.appendUserMessage("skill", "/skill:review Focus on src/app.ts.");
-	const optimistic = rt("skill").turns[0];
-	if (optimistic?.kind !== "user") throw new Error("optimistic turn missing");
-
-	store.handlePiEvent(userStart(expanded), "skill");
-	const turns = rt("skill").turns;
-	expect(turns).toHaveLength(1);
-	const canonical = turns[0];
-	expect(canonical?.id).toBe(optimistic.id);
-	expect(canonical?.kind === "user" && userText(canonical.message.content)).toBe(expanded);
-
-	store.openChatSession("ws1", "mismatch", null, "medium");
-	store.appendUserMessage("mismatch", "/skill:other Focus on src/app.ts.");
-	store.handlePiEvent(userStart(expanded), "mismatch");
-	expect(rt("mismatch").turns.filter((turn) => turn.kind === "user")).toHaveLength(2);
-});
-
-test("an assistant turn is built (and replaced, not duplicated) from message_update partials", () => {
-	const store = useAppStore.getState();
-	store.openChatSession("ws1", "a", null, "medium");
-
-	store.handlePiEvent(agentStart, "a");
-	store.handlePiEvent(assistantStart, "a");
-	store.handlePiEvent(assistantText("po"), "a");
-	store.handlePiEvent(assistantText("pong"), "a");
-
-	const assistants = rt("a").turns.filter((t) => t.kind === "assistant");
-	expect(assistants).toHaveLength(1);
-	const turn = assistants[0];
-	expect(turn?.kind === "assistant" && turn.streaming).toBe(true);
-	expect(turn?.kind === "assistant" && turn.message.content[0]?.type === "text").toBe(true);
-
-	store.handlePiEvent(agentEnd, "a");
-	expect(rt("a").isStreaming).toBe(true);
-	store.handlePiEvent(agentSettled(), "a");
-	const after = rt("a");
-	expect(after.isStreaming).toBe(false);
-	expect(after.currentAssistantId).toBeNull();
-	expect(after.turns.some((t) => t.kind === "system" && t.text === "✓ Done")).toBe(true);
-});
-
-test("a multi-message turn leaves no assistant turn flagged streaming (no stray live indicator)", () => {
-	const store = useAppStore.getState();
-	store.openChatSession("ws1", "a", null, "medium");
-
-	store.handlePiEvent(agentStart, "a");
-	store.handlePiEvent(assistantStart, "a");
-	store.handlePiEvent(assistantText("first"), "a");
-	store.handlePiEvent(assistantStart, "a");
-	expect(rt("a").turns.filter((t) => t.kind === "assistant" && t.streaming)).toHaveLength(0);
-	store.handlePiEvent(assistantText("second"), "a");
-	const streamingMid = rt("a").turns.filter((t) => t.kind === "assistant" && t.streaming);
-	expect(streamingMid).toHaveLength(1);
-
-	store.handlePiEvent(agentEnd, "a");
-	expect(rt("a").turns.some((t) => t.kind === "assistant" && t.streaming)).toBe(true);
-	store.handlePiEvent(agentSettled(), "a");
-	const after = rt("a");
-	expect(after.turns.filter((t) => t.kind === "assistant")).toHaveLength(2);
-	expect(after.turns.some((t) => t.kind === "assistant" && t.streaming)).toBe(false);
-	expect(after.isStreaming).toBe(false);
-});
-
-test("message_end finalizes the turn the moment its message completes (not at agent_end)", () => {
-	const store = useAppStore.getState();
-	store.openChatSession("ws1", "a", null, "medium");
-
-	store.handlePiEvent(agentStart, "a");
-	store.handlePiEvent(assistantStart, "a");
-	store.handlePiEvent(assistantText("asking…"), "a");
-	expect(rt("a").turns.some((t) => t.kind === "assistant" && t.streaming)).toBe(true);
-
-	const finalMessage = {
-		role: "assistant",
-		content: [{ type: "toolCall", id: "ask1", name: "ask_user_question", arguments: {} }],
-		stopReason: "toolUse",
-	};
-	store.handlePiEvent({ type: "message_end", message: finalMessage } as unknown as PiEvent, "a");
-
-	const after = rt("a");
-	expect(after.isStreaming).toBe(true);
-	expect(after.currentAssistantId).toBeNull();
-	const turn = after.turns.find((t) => t.kind === "assistant");
-	expect(turn?.kind === "assistant" && turn.streaming).toBe(false);
-	expect(turn?.kind === "assistant" && turn.message.stopReason).toBe("toolUse");
-
-	const before = rt("a");
-	store.handlePiEvent(
-		{ type: "message_end", message: { role: "toolResult" } } as unknown as PiEvent,
-		"a",
-	);
-	const ignored = rt("a");
-	expect(ignored.turns).toBe(before.turns);
-	expect(ignored.eventRevision).toBe(before.eventRevision + 1);
-});
-
-test("an ask-user-answers custom message_end indexes into askAnswers (never the turn list)", () => {
-	const store = useAppStore.getState();
-	store.openChatSession("ws1", "a", null, "medium");
-
-	const result = {
-		answers: [{ questionIndex: 0, question: "Q?", kind: "option", answer: "A" }],
-		cancelled: false,
-	};
-	store.handlePiEvent(
-		{
-			type: "message_end",
-			message: {
-				role: "custom",
-				customType: "ask-user-answers",
-				content: "User has answered your questions: …",
-				display: true,
-				details: { toolCallId: "ask1", result },
-			},
-		} as unknown as PiEvent,
-		"a",
-	);
-	expect(rt("a").askAnswers.ask1).toEqual(result as never);
-	expect(rt("a").turns.filter((t) => t.kind === "assistant" || t.kind === "user")).toHaveLength(0);
-
-	const before = rt("a");
-	store.handlePiEvent(
-		{
-			type: "message_end",
-			message: { role: "custom", customType: "other", content: "x", display: false },
-		} as unknown as PiEvent,
-		"a",
-	);
-	const ignored = rt("a");
-	expect(ignored.turns).toBe(before.turns);
-	expect(ignored.askAnswers).toBe(before.askAnswers);
-	expect(ignored.eventRevision).toBe(before.eventRevision + 1);
-});
-
-test("a subagent-completion custom message_end appends a subagentCompletion turn", () => {
-	const store = useAppStore.getState();
-	store.openChatSession("ws1", "a", null, "medium");
-
-	const details = {
-		childSessionId: "child-1",
-		roleName: "scout",
-		task: "map the repo",
-		status: "completed",
-		usage: {
-			input: 10,
-			output: 5,
-			cacheRead: 0,
-			cacheWrite: 0,
-			cost: 0.01,
-			turns: 3,
-			contextTokens: 15,
-		},
-		durationMs: 4200,
-	};
-	store.handlePiEvent(
-		{
-			type: "message_end",
-			message: {
-				role: "custom",
-				customType: "subagent-completion",
-				content: 'Subagent "scout" (child-1) completed:\n\nthe report',
-				display: true,
-				details,
-			},
-		} as unknown as PiEvent,
-		"a",
-	);
-	const turn = rt("a").turns.at(-1);
-	expect(turn?.kind).toBe("subagentCompletion");
-	expect(turn?.kind === "subagentCompletion" && turn.details.childSessionId).toBe("child-1");
-	expect(turn?.kind === "subagentCompletion" && turn.text).toContain("the report");
-
-	const before = rt("a");
-	store.handlePiEvent(
-		{
-			type: "message_end",
-			message: {
-				role: "custom",
-				customType: "subagent-completion",
-				content: "x",
-				display: true,
-				details: { nope: true },
-			},
-		} as unknown as PiEvent,
-		"a",
-	);
-	const ignored = rt("a");
-	expect(ignored.turns).toBe(before.turns);
-	expect(ignored.eventRevision).toBe(before.eventRevision + 1);
-});
-
-test("the tool lifecycle folds into toolResults (the status + raw the renderers read)", () => {
-	const store = useAppStore.getState();
-	store.openChatSession("ws1", "a", null, "medium");
-
-	store.handlePiEvent(toolStart("t1"), "a");
-	expect(rt("a").toolResults.t1).toEqual({ status: "running", raw: undefined });
-
-	const partial = { content: [{ type: "text", text: "partial" }] };
-	store.handlePiEvent(toolUpdate("t1", partial), "a");
-	expect(rt("a").toolResults.t1).toEqual({ status: "running", raw: partial });
-
-	const final = { content: [{ type: "text", text: "done" }] };
-	store.handlePiEvent(toolEnd("t1", final), "a");
-	expect(rt("a").toolResults.t1).toEqual({ status: "done", raw: final });
-});
-
-test("a failed tool ends in the error status (the red-path the renderers branch on)", () => {
-	const store = useAppStore.getState();
-	store.openChatSession("ws1", "a", null, "medium");
-
-	store.handlePiEvent(toolStart("t1"), "a");
-	const errResult = { content: [{ type: "text", text: "boom" }] };
-	store.handlePiEvent(toolEnd("t1", errResult, true), "a");
-	expect(rt("a").toolResults.t1).toEqual({ status: "error", raw: errResult });
-});
-
-test("auto-retry adds a countdown turn, and resolving it clears the indicator", () => {
-	const store = useAppStore.getState();
-	store.openChatSession("ws1", "a", null, "medium");
-
-	store.handlePiEvent(retryStart(2, 3, 5_000), "a");
-	const retry = rt("a").turns.find((t) => t.kind === "retry");
-	expect(retry?.kind === "retry" && retry.source).toBe("turn");
-	expect(retry?.kind === "retry" && retry.attempt).toBe(2);
-	expect(retry?.kind === "retry" && retry.maxAttempts).toBe(3);
-	expect(retry?.kind === "retry" && retry.delayMs).toBe(5_000);
-
-	store.handlePiEvent(retryEnd, "a");
-	expect(rt("a").turns.some((t) => t.kind === "retry")).toBe(false);
-});
-
-test("summarization retries show their own countdown; re-scheduling replaces, finished clears", () => {
-	const store = useAppStore.getState();
-	store.openChatSession("ws1", "a", null, "medium");
-
-	store.handlePiEvent(summarizationScheduled(1, 3, 2_000), "a");
-	const first = rt("a").turns.find((t) => t.kind === "retry");
-	expect(first?.kind === "retry" && first.source).toBe("summarization");
-	expect(first?.kind === "retry" && first.attempt).toBe(1);
-
-	store.handlePiEvent(summarizationScheduled(2, 3, 4_000), "a");
-	const retries = rt("a").turns.filter((t) => t.kind === "retry");
-	expect(retries.length).toBe(1);
-	expect(retries[0]?.kind === "retry" && retries[0].attempt).toBe(2);
-
-	store.handlePiEvent(summarizationFinished, "a");
-	expect(rt("a").turns.some((t) => t.kind === "retry")).toBe(false);
-});
-
-test("overlapping turn + summarization retries never clear each other", () => {
-	const store = useAppStore.getState();
-	store.openChatSession("ws1", "a", null, "medium");
-
-	store.handlePiEvent(retryStart(1, 3, 1_000), "a");
-	store.handlePiEvent(summarizationScheduled(1, 3, 2_000), "a");
-	expect(rt("a").turns.filter((t) => t.kind === "retry").length).toBe(2);
-
-	store.handlePiEvent(retryEnd, "a");
-	const left = rt("a").turns.filter((t) => t.kind === "retry");
-	expect(left.length).toBe(1);
-	expect(left[0]?.kind === "retry" && left[0].source).toBe("summarization");
-
-	store.handlePiEvent(summarizationFinished, "a");
-	expect(rt("a").turns.some((t) => t.kind === "retry")).toBe(false);
-});
-
-test("a lingering retry countdown is swept up only when the run settles", () => {
-	const store = useAppStore.getState();
-	store.openChatSession("ws1", "a", null, "medium");
-
-	store.handlePiEvent(agentStart, "a");
-	store.handlePiEvent(retryStart(1, 3, 1_000), "a");
-	store.handlePiEvent(agentEnd, "a");
-	expect(rt("a").turns.some((t) => t.kind === "retry")).toBe(true);
-	store.handlePiEvent(agentSettled(), "a");
-	expect(rt("a").turns.some((t) => t.kind === "retry")).toBe(false);
-	expect(rt("a").turns.some((t) => t.kind === "system" && t.text === "✓ Done")).toBe(true);
-});
-
-test("auto-retry drops the failed attempt's turn — the retried message must not render twice", () => {
-	const store = useAppStore.getState();
-	store.openChatSession("ws1", "a", null, "medium");
-
-	store.handlePiEvent(agentStart, "a");
-	store.handlePiEvent(assistantStart, "a");
-	store.handlePiEvent(assistantText("The answer is"), "a");
-	store.handlePiEvent(
-		{
-			type: "message_end",
-			message: {
-				role: "assistant",
-				content: [{ type: "text", text: "The answer is" }],
-				stopReason: "error",
-				errorMessage: "fetch failed",
-			},
-		} as unknown as PiEvent,
-		"a",
-	);
-	store.handlePiEvent(
-		{ type: "agent_end", willRetry: true, messages: [] } as unknown as PiEvent,
-		"a",
-	);
-	store.handlePiEvent(retryStart(1, 3, 2_000), "a");
-	expect(rt("a").turns.some((t) => t.kind === "retry")).toBe(true);
-
-	store.handlePiEvent(agentStart, "a");
-	store.handlePiEvent(assistantStart, "a");
-	store.handlePiEvent(assistantText("The answer is 4"), "a");
-	store.handlePiEvent(
-		{
-			type: "message_end",
-			message: {
-				role: "assistant",
-				content: [{ type: "text", text: "The answer is 4" }],
-				stopReason: "stop",
-			},
-		} as unknown as PiEvent,
-		"a",
-	);
-	store.handlePiEvent(agentEnd, "a");
-	store.handlePiEvent(agentSettled(), "a");
-
-	const after = rt("a");
-	const assistants = after.turns.filter((t) => t.kind === "assistant");
-	expect(assistants).toHaveLength(1);
-	expect(
-		assistants[0]?.kind === "assistant" &&
-			assistants[0].message.content.some((c) => c.type === "text" && c.text === "The answer is 4"),
-	).toBe(true);
-	expect(after.turns.some((t) => t.kind === "retry")).toBe(false);
-	expect(after.turns.some((t) => t.kind === "system" && t.text === "✓ Done")).toBe(true);
-});
-
-test("auto-retry with no assistant message yet (error before message_start) drops nothing", () => {
-	const store = useAppStore.getState();
-	store.openChatSession("ws1", "a", null, "medium");
-	store.appendUserMessage("a", "hi");
-
-	store.handlePiEvent(agentStart, "a");
-	store.handlePiEvent(
-		{ type: "agent_end", willRetry: true, messages: [] } as unknown as PiEvent,
-		"a",
-	);
-	store.handlePiEvent(retryStart(1, 3, 2_000), "a");
-	expect(rt("a").turns.filter((t) => t.kind === "user")).toHaveLength(1);
-	expect(rt("a").turns.some((t) => t.kind === "retry")).toBe(true);
-});
-
-test("a turn that ends in a provider error surfaces the error (not a false ✓ Done)", () => {
-	const store = useAppStore.getState();
-	store.openChatSession("ws1", "a", null, "medium");
-
-	store.handlePiEvent(agentStart, "a");
-	store.handlePiEvent(agentEndError("model 'gpt-5.5' not found"), "a");
-	expect(rt("a").isStreaming).toBe(true);
-	store.handlePiEvent(
-		agentSettled({ stopReason: "error", errorMessage: "model 'gpt-5.5' not found" }),
-		"a",
-	);
-
-	const after = rt("a");
-	expect(after.isStreaming).toBe(false);
-	const err = after.turns.find((t) => t.kind === "error");
-	expect(err?.kind === "error" && err.text).toContain("gpt-5.5");
-	expect(failureRecovery("a")).toBe("try-again");
-	expect(after.turns.some((t) => t.kind === "system" && t.text === "✓ Done")).toBe(false);
-});
-
-test("a terminal length stop is a visible failure, never a false ✓ Done", () => {
-	const store = useAppStore.getState();
-	store.openChatSession("ws1", "a", null, "medium");
-
-	store.handlePiEvent(agentStart, "a");
-	store.handlePiEvent(agentEnd, "a");
-	store.handlePiEvent(agentSettled({ stopReason: "length" }), "a");
-
-	const after = rt("a");
-	const error = after.turns.find((turn) => turn.kind === "error");
-	expect(error?.kind === "error" && error.text.toLowerCase()).toContain("truncated");
-	expect(failureRecovery("a")).toBe("try-again");
-	expect(after.turns.some((turn) => turn.kind === "system" && turn.text === "✓ Done")).toBe(false);
-	expect(after.isStreaming).toBe(false);
-});
-
-test("a local follow-on consumes only its session's failure recovery", () => {
-	const store = useAppStore.getState();
-	store.openChatSession("ws1", "a", null, "medium");
-	store.openChatSession("ws1", "b", null, "medium");
-	for (const sessionId of ["a", "b"]) {
-		store.handlePiEvent(
-			agentSettled({ stopReason: "error", errorMessage: "fetch failed" }),
-			sessionId,
-		);
-	}
-
-	store.appendUserMessage("a", "Try again.");
-
-	expect(failureRecovery("a")).toBeUndefined();
-	expect(failureRecovery("b")).toBe("try-again");
-});
-
-test("another client's agent start consumes only its session's failure recovery", () => {
-	const store = useAppStore.getState();
-	store.openChatSession("ws1", "a", null, "medium");
-	store.openChatSession("ws1", "b", null, "medium");
-	for (const sessionId of ["a", "b"]) {
-		store.handlePiEvent(
-			agentSettled({ stopReason: "error", errorMessage: "fetch failed" }),
-			sessionId,
-		);
-	}
-
-	store.handlePiEvent(agentStart, "b");
-
-	expect(failureRecovery("a")).toBe("try-again");
-	expect(failureRecovery("b")).toBeUndefined();
-});
-
-test("a successful overflow compaction removes the superseded assistant attempt", () => {
-	const store = useAppStore.getState();
-	store.openChatSession("ws1", "a", null, "medium");
-
-	store.handlePiEvent(agentStart, "a");
-	store.handlePiEvent(assistantStart, "a");
-	store.handlePiEvent(assistantText("incomplete"), "a");
-	store.handlePiEvent(
-		{
-			type: "message_end",
-			message: {
-				role: "assistant",
-				content: [{ type: "text", text: "incomplete" }],
-				stopReason: "length",
-			},
-		} as unknown as PiEvent,
-		"a",
-	);
-	store.handlePiEvent(agentEnd, "a");
-	expect(rt("a").turns.filter((turn) => turn.kind === "assistant")).toHaveLength(1);
-
-	store.handlePiEvent(recoveredOverflow, "a");
-	expect(rt("a").turns.filter((turn) => turn.kind === "assistant")).toHaveLength(0);
-	expect(rt("a").isStreaming).toBe(true);
-});
-
-test("overflow recovery never removes an older failure when this attempt was not observed", () => {
-	const store = useAppStore.getState();
-	store.openChatSession("ws1", "a", null, "medium");
-
-	store.handlePiEvent(agentStart, "a");
-	store.handlePiEvent(assistantStart, "a");
-	store.handlePiEvent(assistantText("old failed answer"), "a");
-	store.handlePiEvent(
-		{
-			type: "message_end",
-			message: {
-				role: "assistant",
-				content: [{ type: "text", text: "old failed answer" }],
-				stopReason: "error",
-				errorMessage: "old failure",
-			},
-		} as unknown as PiEvent,
-		"a",
-	);
-	store.handlePiEvent(agentEndError("old failure"), "a");
-	store.handlePiEvent(agentSettled({ stopReason: "error", errorMessage: "old failure" }), "a");
-	expect(rt("a").turns.filter((turn) => turn.kind === "assistant")).toHaveLength(1);
-
-	store.handlePiEvent(agentStart, "a");
-	store.handlePiEvent(agentEnd, "a");
-	store.handlePiEvent(recoveredOverflow, "a");
-
-	expect(rt("a").turns.filter((turn) => turn.kind === "assistant")).toHaveLength(1);
-});
-
-const compactionStart = (reason: "manual" | "threshold" | "overflow" = "threshold"): PiEvent => ({
-	type: "compaction_start",
-	reason,
-});
-const compactionEnd = (over: Partial<Extract<PiEvent, { type: "compaction_end" }>> = {}): PiEvent =>
-	({
-		type: "compaction_end",
-		reason: "threshold",
-		result: { tokensBefore: 268_909, estimatedTokensAfter: 12_000 },
-		aborted: false,
-		willRetry: false,
-		...over,
-	}) as PiEvent;
-const compactionTurns = (sessionId: string) =>
-	rt(sessionId).turns.filter(
-		(turn): turn is Extract<ChatTurn, { kind: "compaction" }> => turn.kind === "compaction",
-	);
-
-test("compaction lifecycle: a running notice settles in place (same id) with the token figures", () => {
-	const store = useAppStore.getState();
-	store.openChatSession("ws1", "a", null, "medium");
-
-	store.handlePiEvent(agentStart, "a");
-	store.handlePiEvent(agentEnd, "a");
-	store.handlePiEvent(compactionStart(), "a");
-	const running = compactionTurns("a");
-	expect(running).toMatchObject([{ status: "running" }]);
-	expect(rt("a").isStreaming).toBe(true);
-	expect(rt("a").turns.filter((turn) => turn.kind === "system")).toHaveLength(0);
-
-	store.handlePiEvent(compactionEnd(), "a");
-	expect(compactionTurns("a")).toMatchObject([
-		{ id: running[0]?.id, status: "done", tokensBefore: 268_909, tokensAfter: 12_000 },
-	]);
-
-	store.handlePiEvent(agentSettled(), "a");
-	const turns = rt("a").turns;
-	expect(turns.at(-1)).toMatchObject({ kind: "system", text: "✓ Done" });
-	expect(turns.at(-2)).toMatchObject({ kind: "compaction", status: "done" });
-});
-
-test("the incident sequence: truncated response → compacting → compacted-resuming, never a misleading Done", () => {
-	const store = useAppStore.getState();
-	store.openChatSession("ws1", "a", null, "medium");
-
-	store.handlePiEvent(agentStart, "a");
-	store.handlePiEvent(assistantStart, "a");
-	store.handlePiEvent(assistantText(""), "a");
-	store.handlePiEvent(
-		{
-			type: "message_end",
-			message: { role: "assistant", content: [], stopReason: "length" },
-		} as unknown as PiEvent,
-		"a",
-	);
-	store.handlePiEvent(agentEnd, "a");
-	store.handlePiEvent(compactionStart("overflow"), "a");
-	expect(compactionTurns("a")).toMatchObject([{ status: "running" }]);
-
-	store.handlePiEvent(
-		compactionEnd({ reason: "overflow", willRetry: true, result: { tokensBefore: 268_909 } }),
-		"a",
-	);
-	expect(compactionTurns("a")).toMatchObject([
-		{ status: "done", resuming: true, tokensBefore: 268_909 },
-	]);
-	expect(rt("a").turns.filter((turn) => turn.kind === "assistant")).toHaveLength(0);
-	expect(rt("a").isStreaming).toBe(true);
-	expect(rt("a").turns.filter((turn) => turn.kind === "system")).toHaveLength(0);
-
-	store.handlePiEvent(agentStart, "a");
-	store.handlePiEvent(assistantStart, "a");
-	store.handlePiEvent(assistantText("finished the rebase"), "a");
-	store.handlePiEvent(agentEnd, "a");
-	store.handlePiEvent(agentSettled(), "a");
-	expect(rt("a").turns.at(-1)).toMatchObject({ kind: "system", text: "✓ Done" });
-	expect(rt("a").isStreaming).toBe(false);
-	expect(compactionTurns("a")[0]?.resuming).toBeUndefined();
-});
-
-test("a failed compaction settles into a visible, actionable notice — and a cancelled one into a muted record", () => {
-	const store = useAppStore.getState();
-	store.openChatSession("ws1", "a", null, "medium");
-
-	store.handlePiEvent(compactionStart("manual"), "a");
-	store.handlePiEvent(
-		compactionEnd({ reason: "manual", result: undefined, errorMessage: "Compaction failed: boom" }),
-		"a",
-	);
-	expect(compactionTurns("a")).toMatchObject([
-		{ status: "failed", detail: "Compaction failed: boom" },
-	]);
-
-	store.handlePiEvent(compactionStart("manual"), "a");
-	store.handlePiEvent(compactionEnd({ reason: "manual", result: undefined, aborted: true }), "a");
-	expect(compactionTurns("a")).toMatchObject([{ status: "failed" }, { status: "cancelled" }]);
-});
-
-test("manual compaction rejection appends one failed row only when no lifecycle was observed", () => {
-	const store = useAppStore.getState();
-	store.openChatSession("ws1", "a", null, "medium");
-
-	const beforeEarlyFailure = selectCompactionTurnIds(useAppStore.getState(), "a");
-	store.appendCompactionFailureUnlessObserved("a", beforeEarlyFailure, "host unavailable");
-	expect(compactionTurns("a")).toMatchObject([{ status: "failed", detail: "host unavailable" }]);
-
-	const beforePiFailure = selectCompactionTurnIds(useAppStore.getState(), "a");
-	store.handlePiEvent(compactionStart("manual"), "a");
-	store.handlePiEvent(
-		compactionEnd({ reason: "manual", result: undefined, errorMessage: "Nothing to compact" }),
-		"a",
-	);
-	store.appendCompactionFailureUnlessObserved("a", beforePiFailure, "request rejected");
-
-	expect(compactionTurns("a")).toMatchObject([
-		{ status: "failed", detail: "host unavailable" },
-		{ status: "failed", detail: "Nothing to compact" },
-	]);
-});
-
-test("a compaction_end with no observed start still lands a settled notice (connected mid-compaction)", () => {
-	const store = useAppStore.getState();
-	store.openChatSession("ws1", "a", null, "medium");
-
-	store.handlePiEvent(compactionEnd(), "a");
-	expect(compactionTurns("a")).toMatchObject([
-		{ status: "done", tokensBefore: 268_909, tokensAfter: 12_000 },
-	]);
-});
-
-test("compact-and-retry produces one completion marker at final settlement", () => {
-	const store = useAppStore.getState();
-	store.openChatSession("ws1", "a", null, "medium");
-
-	store.handlePiEvent(agentStart, "a");
-	store.handlePiEvent(agentEnd, "a");
-	store.handlePiEvent(recoveredOverflow, "a");
-	store.handlePiEvent(agentStart, "a");
-	store.handlePiEvent(agentEnd, "a");
-	expect(rt("a").turns.filter((turn) => turn.kind === "system")).toHaveLength(0);
-
-	store.handlePiEvent(agentSettled(), "a");
-	expect(
-		rt("a").turns.filter((turn) => turn.kind === "system" && turn.text === "✓ Done"),
-	).toHaveLength(1);
-});
-
-test("appendErrorTurn surfaces a failed send (a rejected prompt) as a visible error turn", () => {
-	const store = useAppStore.getState();
-	store.openChatSession("ws1", "a", null, "medium");
-
-	store.appendUserMessage("a", "do the thing");
-	store.appendErrorTurn("a", "No API key configured for provider openai");
-
-	const err = rt("a").turns.find((t) => t.kind === "error");
-	expect(err?.kind === "error" && err.text).toContain("No API key");
-	expect(failureRecovery("a")).toBeUndefined();
-	expect(rt("a").isStreaming).toBe(false);
-});
-
-test("a message_update with no prior message_start still builds the turn (mid-stream hydration)", () => {
-	const store = useAppStore.getState();
-	store.openChatSession("ws1", "a", null, "medium");
-
-	store.handlePiEvent(assistantText("partial reply"), "a");
-	expect(rt("a").turns.filter((t) => t.kind === "assistant")).toHaveLength(1);
-	expect(rt("a").currentAssistantId).not.toBeNull();
-
-	store.handlePiEvent(assistantText("partial reply"), "a");
-	expect(rt("a").turns.filter((t) => t.kind === "assistant")).toHaveLength(1);
-});
-
-test("an event for an unknown session is a no-op (no runtime is conjured)", () => {
-	const before = useAppStore.getState().sessions;
-	useAppStore.getState().handlePiEvent(agentStart, "ghost");
-	const after = useAppStore.getState().sessions;
-	expect(after).toBe(before);
-	expect(after.ghost).toBeUndefined();
-});
-
-test("closeChatRuntime drops only its own runtime", () => {
-	const store = useAppStore.getState();
-	store.openChatSession("ws1", "a", null, "medium");
-	store.openChatSession("ws1", "b", null, "medium");
-	store.handlePiEvent(agentStart, "b");
-
-	store.closeChatRuntime("a");
-	expect(useAppStore.getState().sessions.a).toBeUndefined();
-	expect(rt("b").isStreaming).toBe(true);
-});
-
-test("applyExtUi routes a dialog to its session; the reply clears only that one", () => {
-	const store = useAppStore.getState();
-	store.openChatSession("ws1", "a", null, "medium");
-	store.openChatSession("ws1", "b", null, "medium");
-
-	const dialog: ExtUiRequest = {
-		id: "d1",
-		sessionId: "a",
-		kind: "confirm",
-		title: "Proceed?",
-		message: "Apply?",
-	};
-	store.applyExtUi(dialog);
-	expect(rt("a").pendingExtUi?.id).toBe("d1");
-	expect(rt("b").pendingExtUi).toBeNull();
-
-	store.clearPendingExtUi("a", "d1");
-	expect(rt("a").pendingExtUi).toBeNull();
-});
-
-test("applyExtUi reads a notify's level: only an error becomes an error turn", () => {
-	const store = useAppStore.getState();
-	store.openChatSession("ws1", "a", null, "medium");
-
-	store.applyExtUi({
-		id: "n1",
-		sessionId: "a",
-		kind: "notify",
-		message: "Just so you know",
-		level: "info",
-	});
-	store.applyExtUi({
-		id: "n2",
-		sessionId: "a",
-		kind: "notify",
-		message: "Careful",
-		level: "warning",
-	});
-	store.applyExtUi({
-		id: "n3",
-		sessionId: "a",
-		kind: "notify",
-		message: "Extension theme-probe.ts failed on session_start: theme.fg is not a function",
-		level: "error",
+	expect(rt("q1").queue).toEqual({
+		steering: 0,
+		followUp: 1,
+		messages: { steering: [], followUp: ["waiting in line"] },
 	});
 
-	expect(rt("a").turns.slice(-3)).toMatchObject([
-		{ kind: "system", text: "Just so you know" },
-		{ kind: "system", text: "Careful" },
-		{
-			kind: "error",
-			text: "Extension theme-probe.ts failed on session_start: theme.fg is not a function",
-		},
-	]);
+	store.hydrateSession(summary("q2", "ws1"), hydrated());
+	expect(rt("q2").queue).toEqual({ steering: 0, followUp: 0, messages: null });
 });
 
-test("an ext-UI frame that beats its session.create response is replayed, not dropped", () => {
-	const store = useAppStore.getState();
-
-	store.applyExtUi({
-		id: "s1",
-		sessionId: "late",
-		kind: "setStatus",
-		key: "test",
-		text: "Theme works",
-	});
-	store.applyExtUi({
-		id: "n1",
-		sessionId: "late",
-		kind: "notify",
-		message: "Extension theme-probe.ts failed on session_start: theme.fg is not a function",
-		level: "error",
-	});
-	expect(useAppStore.getState().sessions.late).toBeUndefined();
-
-	store.openChatSession("ws1", "late", null, "medium");
-
-	expect(rt("late").extUiStatus).toEqual({ test: "Theme works" });
-	expect(rt("late").turns.at(-1)).toMatchObject({
-		kind: "error",
-		text: "Extension theme-probe.ts failed on session_start: theme.fg is not a function",
-	});
-	expect(useAppStore.getState().extUiOrphans).toEqual([]);
-});
-
-test("a dialog for an unknown session is dropped, never replayed as a phantom", () => {
-	const store = useAppStore.getState();
-
-	store.applyExtUi({
-		id: "d-late",
-		sessionId: "dialog",
-		kind: "confirm",
-		title: "Proceed?",
-		message: "Apply?",
-	});
-	expect(useAppStore.getState().extUiOrphans).toEqual([]);
-
-	store.openChatSession("ws1", "dialog", null, "medium");
-	expect(rt("dialog").pendingExtUi).toBeNull();
-	expect(rt("dialog").extUiQueue).toEqual([]);
-});
-
-test("a frame for a chat closed to history still applies, and orphans stay bounded", () => {
-	const store = useAppStore.getState();
-	store.openChatSession("ws1", "closed", null, "medium");
-	store.closeChatToHistory("closed", true, "ws1");
-
-	store.applyExtUi({ id: "t1", sessionId: "closed", kind: "setTitle", title: "Renamed later" });
-	const closed = useAppStore
-		.getState()
-		.closedChatsByWorkspace.ws1?.find((chat) => chat.sessionId === "closed");
-	expect(closed?.title).toBe("Renamed later");
-	expect(useAppStore.getState().extUiOrphans).toEqual([]);
-
-	for (let i = 0; i < 70; i++) {
-		store.applyExtUi({
-			id: `f${i}`,
-			sessionId: "never-opened",
-			kind: "setStatus",
-			key: "k",
-			text: String(i),
-		});
-	}
-	const orphans = useAppStore.getState().extUiOrphans;
-	expect(orphans).toHaveLength(64);
-	expect(orphans.at(-1)).toMatchObject({ id: "f69" });
-});
-
-test("a frame for a chat known only as a tab is buffered, never silently dropped", () => {
-	const store = useAppStore.getState();
-	useAppStore.setState({
-		tabsByWorkspace: {
-			ws1: [
-				{
-					kind: "chat",
-					id: chatTabId("ws1", "tab-only"),
-					workspaceId: "ws1",
-					name: "Chat",
-					sessionId: "tab-only",
-				},
-			],
-		},
-	});
-
-	store.applyExtUi({
-		id: "s1",
-		sessionId: "tab-only",
-		kind: "setStatus",
-		key: "test",
-		text: "Theme works",
-	});
-
-	expect(useAppStore.getState().sessions["tab-only"]).toBeUndefined();
-	expect(useAppStore.getState().extUiOrphans).toMatchObject([{ id: "s1" }]);
-});
-
-test("a frame that beats a reopened chat's transcript is replayed by hydrateSession", () => {
-	const store = useAppStore.getState();
-
-	store.applyExtUi({
-		id: "s1",
-		sessionId: "reopened",
-		kind: "setStatus",
-		key: "test",
-		text: "Theme works",
-	});
-	expect(useAppStore.getState().extUiOrphans).toMatchObject([{ id: "s1" }]);
-
-	const summary: SessionSummary = {
-		sessionId: "reopened",
-		workspaceId: "ws1",
-		title: "Chat",
-		model: null,
-		thinkingLevel: "medium",
-		isStreaming: false,
-		messageCount: 0,
-		updatedAt: 0,
-		live: true,
-	};
-	store.hydrateSession(summary, { turns: [], toolResults: {}, askAnswers: {} });
-
-	expect(rt("reopened").extUiStatus).toEqual({ test: "Theme works" });
-	expect(useAppStore.getState().extUiOrphans).toEqual([]);
-});
-
-test("setTitle refreshes shared chat metadata without requesting activation", () => {
+test("session_info renames shared chat metadata without requesting activation", () => {
 	const store = useAppStore.getState();
 	const cacheId = chatTabId("ws1", "a");
 	const placementId = "legacy-chat-placement";
-	store.openChatSession("ws1", "a", null, "medium");
+	store.openChatSession("ws1", "a", EMPTY_RUNTIME.capabilities, []);
 	useAppStore.setState({
 		layoutIntents: [],
 		layoutDocumentsByWorkspace: {
@@ -1190,7 +592,7 @@ test("setTitle refreshes shared chat metadata without requesting activation", ()
 		},
 	});
 
-	store.applyExtUi({ id: "title-1", sessionId: "a", kind: "setTitle", title: "Migration plan" });
+	store.applyChatEvent("a", { type: "session_info", title: "Migration plan" });
 	const state = useAppStore.getState();
 	expect(state.tabsByWorkspace.ws1?.find((tab) => tab.id === cacheId)?.name).toBe("Migration plan");
 	expect(state.layoutIntents).toHaveLength(1);
@@ -1217,7 +619,7 @@ test("setTitle refreshes shared chat metadata without requesting activation", ()
 			},
 		},
 	});
-	store.applyExtUi({ id: "title-1b", sessionId: "a", kind: "setTitle", title: "Migration plan" });
+	store.applyChatEvent("a", { type: "session_info", title: "Migration plan" });
 	expect(useAppStore.getState().layoutIntents[0]).toMatchObject({
 		kind: "open",
 		tab: { id: placementId, name: "Migration plan", sessionId: "a" },
@@ -1228,16 +630,16 @@ test("setTitle refreshes shared chat metadata without requesting activation", ()
 	useAppStore.setState({ layoutIntents: [] });
 	store.openTab(cache, "keep", true, { activate: false });
 	expect(useAppStore.getState().layoutIntents[0]).toMatchObject({ tab: { id: cacheId } });
-	store.applyExtUi({ id: "title-1c", sessionId: "a", kind: "setTitle", title: "Migration plan" });
+	store.applyChatEvent("a", { type: "session_info", title: "Migration plan" });
 	expect(useAppStore.getState().layoutIntents[0]).toMatchObject({
 		kind: "open",
 		tab: { id: placementId, name: "Migration plan", sessionId: "a" },
 	});
 });
 
-test("setTitle cannot restore a cache whose structural close is already accepted", () => {
+test("session_info cannot restore a cache whose structural close is already accepted", () => {
 	const store = useAppStore.getState();
-	store.openChatSession("ws1", "a", null, "medium");
+	store.openChatSession("ws1", "a", EMPTY_RUNTIME.capabilities, []);
 	useAppStore.setState({
 		layoutIntents: [],
 		layoutDocumentsByWorkspace: {
@@ -1251,50 +653,153 @@ test("setTitle cannot restore a cache whose structural close is already accepted
 			},
 		},
 	});
-	store.applyExtUi({ id: "title-2", sessionId: "a", kind: "setTitle", title: "Closed title" });
+	store.applyChatEvent("a", { type: "session_info", title: "Closed title" });
 	expect(useAppStore.getState().layoutIntents).toEqual([]);
 	expect(useAppStore.getState().tabsByWorkspace.ws1?.[0]?.name).toBe("Closed title");
 });
 
-test("setTitle repairs the title of a still-live chat in local history", () => {
+test("session_info repairs the title of a still-live chat in local history", () => {
 	const store = useAppStore.getState();
-	store.openChatSession("ws1", "a", null, "medium");
+	store.openChatSession("ws1", "a", EMPTY_RUNTIME.capabilities, []);
 	store.closeChatToHistory("a", true, "ws1");
-	store.applyExtUi({ id: "title-3", sessionId: "a", kind: "setTitle", title: "Finished title" });
+	store.applyChatEvent("a", { type: "session_info", title: "Finished title" });
 	expect(useAppStore.getState().closedChatsByWorkspace.ws1?.[0]?.title).toBe("Finished title");
 });
 
-test("a second dialog for a busy session queues instead of orphaning the first", () => {
+test("session_info without a title is a no-op", () => {
 	const store = useAppStore.getState();
-	store.openChatSession("ws1", "a", null, "medium");
+	store.openChatSession("ws1", "a", EMPTY_RUNTIME.capabilities, []);
+	const before = useAppStore.getState();
 
-	const mk = (id: string): ExtUiRequest => ({
-		id,
-		sessionId: "a",
-		kind: "input",
-		title: "name?",
+	store.applyChatEvent("a", { type: "session_info", updatedAt: 42 });
+	expect(useAppStore.getState().tabsByWorkspace).toBe(before.tabsByWorkspace);
+	expect(useAppStore.getState().sessions).toBe(before.sessions);
+});
+
+test("appendNotice surfaces a failed send as a visible notice message", () => {
+	const store = useAppStore.getState();
+	store.openChatSession("ws1", "a", EMPTY_RUNTIME.capabilities, []);
+
+	store.appendNotice("a", "error", "No API key configured for provider openai");
+
+	const message = rt("a").messages[0];
+	expect(message?.role === "marker" && message.marker).toEqual({
+		kind: "notice",
+		level: "error",
+		text: "No API key configured for provider openai",
 	});
-	store.applyExtUi(mk("d1"));
-	store.applyExtUi(mk("d2"));
-	expect(rt("a").pendingExtUi?.id).toBe("d1");
-	expect(rt("a").extUiQueue.map((q) => q.id)).toEqual(["d2"]);
+	expect(rt("a").isStreaming).toBe(false);
+});
 
-	store.clearPendingExtUi("a", "d1");
-	expect(rt("a").pendingExtUi?.id).toBe("d2");
-	expect(rt("a").extUiQueue).toHaveLength(0);
+test("an event for an unknown session is a no-op (no runtime is conjured)", () => {
+	const before = useAppStore.getState().sessions;
+	useAppStore.getState().applyChatEvent("ghost", { type: "turn_start" });
+	const after = useAppStore.getState().sessions;
+	expect(after).toBe(before);
+	expect(after.ghost).toBeUndefined();
+});
+
+test("closeChatRuntime drops only its own runtime", () => {
+	const store = useAppStore.getState();
+	store.openChatSession("ws1", "a", EMPTY_RUNTIME.capabilities, []);
+	store.openChatSession("ws1", "b", EMPTY_RUNTIME.capabilities, []);
+	store.applyChatEvent("b", { type: "turn_start" });
+
+	store.closeChatRuntime("a");
+	expect(useAppStore.getState().sessions.a).toBeUndefined();
+	expect(rt("b").isStreaming).toBe(true);
+});
+
+test("applyElicitation queues behind a busy dialog; cancelling the active one promotes the next", () => {
+	const store = useAppStore.getState();
+	store.applyElicitation({ type: "request", request: elicitationRequest("e1") });
+	expect(useAppStore.getState().activeElicitation?.id).toBe("e1");
+	expect(useAppStore.getState().elicitationQueue).toEqual([]);
+
+	store.applyElicitation({ type: "request", request: elicitationRequest("e2") });
+	expect(useAppStore.getState().activeElicitation?.id).toBe("e1");
+	expect(useAppStore.getState().elicitationQueue.map((r) => r.id)).toEqual(["e2"]);
+
+	store.applyElicitation({ type: "cancel", id: "e1" });
+	expect(useAppStore.getState().activeElicitation?.id).toBe("e2");
+	expect(useAppStore.getState().elicitationQueue).toEqual([]);
+});
+
+test("applyElicitation cancel of a queued request just filters it, leaving the active one alone", () => {
+	const store = useAppStore.getState();
+	store.applyElicitation({ type: "request", request: elicitationRequest("e1") });
+	store.applyElicitation({ type: "request", request: elicitationRequest("e2") });
+	store.applyElicitation({ type: "request", request: elicitationRequest("e3") });
+
+	store.applyElicitation({ type: "cancel", id: "e2" });
+	expect(useAppStore.getState().activeElicitation?.id).toBe("e1");
+	expect(useAppStore.getState().elicitationQueue.map((r) => r.id)).toEqual(["e3"]);
+});
+
+test("clearActiveElicitation is id-checked, so a stale clear racing a newer dialog is a no-op", () => {
+	const store = useAppStore.getState();
+	store.applyElicitation({ type: "request", request: elicitationRequest("e1") });
+	store.applyElicitation({ type: "request", request: elicitationRequest("e2") });
+	store.applyElicitation({ type: "cancel", id: "e1" });
+	expect(useAppStore.getState().activeElicitation?.id).toBe("e2");
+
+	store.clearActiveElicitation("e1");
+	expect(useAppStore.getState().activeElicitation?.id).toBe("e2");
+
+	store.clearActiveElicitation("e2");
+	expect(useAppStore.getState().activeElicitation).toBeNull();
+});
+
+test("applyPermission routes a request by session+toolCallId; sibling sessions are untouched", () => {
+	const store = useAppStore.getState();
+	store.openChatSession("ws1", "a", EMPTY_RUNTIME.capabilities, []);
+	store.openChatSession("ws1", "b", EMPTY_RUNTIME.capabilities, []);
+
+	store.applyPermission({ type: "request", request: permissionRequest("p1", "a", "t1") });
+	expect(rt("a").permissions.t1?.id).toBe("p1");
+	expect(rt("b").permissions).toEqual({});
+});
+
+test("applyPermission cancel carries no sessionId on the wire, so it scans every session for the match", () => {
+	const store = useAppStore.getState();
+	store.openChatSession("ws1", "a", EMPTY_RUNTIME.capabilities, []);
+	store.openChatSession("ws1", "b", EMPTY_RUNTIME.capabilities, []);
+	store.applyPermission({ type: "request", request: permissionRequest("p1", "a", "t1") });
+	store.applyPermission({ type: "request", request: permissionRequest("p2", "b", "t2") });
+
+	store.applyPermission({ type: "cancel", id: "p1" });
+	expect(rt("a").permissions).toEqual({});
+	expect(rt("b").permissions.t2?.id).toBe("p2");
+});
+
+test("clearPermission drops one tool call's pending request without touching a sibling", () => {
+	const store = useAppStore.getState();
+	store.openChatSession("ws1", "a", EMPTY_RUNTIME.capabilities, []);
+	store.applyPermission({ type: "request", request: permissionRequest("p1", "a", "t1") });
+	store.applyPermission({ type: "request", request: permissionRequest("p2", "a", "t2") });
+
+	store.clearPermission("a", "t1");
+	expect(rt("a").permissions.t1).toBeUndefined();
+	expect(rt("a").permissions.t2?.id).toBe("p2");
+});
+
+test("noteAgentChanged bumps the tick — a bare, data-free invalidation signal", () => {
+	const before = useAppStore.getState().agentChangeTick;
+	useAppStore.getState().noteAgentChanged();
+	expect(useAppStore.getState().agentChangeTick).toBe(before + 1);
 });
 
 test("closing a chat moves it to history with its runtime kept; reopening restores full state", () => {
 	const store = useAppStore.getState();
 	useAppStore.setState({ activeWorkspaceId: "ws1" });
-	store.openChatSession("ws1", "a", null, "medium");
-	store.handlePiEvent(agentStart, "a");
+	store.openChatSession("ws1", "a", EMPTY_RUNTIME.capabilities, []);
+	store.applyChatEvent("a", { type: "turn_start" });
 	useAppStore.setState({
 		chatLocationRequest: {
 			workspaceId: "ws1",
 			projectId: "p1",
 			sessionId: "a",
-			messageIndex: 0,
+			messageId: "m0",
 			anchorText: "target",
 		},
 		historyOpenRequest: { id: "history-a", sessionId: "a" },
@@ -1335,7 +840,7 @@ test("closing a chat moves it to history with its runtime kept; reopening restor
 test("reopening a chat targets its captured workspace after the user switches away", () => {
 	const store = useAppStore.getState();
 	useAppStore.setState({ activeWorkspaceId: "ws1" });
-	store.openChatSession("ws1", "captured", null, "medium");
+	store.openChatSession("ws1", "captured", EMPTY_RUNTIME.capabilities, []);
 	store.closeChatToHistory("captured");
 	useAppStore.setState({ activeWorkspaceId: "ws2" });
 	store.reopenChat("ws1", "captured", { activate: false });
@@ -1350,8 +855,8 @@ test("reopening a chat targets its captured workspace after the user switches aw
 test("deleteChat removes history/runtime state and falls back when deleting the active tab", () => {
 	const store = useAppStore.getState();
 	useAppStore.setState({ activeWorkspaceId: "ws1" });
-	store.openChatSession("ws1", "a", null, "medium");
-	store.openChatSession("ws1", "b", null, "medium");
+	store.openChatSession("ws1", "a", EMPTY_RUNTIME.capabilities, []);
+	store.openChatSession("ws1", "b", EMPTY_RUNTIME.capabilities, []);
 
 	store.closeChatToHistory("a");
 	store.deleteChat("ws1", "a");
@@ -1361,7 +866,7 @@ test("deleteChat removes history/runtime state and falls back when deleting the 
 	expect(st.skillsSyncedTickBySession.a).toBeUndefined();
 	expect(st.sessions.b).toBeDefined();
 
-	store.openChatSession("ws1", "c", null, "medium");
+	store.openChatSession("ws1", "c", EMPTY_RUNTIME.capabilities, []);
 	const beforeNav = useAppStore.getState().navTickByWorkspace.ws1 ?? 0;
 	store.deleteChat("ws1", "c");
 	st = useAppStore.getState();
@@ -1374,10 +879,10 @@ test("deleteChat removes history/runtime state and falls back when deleting the 
 test("session-list reconciliation removes missed deletions without deleting a chat created mid-read", () => {
 	const store = useAppStore.getState();
 	useAppStore.setState({ activeWorkspaceId: "ws1" });
-	store.openChatSession("ws1", "stale", null, "medium");
+	store.openChatSession("ws1", "stale", EMPTY_RUNTIME.capabilities, []);
 	const baseline = selectWorkspaceSessionIds(useAppStore.getState(), "ws1");
 
-	store.openChatSession("ws1", "newcomer", null, "medium");
+	store.openChatSession("ws1", "newcomer", EMPTY_RUNTIME.capabilities, []);
 	store.reconcileWorkspaceSessions("ws1", baseline, []);
 
 	const state = useAppStore.getState();
@@ -1392,7 +897,7 @@ test("session-list reconciliation removes missed deletions without deleting a ch
 
 test("authoritative session reconciliation never impersonates user navigation", () => {
 	const store = useAppStore.getState();
-	store.openChatSession("ws1", "missing", null, "medium");
+	store.openChatSession("ws1", "missing", EMPTY_RUNTIME.capabilities, []);
 	const baseline = selectWorkspaceSessionIds(useAppStore.getState(), "ws1");
 	const before = useAppStore.getState().navTickByWorkspace.ws1 ?? 0;
 	store.reconcileWorkspaceSessions("ws1", baseline, []);
@@ -1403,7 +908,7 @@ test("authoritative session reconciliation never impersonates user navigation", 
 
 test("session deletion drops queued chat and live-plan opens before pruning placement", () => {
 	const store = useAppStore.getState();
-	store.openChatSession("ws1", "queued", null, "medium");
+	store.openChatSession("ws1", "queued", EMPTY_RUNTIME.capabilities, []);
 	store.openDoc({
 		kind: "plan",
 		id: "queued-plan",
@@ -1434,7 +939,7 @@ test("a deletion that beats session.create prevents its late response from resto
 	const store = useAppStore.getState();
 
 	store.deleteChat("ws1", "late");
-	store.openChatSession("ws1", "late", null, "medium");
+	store.openChatSession("ws1", "late", EMPTY_RUNTIME.capabilities, []);
 	store.openTab(
 		{
 			kind: "chat",
@@ -1459,7 +964,7 @@ test("a deletion that beats session.create prevents its late response from resto
 		workspaceId: "ws1",
 		projectId: "p1",
 		sessionId: "late",
-		messageIndex: 0,
+		messageId: "m0",
 		anchorText: "late",
 	});
 	store.requestHistoryOpen({ workspaceId: "ws1", sessionId: "late", tabId: "late" });
@@ -1476,25 +981,11 @@ test("a deletion that beats session.create prevents its late response from resto
 
 test("a deletion that beats getMessages prevents its late hydrate from restoring the chat", () => {
 	const store = useAppStore.getState();
-	const summary: SessionSummary = {
-		sessionId: "late",
-		workspaceId: "ws1",
-		title: "Deleted chat",
-		model: null,
-		thinkingLevel: "medium",
-		isStreaming: false,
-		messageCount: 1,
-		updatedAt: 1,
-		live: true,
-	};
-
 	store.deleteChat("ws1", "late");
-	store.hydrateSession(summary, {
-		turns: [],
-		toolResults: {},
-		askAnswers: {},
-		turnIdByMessageIndex: [],
-	});
+	store.hydrateSession(
+		summary("late", "ws1", { title: "Deleted chat", messageCount: 1, updatedAt: 1 }),
+		hydrated(),
+	);
 
 	const state = useAppStore.getState();
 	expect(state.sessions.late).toBeUndefined();
@@ -1503,21 +994,12 @@ test("a deletion that beats getMessages prevents its late hydrate from restoring
 
 test("a page-lifetime deletion tombstone survives workspace cleanup until late hydration settles", () => {
 	const store = useAppStore.getState();
-	const summary: SessionSummary = {
-		sessionId: "late",
-		workspaceId: "ws1",
-		title: "Deleted chat",
-		model: null,
-		thinkingLevel: "medium",
-		isStreaming: false,
-		messageCount: 1,
-		updatedAt: 1,
-		live: true,
-	};
-
 	store.deleteChat("ws1", "late");
 	store.clearWorkspaceTabs("ws1");
-	store.hydrateSession(summary, { turns: [], toolResults: {}, askAnswers: {} });
+	store.hydrateSession(
+		summary("late", "ws1", { title: "Deleted chat", messageCount: 1, updatedAt: 1 }),
+		hydrated(),
+	);
 
 	expect(useAppStore.getState().sessions.late).toBeUndefined();
 });
@@ -1534,143 +1016,23 @@ test("a deletion that beats session.list prevents its late history row from retu
 test("hydrateSession rebuilds a runtime + tab on connect, and never clobbers a live one", () => {
 	const store = useAppStore.getState();
 	useAppStore.setState({ activeWorkspaceId: "ws1" });
-	const summary: SessionSummary = {
-		sessionId: "h1",
-		workspaceId: "ws1",
-		title: "Chat",
-		model: null,
-		thinkingLevel: "medium",
-		isStreaming: false,
-		messageCount: 1,
-		updatedAt: 0,
-		live: true,
-	};
-	store.hydrateSession(summary, {
-		turns: [{ kind: "user", id: "u1", message: { role: "user", content: "hi", timestamp: 0 } }],
-		toolResults: {},
-		askAnswers: {},
-		turnIdByMessageIndex: ["u1"],
-	});
+	const summaryFixture = summary("h1", "ws1", { messageCount: 1 });
+	store.hydrateSession(summaryFixture, hydrated([userMessage("u1", "hi")]));
 	const st = useAppStore.getState();
-	expect(st.sessions.h1?.turns).toHaveLength(1);
-	expect(st.sessions.h1?.turnIdByMessageIndex).toEqual(["u1"]);
+	expect(st.sessions.h1?.messages).toHaveLength(1);
 	expect(st.tabsByWorkspace.ws1?.some((t) => t.kind === "chat" && t.sessionId === "h1")).toBe(true);
 
 	store.hydrateSession(
-		{ ...summary, messageCount: 99 },
-		{ turns: [], toolResults: {}, askAnswers: {}, turnIdByMessageIndex: [] },
+		{ ...summaryFixture, record: { ...summaryFixture.record, messageCount: 99 } },
+		hydrated(),
 	);
-	expect(useAppStore.getState().sessions.h1?.turns).toHaveLength(1);
-});
-
-test("reconcileSession replaces stale host state while preserving browser-local state", () => {
-	const store = useAppStore.getState();
-	store.openChatSession("ws1", "sync", null, "medium");
-	store.setChatDraft("sync", "keep my draft");
-	store.appendUserMessage("sync", "old summarized prompt");
-	store.handlePiEvent(agentStart, "sync");
-	store.handlePiEvent({ type: "compaction_start", reason: "overflow" }, "sync");
-	store.handlePiEvent(
-		{
-			type: "compaction_end",
-			reason: "overflow",
-			result: { tokensBefore: 268_000, estimatedTokensAfter: 24_000 },
-			aborted: false,
-			willRetry: true,
-		},
-		"sync",
-	);
-
-	const before = rt("sync");
-	const liveCompaction = before.turns.findLast((turn) => turn.kind === "compaction");
-	if (liveCompaction?.kind !== "compaction") throw new Error("live compaction missing");
-	const summary: SessionSummary = {
-		sessionId: "sync",
-		workspaceId: "ws1",
-		title: "Chat",
-		model: null,
-		thinkingLevel: "high",
-		isStreaming: true,
-		messageCount: 2,
-		updatedAt: 2,
-		live: true,
-		queue: { steering: [], followUp: ["continue afterward"] },
-	};
-	const applied = store.reconcileSession(
-		summary,
-		{
-			turns: [
-				{
-					kind: "compaction",
-					id: "persisted-compaction",
-					status: "done",
-					summary: "## Earlier work\nFinished the investigation.",
-					tokensBefore: 268_000,
-				},
-			],
-			toolResults: {},
-			askAnswers: {},
-			turnIdByMessageIndex: [null],
-		},
-		before.eventRevision,
-		7,
-	);
-
-	expect(applied).toBe(true);
-	const after = rt("sync");
-	expect(after.turns).toHaveLength(1);
-	expect(after.turns[0]).toEqual({
-		kind: "compaction",
-		id: liveCompaction.id,
-		status: "done",
-		summary: "## Earlier work\nFinished the investigation.",
-		tokensBefore: 268_000,
-		tokensAfter: 24_000,
-		resuming: true,
-	});
-	expect(after.draft).toBe("keep my draft");
-	expect(after.queue).toEqual({ steering: [], followUp: ["continue afterward"] });
-	expect(after.thinkingLevel).toBe("high");
-	expect(after.syncedConnectionGeneration).toBe(7);
-	expect(after.eventRevision).toBe(before.eventRevision + 1);
-});
-
-test("reconcileSession rejects a transcript read crossed by even a UI-ignored Pi event", () => {
-	const store = useAppStore.getState();
-	store.openChatSession("ws1", "sync-race", null, "medium");
-	store.appendUserMessage("sync-race", "keep this turn");
-	const expectedRevision = rt("sync-race").eventRevision;
-
-	store.handlePiEvent({ type: "turn_start" } as PiEvent, "sync-race");
-	const crossed = rt("sync-race");
-	expect(crossed.eventRevision).toBe(expectedRevision + 1);
-
-	const applied = store.reconcileSession(
-		{
-			sessionId: "sync-race",
-			workspaceId: "ws1",
-			title: "Chat",
-			model: null,
-			thinkingLevel: "medium",
-			isStreaming: false,
-			messageCount: 0,
-			updatedAt: 2,
-			live: true,
-		},
-		{ turns: [], toolResults: {}, askAnswers: {}, turnIdByMessageIndex: [] },
-		expectedRevision,
-		3,
-	);
-
-	expect(applied).toBe(false);
-	expect(rt("sync-race").turns).toHaveLength(1);
-	expect(rt("sync-race").syncedConnectionGeneration).not.toBe(3);
+	expect(useAppStore.getState().sessions.h1?.messages).toHaveLength(1);
 });
 
 test("noteClosedChats surfaces disk-only sessions in history, skipping live/open/known ones", () => {
 	const store = useAppStore.getState();
 	useAppStore.setState({ activeWorkspaceId: "ws1" });
-	store.openChatSession("ws1", "live1", null, "medium");
+	store.openChatSession("ws1", "live1", EMPTY_RUNTIME.capabilities, []);
 
 	store.noteClosedChats("ws1", [
 		{ sessionId: "disk1", title: "Old chat", closedAt: 200 },
@@ -1707,7 +1069,9 @@ test("opening a chat never steals another resource's canonical cache id", () => 
 		content: "kept",
 	};
 	useAppStore.setState({ tabsByWorkspace: { ws1: [file] }, layoutIntents: [] });
-	useAppStore.getState().openChatSession("ws1", "collision-session", null, "medium");
+	useAppStore
+		.getState()
+		.openChatSession("ws1", "collision-session", EMPTY_RUNTIME.capabilities, []);
 	const tabs = useAppStore.getState().tabsByWorkspace.ws1 ?? [];
 	const openedChat = tabs.find((tab) => tab.kind === "chat");
 
@@ -1735,19 +1099,14 @@ test("restoring a stable chat placement never steals another resource's cache id
 
 test("hydrateSession preserves the stable id of an already-restored shared placement", () => {
 	const store = useAppStore.getState();
-	const summary: SessionSummary = {
-		sessionId: "legacy-session",
-		workspaceId: "ws1",
-		title: "Restored",
-		model: null,
-		thinkingLevel: "medium",
-		isStreaming: false,
-		messageCount: 0,
-		updatedAt: 1,
-		live: true,
-	};
-	store.restorePlacedChatCache("ws1", "legacy-placement-id", summary.sessionId, summary.title);
-	store.hydrateSession(summary, { turns: [], toolResults: {}, askAnswers: {} }, false);
+	const summaryFixture = summary("legacy-session", "ws1", { title: "Restored" });
+	store.restorePlacedChatCache(
+		"ws1",
+		"legacy-placement-id",
+		summaryFixture.record.sessionId,
+		summaryFixture.record.title ?? "Chat",
+	);
+	store.hydrateSession(summaryFixture, hydrated(), false);
 	const chats = useAppStore.getState().tabsByWorkspace.ws1?.filter((tab) => tab.kind === "chat");
 	expect(chats).toHaveLength(1);
 	expect(chats?.[0]?.id).toBe("legacy-placement-id");
@@ -1756,23 +1115,12 @@ test("hydrateSession preserves the stable id of an already-restored shared place
 test("hydrateSession(activate) reopens a disk-only chat: builds it, focuses it, and drops it from history", () => {
 	const store = useAppStore.getState();
 	useAppStore.setState({ activeWorkspaceId: "ws1" });
-	store.openChatSession("ws1", "other", null, "medium");
+	store.openChatSession("ws1", "other", EMPTY_RUNTIME.capabilities, []);
 	store.noteClosedChats("ws1", [{ sessionId: "disk1", title: "Old", closedAt: 1 }]);
 
-	const summary: SessionSummary = {
-		sessionId: "disk1",
-		workspaceId: "ws1",
-		title: "Old",
-		model: null,
-		thinkingLevel: "medium",
-		isStreaming: false,
-		messageCount: 2,
-		updatedAt: 1,
-		live: true,
-	};
 	store.hydrateSession(
-		summary,
-		{ turns: [], toolResults: {}, askAnswers: {}, turnIdByMessageIndex: [] },
+		summary("disk1", "ws1", { title: "Old", messageCount: 2 }),
+		hydrated(),
 		true,
 	);
 
@@ -1785,8 +1133,8 @@ test("hydrateSession(activate) reopens a disk-only chat: builds it, focuses it, 
 test("clearWorkspaceTabs drops both open and closed chat runtimes + clears history", () => {
 	const store = useAppStore.getState();
 	useAppStore.setState({ activeWorkspaceId: "ws1" });
-	store.openChatSession("ws1", "a", null, "medium");
-	store.openChatSession("ws1", "b", null, "medium");
+	store.openChatSession("ws1", "a", EMPTY_RUNTIME.capabilities, []);
+	store.openChatSession("ws1", "b", EMPTY_RUNTIME.capabilities, []);
 	store.closeChatToHistory("a");
 
 	store.clearWorkspaceTabs("ws1");
@@ -1805,7 +1153,7 @@ test("requestChatLocation sets the jump deep link AND switches project+workspace
 		workspaceId: "ws2",
 		projectId: "p2",
 		sessionId: "s1",
-		messageIndex: 3,
+		messageId: "m3",
 		anchorText: "deploy the docs",
 	});
 	let st = useAppStore.getState();
@@ -1813,7 +1161,7 @@ test("requestChatLocation sets the jump deep link AND switches project+workspace
 		workspaceId: "ws2",
 		projectId: "p2",
 		sessionId: "s1",
-		messageIndex: 3,
+		messageId: "m3",
 		anchorText: "deploy the docs",
 	});
 	expect(st.activeWorkspaceId).toBe("ws2");
@@ -1842,7 +1190,7 @@ test("requestChatLocation captures an already-hydrated destination before switch
 		workspaceId: "ws2",
 		projectId: "p2",
 		sessionId: "session",
-		messageIndex: 1,
+		messageId: "m1",
 		anchorText: "target",
 	});
 	expect(useAppStore.getState().chatLocationRequest?.navigation).toEqual({
@@ -2106,7 +1454,7 @@ test("installWelcomeSnapshot lands one complete snapshot and advances its own ge
 		expect(state.recentProjects.map((candidate) => candidate.id)).toEqual(["p1", "p2"]);
 	});
 
-	useAppStore.getState().installWelcomeSnapshot(44, [p1, closed], [p1, closed], {
+	useAppStore.getState().installWelcomeSnapshot(44, [p1, closed], [p1, closed], null, null, {
 		theme: "test-theme",
 		analyticsEnabled: false,
 		terminalReplayKb: 256,
@@ -2114,7 +1462,7 @@ test("installWelcomeSnapshot lands one complete snapshot and advances its own ge
 	unsubscribe();
 	expect(notifications).toBe(1);
 
-	useAppStore.getState().installWelcomeSnapshot(44, [p1], [p1]);
+	useAppStore.getState().installWelcomeSnapshot(44, [p1], [p1], null, null);
 	expect(useAppStore.getState().welcomeGeneration).toBe(2);
 });
 
@@ -2126,7 +1474,7 @@ test("installWelcomeSnapshot reconciles stale project navigation", () => {
 		activeWorkspaceId: null,
 	});
 
-	useAppStore.getState().installWelcomeSnapshot(44, [p1], [p1]);
+	useAppStore.getState().installWelcomeSnapshot(44, [p1], [p1], null, null);
 	expect(useAppStore.getState().selectedProjectId).toBe("p1");
 });
 
@@ -2332,7 +1680,7 @@ test("applyWorkspaceRemoved drops the row, clears its tabs, and returns the acti
 			workspaceId: "w1",
 			projectId: "p1",
 			sessionId: "removed-chat",
-			messageIndex: 0,
+			messageId: "m0",
 			anchorText: "removed",
 		},
 		historyOpenRequest: { id: "history", sessionId: "removed-chat" },
@@ -2397,7 +1745,7 @@ test("applyWorkspaceRemoved drops the row, clears its tabs, and returns the acti
 		workspaceId: "w1",
 		projectId: "p1",
 		sessionId: "late-chat",
-		messageIndex: 0,
+		messageId: "m0",
 		anchorText: "late",
 	});
 	s.activateWorkspace(pushedWorkspace());
@@ -2643,8 +1991,8 @@ test("a request-time center navigation is not counted again when its chat cache 
 		.openChatSession(
 			"ws1",
 			"session-requested",
-			null,
-			"medium",
+			EMPTY_RUNTIME.capabilities,
+			[],
 			undefined,
 			layoutOpenOptionsForNavigation(useAppStore.getState(), "ws1", navigation),
 		);
@@ -2715,137 +2063,21 @@ test("setWorkspaceSpecs keeps the previous array identity when the re-read found
 	expect(useAppStore.getState().specsByWorkspace.w1).toEqual([]);
 });
 
-test("beginLogin opens a fresh active login; frames accumulate (url + paste prompt coexist)", () => {
-	const s = useAppStore.getState();
-	s.beginLogin("l1", "anthropic");
-	expect(useAppStore.getState().activeLogin).toEqual({
-		loginId: "l1",
-		providerId: "anthropic",
-		status: "active",
-	});
-
-	s.applyLoginFrame({
-		loginId: "l1",
-		providerId: "anthropic",
-		frame: { kind: "authUrl", url: "https://x/auth" },
-	});
-	s.applyLoginFrame({
-		loginId: "l1",
-		providerId: "anthropic",
-		frame: { kind: "prompt", message: "Paste the code", placeholder: "code" },
-	});
-	expect(useAppStore.getState().activeLogin).toMatchObject({
-		url: "https://x/auth",
-		input: { kind: "prompt", message: "Paste the code", placeholder: "code" },
-	});
-});
-
-test("a prompt frame's allowEmpty folds through (Copilot's blank-for-github.com GHE prompt)", () => {
-	const s = useAppStore.getState();
-	s.beginLogin("l1", "github-copilot");
-	s.applyLoginFrame({
-		loginId: "l1",
-		providerId: "github-copilot",
-		frame: {
-			kind: "prompt",
-			message: "GitHub Enterprise URL/domain (blank for github.com)",
-			placeholder: "company.ghe.com",
-			allowEmpty: true,
-		},
-	});
-	expect(useAppStore.getState().activeLogin?.input).toMatchObject({
-		kind: "prompt",
-		allowEmpty: true,
-	});
-});
-
-test("a frame that beats the loginStart response creates the login; beginLogin then no-ops", () => {
-	const s = useAppStore.getState();
-	s.applyLoginFrame({
-		loginId: "l9",
-		providerId: "openai-codex",
-		frame: { kind: "authUrl", url: "https://y" },
-	});
-	expect(useAppStore.getState().activeLogin).toMatchObject({ loginId: "l9", url: "https://y" });
-
-	s.beginLogin("l9", "openai-codex");
-	expect(useAppStore.getState().activeLogin).toMatchObject({ loginId: "l9", url: "https://y" });
-});
-
-test("frames for a different still-active login are ignored (modal — one at a time)", () => {
-	const s = useAppStore.getState();
-	s.beginLogin("l1", "anthropic");
-	s.applyLoginFrame({
-		loginId: "other",
-		providerId: "google",
-		frame: { kind: "authUrl", url: "https://nope" },
-	});
-	expect(useAppStore.getState().activeLogin).toMatchObject({
-		loginId: "l1",
-		providerId: "anthropic",
-	});
-	expect(useAppStore.getState().activeLogin?.url).toBeUndefined();
-});
-
-test("clearLoginInput drops the live input; success is terminal; clearLogin dismisses", () => {
-	const s = useAppStore.getState();
-	s.beginLogin("l1", "anthropic");
-	s.applyLoginFrame({
-		loginId: "l1",
-		providerId: "anthropic",
-		frame: { kind: "select", message: "Pick", options: [{ id: "max", label: "Max" }] },
-	});
-	expect(useAppStore.getState().activeLogin?.input).toBeDefined();
-
-	s.clearLoginInput();
-	expect(useAppStore.getState().activeLogin?.input).toBeUndefined();
-
-	s.applyLoginFrame({ loginId: "l1", providerId: "anthropic", frame: { kind: "success" } });
-	expect(useAppStore.getState().activeLogin?.status).toBe("success");
-
-	s.clearLogin();
-	expect(useAppStore.getState().activeLogin).toBeNull();
-});
-
-test("openSettings deep-links to a section (default providers); closeSettings hides it", () => {
+test("openSettings deep-links to a section (default agents); closeSettings hides it", () => {
 	const s = useAppStore.getState();
 	s.openSettings();
 	expect(useAppStore.getState().settingsOpen).toBe(true);
-	expect(useAppStore.getState().settingsSection).toBe("providers");
+	expect(useAppStore.getState().settingsSection).toBe("agents");
 
 	s.openSettings("github");
 	expect(useAppStore.getState().settingsSection).toBe("github");
 
-	s.setSettingsSection("providers");
-	expect(useAppStore.getState().settingsSection).toBe("providers");
+	s.setSettingsSection("agents");
+	expect(useAppStore.getState().settingsSection).toBe("agents");
 
 	s.closeSettings();
 	expect(useAppStore.getState().settingsOpen).toBe(false);
-	expect(useAppStore.getState().settingsSection).toBe("providers");
-});
-
-test("an error frame is terminal: sets status/error and clears the live input + progress", () => {
-	const s = useAppStore.getState();
-	s.beginLogin("l1", "anthropic");
-	s.applyLoginFrame({
-		loginId: "l1",
-		providerId: "anthropic",
-		frame: { kind: "progress", message: "…" },
-	});
-	s.applyLoginFrame({
-		loginId: "l1",
-		providerId: "anthropic",
-		frame: { kind: "prompt", message: "code" },
-	});
-	s.applyLoginFrame({
-		loginId: "l1",
-		providerId: "anthropic",
-		frame: { kind: "error", message: "Scope revoked by provider" },
-	});
-	const login = useAppStore.getState().activeLogin;
-	expect(login).toMatchObject({ status: "error", error: "Scope revoked by provider" });
-	expect(login?.input).toBeUndefined();
-	expect(login?.progress).toBeUndefined();
+	expect(useAppStore.getState().settingsSection).toBe("agents");
 });
 
 test("pushToast appends with a fresh id and dismissToast removes only that toast", () => {
@@ -3043,7 +2275,7 @@ const isStale = (workspaceId: string, sessionId: string) =>
 
 test("skills badge: a skill-dir change flags the loaded session; reload clears it for good", () => {
 	const s = () => useAppStore.getState();
-	s().openChatSession("ws1", "a", null, "medium");
+	s().openChatSession("ws1", "a", EMPTY_RUNTIME.capabilities, []);
 	expect(isStale("ws1", "a")).toBe(false);
 
 	s().noteFsChanged(skillFs("ws1", [".claude/skills/foo/SKILL.md"]));
@@ -3061,7 +2293,7 @@ test("skills badge: a skill-dir change flags the loaded session; reload clears i
 
 test("skills badge: the skill-change tick is accumulated, so a later non-skill batch can't lose it", () => {
 	const s = () => useAppStore.getState();
-	s().openChatSession("ws1", "a", null, "medium");
+	s().openChatSession("ws1", "a", EMPTY_RUNTIME.capabilities, []);
 
 	s().noteFsChanged(skillFs("ws1", [".claude/skills/foo/SKILL.md"]));
 	s().noteFsChanged(skillFs("ws1", ["src/app.ts"], "none"));
@@ -3070,7 +2302,7 @@ test("skills badge: the skill-change tick is accumulated, so a later non-skill b
 
 test("skills badge: a pathless skill-neutral repo-metadata nudge refreshes without staling", () => {
 	const s = () => useAppStore.getState();
-	s().openChatSession("ws1", "a", null, "medium");
+	s().openChatSession("ws1", "a", EMPTY_RUNTIME.capabilities, []);
 	s().noteFsChanged(skillFs("ws1", [], "none"));
 	expect(selectWorkspaceTick(s(), "ws1")).toBe(1);
 	expect(isStale("ws1", "a")).toBe(false);
@@ -3078,7 +2310,7 @@ test("skills badge: a pathless skill-neutral repo-metadata nudge refreshes witho
 
 test("skills badge: generic path overflow is neutral, but detected and unknown skill impact flags", () => {
 	const s = () => useAppStore.getState();
-	s().openChatSession("ws1", "a", null, "medium");
+	s().openChatSession("ws1", "a", EMPTY_RUNTIME.capabilities, []);
 
 	s().noteFsChanged(skillFs("ws1", ["dist/chunk.js"], "none", true));
 	expect(selectWorkspaceTick(s(), "ws1")).toBe(1);
@@ -3097,16 +2329,16 @@ test("skills badge: non-skill overflow during session creation does not open the
 	s().noteFsChanged(skillFs("ws1", [], "unknown", true));
 	const baseline = selectWorkspaceTick(s(), "ws1");
 	s().noteFsChanged(skillFs("ws1", ["dist/chunk.js"], "none", true));
-	s().openChatSession("ws1", "new", null, "medium", baseline);
+	s().openChatSession("ws1", "new", EMPTY_RUNTIME.capabilities, [], baseline);
 	expect(isStale("ws1", "new")).toBe(false);
 });
 
 test("skills badge: per session — a chat opened after the change isn't flagged; reload clears only its own", () => {
 	const s = () => useAppStore.getState();
-	s().openChatSession("ws1", "a", null, "medium");
+	s().openChatSession("ws1", "a", EMPTY_RUNTIME.capabilities, []);
 
 	s().noteFsChanged(skillFs("ws1", [".claude/skills/foo/SKILL.md"]));
-	s().openChatSession("ws1", "b", null, "medium");
+	s().openChatSession("ws1", "b", EMPTY_RUNTIME.capabilities, []);
 	expect(isStale("ws1", "a")).toBe(true);
 	expect(isStale("ws1", "b")).toBe(false);
 
@@ -3121,7 +2353,7 @@ test("skills badge: per session — a chat opened after the change isn't flagged
 
 test("skills badge: a skill change mid-reload stays flagged (baseline is captured at reload start)", () => {
 	const s = () => useAppStore.getState();
-	s().openChatSession("ws1", "a", null, "medium");
+	s().openChatSession("ws1", "a", EMPTY_RUNTIME.capabilities, []);
 	const reloadBaseline = selectWorkspaceTick(s(), "ws1");
 	s().noteFsChanged(skillFs("ws1", [".claude/skills/foo/SKILL.md"]));
 	s().markSkillsSynced("a", reloadBaseline);
@@ -3130,7 +2362,7 @@ test("skills badge: a skill change mid-reload stays flagged (baseline is capture
 
 test("skills badge: closing a chat runtime drops its sync baseline (no leak)", () => {
 	const s = () => useAppStore.getState();
-	s().openChatSession("ws1", "a", null, "medium");
+	s().openChatSession("ws1", "a", EMPTY_RUNTIME.capabilities, []);
 	s().noteFsChanged(skillFs("ws1", [".claude/skills/foo/SKILL.md"]));
 	s().markSkillsSynced("a", selectWorkspaceTick(s(), "ws1"));
 	expect(s().skillsSyncedTickBySession.a).toBeDefined();
@@ -3141,7 +2373,7 @@ test("skills badge: closing a chat runtime drops its sync baseline (no leak)", (
 
 test("skills badge: markSkillsSynced is monotonic and ignores a disposed session", () => {
 	const s = () => useAppStore.getState();
-	s().openChatSession("ws1", "a", null, "medium");
+	s().openChatSession("ws1", "a", EMPTY_RUNTIME.capabilities, []);
 
 	s().markSkillsSynced("a", 5);
 	s().markSkillsSynced("a", 2);
@@ -3152,28 +2384,16 @@ test("skills badge: markSkillsSynced is monotonic and ignores a disposed session
 	expect(s().skillsSyncedTickBySession.a).toBeUndefined();
 });
 
-const summaryFor = (sessionId: string, live: boolean): SessionSummary => ({
-	sessionId,
-	workspaceId: "ws1",
-	title: "Chat",
-	model: null,
-	thinkingLevel: "medium",
-	isStreaming: false,
-	messageCount: 0,
-	updatedAt: 0,
-	live,
-});
-
 test("skills badge: a LIVE restore stays conservatively stale; a disk attach anchors to its load tick", () => {
 	const s = () => useAppStore.getState();
 	s().noteFsChanged(skillFs("ws1", [".claude/skills/foo/SKILL.md"]));
 
-	s().hydrateSession(summaryFor("live1", true), { turns: [], toolResults: {}, askAnswers: {} });
+	s().hydrateSession(summary("live1", "ws1", {}, { live: true }), hydrated());
 	expect(isStale("ws1", "live1")).toBe(true);
 
 	s().hydrateSession(
-		summaryFor("disk1", false),
-		{ turns: [], toolResults: {}, askAnswers: {} },
+		summary("disk1", "ws1", {}, { live: false }),
+		hydrated(),
 		false,
 		selectWorkspaceTick(s(), "ws1"),
 	);
@@ -3183,11 +2403,13 @@ test("skills badge: a LIVE restore stays conservatively stale; a disk attach anc
 test("explicitly passive hydration never becomes navigation just because the cache has no active tab", () => {
 	const store = useAppStore.getState();
 	store.hydrateSession(
-		summaryFor("passive", true),
-		{ turns: [], toolResults: {}, askAnswers: {} },
+		summary("passive", "ws1", {}, { live: true }),
+		hydrated(),
 		false,
 		undefined,
-		{ activate: false },
+		{
+			activate: false,
+		},
 	);
 	expect(useAppStore.getState().activeTabByWorkspace.ws1).toBeUndefined();
 	expect(useAppStore.getState().navTickByWorkspace.ws1).toBeUndefined();
@@ -3291,7 +2513,7 @@ test("chat, document, and plan tabs never enter the preview slot", () => {
 	const store = useAppStore.getState();
 	store.openTab(fileTab("ws1", "a.ts"), "preview");
 
-	store.openChatSession("ws1", "s1", null, "medium");
+	store.openChatSession("ws1", "s1", EMPTY_RUNTIME.capabilities, []);
 	store.openDoc({
 		kind: "doc",
 		id: "ws1:plan",
@@ -3368,7 +2590,9 @@ test("every center navigation bumps the workspace's nav tick, and none of them b
 			sourceId: "s1",
 		}),
 	);
-	bumps("openChatSession", () => s().openChatSession("ws1", "sess", null, "medium"));
+	bumps("openChatSession", () =>
+		s().openChatSession("ws1", "sess", EMPTY_RUNTIME.capabilities, []),
+	);
 	bumps("closeChatToHistory", () => s().closeChatToHistory("sess"));
 	bumps("reopenChat", () => s().reopenChat("ws1", "sess"));
 	s().setActiveTab("ws1:a.ts");
@@ -3382,17 +2606,7 @@ test("every center navigation bumps the workspace's nav tick, and none of them b
 
 	useAppStore.setState({ activeTabByWorkspace: { ws1: "ws1:sess" } });
 	const before = tick();
-	s().hydrateSession(
-		{
-			sessionId: "bg",
-			workspaceId: "ws1",
-			title: "bg",
-			createdAt: 0,
-			updatedAt: 0,
-			live: true,
-		} as unknown as SessionSummary,
-		{ turns: [], toolResults: {}, askAnswers: {} },
-	);
+	s().hydrateSession(summary("bg", "ws1", { title: "bg" }), hydrated());
 	expect(tick()).toBe(before);
 
 	expect(useAppStore.getState().navTickByWorkspace.ws2).toBeUndefined();
@@ -3402,7 +2616,7 @@ test("every center navigation bumps the workspace's nav tick, and none of them b
 
 test("history selection resolves a cache alias to its stable shared placement id", () => {
 	const store = useAppStore.getState();
-	store.openChatSession("ws1", "history-alias", null, "medium");
+	store.openChatSession("ws1", "history-alias", EMPTY_RUNTIME.capabilities, []);
 	const cache = useAppStore
 		.getState()
 		.tabsByWorkspace.ws1?.find((tab) => tab.kind === "chat" && tab.sessionId === "history-alias");
@@ -3454,7 +2668,7 @@ test("history selection resolves a cache alias to its stable shared placement id
 
 test("history selection never uses a colliding cache id as shared placement identity", () => {
 	const store = useAppStore.getState();
-	store.openChatSession("ws1", "history-collision", null, "medium");
+	store.openChatSession("ws1", "history-collision", EMPTY_RUNTIME.capabilities, []);
 	const chat = useAppStore
 		.getState()
 		.tabsByWorkspace.ws1?.find(
@@ -3531,7 +2745,7 @@ test("a close that moves no focus is not a navigation — it can't discard a bro
 
 	s().openTab(fileTab("ws1", "a.ts"), "keep");
 	s().openTab(fileTab("ws1", "b.ts"), "keep");
-	s().openChatSession("ws1", "sess", null, "medium");
+	s().openChatSession("ws1", "sess", EMPTY_RUNTIME.capabilities, []);
 	s().setActiveTab("ws1:b.ts");
 	const before = tick();
 
@@ -3639,74 +2853,13 @@ test("hidden terminal seeding stays non-activating, idempotent, and atomically r
 	expect(useAppStore.getState().layoutIntents).toEqual([]);
 });
 
-test("catalog authority falls with the list it describes — only an awaited refresh sets it", () => {
-	const s = () => useAppStore.getState();
-	const listed = [{ id: "opus-5", name: "opus-5", provider: "anthropic" }] as WireModel[];
-	const refreshed = [{ id: "opus-6", name: "opus-6", provider: "anthropic" }] as WireModel[];
-
-	s().setModelsForProviderVersion(s().providerVersion, listed);
-	expect(s().modelsFresh).toBe(false);
-
-	const settledVersion = s().beginModelsRefresh();
-	s().finishModelsRefresh(settledVersion, { models: refreshed, complete: true });
-	expect(s().models).toBe(refreshed);
-	expect(s().modelsRefreshing).toBe(false);
-	expect(s().modelsFresh).toBe(true);
-
-	s().setModelsForProviderVersion(s().providerVersion, listed);
-	expect(s().models).toBe(listed);
-	expect(s().modelsFresh).toBe(false);
-
-	s().finishModelsRefresh(s().providerVersion, { models: refreshed, complete: true });
-	const failedVersion = s().beginModelsRefresh();
-	s().finishModelsRefresh(failedVersion, null);
-	expect(s().models).toBe(refreshed);
-	expect(s().modelsFresh).toBe(true);
-});
-
-test("a provider invalidation rejects every stale model reply", () => {
-	const s = () => useAppStore.getState();
-	const listed = [
-		{ id: "central-model", name: "central-model", provider: "central" },
-	] as WireModel[];
-	const before = s().beginModelsRefresh();
-	s().finishModelsRefresh(before, { models: listed, complete: true });
-
-	s().noteProviderChanged();
-	expect(s().providerVersion).toBe(before + 1);
-	expect(s().models).toEqual([]);
-	expect(s().modelsFresh).toBe(false);
-	expect(s().modelsRefreshing).toBe(false);
-
-	s().setModelsForProviderVersion(before, listed);
-	s().finishModelsRefresh(before, { models: listed, complete: true });
-	expect(s().models).toEqual([]);
-	expect(s().modelsFresh).toBe(false);
-});
-
-test("a refresh whose wait was capped installs its list but claims no authority", () => {
-	const s = () => useAppStore.getState();
-	const listed = [{ id: "opus-5", name: "opus-5", provider: "anthropic" }] as WireModel[];
-	const unsettled = [{ id: "opus-6", name: "opus-6", provider: "anthropic" }] as WireModel[];
-	const settledVersion = s().beginModelsRefresh();
-	s().finishModelsRefresh(settledVersion, { models: listed, complete: true });
-	expect(s().modelsFresh).toBe(true);
-
-	const unsettledVersion = s().beginModelsRefresh();
-	s().finishModelsRefresh(unsettledVersion, { models: unsettled, complete: false });
-	expect(s().models).toBe(unsettled);
-	expect(s().modelsRefreshing).toBe(false);
-	expect(s().modelsFresh).toBe(false);
-});
-
-test("authority can be given up without replacing the list (a consumer activating)", () => {
-	const s = () => useAppStore.getState();
-	const refreshed = [{ id: "opus-6", name: "opus-6", provider: "anthropic" }] as WireModel[];
-	const providerVersion = s().beginModelsRefresh();
-	s().finishModelsRefresh(providerVersion, { models: refreshed, complete: true });
-	expect(s().modelsFresh).toBe(true);
-
-	s().dropModelsFreshness();
-	expect(s().modelsFresh).toBe(false);
-	expect(s().models).toBe(refreshed);
+test("addTerminal reuses a host-minted tabKey instead of generating one", () => {
+	useAppStore.getState().addTerminal("w1", undefined, undefined, "center", true, "host-terminal-1");
+	const state = useAppStore.getState();
+	expect(state.terminalsByWorkspace.w1).toMatchObject([{ tabKey: "host-terminal-1" }]);
+	expect(state.activeTerminalByWorkspace.w1).toBe("host-terminal-1");
+	expect(state.layoutIntents[0]).toMatchObject({
+		kind: "place-terminal",
+		tabKey: "host-terminal-1",
+	});
 });

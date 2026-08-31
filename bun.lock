@@ -8,6 +8,7 @@
         "@biomejs/biome": "2.5.0",
         "@earendil-works/pi-coding-agent": "catalog:",
         "@playwright/test": "1.61.0",
+        "@thinkrail/acp": "workspace:*",
         "@thinkrail/contracts": "workspace:*",
         "@thinkrail/desktop": "workspace:*",
         "@thinkrail/server": "workspace:*",
@@ -25,6 +26,8 @@
         "thinkrail": "./src/index.ts",
       },
       "dependencies": {
+        "@thinkrail/acp": "workspace:*",
+        "@thinkrail/pi-agent": "workspace:*",
         "@thinkrail/server": "workspace:*",
         "@thinkrail/shared": "workspace:*",
       },
@@ -124,12 +127,52 @@
         "typescript": "catalog:",
       },
     },
+    "packages/acp": {
+      "name": "@thinkrail/acp",
+      "version": "0.0.0",
+      "dependencies": {
+        "@agentclientprotocol/sdk": "catalog:",
+        "@thinkrail/contracts": "workspace:*",
+        "zod": "catalog:",
+      },
+      "devDependencies": {
+        "@types/bun": "catalog:",
+        "ajv": "8.20.0",
+        "typescript": "catalog:",
+      },
+    },
     "packages/contracts": {
       "name": "@thinkrail/contracts",
       "version": "0.0.0",
       "devDependencies": {
+        "@types/bun": "catalog:",
+        "typescript": "catalog:",
+      },
+    },
+    "packages/pi-agent": {
+      "name": "@thinkrail/pi-agent",
+      "version": "0.0.0",
+      "bin": {
+        "thinkrail-acp-pi": "./src/main.ts",
+      },
+      "dependencies": {
+        "@agentclientprotocol/sdk": "catalog:",
         "@earendil-works/pi-agent-core": "catalog:",
         "@earendil-works/pi-ai": "catalog:",
+        "@earendil-works/pi-coding-agent": "catalog:",
+        "@thinkrail/acp": "workspace:*",
+        "@thinkrail/contracts": "workspace:*",
+        "pi-delegation": "workspace:*",
+        "pi-spec-graph": "workspace:*",
+        "pi-subagents": "workspace:*",
+        "pi-thinkrail-workflow": "workspace:*",
+        "pi-todos": "workspace:*",
+        "pi-visualize": "workspace:*",
+        "pi-web-access": "0.13.0",
+        "typebox": "catalog:",
+        "zod": "catalog:",
+      },
+      "devDependencies": {
         "@types/bun": "catalog:",
         "typescript": "catalog:",
       },
@@ -223,12 +266,11 @@
         "@earendil-works/pi-ai": "catalog:",
         "@earendil-works/pi-coding-agent": "catalog:",
         "@stroncium/procfs": "1.2.1",
+        "@thinkrail/acp": "workspace:*",
         "@thinkrail/contracts": "workspace:*",
         "@thinkrail/shared": "workspace:*",
         "bun-pty": "0.4.10",
-        "pi-delegation": "workspace:*",
         "pi-spec-graph": "workspace:*",
-        "pi-subagents": "workspace:*",
         "pi-thinkrail-workflow": "workspace:*",
         "pi-todos": "workspace:*",
         "pi-visualize": "workspace:*",
@@ -293,6 +335,7 @@
     "react-dom": "catalog:",
   },
   "catalog": {
+    "@agentclientprotocol/sdk": "1.3.0",
     "@astrojs/check": "0.9.10",
     "@earendil-works/pi-agent-core": "0.84.3",
     "@earendil-works/pi-ai": "0.84.3",
@@ -311,8 +354,11 @@
     "tailwindcss": "4.3.1",
     "typebox": "1.3.7",
     "typescript": "6.0.3",
+    "zod": "4.4.3",
   },
   "packages": {
+    "@agentclientprotocol/sdk": ["@agentclientprotocol/sdk@1.3.0", "", { "peerDependencies": { "zod": "^3.25.0 || ^4.0.0" } }, "sha512-i3h/efaeuMUFAO1HSfo97QZQnnvMd7wWBYtBsdL6UMZg3a78sk3Ffya5Xu7C7tYsXomXoDXJBAzQF2PcFKAhIQ=="],
+
     "@antfu/install-pkg": ["@antfu/install-pkg@1.1.0", "", { "dependencies": { "package-manager-detector": "^1.3.0", "tinyexec": "^1.0.1" } }, "sha512-MGQsmw10ZyI+EJo45CdSER4zEb+p31LpDAFp2Z3gkSd1yqVZGi0Ebx++YTEMonJy4oChEMLsxZ64j8FH6sSqtQ=="],
 
     "@anthropic-ai/sdk": ["@anthropic-ai/sdk@0.91.1", "", { "dependencies": { "json-schema-to-ts": "^3.1.1" }, "peerDependencies": { "zod": "^3.25.0 || ^4.0.0" }, "optionalPeers": ["zod"], "bin": { "anthropic-ai-sdk": "bin/cli" } }, "sha512-LAmu761tSN9r66ixvmciswUj/ZC+1Q4iAfpedTfSVLeswRwnY3n2Nb6Tsk+cLPP28aLOPWeMgIuTuCcMC6W/iw=="],
@@ -921,11 +967,15 @@
 
     "@tailwindcss/vite": ["@tailwindcss/vite@4.3.1", "", { "dependencies": { "@tailwindcss/node": "4.3.1", "@tailwindcss/oxide": "4.3.1", "tailwindcss": "4.3.1" }, "peerDependencies": { "vite": "^5.2.0 || ^6 || ^7 || ^8" } }, "sha512-hItDHuIIlEV61R+faXu66s1K36aTurO/Qw0e45Vskz57gXl9pWOT6eg3zmcEui6CZXddbN7zd41bwmvag4JGwQ=="],
 
+    "@thinkrail/acp": ["@thinkrail/acp@workspace:packages/acp"],
+
     "@thinkrail/cli": ["@thinkrail/cli@workspace:apps/cli"],
 
     "@thinkrail/contracts": ["@thinkrail/contracts@workspace:packages/contracts"],
 
     "@thinkrail/desktop": ["@thinkrail/desktop@workspace:apps/desktop"],
+
+    "@thinkrail/pi-agent": ["@thinkrail/pi-agent@workspace:packages/pi-agent"],
 
     "@thinkrail/server": ["@thinkrail/server@workspace:packages/server"],
 
@@ -1733,7 +1783,7 @@
 
     "node-mock-http": ["node-mock-http@1.0.5", "", {}, "sha512-KQyt/wLjG3TAc7DOUhpqWzgd4ERxR80JOlTK5VE5R1S12IaPVN5qkj4klBce9HPG1Njuup4Sb5bljaT34lIyjw=="],
 
-    "node-releases": ["node-releases@2.0.53", "", {}, "sha512-D9UOmYG3UH1V+ENW56t5QXBwJw1YEY18ruVeus89Rw+SyIgjPkCO84bRzO3uNIYosJbNwiabWVn48o3uJLjxFQ=="],
+    "node-releases": ["node-releases@2.0.54", "", {}, "sha512-YHs7BmmcsdAI5Ozuf8JZo6PT0mv2GIWC9vMfvUC3dp65M8hn7Ux8CPL+2oBI7juNuj9d0ndhTcznq2ODBps9cQ=="],
 
     "normalize-path": ["normalize-path@3.0.0", "", {}, "sha512-6eZs5Ls3WtCisHWp9S2GUy8dqkpGi4BVSz3GaqiE6ezub0512ESztXUwUB6C6IKbQkY2Pnb/mD4WYojCRwcwLA=="],
 

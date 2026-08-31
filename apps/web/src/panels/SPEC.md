@@ -223,12 +223,31 @@ nav's selection updates it). Its `hasSpecs` is **fetched lazily** via `project.h
 project (a full-tree walk, kept off the connect handshake) — pending until it resolves, so the cards wait
 on it. The open-project orchestration lives in the shared **`useOpenProject`** hook
 (above), so the Welcome "Open project" card gets the same non-git init/notice handling as the rail.
-Above the cards, `WelcomePanel` composes **`ProviderWarningBanner`** — a slim gold banner shown **only when
-no provider is connected** ("No model provider connected — the agent can't run") with a **Connect a provider**
-CTA that opens Settings → Providers (`store.openSettings("providers")`). It reads `provider.status` (a
-provider is "connected" iff any `configured`) on mount and re-checks whenever the settings dialog toggles, so
-it disappears the moment the user connects one; a transport error degrades to *not* nagging (offline ≠ "no
-provider"). All provider **management** lives in Settings, not here (the always-on strip is gone).
+Above the cards, `WelcomePanel` composes **`AgentWarningBanner`** — a slim gold banner that is
+**agent-first**, because under ACP the first thing that can be missing is the agent itself, not a
+provider. Its three states are a pure derivation, `agentsModel.ts`'s **`agentBannerState`** (unit-tested
+away from React and from the transport):
+**no agent** — nothing installed, or the resolved id names an agent that is absent or `unavailable` —
+renders "No agent connected — ThinkRail has nothing to run." + **Set up an agent**
+(`welcome-agent-warning` / `welcome-connect-agent`); **no provider** — an agent that *is* there reports
+no `configured` provider — renders "No model provider connected for {agent} — it can't run." + **Connect
+a provider** (`welcome-provider-warning` / `welcome-connect-provider`, the pre-ACP hooks kept so the e2e
+suite still points at the state it was written for); anything else renders **nothing**. Both CTAs open
+Settings → Agents (`store.openSettings(SettingsSection.Agents)`), which is now the one place agents *and*
+their providers are managed. The banner takes the resolved `project`'s id as a `projectId` prop
+(`WelcomePanel` already computed that fallback-to-first-project value; the banner never re-derives it)
+and resolves the agent to check via the store's **`selectResolvedAgentId`** — the same precedence
+`session.create` applies host-side: the project's `agentId` override, else `AppConfig.defaultAgentId`,
+else the connected `defaultAgent` the host resolved at `server.welcome` (its bundled fallback). It reads
+`agent.list` first (so it can tell "no agent" from "no provider" instead of guessing), then
+`agent.providers({ agentId })` for the one agent that would run, on mount and again whenever the settings
+dialog toggles or the resolved agent id changes — so it disappears the moment the user fixes either. Two
+things deliberately keep it quiet: a **transport error** on either read (an unreadable host is not
+evidence of a missing agent), and an agent whose capability record positively says `providerConfig:
+false` (it manages its own credentials; per [[architecture]] Decision #16 an absent capability is not a
+warning). A never-connected agent reports no capabilities at all, so that gate defaults to *shown*
+(`?? true`), the same widen-by-observation posture the Settings section takes. All agent and provider
+**management** lives in Settings, not here (the always-on strip is gone).
 
 Beneath it, **`ProjectSkillsNotice`** is the pre-workspace trust surface (so trust is reachable with no
 workspace yet): **presence-gated** — renders nothing unless the selected project ships committed skills —
@@ -262,26 +281,13 @@ base-branch trigger reads **“From
 empty by default); while the prompt is non-empty (worktree mode), a secondary hint says ThinkRail will name the workspace
 and branch from the request. The rest stays compact: the base-branch combobox (`git.listBranches`,
 degrading to local branches offline; a Refresh re-lists; `origin/HEAD` is filtered so no stray `origin`),
-a project picker, the prompt hero, and the reused
-  `chat/ModelSelector`+`ThinkingSelector` in **pre-session** mode — preselected to the host's resolved
-  default via `model.default` so the exact model shows (values held in dialog state, applied at create
-  time). The pickers' popovers portal into the dialog node (so their lists scroll under the Dialog scroll
-  lock). Their catalog is the shared one — `chat/useModelCatalog`, so the dialog and the chat composer
-  cannot drift — which means it is **live**: the picker's Refresh row can replace the list underneath a
-  held selection. The dialog therefore reconciles the held model against it on every change via the pure
-  **`reconcileModel`** (model only — effort is decided by the host's clamp, below): re-point to the same
-  `{provider,id}` (the refreshed object, whose `thinkingLevels` may differ). What it does when the catalog
-  has no such model turns on **`catalogFresh`** — the store's `modelsFresh`, true only for the installed
-  result of an awaited forced refresh the host reported **`complete`** (a capped wait can answer with a
-  current-but-unsettled list, which is no basis for a verdict), dropped by the next `model.list` install from any consumer (whose
-  handler answers from before the detached refresh it starts) *and* dropped up front by any consumer
-  activating. On a fresh catalog it returns **`"unavailable"`** — a verdict, not a replacement: the dialog
-  then asks **`model.default`** (pi's own `pinned ?? available[0]`, plus a consistent effort) exactly as it
-  does for the preselect, through **one** `applyHostDefault` — so no client-side copy of the host's default
-  policy exists here. Asked at most once per opening, so a still-missing model can't spin the effect. Effort is a separate concern: one effect keeps the held level
-  runnable by the held model by asking the host for pi's clamp (**`model.clampThinking`**) rather than
-  deciding locally, so an explicit switch and a refresh that shrank a model's set resolve the same way
-  pi would. `model.default` needs no adjustment: the host already returns a self-consistent pair.
+a project picker, and the prompt hero. There is **no model/effort picker here** — `session.create` takes
+  only `{ workspaceId }`, so which agent and which of its `ConfigOption`s the first turn runs under is
+  resolved **host-side** ([[module-contracts]]'s `session.create` promise: the project's `agentId`
+  override, else the global `AppConfig.defaultAgentId`, else the bundled agent) rather than pre-selected in
+  this dialog; a model/thinking-level change happens **after** the chat opens, from the composer's own
+  pickers reading that session's `configOptions` directly. (Agent choice follows the same precedence and is
+  likewise not chosen here — see the kick-off paragraph below.)
   On open and project-picker changes, the dialog reads **`skill.list({projectId})`** and feeds the
   result to chat's shared slash-completion primitive: a leading `/` autocompletes skills from the selected
   project's **current checkout** plus personal/bundled sources, selecting one inserts `/skill:<name> `;
@@ -293,30 +299,112 @@ a project picker, the prompt hero, and the reused
   updated project back into the store and re-previews); personal + bundled skills show regardless. When the menu is closed, **Enter submits** (matching the submit button's
   `↵` affordance) and
   **Shift+Enter** inserts a newline. Worktree-mode submit = `workspace.create({ projectId, baseRef })` → set active → **always open a
-  fresh chat** (`session.create({ model, thinkingLevel })` — the picked model + effort apply even
-  without a prompt) → a typed prompt is additionally sent as the first message (fire-and-forget
-  `prompt`); an **empty prompt leaves the just-opened composer ready** — submitting the start-working
-  surface always lands the user in a chat, never on a bare receipt (folder mode: the same tail after
-  entering Default). A **rejected** kick-off `prompt` (a bad model / missing API key — e.g. picking a
-  nonexistent model) surfaces as an `error` turn in the just-opened chat via `store.appendErrorTurn` (with
-  `transport`'s `errorText`) rather than vanishing. The two rejections with **no chat to host a turn** raise a
+  fresh chat** (`session.create({ workspaceId })`, resolved to an agent as above; skill-baseline-wrapped
+  through `transport`'s `createSessionWithSkillBaseline`) → `store.openChatSession` seeds the runtime from
+  its `capabilities`/`configOptions` → a typed prompt is additionally sent as the first message via
+  `session.prompt({ sessionId, content })`, whose synchronous `{ messageId }` result lets the dialog build
+  the real `UserMessage` up front and land it through `store.applyChatEvent(sessionId, { type:
+  "message_start", message })` — the same optimistic-echo path the composer uses, not a dialog-local one;
+  an **empty prompt leaves the just-opened composer ready** — submitting the start-working surface always
+  lands the user in a chat, never on a bare receipt (folder mode: the same tail after entering Default). A
+  **rejected** kick-off `session.prompt` (a missing/misconfigured provider, say) surfaces as a `notice`
+  marker in the just-opened chat via `store.appendNotice(sessionId, "error", …)` (with `transport`'s
+  `errorText`) rather than vanishing. The two rejections with **no chat to host a notice** raise a
   `store.toast.error` instead: a failed **`workspace.create`** (keeps the dialog open to retry) and a failed
   **`session.create`** (the dialog has already closed, the workspace exists — the toast is the only place left
   to report the dropped kick-off). (`gh` status lives in `SettingsDialog`, not the
   create dialog.) **`SettingsDialog`** is the app-settings surface the shell's topbar gear opens — a
   **store-driven two-pane shell** (left section rail + scrollable content pane; mobile collapses the rail to
   a horizontal segmented strip): `settingsOpen`/`settingsSection` live in the store so the gear AND the
-  Welcome banner can open it deep-linked to a section. Live sections: **`ProvidersSettings`** (the in-app
-  provider-auth surface — Connected cards each with a **Sign-out only when `canLogout`** (env /
-  models.json auth shows a "Managed" tag instead, since the host can't unset it); a **"Sign in with a
-  subscription"** block of `canOAuth` providers; an **"Add an API key"** group of `canApiKey`-only
-  providers (capped with a "Show N more" expander) — **both routes start `provider.loginStart`**
-  (`type` `"oauth"` / `"api_key"`, issue #97) into the same store-driven `auth/LoginDialog` (open the
-  URL / paste a code / answer the provider's own key prompts, `provider.loginReply` — no inline key
-  field); a "configured outside the app" note for rows with neither flag; and
+  Welcome banner can open it deep-linked to a section. Live sections: **`AgentsSettings`** (`data-testid
+  "settings-agents"`) — the **first-class agents surface**, and the section `openSettings()` defaults to.
+  Agents are the concept and **providers nest under one**, because under ACP a provider only means
+  something relative to the agent that reaches it. It is **master/detail**. The sticky left column holds
+  three groups: (a) **installed agents** from `agent.list`, ordered bundled-first then by name
+  (`agentsModel.ts`'s `sortInstalledAgents`), each row marking the **global default**
+  (`selectResolvedAgentId(state, null)` — `AppConfig.defaultAgentId`, else the host's `defaultAgent`), and
+  the selection surviving a reload via `pickSelectedAgentId` (current if it is still there, else the
+  default, else the first row); (b) **"Found on your machine"** from `agent.detect`, each row naming its
+  evidence (`DetectedAgent.detail` — an absolute path, or a pinned `pkg@version`) behind a **one-click
+  Add** that posts the host's own pre-resolved `id`/`name`/`command`/`args` straight back to `agent.add`.
+  That one click is the point: an ACP agent the user already has — Junie, say — is added without typing a
+  path. Detection returns only rows that are addable *right now*, so there is nothing to disable and no
+  "unavailable" row to explain. A failed scan says so ("Couldn't scan this machine for agents") rather
+  than borrowing the empty state's "nothing found", which would be a claim the panel cannot make;
+  **Rescan** re-runs `agent.list` + `agent.detect` together and doubles as the retry for either;
+  (c) **Install new…** opens `AgentRegistryDialog` (below). The detail
+  pane for the selected agent carries, in order: its name + origin (`Bundled with ThinkRail` /
+  `Installed from the ACP registry` / `Launched from this machine`) + version; a **Default** pill, or a
+  **Use by default** button writing `settings.update { defaultAgentId }` and converging on
+  `settings.changed` exactly like the theme picker; `InstalledAgent.unavailable` as a gold line when the
+  host could not launch it; **`AgentCommandEditor`**; **`AgentProviderSetup`**; and, for every
+  non-bundled agent, a **Remove agent** `ConfirmPopover` firing `agent.remove`. The pane is **keyed
+  by the selected agent's id**, so switching agents remounts it and no per-agent form or popover state
+  survives the switch; the key belongs on the pane, never on its individual children — two keyed siblings
+  sharing the agent id is a duplicate-key collision React resolves by dropping one. `agent.changed` is
+  non-replayable ([[module-contracts]]), so the store's `agentChangeTick` is what re-reads the catalog
+  after an install, add or remove — including one initiated by another client.
+  **`AgentCommandEditor`** is the owner's "resolved automatically, or let me set the command": two fields,
+  the **Executable** taken verbatim (never split — a path may contain spaces) and **Arguments**
+  whitespace-split (`parseAgentArgs`/`formatAgentArgs`; ACP launch args are flags, and a per-argument row
+  editor would buy precision nothing needs). Save/Reset are **absent until the form is dirty** rather than
+  sitting there disabled. Saving is **remove-then-add**, because `agent.add` deliberately refuses an id it
+  already knows ([[submodule-server-host]]) — a Save that silently overwrote a registration would be a
+  footgun a terminal does not have, so the UI performs the re-point explicitly. For the **bundled** agent
+  the command is read-only with the reason stated (ThinkRail launches it from its own binary), which is
+  also why it is the one agent with no Remove; both refusals are the host's, mirrored rather than
+  re-derived.
+  **`AgentRegistryDialog`** browses `agent.registry` — name, description, `version · license · authors`,
+  a client-side filter over id/name/description, and a **Refresh** passing `{ refresh: true }` to force a
+  re-fetch. It reports the registry's own honesty back: `AgentRegistryList.stale` says *in the UI* that
+  the fetch failed and this is the cached list, instead of presenting it as current; `installed` renders
+  as a marker with no button; and an entry whose `distribution` is `null` renders **"Not built for this
+  platform"** rather than an Install button that could only fail. Install calls `agent.install` (the host
+  does the real download, SHA-256 verify and unpack), spins on that row for the duration, re-reads the
+  list on success, and prints the host's error **on the row** on failure — never a silent no-op.
+  **`AgentProviderSetup`** is the provider ceremony, scoped to whichever agent the master list selected
+  (`data-testid "settings-providers"`, kept from the pre-ACP panel it was extracted from, along with
+  `providers-refresh` / `providers-error` / `providers-show-more`). It reads
+  `agent.providers({ agentId })` → `AgentProvidersReport`
+  and `agent.authMethods({ agentId })` together, gated on that agent's **last-negotiated**
+  `ChatCapabilities` (`InstalledAgent.capabilities`, cached by the host from the last time it connected to
+  that agent): `providerConfig` gates the **Connected**/**Not configured** status tables at all,
+  `authentication` gates the **Sign in** section, `logout` gates each connected row's Sign-out button, and
+  `jetbrainsCentral` gates the `JetBrainsAiCard` region below — an agent never yet connected to reports no
+  capabilities at all, so every one of those gates **defaults to shown** (`?? true`) rather than hidden:
+  hiding them would deadlock first-time setup, since connecting *is* what would populate the record, and a
+  flag observed `false` after a real connection is what narrows the panel from then on (the same
+  widen-by-observation posture [[architecture]] Decision #16 states for the rest of the wire). The
+  **Connected** table is read-only status (name, `protocols` sub-label, Sign-out where `logout` allows —
+  keyed by `methodId: provider.id`, the wire's own narrowing convention for `agent.logout`) plus a
+  **"Managed"** tag where it doesn't; **Not configured** rows add a **Required** tag from `AgentProviderInfo.required`
+  and are capped with a "Show N more" expander, same idiom as `TemplatesSettings`' two independently-failing
+  reads below. Signing in is decoupled from the provider table entirely — providers describe *state*,
+  `AgentAuthMethod`s describe *how to reach it* — so a separate **Sign in** group lists `agent.authMethods`'
+  rows by `kind`: `"agent"` and `"terminal"` are a bare Connect/Sign-in button calling
+  `agent.authenticate({ agentId, methodId })` directly; `"envVar"` expands an inline form (the new
+  `components/ui/input` primitive, `type="password"` unless a field explicitly sets `secret: false`) for
+  its `AgentAuthEnvVar[]`, submitting the filled, trimmed values as `agent.authenticate`'s `env`. Its
+  Connect/Add-key button is bright (`variant="default"`) only while `AgentProvidersReport.anyConfigured`
+  is false; once some provider already satisfies the agent, every Sign-in row downgrades to `outline` —
+  `authMethods` carries no "already used" signal from ACP so it cannot itself say a method is signed in,
+  but a bright Connect next to an agent that already runs reads as "you must act now" when nothing is
+  required. Any
+  interactive step an `"agent"`-kind method needs (an OAuth hand-off, a device code) is **not this panel's
+  concern** — it arrives over the app-wide `agent.elicitation` channel and its own modal, same as any other
+  agent-initiated form; `AgentAuthResult`'s three outcomes are handled once, centrally: `"ok"` re-reads this
+  agent's providers/methods, `"failed"` raises `result.error` as a toast, and `"terminal"` (the agent's own
+  login TUI, opened as a real workspace terminal server-side) activates that workspace and places the
+  **exact** terminal the host already created — `addTerminal`'s new optional trailing `tabKey` lets a
+  caller reuse a host-minted id instead of always minting a fresh one, the same `ToolOutput.terminal`
+  convention (`terminalId` *is* the tab key) applied to a login shell — then closes Settings so the user
+  lands on it. An agent whose capabilities positively rule out `authentication`/`providerConfig`/
+  `jetbrainsCentral` all at once renders a quiet "has nothing to configure here" line instead of looking
+  broken. Refresh (`providers-refresh`) re-reads just this agent's providers and auth methods — the
+  catalog above it is `AgentsSettings`' concern and rides `agentChangeTick`; and
   the **`JetBrainsAiCard`** — route Central-supported models through the user's JetBrains subscription while
   keeping ThinkRail's embedded PI — a state machine over the typed `JbcentralStatus` +
-  `provider.jbcentral*`: absent (official host-OS install guidance + Recheck), outdated — below the host's
+  `agent.jbcentral*`: absent (official host-OS install guidance + Recheck), outdated — below the host's
   minimum supported Central (guided Update), invalid/unverifiable version (safe guidance, no native action;
   a version *above* the minimum is simply ready, never gated), **signed out** — the card
   **states it and offers only Sign in**: the primary action *replaces* Connect rather than sitting beside it,
@@ -343,9 +431,10 @@ a project picker, the prompt hero, and the reused
   There is no restart prompt, affected-chat list, blocked state, or recovery mode. Existing live chats may
   retain an older runtime—including Central after Disconnect—and the card says its state applies to new chats.
   Update/connect/disconnect state is host-authoritative and shared across clients; every mutation re-reads
-  `provider.status`, while `provider.changed` invalidations from watched external changes trigger the same
-  re-read plus model-list invalidation. Status reads are request-sequenced so an older response cannot replace
-  a newer watched/action result. Copy never promises only Claude/GPT, never asks for standalone PI,
+  `agent.providers`, while `agent.changed` invalidations from watched external changes bump the store's
+  `agentChangeTick`, which `AgentsSettings` reads to trigger the same re-read. Status reads are
+  request-sequenced so an older response cannot replace a newer watched/action result. Copy never promises
+  only Claude/GPT, never asks for standalone PI,
   never renders child output/diagnostics/artifact content/paths/proxy data/secrets/raw models, and maps only
   closed reason codes to ThinkRail-authored text. **`GithubSettings`** (the "Local GitHub" block — `github.authStatus()`
   Connected + login / Not connected + Refresh); **`AppearanceSettings`** (the **theme picker** — the
@@ -403,22 +492,13 @@ a project picker, the prompt hero, and the reused
   ever seeds global files. No server change. **`PrivacySettings`** is the **anonymous-usage-analytics
   toggle** — a switch over `store.analyticsEnabled`, fired via `settings.update { analyticsEnabled }`
   with the same converge-on-broadcast pattern as the theme, plus the what-is/isn't-collected copy; only
-  the boolean ever crosses the wire, see `submodule-server-analytics`. **`ReviewSettings`** is the
-  **plan-review policy** section: the reviewer **model + effort** (`ModelSelector`/`ThinkingSelector` over
-  `useModelCatalog`, written as `settings.update { reviewModel | reviewEffort }`; unset ⇒ default). The
-  selector carries an **explicit default-model row** (`model-option-default`, labelled with the host's
-  `model.default` result) that writes `{ reviewModel: null, reviewEffort: null }` — the null-clears wire
-  form, see `submodule-server-settings` — so a chosen reviewer model can be restored to the pi default
-  without hand-editing host state; while unset, the effort control runs on the default model's supported
-  levels (fetched once from `model.default`) instead of an empty list. And an
-  **auto-fix toggle** (`review-autofix-toggle`, a switch over `store.reviewAutoFix` →
-  `settings.update { reviewAutoFix }`) — off means a `request_changes` verdict records findings and waits
-  (the host gates its auto-fix cycle on it, see `submodule-server-todos`). A single dimmed "General" nav item ("Soon") still signals the shell is
-  built to grow. `ProvidersSettings`/`AppearanceSettings`/`ChatSettings`/`TemplatesSettings`/
-  `PrivacySettings`/`ReviewSettings` are the panels-owned **integration pieces** (store + transport);
-  `SettingsDialog` receives the Layout section
-  from the shell composition root so no panel reaches sideways into shell, and the `LoginDialog` stays
-  presentational (`auth` module).
+  the boolean ever crosses the wire, see `submodule-server-analytics`. A single dimmed "General" nav item ("Soon") still signals the shell is
+  built to grow. `AgentsSettings`/`AppearanceSettings`/`TemplatesSettings`/`PrivacySettings` are the
+  panels-owned **integration pieces** (store + transport); `SettingsDialog` receives the Layout section
+  from the shell composition root so no panel reaches sideways into shell. (The old `auth` module —
+  `LoginDialog` and its store-owned frame reducer — is gone: interactive provider auth is elicitation or a
+  workspace terminal now, both driven from `AgentProviderSetup` itself, so there is no separate
+  presentational auth surface left to integrate.)
 
   Panels compose their own sub-panels
   (e.g. side tools → `FileTree`/`ChangesPanel`, workbench resource renderers → `FilePane`→`MonacoEditor`) — an internal hierarchy.
@@ -464,145 +544,10 @@ a project picker, the prompt hero, and the reused
   `GitFileChange[]` rows; the chevron/summary is the
   toggle while the sha chip stays a separate button (routing the Changes panel, never toggling). Expanded,
   file rows open Monaco diff tabs at the item's `commit:{sha}` scope (`openDiffInTab`, preview intent; the
-  path-list fallback opens at branch scope, no counts because they would drift), **and the review verdict
-  ON the item row itself**: the row's right edge is ONE review slot rendering exactly one of, in
-  precedence order, the clickable `Reviewing…` label (`plan-item-reviewing`, off the host-derived
-  `review.reviewing`, opens the reviewer chat), the warning `Changes requested · N` chip, or the
-  primary-filled `Start review` button (`plan-start-review` — the standard **small** action button:
-  `h-6`/`tr-text-action`/`control-primary-bg`, the same size as `SendReviewButton`, not an oversized
-  `min-h-8` block) for an unsettled reviewable item. The two **status**
-  readouts stay always visible (state, not an action); the **`Start review` action reveals on the
-  row's hover / keyboard focus**, exactly like the ProjectTree kebab: `[@media(hover:hover)]:opacity-0`
-  + `[@media(hover:hover)]:group-hover:opacity-100` + `focus-visible:opacity-100` — so a wall of
-  primary buttons never paints across every reviewable row on desktop, yet on a **touch** device (no
-  hover) it stays visible, and it never sticks the way `group-focus-within` did. It is an **in-flow**
-  button on the title line (the meta on line 2 frees that right edge, so the title simply shrinks for
-  it — no overlap, no empty reserved slot). Still one slot, no duplicates — the change-set disclosure
-  row carries NO review affordance.
-  `Start review` fires the AGENT review (`todo.startReview` — the plan's reviewer chat) and STAYS on
-  the plan page: the row's `Reviewing…` pulse and a toast are the only signals, success AND failure —
-  the detached error notice lands in a reviewer chat nobody has open, so the toast must carry it.
-  Row controls (`plan-item-toggle`, the change-set toggle, the sha chip, the review slot, `FileRow`)
-  wear `min-h-8` — the dense metadata rows stay tappable on touch. `planView.changeSetCounts` is the
-  one count/stat derivation (paths → count only; commit → `changeSetStat`), shared by the row's meta
-  strip and the disclosure line. There is **no in-page manual verdict UI** — the former `manually` toggle
-  + `ReviewActions` pair (Approve / Ask to fix) was removed with `PlanReview.tsx`; the `todo.review` /
-  `todo.requestFix` wire methods and host handlers stay, so a manual-override surface can return without
-  protocol work; agent-authored findings appear in the Review
-  panel badged `agent` (`review-comment-agent`), and an agent-settled card reads `Reviewed · agent`;
-  a **changes_requested** verdict marks the item loudly: the status glyph flips to the warning
-  `CircleAlert` (`StatusIcon changesRequested`, `data-changes-requested` — popup row and plan page
-  alike), the plan page's title row grows a warning **`Changes requested · N`** chip
-  (`plan-item-changes-requested`; N = `planView.itemOpenFindings`, the reviewer's open comments
-  matched by `origin` provenance (path-join fallback for provenance-less ones) — the Review tab is
-  the truth; the chip
-  `requestToolView`s the Review tab) and the verdict's `feedback` note renders inline
-  (`plan-item-review-feedback`); approving settles the item — its status glyph upgrades to the **circled Verified check**
-  (`StatusIcon reviewed`, hover "Verified", `data-reviewed` on the row; `planView.reviewSettled` is the
-  one derivation — approved AND no unreviewed delta, so a fresh revision drops the item back out of both
-  the glyph and the reviewed counter). **The header is a title + a lifecycle STEPPER and a kebab menu**. The stepper (`plan-progress`)
-  renders the plan's shipping funnel — **Build (`d/t done`) → Review (`r/k reviewed`,
-  `plan-review-progress`, only when the plan has reviewable items) → PR (`plan-pr-stage`,
-  `data-state`)** — each stage wearing a glyph for its state: done (check), active (the stage the
-  plan is currently at), pending (muted). The PR stage reads the same `useOpenBranchReview` lookup
-  as the button and shows `PR #N` once one is open; "merged" is unknowable in V1 (the lookup only
-  sees OPEN reviews), so the funnel honestly ends at PR-open. Under the stepper sits the **work
-  CONTEXT line** (`plan-context`): `branch ← baseBranch · N commits · +A −R` — commits summed over
-  `itemRevisions`, the total diff from the workspace record's `diffStats`; each piece hides when
-  unknown. Between header and summary lives the **NEXT-ACTION banner** (`plan-next-action`,
-  `data-kind`) — the report's one "what now", rendering the FIRST matching state by urgency:
-  `fix` (N steps carry changes_requested → **Show step** scrolls to the first flagged item and
-  auto-expands it via the `focusRequest` token — `{ id, tick }`, tick bumped per click and consumed
-  once per tick by the target `ItemBlock`, so a re-click re-expands a manually collapsed row and a
-  stale request can't reopen it later) → `review`
-  (N unsettled reviewables → an inline **Review All** button, same `todo.reviewAll` flow as the
-  kebab item, which stays) → `ship` (all done + reviewed, no open PR → an inline **Open PR**,
-  same `pr.open` flow as the header button) → hidden when nothing demands action. The plan-level
-  completion note wears a `Summary` eyebrow so the report reads in labeled sections. After the item
-sections the page renders **`Outside the plan`** (`plan-unattributed`, only when
-`TodoPlan.unattributed` is non-empty — including on an otherwise empty plan): the host-derived
-uncommitted rows no item claims (derivation: [[submodule-server-todos]]), rendered as `FileRow`s
-opening the **uncommitted-scope** diff — the honesty section that keeps un-planned work visible in
-the review map instead of reading as "nothing else changed"; `chat/planMarkdown` exports it as its
-own section. The kebab menu (`plan-menu`, a
-  `DropdownMenu`) holding **Copy** (clipboard) / **Save .md** (browser download) — both compiling through
-  `chat/planMarkdown` — and, when the plan has reviewable items, **Review All** (`plan-review-all`): fires
-  `todo.reviewAll`, the host-side queue that agent-reviews every *unsettled* reviewable item one at a time
-  (disabled when none are unsettled; a toast reports how many were queued, the per-row `Reviewing…` pulses
-  track progress), plus **Open draft PR** (`plan-open-draft-pr`, hidden once a PR exists). **The header
-  also owns the plan's finish line — Open PR** (`plan-open-pr`, task-open-pr): a deterministic
-  host-side flow (push + `gh`, NEVER an agent prompt) that goes through the **compose dialog**
-  (`PrComposeDialog.tsx`, `pr-compose-dialog`): the click fetches `pr.preview` and opens editable
-  Title (`pr-compose-title`) + Description (`pr-compose-body`, prefilled from the plan) fields;
-  only the submit (`pr-compose-submit`, label follows the action — Open PR / Open draft PR / Push
-  updates) runs `pr.open` with the edited `title`/`body`. The dialog closes on success, stays open
-  on a generic failure (edits survive the toast), and hands off to `PrSetupDialog` on
-  `PUSH_AUTH_FAILED` — whose Try again re-submits the LAST edited title/body (kept in a ref), never
-  a re-rendered draft. The header button is primary-filled when the plan is
-  *ready* (all done + all reviews settled) and quiet otherwise; once an open PR exists (the same
-  `workspace.openReview` lookup the shell's scope label uses, via `useOpenBranchReview` — the hook
-  lives in `panels` because nothing may import `shell`) the label flips to **Push updates**
-  (same call — the host pushes to the SAME branch/PR and refreshes its body); when the lookup reports
-  **`unpushedCommits`** the label appends the count (`Push updates (N)`), the button turns
-  primary-filled, and the next-action banner grows a `push` arm ("N new commits aren't in PR #N
-  yet" + Push updates) so new work after the PR never sits silently local — a successful push
-  reseeds the state without the count, clearing both. Also a **`PR #N` chip**
-  (`plan-pr-chip`) links out when the URL is known. The hook owns the ONE keyed PR state:
-  `noteOpenReview(review, url?)` seeds it right after `pr.open` (no separate shadow state in the
-  page), and the focus-refetch overwrites it — a PR closed/merged on GitHub drops out of the chip,
-  the label, and the stepper on the next refetch instead of sticking until remount (the url is kept
-  across refetches while the review number matches). A `compare` result opens the prefilled GitHub
-  compare page (`window.open`); every outcome toasts, uncommitted files get a separate info toast.
-  The `pr.open` request runs with a **180s timeout** (push + gh mutation can outlast the transport's
-  60s default) and the header button wears a spinner while any PR work is in flight — the
-  **Pushing…** label only during the actual submit (a preview fetch is not a push, and its failure
-  toasts "Couldn't prepare the PR", never "Open PR failed"). The uncommitted-files info toast fires
-  once, before the outcome branches. A successful submit with no `review` in the result (gh broken
-  or non-GitHub remote) reseeds the open-review state WITHOUT `unpushedCommits` — the push
-  succeeded, so the count and the push banner must clear even when the PR lookup payload is absent —
-  but only when a count was actually showing, so the render-time closure can't overwrite a fresher
-  focus-refetch in the no-count case. The compose submit also reports whether the title was touched
-  (`titleEdited`) so the host never rewrites a GitHub-side rename with the regenerated prefill.
-  **Failures that name a fixable setup gap open `PrSetupDialog` (`PrSetupDialog.tsx`,
-  `pr-setup-dialog`) instead of a toast**: a `PUSH_AUTH_FAILED` rejection (matched via the
-  transport's `wsErrorCode`) explains that the host pushes without a terminal and shows git's
-  stderr (`pr-setup-detail`) plus copyable fixes (`ssh-add --apple-use-keychain …` for SSH,
-  `gh auth login` for HTTPS); a `compare` result carrying `ghProblem` explains the missing/
-  unauthenticated GitHub CLI with install/sign-in commands and offers the compare page as an
-  in-dialog link (`pr-setup-compare` — a real anchor, so no popup-blocker risk) instead of the
-  blind `window.open`. Both variants keep a **Try again** (`pr-setup-retry`) that re-runs the same
-  flow — always with the LAST edited title/body (the `lastPrSubmit` ref, set on every submit,
-  cleared only when the flow fully succeeded, when the user explicitly cancels the compose dialog,
-  or when they take the compare-page hand-off (external completion the client can't observe) — a
-  `ghProblem` outcome otherwise keeps it, so the gh dialog's Try again actually re-submits;
-  reopening Open PR after a failure reuses those edits (including the edited-title baseline, so a
-  reopened draft doesn't lose its `titleEdited` flag) instead of refetching a regenerated draft); command rows copy via
-  `copyText` (`pr-setup-copy`) and carry a **Run** (`pr-setup-run`) that closes the dialog and
-  executes the command in a fresh workspace terminal via the store's
-  `addTerminal(workspaceId, initialCommand)` — the pty is a real interactive shell, so
-  passphrase/login prompts are answered right there instead of asking the user to find an external
-  terminal. Command sets are **host-platform-aware** (the welcome's `hostPlatform`, validated on
-  intake and RESET on every welcome so switching hosts can't leave a stale platform; there is **no
-  darwin fallback** — a null/unknown platform gets the generic commands: plain `ssh-add`, no
-  package-manager guess, a cli.github.com install hint): `ssh-add --apple-use-keychain` / `brew` on
-  macOS, plain `ssh-add` + the distro hint on Linux, `$env:USERPROFILE` + winget on Windows — the
-  commands run on the HOST, so the browser's own platform is never consulted. A push-auth detail
-  matching `Host key verification failed` adds an approve-the-host-key row (`ssh -T git@github.com`
-  run interactively) — the ssh-add/gh remedies don't fix known_hosts. A `compare`
-  *without* `ghProblem` (offline seam, transient gh failure) keeps the window.open + toast path.
-  This dialog is unit/e2e-pinned on the server side (`isPushAuthFailure`, `ghSetupProblem`); the
-  browser-side arms need a real broken push / missing gh, so they stay convention-held.
-  The agent's plan-level completion note (`plan-overall-summary`) renders **clamped to
-  3 lines** with a `Show more`/`Show less` toggle (`plan-overall-summary-toggle`, shown only for long
-  notes) — the page opens on the plan, not on a wall of prose. There is **no in-page "Review mode"** — findings live in the right-panel **Review** tab;
-  when the reviewer agent has open comments (`selectAgentReviewCommentCount` — open, `author: "agent"`) the
-  header shows a **`N comments`** chip (`plan-review-comments`) that `requestToolView(ws, "review")` to
-  focus that tab. The header also shows the agent's plan-level completion note
-  (`planCompletionSummary`-gated `plan-overall-summary`). `FileRow` (`planFileRow.tsx`, its own module so plan surfaces
-  share one row without cycles) is the shared change-set row. Live by
-  construction, it reads through the same `useChatTodos` hook as the plan popup (per-mount fetch +
-  `pi.event` refetch), so it cannot show a stale snapshot.
-  `TerminalWorkbench` owns one visibility-gated terminal body per semantic terminal identity and
+  path-list fallback opens at branch scope, no counts because they would drift), and header **Copy** / **Save
+  .md** actions compile through `chat/planMarkdown`. Live by construction, it reads through the same
+  `useChatTodos` hook as the plan popup (per-mount fetch + `chat.event` refetch), so it cannot show a stale
+  snapshot. `TerminalWorkbench` owns one visibility-gated terminal body per semantic terminal identity and
   the host-atomic close flow. A busy close remains one correlated request through confirmation and forced
   retry; dialog auto-close cannot release that request, authoritative catalog removal dismisses stale
   confirmation, and a rejected force clears exactly that request with an error so a later close can start
@@ -639,10 +584,10 @@ own section. The kebab menu (`plan-menu`, a
   panes, singleton side tools, terminal bodies, Settings, and `Toaster`), imported **per-file** so
   Monaco/shiki/xterm stay lazy. Tab strips, group headers, side stacks, and center topology are not panel
   surfaces; the shell layout module wraps these renderers.
-- **Allowed deps:** `store`, `transport`, `components/ui` (incl. `popover`/`command`/`textarea` for the
-  dialog), `chat` (`ModelSelector`/`ThinkingSelector` + the `useModelCatalog` hook that feeds them,
-  reused by `NewWorkspaceDialog`; `Markdown`,
-  reused by `MarkdownPreview`; `TemplateEditorDialog`, reused by `TemplatesSettings`), `lib`, `themes` (catalog + generic application contract),
+- **Allowed deps:** `store`, `transport`, `components/ui` (incl. `popover`/`command`/`textarea`/`input` for
+  the dialog and Settings), `chat` (`Markdown`, reused by `MarkdownPreview`; `TemplateEditorDialog`, reused
+  by `TemplatesSettings`; `SkillsButton`/`SkillsDialog`/`SlashCommandCompletion`, reused by
+  `NewWorkspaceDialog`), `lib`, `themes` (catalog + generic application contract),
   `contracts`; `@remixicon/react`; and the heavy libs each lazy panel owns (`monaco-editor`, `shiki`,
   `@xterm/*`) loaded via `import()`.
 - **Forbidden:** `server`/`shared`/`pi`; importing `shell`; reaching across unrelated panels.
@@ -841,7 +786,8 @@ own section. The kebab menu (`plan-menu`, a
   from the result (`openChatSession` — no round-trip, and its runtime exists before the first streamed
   event), while a **reused** one goes through `openChatInTab`'s tab→runtime→disk escalation, because it
   may be a chat this client has never seen (a second client, or this one after a reload — review state
-  and pi transcripts both outlive the host); opening that as new would show a blank conversation for
+  and the host's own transcript record both outlive any one connection to it, for every agent per
+  [[architecture]] Decision #15); opening that as new would show a blank conversation for
   comments already marked sent.
   **Sidebar navigation goes to the surface the anchor is READABLE on** (one derivation,
   `reviewModel`'s `ReviewSurface`: `commentSurface` for a row, `reviewFileSurface` for a file row —

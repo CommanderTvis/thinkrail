@@ -4,6 +4,7 @@ export {
 	isValidTemplateName,
 	listTemplates,
 	MAX_TEMPLATE_BYTES,
+	promptsRoot,
 	saveTemplate,
 	type TemplateDirs,
 	templateDirs,

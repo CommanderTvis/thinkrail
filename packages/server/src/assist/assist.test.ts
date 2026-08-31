@@ -1,41 +1,33 @@
-import { afterEach, expect, test } from "bun:test";
-import type { AssistantMessage, Message, UserMessage } from "@thinkrail/contracts";
-import {
-	extractFirstTurn,
-	naiveWorkspaceName,
-	type OneShotRunner,
-	setOneShotRunner,
-	suggestWorkspaceName,
-	toWorkspaceName,
-} from "./assist";
+import { expect, test } from "bun:test";
+import type { ChatMessage, PromptContent, StopReason, UserMessage } from "@thinkrail/contracts";
+import { extractFirstTurn, naiveWorkspaceName, toWorkspaceName } from "./assist";
 
-function fakeRunner(fn: OneShotRunner): void {
-	setOneShotRunner(fn);
-}
+let seq = 0;
 
-afterEach(() => setOneShotRunner(null));
-
-function user(content: UserMessage["content"]): Message {
-	return { role: "user", content, timestamp: 0 } as Message;
-}
-function assistant(text: string, stopReason: AssistantMessage["stopReason"] = "stop"): Message {
+function user(content: string | PromptContent[], hidden?: true): UserMessage {
+	seq += 1;
 	return {
-		role: "assistant",
-		content: [{ type: "text", text }],
-		api: "x",
-		provider: "x",
-		model: "x",
-		usage: {
-			input: 0,
-			output: 0,
-			cacheRead: 0,
-			cacheWrite: 0,
-			totalTokens: 0,
-			cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
-		},
-		stopReason,
-		timestamp: 0,
-	} as AssistantMessage as Message;
+		role: "user",
+		id: `u${seq}`,
+		timestamp: seq,
+		content: typeof content === "string" ? [{ type: "text", text: content }] : content,
+		...(hidden === undefined ? {} : { hidden }),
+	};
+}
+
+function assistant(text: string): ChatMessage {
+	seq += 1;
+	return { role: "assistant", id: `a${seq}`, timestamp: seq, blocks: [{ type: "text", text }] };
+}
+
+function settled(stopReason: StopReason): ChatMessage {
+	seq += 1;
+	return {
+		role: "marker",
+		id: `m${seq}`,
+		timestamp: seq,
+		marker: { kind: "turnSettled", stopReason },
+	};
 }
 
 test("toWorkspaceName normalizes model output into a safe, bounded display name, preserving casing", () => {
@@ -76,12 +68,13 @@ test("extractFirstTurn pulls the first prompt + first assistant answer from a tr
 	const turn = extractFirstTurn([
 		user("add a login flow"),
 		assistant("Sure, here is the plan…"),
+		settled("completed"),
 		user("now add tests"),
 	]);
 	expect(turn).toEqual({ prompt: "add a login flow", answer: "Sure, here is the plan…" });
 });
 
-test("extractFirstTurn reads array (multi-part) user content and tolerates a missing answer", () => {
+test("extractFirstTurn reads multi-part user content and tolerates a missing answer", () => {
 	const turn = extractFirstTurn([
 		user([
 			{ type: "text", text: "please " },
@@ -97,12 +90,23 @@ test("extractFirstTurn returns null when there is no user turn yet", () => {
 	expect(extractFirstTurn([user("   ")])).toBeNull();
 });
 
+test("extractFirstTurn ignores a hidden user message — the host's own prompts never name a workspace", () => {
+	const turn = extractFirstTurn([
+		user("[nudge] wake up", true),
+		assistant("ok"),
+		settled("completed"),
+	]);
+	expect(turn).toBeNull();
+});
+
 test("extractFirstTurn skips killed turns — a retracted prompt is never naming material", () => {
 	const turn = extractFirstTurn([
 		user("refactor the billing engine"),
-		assistant("Starting on billing…", "aborted"),
+		assistant("Starting on billing…"),
+		settled("cancelled"),
 		user("fix the header layout"),
 		assistant("Done — header fixed."),
+		settled("completed"),
 	]);
 	expect(turn).toEqual({ prompt: "fix the header layout", answer: "Done — header fixed." });
 });
@@ -111,49 +115,25 @@ test("extractFirstTurn returns null when every turn was killed", () => {
 	expect(
 		extractFirstTurn([
 			user("do a thing"),
-			assistant("", "error"),
+			assistant(""),
+			settled("failed"),
 			user("try again"),
-			assistant("", "aborted"),
+			assistant(""),
+			settled("cancelled"),
 		]),
 	).toBeNull();
 });
 
-test("extractFirstTurn skips a killed multi-round turn by its terminal assistant message", () => {
+test("extractFirstTurn judges a multi-round turn by its last settlement, not its first", () => {
 	const turn = extractFirstTurn([
 		user("first task"),
 		assistant("let me look…"),
-		assistant("", "aborted"),
+		settled("completed"),
+		assistant(""),
+		settled("cancelled"),
 		user("second task"),
 		assistant("on it"),
+		settled("completed"),
 	]);
 	expect(turn).toEqual({ prompt: "second task", answer: "on it" });
-});
-
-test("suggestWorkspaceName runs the turn through the runner and normalizes the reply", async () => {
-	let seen: string | undefined;
-	fakeRunner(async (req) => {
-		seen = req.prompt;
-		return { text: "Add Login Flow", model: { provider: "p", id: "m" } };
-	});
-	const name = await suggestWorkspaceName({ prompt: "add a login flow", answer: "ok" });
-	expect(name).toBe("Add Login Flow");
-	expect(seen).toContain("add a login flow");
-	expect(seen).toContain("ok");
-});
-
-test("suggestWorkspaceName degrades to null on a runner failure (never throws)", async () => {
-	fakeRunner(async () => {
-		throw new Error("no-model");
-	});
-	expect(await suggestWorkspaceName({ prompt: "do a thing", answer: "" })).toBeNull();
-});
-
-test("suggestWorkspaceName returns null without calling the runner when there's no prompt", async () => {
-	let called = false;
-	fakeRunner(async () => {
-		called = true;
-		return { text: "x", model: { provider: "p", id: "m" } };
-	});
-	expect(await suggestWorkspaceName({ prompt: "   ", answer: "answer" })).toBeNull();
-	expect(called).toBe(false);
 });

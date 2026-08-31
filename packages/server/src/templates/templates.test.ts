@@ -30,8 +30,8 @@ let dirs: TemplateDirs;
 
 beforeEach(() => {
 	root = mkdtempSync(join(tmpdir(), "trpi-templates-test-"));
-	globalDir = join(root, "agent-home", "prompts");
-	projectDir = join(root, "worktree", ".pi", "prompts");
+	globalDir = join(root, "data-dir", "prompts");
+	projectDir = join(root, "worktree", ".thinkrail", "prompts");
 	dirs = { globalDir, projectDir };
 });
 
@@ -40,14 +40,14 @@ afterEach(() => {
 });
 
 describe("templateDirs", () => {
-	test("computes globalDir under agentDir/prompts and projectDir under cwd/.pi/prompts", () => {
-		const result = templateDirs("/some/cwd", "/some/agent-dir");
-		expect(result.globalDir).toBe(join("/some/agent-dir", "prompts"));
-		expect(result.projectDir).toBe(join("/some/cwd", ".pi", "prompts"));
+	test("computes globalDir from the caller and projectDir under cwd/.thinkrail/prompts", () => {
+		const result = templateDirs("/some/cwd", "/some/global-dir");
+		expect(result.globalDir).toBe("/some/global-dir");
+		expect(result.projectDir).toBe(join("/some/cwd", ".thinkrail", "prompts"));
 	});
 
 	test("projectDir is absent when cwd is omitted", () => {
-		const result = templateDirs(undefined, "/some/agent-dir");
+		const result = templateDirs(undefined, "/some/global-dir");
 		expect(result.projectDir).toBeUndefined();
 	});
 });
@@ -136,8 +136,8 @@ describe("saveTemplate -> listTemplates -> getTemplate", () => {
 		expect(getTemplate(dirs, "dup", "global").content).toBe("second version");
 	});
 
-	test("saveTemplate rejects malformed frontmatter before writing anything (no orphan file)", () => {
-		const badContent = "---\nbad: [unterminated\n---\nbody";
+	test("saveTemplate rejects an unclosed frontmatter fence before writing anything (no orphan file)", () => {
+		const badContent = "---\ndescription: never closed\nbody";
 
 		expect(() => saveTemplate(dirs, "global", "broken", badContent)).toThrow();
 
@@ -191,12 +191,14 @@ describe("listTemplates precedence + freshness", () => {
 		expect(listTemplates(dirs).map((t) => t.name)).toEqual(["late"]);
 	});
 
-	test("skips a file it can't parse (malformed frontmatter) without throwing, keeps the rest", () => {
+	test("a file whose frontmatter fence is never closed lists with no metadata, not as an error", () => {
 		mkdirSync(globalDir, { recursive: true });
-		writeFileSync(join(globalDir, "broken.md"), "---\nbad: [unterminated\n---\nbody");
+		writeFileSync(join(globalDir, "unclosed.md"), "---\ndescription: never closed\nbody");
 		saveTemplate(dirs, "global", "ok", "a fine template");
 
-		expect(listTemplates(dirs).map((t) => t.name)).toEqual(["ok"]);
+		const listed = listTemplates(dirs);
+		expect(listed.map((t) => t.name)).toEqual(["ok", "unclosed"]);
+		expect(listed.find((t) => t.name === "unclosed")?.description).toBeUndefined();
 	});
 
 	test("skips dot-leading filenames entirely (list/get parity: the gate would reject the name too)", () => {
@@ -208,7 +210,7 @@ describe("listTemplates precedence + freshness", () => {
 	});
 
 	test("a scope dir that isn't actually a directory doesn't blank the other scope's listing", () => {
-		mkdirSync(join(root, "agent-home"), { recursive: true });
+		mkdirSync(join(root, "data-dir"), { recursive: true });
 		writeFileSync(globalDir, "not a directory");
 		saveTemplate(dirs, "project", "solo", "project body");
 
@@ -244,11 +246,14 @@ describe("getTemplate", () => {
 		expect(() => getTemplate(dirs, "missing", "project")).toThrow();
 	});
 
-	test("throws on a directly-named file with malformed frontmatter (asymmetric vs listTemplates's swallow)", () => {
+	test("reads a file whose frontmatter fence is never closed as content with no metadata", () => {
 		mkdirSync(globalDir, { recursive: true });
-		writeFileSync(join(globalDir, "broken.md"), "---\nbad: [unterminated\n---\nbody");
+		const raw = "---\ndescription: never closed\nbody";
+		writeFileSync(join(globalDir, "unclosed.md"), raw);
 
-		expect(() => getTemplate(dirs, "broken", "global")).toThrow();
+		const template = getTemplate(dirs, "unclosed", "global");
+		expect(template.content).toBe(raw);
+		expect(template.description).toBeUndefined();
 	});
 });
 
@@ -340,24 +345,24 @@ describe("symlink containment", () => {
 		expect(existsSync(outsideTarget)).toBe(true);
 	});
 
-	for (const level of ["prompts", ".pi"] as const) {
-		test(`a symlinked ${level === ".pi" ? ".pi" : ".pi/prompts"} directory: writes refuse, list/get treat the project dir as empty`, () => {
+	for (const level of ["prompts", ".thinkrail"] as const) {
+		test(`a symlinked ${level === ".thinkrail" ? ".thinkrail" : ".thinkrail/prompts"} directory: writes refuse, list/get treat the project dir as empty`, () => {
 			const evilRoot = mkdtempSync(join(tmpdir(), "trpi-templates-evil-"));
 			try {
 				const elsewhere = join(evilRoot, "elsewhere");
-				const elsewherePrompts = level === ".pi" ? join(elsewhere, "prompts") : elsewhere;
+				const elsewherePrompts = level === ".thinkrail" ? join(elsewhere, "prompts") : elsewhere;
 				mkdirSync(elsewherePrompts, { recursive: true });
 				writeFileSync(join(elsewherePrompts, "secret.md"), "outside content");
 				const worktree = join(evilRoot, "worktree");
 				let promptsDir: string;
-				if (level === ".pi") {
+				if (level === ".thinkrail") {
 					mkdirSync(worktree, { recursive: true });
-					symlinkSync(elsewhere, join(worktree, ".pi"));
-					promptsDir = join(worktree, ".pi", "prompts");
+					symlinkSync(elsewhere, join(worktree, ".thinkrail"));
+					promptsDir = join(worktree, ".thinkrail", "prompts");
 				} else {
-					mkdirSync(join(worktree, ".pi"), { recursive: true });
-					symlinkSync(elsewhere, join(worktree, ".pi", "prompts"));
-					promptsDir = join(worktree, ".pi", "prompts");
+					mkdirSync(join(worktree, ".thinkrail"), { recursive: true });
+					symlinkSync(elsewhere, join(worktree, ".thinkrail", "prompts"));
+					promptsDir = join(worktree, ".thinkrail", "prompts");
 				}
 				const evilDirs: TemplateDirs = { globalDir, projectDir: promptsDir };
 
@@ -387,24 +392,31 @@ describe("symlink containment", () => {
 	});
 });
 
-describe("frontmatter value fidelity (pi's real YAML parser)", () => {
-	test("a single-quoted scalar parses to its value — quotes are never part of the description", () => {
+describe("frontmatter value fidelity (the host's own flat-scalar reader)", () => {
+	test("a quoted scalar parses to its value — quotes are never part of the description", () => {
 		mkdirSync(globalDir, { recursive: true });
 		writeFileSync(join(globalDir, "sq.md"), "---\ndescription: 'Review safely'\n---\nBody\n");
+		writeFileSync(join(globalDir, "dq.md"), '---\ndescription: "Review safely"\n---\nBody\n');
 
 		expect(getTemplate(dirs, "sq", "global").description).toBe("Review safely");
+		expect(getTemplate(dirs, "dq", "global").description).toBe("Review safely");
 	});
 
-	test("a folded block scalar parses to its (joined) value, not a literal '>'", () => {
+	test("a block scalar degrades to no metadata rather than surfacing YAML noise", () => {
 		mkdirSync(globalDir, { recursive: true });
 		writeFileSync(
 			join(globalDir, "folded.md"),
 			"---\ndescription: >-\n  folded description\n  over two lines\n---\nBody\n",
 		);
 
-		expect(getTemplate(dirs, "folded", "global").description).toBe(
-			"folded description over two lines",
-		);
+		expect(getTemplate(dirs, "folded", "global").description).toBeUndefined();
+	});
+
+	test("argument-hint keeps its on-disk kebab-case key and reaches the wire camelCased", () => {
+		mkdirSync(globalDir, { recursive: true });
+		writeFileSync(join(globalDir, "hinted.md"), "---\nargument-hint: <path>\n---\nBody\n");
+
+		expect(getTemplate(dirs, "hinted", "global").argumentHint).toBe("<path>");
 	});
 });
 

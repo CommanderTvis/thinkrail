@@ -1,17 +1,20 @@
-import type { SessionStats } from "@thinkrail/contracts";
+import type { AgentDescriptor, SessionUsage } from "@thinkrail/contracts";
 import type { ReactNode } from "react";
-import { SessionStatsBar } from "./SessionStatsBar";
+import { AgentBadge } from "./AgentBadge";
+import { SessionStatsBar, type UsageCapabilities } from "./SessionStatsBar";
 import { SkillsButton } from "./SkillsButton";
 
 export function ChatHeader({
-	stats,
-	statusEntries,
+	usage,
+	capabilities,
+	agent,
 	left,
 	onOpenSkills,
 	skillsStale,
 }: {
-	stats: SessionStats | null;
-	statusEntries: [string, string][];
+	usage: SessionUsage | null;
+	capabilities: UsageCapabilities;
+	agent: AgentDescriptor;
 	left?: ReactNode;
 	onOpenSkills?: () => void;
 	skillsStale?: boolean;
@@ -23,12 +26,8 @@ export function ChatHeader({
 		>
 			<div className="flex min-w-0 flex-1 items-center overflow-clip">{left}</div>
 			<div className="flex min-w-0 items-center justify-end gap-12 overflow-clip">
-				{statusEntries.map(([key, text]) => (
-					<span key={key} className="shrink-0 whitespace-nowrap text-text-muted tr-text-metadata">
-						{text}
-					</span>
-				))}
-				<SessionStatsBar stats={stats} />
+				<AgentBadge agent={agent} />
+				<SessionStatsBar usage={usage} capabilities={capabilities} />
 			</div>
 			{onOpenSkills ? (
 				<SkillsButton onOpen={onOpenSkills} testId="open-skills" stale={skillsStale ?? false} />

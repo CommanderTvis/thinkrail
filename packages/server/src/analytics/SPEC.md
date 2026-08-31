@@ -11,7 +11,7 @@ tags: [v1, analytics, privacy]
 ## Responsibility
 
 Anonymous, no-personal-data usage analytics, emitted **host-side only**. Answers product questions —
-unique users, version/platform, model preference, provider auth — via a **closed event set** delivered
+unique users, version/platform, agent preference, agent auth — via a **closed event set** delivered
 to **PostHog (EU cloud)** through the official `posthog-node` SDK. **Every channel reports** (a release
 binary, a packaged desktop app, a locally compiled artifact, and a run from source alike); what a run is gets *reported*, via
 `channel` + `build`, not gated on. What never reports is an **automated** run — CI, `bun test`, e2e. The SDK is an implementation detail
@@ -24,10 +24,14 @@ PostHog won on free tier, EU residency, and a self-host path).
 
 - **Owns:**
   - `events.ts` — the closed `AnalyticsEvent` union (`app_installed` / `app_started` /
-    `chat_started {provider, model}` / `message_sent {mode}` / `provider_login {provider, method}`) and
-    `bucketProvider()` / `bucketProviderModel()`: identity passes raw **only** when it matches pi's
-    built-in catalog (`getBuiltinProviders()` / `getBuiltinModels()`); a custom provider — or a custom
-    model id on a known provider — becomes `"custom"`. Fails closed. The machine-checked privacy pin is
+    `chat_started {agent}` / `message_sent {mode}` / `provider_login {agent, method}`) and
+    `bucketAgent()`: an agent id passes raw **only** when the agent is `bundled` (ours) or `installed`
+    (its id came from the public ACP registry); an `external` agent — one the user pointed ThinkRail at
+    by path or name — becomes `"custom"`, because its id is free text the user chose. Fails closed.
+    **This replaces the old provider/model bucketing outright:** under [[architecture]] Decision #13 the
+    agent owns model choice and never tells the host which model it used, so there is no model to report
+    and no pi catalogue to check one against. Agent preference is the question that survives. The
+    machine-checked privacy pin is
     the **unit tests**: they assert every event variant's exact outgoing properties — there is
     deliberately no runtime allowlist filter (the union is closed and we control every call site; a
     content-leaking field fails CI, and runtime filtering was judged over-engineering).
@@ -58,25 +62,25 @@ PostHog won on free tier, EU residency, and a self-host path).
     `track(event)`, `setAnalyticsSending(enabled)`, `shutdownAnalytics()` (best-effort flush — the
     host's `stop()` fires it without awaiting), `resetAnalyticsForTests()`.
 - **Engagement (`message_sent`):** one event per user-authored send, `mode` from the closed vocabulary
-  `prompt` | `steer` | `follow_up` (pi's three send methods) — never anything about the message (no
-  text, no length, no image count) and no identity params (model preference is `chat_started`'s job).
+  `prompt` | `steer` | `follow_up` (the wire's three send methods) — never anything about the message
+  (no text, no length, no image count) and no identity params (agent preference is `chat_started`'s job).
   New-chat and existing-chat sends are the same event; `chat_started` stays the new-chat signal. Fired
-  by `host` from `session.prompt`/`steer`/`followUp` **after the send is accepted** (`ackSend`), so a
-  rejected send never counts — and **only for user-authored** sends: the same wire methods also carry
+  by `host` from `session.prompt`/`steer`/`followUp` **after the send is accepted** — the manager takes
+  the message synchronously, so a rejected send throws before the track and never counts — and **only for user-authored** sends: the same wire methods also carry
   internal control traffic (the client's TODO wake-nudge), which `isControlMessage` filters out, so the
   count stays "messages the user sent" and never inflates with the app's own prompts.
 - **Public surface (barrel):** `initializeAnalytics`, `track`, `setAnalyticsSending`,
-  `shutdownAnalytics`, `resetAnalyticsForTests`, the event types + bucket helpers, and `BuildKind` — which
+  `shutdownAnalytics`, `resetAnalyticsForTests`, the event types + `bucketAgent`, and `BuildKind` — which
   `host/index.ts` re-exports so a launcher can name its own provenance without importing this module
   (the forbidden edge below stays intact).
 - **Allowed deps:** `persistence` (installation record + data dir), `log` (send failures surface at
   debug level through the shared logger), `contracts` (types),
-  `@earendil-works/pi-ai` (the built-in catalog — server-side value import), `posthog-node` (the
-  delivery SDK — value-imported **only** in `sink.ts`), Node `crypto`/`process`.
+  `posthog-node` (the delivery SDK — value-imported **only** in `sink.ts`), Node `crypto`/`process`.
 - **Forbidden:** importing `host` or any other sibling; being imported by anything but `host` (all
-  `track()` call sites live in `host` — feature modules stay analytics-free; `provider_login` method
-  attribution is host's `loginAnalytics` correlation, see `submodule-server-host`); putting the
-  installation id on the wire in any form.
+  `track()` call sites live in `host` — feature modules stay analytics-free; `provider_login` is
+  tracked straight off the `agent.authenticate` handler's own result, see [[submodule-server-host]]);
+  **any pi package** (the built-in-catalogue edge left with the model params); putting the installation
+  id on the wire in any form.
 
 ## Get right (the privacy contract)
 
@@ -106,7 +110,8 @@ PostHog won on free tier, EU residency, and a self-host path).
   `AnalyticsOptions.posthogApiKey` overrides it (tests, self-hosting), as `THINKRAIL_POSTHOG_HOST` does
   the endpoint.
 - **Never sent:** paths, file/spec names, prompts, code, transcripts, token counts, hostnames,
-  usernames, IP-derived fields, or any free-form user string. Params on every event: `app_version`,
+  usernames, IP-derived fields, or any free-form user string — including an external agent's id, which
+  is exactly such a string and is why `bucketAgent` exists. Params on every event: `app_version`,
   `channel`, `os`, `arch`, `build` (`source` | `binary` | `desktop` — declared by the launching entry,
   see `module-cli` / `module-desktop`, so `channel = dev` still separates local artifact kinds)
   — plus only the closed per-event params above; the unit tests pin each

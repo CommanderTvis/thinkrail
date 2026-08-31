@@ -2,9 +2,8 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { getBuiltinModels } from "@earendil-works/pi-ai/providers/all";
 import { ensureInstallation } from "../persistence";
-import { type AnalyticsEvent, bucketProvider, bucketProviderModel, CUSTOM_BUCKET } from "./events";
+import { type AnalyticsEvent, bucketAgent, CUSTOM_BUCKET } from "./events";
 import {
 	initializeAnalytics,
 	resetAnalyticsForTests,
@@ -78,9 +77,9 @@ function bootSending(
 const EVENT_SAMPLES = {
 	app_installed: { name: "app_installed" },
 	app_started: { name: "app_started" },
-	chat_started: { name: "chat_started", params: { provider: "anthropic", model: "some-model" } },
+	chat_started: { name: "chat_started", params: { agent: "thinkrail-pi" } },
 	message_sent: { name: "message_sent", params: { mode: "prompt" } },
-	provider_login: { name: "provider_login", params: { provider: "openai", method: "oauth" } },
+	provider_login: { name: "provider_login", params: { agent: "junie", method: "agent" } },
 } as const satisfies { [K in AnalyticsEvent["name"]]: Extract<AnalyticsEvent, { name: K }> };
 
 const ENV_KEYS = ["app_version", "channel", "os", "arch", "build"];
@@ -88,9 +87,9 @@ const ENV_KEYS = ["app_version", "channel", "os", "arch", "build"];
 const EXPECTED_KEYS: Record<keyof typeof EVENT_SAMPLES, string[]> = {
 	app_installed: ENV_KEYS,
 	app_started: ENV_KEYS,
-	chat_started: [...ENV_KEYS, "provider", "model"],
+	chat_started: [...ENV_KEYS, "agent"],
 	message_sent: [...ENV_KEYS, "mode"],
-	provider_login: [...ENV_KEYS, "provider", "method"],
+	provider_login: [...ENV_KEYS, "agent", "method"],
 };
 
 test("every event's outgoing properties are EXACTLY its declared params (+ $ transport framing)", async () => {
@@ -153,7 +152,7 @@ test("shutdownAnalytics genuinely awaits the drain (slow transport, no polling) 
 		return new Response("{}", { status: 200 });
 	}) as typeof fetch;
 	bootSending(sent, { fetchImpl: slowFetch });
-	track({ name: "chat_started", params: { provider: "anthropic", model: "m" } });
+	track({ name: "chat_started", params: { agent: "thinkrail-pi" } });
 	await shutdownAnalytics();
 	expect(allEntries(sent).map((e) => e.event)).toEqual([
 		"app_installed",
@@ -176,12 +175,12 @@ test("toggle-off silences events already queued inside the SDK — the transport
 	await drained(delivered, 2);
 
 	const startedBefore = started;
-	track({ name: "chat_started", params: { provider: "anthropic", model: "m" } });
+	track({ name: "chat_started", params: { agent: "thinkrail-pi" } });
 	const deadline = Date.now() + 2_000;
 	while (started === startedBefore && Date.now() < deadline) await Bun.sleep(5);
 	expect(started).toBeGreaterThan(startedBefore);
 
-	track({ name: "provider_login", params: { provider: "openai", method: "oauth" } });
+	track({ name: "provider_login", params: { agent: "junie", method: "agent" } });
 	setAnalyticsSending(false);
 	await shutdownAnalytics();
 	await Bun.sleep(150);
@@ -288,7 +287,7 @@ test("setAnalyticsSending(false) stops sending immediately", async () => {
 	await drained(sent, 2);
 	sent.length = 0;
 	setAnalyticsSending(false);
-	track({ name: "chat_started", params: { provider: "anthropic", model: "m" } });
+	track({ name: "chat_started", params: { agent: "thinkrail-pi" } });
 	await settled();
 	expect(sent).toHaveLength(0);
 });
@@ -306,27 +305,11 @@ test("track never throws into the caller, even when the transport does", async (
 	await settled();
 });
 
-test("a pi built-in provider + model pass through raw", () => {
-	const model = getBuiltinModels("anthropic")[0];
-	if (!model) throw new Error("pi catalog has no anthropic models — update the test");
-	expect(bucketProviderModel("anthropic", model.id)).toEqual({
-		provider: "anthropic",
-		model: model.id,
-	});
-	expect(bucketProvider("anthropic")).toBe("anthropic");
+test("the bundled and installed agents pass through raw — their ids are ours or the ACP registry's", () => {
+	expect(bucketAgent({ id: "thinkrail-pi", origin: "bundled" })).toBe("thinkrail-pi");
+	expect(bucketAgent({ id: "junie", origin: "installed" })).toBe("junie");
 });
 
-test("a custom provider — and its model — bucket to custom (fails closed)", () => {
-	expect(bucketProviderModel("acme-internal", "secret-model-v2")).toEqual({
-		provider: CUSTOM_BUCKET,
-		model: CUSTOM_BUCKET,
-	});
-	expect(bucketProvider("acme-internal")).toBe(CUSTOM_BUCKET);
-});
-
-test("a custom model id on a known provider buckets the model but keeps the provider", () => {
-	expect(bucketProviderModel("openai", "my-private-finetune")).toEqual({
-		provider: "openai",
-		model: CUSTOM_BUCKET,
-	});
+test("an agent the user pointed us at buckets to custom (fails closed — its id is free text)", () => {
+	expect(bucketAgent({ id: "/opt/acme/secret-agent", origin: "external" })).toBe(CUSTOM_BUCKET);
 });

@@ -12,8 +12,10 @@ import {
 	writeFileSync,
 } from "node:fs";
 import { dirname, join } from "node:path";
-import { CONFIG_DIR_NAME, getAgentDir, parseFrontmatter } from "@earendil-works/pi-coding-agent";
 import type { Template, TemplateInfo, TemplateScope } from "@thinkrail/contracts";
+import { WORKSPACE_INTERNAL_DIR } from "@thinkrail/shared/paths";
+import { dataDir } from "../persistence";
+import { readFrontmatter } from "./frontmatter";
 
 export interface TemplateDirs {
 	globalDir: string;
@@ -26,10 +28,14 @@ export function isValidTemplateName(name: string): boolean {
 	return !name.includes("/") && !name.includes("\\") && !name.includes("\0");
 }
 
-export function templateDirs(cwd?: string, agentDir: string = getAgentDir()): TemplateDirs {
+export function promptsRoot(): string {
+	return join(dataDir(), "prompts");
+}
+
+export function templateDirs(cwd?: string, globalDir: string = promptsRoot()): TemplateDirs {
 	return {
-		globalDir: join(agentDir, "prompts"),
-		...(cwd ? { projectDir: join(cwd, CONFIG_DIR_NAME, "prompts") } : {}),
+		globalDir,
+		...(cwd ? { projectDir: join(cwd, WORKSPACE_INTERNAL_DIR, "prompts") } : {}),
 	};
 }
 
@@ -89,11 +95,9 @@ function readHead(filePath: string, bytes: number): string {
 }
 
 function frontmatterMeta(text: string): Pick<TemplateInfo, "description" | "argumentHint"> {
-	const { frontmatter } = parseFrontmatter(text);
-	const description =
-		typeof frontmatter.description === "string" ? frontmatter.description : undefined;
-	const argumentHint =
-		typeof frontmatter["argument-hint"] === "string" ? frontmatter["argument-hint"] : undefined;
+	const { keys } = readFrontmatter(text);
+	const description = keys.get("description");
+	const argumentHint = keys.get("argument-hint");
 	return {
 		...(description ? { description } : {}),
 		...(argumentHint ? { argumentHint } : {}),
@@ -176,11 +180,8 @@ export function saveTemplate(
 	if (size > MAX_TEMPLATE_BYTES) {
 		throw new Error(`template too large: ${size} bytes (limit ${MAX_TEMPLATE_BYTES})`);
 	}
-	try {
-		parseFrontmatter(content);
-	} catch (err) {
-		const message = err instanceof Error ? err.message : String(err);
-		throw new Error(`invalid frontmatter: ${message}`);
+	if (readFrontmatter(content).malformed) {
+		throw new Error("invalid frontmatter: the opening --- fence is never closed");
 	}
 	const dir = dirForScope(dirs, scope);
 	assertProjectWriteSafe(dirs, scope);

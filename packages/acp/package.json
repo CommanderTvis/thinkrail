@@ -1,0 +1,25 @@
+{
+	"name": "@thinkrail/acp",
+	"version": "0.0.0",
+	"private": true,
+	"type": "module",
+	"exports": {
+		".": "./src/index.ts",
+		"./meta": "./src/meta/index.ts",
+		"./testing": "./src/testing/index.ts"
+	},
+	"scripts": {
+		"typecheck": "tsc --noEmit",
+		"test": "bun test"
+	},
+	"dependencies": {
+		"@agentclientprotocol/sdk": "catalog:",
+		"@thinkrail/contracts": "workspace:*",
+		"zod": "catalog:"
+	},
+	"devDependencies": {
+		"@types/bun": "catalog:",
+		"ajv": "8.20.0",
+		"typescript": "catalog:"
+	}
+}

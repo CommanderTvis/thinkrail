@@ -239,15 +239,6 @@
 				"textTransform": "none",
 				"fontStyle": "normal"
 			},
-			"otp": {
-				"fontFamily": "code",
-				"fontSize": "s18",
-				"fontWeight": "regular",
-				"lineHeight": "metadata",
-				"letterSpacing": "widest",
-				"textTransform": "none",
-				"fontStyle": "normal"
-			},
 			"textSmall": {
 				"fontFamily": "code",
 				"fontSize": "s11",

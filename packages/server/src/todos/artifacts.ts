@@ -1,4 +1,4 @@
-import type { GitFileChange, PiEvent } from "@thinkrail/contracts";
+import type { GitFileChange } from "@thinkrail/contracts";
 import { WORKSPACE_INTERNAL_DIR } from "@thinkrail/shared/paths";
 import { type TodoArtifact, type TodoPlan, TodoStore } from "pi-todos/core";
 import { gitCommitPaths, gitHeadSha, gitStatus, gitUncommittedPaths } from "../git";
@@ -24,14 +24,6 @@ export type CommitWindow = (opts: {
 
 const isAppStatePath = (path: string): boolean =>
 	path === WORKSPACE_INTERNAL_DIR || path.startsWith(`${WORKSPACE_INTERNAL_DIR}/`);
-
-export function isTodoToolEnd(event: PiEvent): boolean {
-	return (
-		event.type === "tool_execution_end" &&
-		typeof event.toolName === "string" &&
-		event.toolName.startsWith("todo_")
-	);
-}
 
 function flatten(plan: TodoPlan): TodoPlan["todos"] {
 	return [...plan.todos, ...plan.groups.flatMap((g) => g.todos)];

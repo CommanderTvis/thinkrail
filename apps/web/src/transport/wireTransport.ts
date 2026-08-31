@@ -1,43 +1,27 @@
 import type {
 	AppConfig,
-	ExtUiRequest,
-	LoginPush,
+	ChatEventPayload,
+	ElicitationPush,
+	PermissionPush,
 	Project,
 	ReviewChangedPayload,
 	ServerWelcome,
-	SessionCreatedPayload,
 	SessionDeletedPayload,
-	SessionEventPayload,
 	Workspace,
 	WorkspaceFsChangedPayload,
 	WorkspaceRemoved,
 } from "@thinkrail/contracts";
 import { WS_CHANNELS } from "@thinkrail/contracts";
 import { useAppStore } from "../store";
-import { createPiEventBatcher, shouldFlushPiEventsBefore } from "./piEventBatcher";
 import { WsTransport } from "./transport";
 
 let transport: WsTransport | null = null;
 
 export function initTransport(): WsTransport {
 	if (transport) return transport;
-	const piEvents = createPiEventBatcher((payloads) =>
-		useAppStore.getState().handlePiEvents(payloads),
-	);
-
-	transport = new WsTransport(
-		{
-			onStatus: (status) => {
-				piEvents.flush();
-				useAppStore.getState().setStatus(status);
-			},
-		},
-		{
-			beforeDispatch: (message) => {
-				if (shouldFlushPiEventsBefore(message)) piEvents.flush();
-			},
-		},
-	);
+	transport = new WsTransport({
+		onStatus: (status) => useAppStore.getState().setStatus(status),
+	});
 
 	transport.subscribe(WS_CHANNELS.serverWelcome, (data) => {
 		const welcome = data as Partial<ServerWelcome>;
@@ -48,6 +32,8 @@ export function initTransport(): WsTransport {
 				welcome.protocolVersion,
 				welcome.projects,
 				Array.isArray(welcome.recentProjects) ? welcome.recentProjects : welcome.projects,
+				welcome.defaultAgent ?? null,
+				welcome.agentProtocolVersion ?? null,
 				welcome.config,
 				welcome.hostPlatform === "darwin" ||
 					welcome.hostPlatform === "linux" ||
@@ -61,21 +47,17 @@ export function initTransport(): WsTransport {
 		useAppStore.getState().applyProjectUpdated(data as Project);
 	});
 
-	transport.subscribe(WS_CHANNELS.piEvent, (data) => {
-		piEvents.enqueue(data as SessionEventPayload);
+	transport.subscribe(WS_CHANNELS.chatEvent, (data) => {
+		const { sessionId, event } = data as ChatEventPayload;
+		useAppStore.getState().applyChatEvent(sessionId, event);
 	});
 
-	transport.subscribe(WS_CHANNELS.piExtensionUi, (data) => {
-		useAppStore.getState().applyExtUi(data as ExtUiRequest);
+	transport.subscribe(WS_CHANNELS.agentElicitation, (data) => {
+		useAppStore.getState().applyElicitation(data as ElicitationPush);
 	});
 
-	transport.subscribe(WS_CHANNELS.sessionCreated, (data) => {
-		const summary = data as SessionCreatedPayload;
-		useAppStore
-			.getState()
-			.noteClosedChats(summary.workspaceId, [
-				{ sessionId: summary.sessionId, title: summary.title, closedAt: summary.updatedAt },
-			]);
+	transport.subscribe(WS_CHANNELS.agentPermission, (data) => {
+		useAppStore.getState().applyPermission(data as PermissionPush);
 	});
 
 	transport.subscribe(WS_CHANNELS.sessionDeleted, (data) => {
@@ -83,17 +65,8 @@ export function initTransport(): WsTransport {
 		useAppStore.getState().deleteChat(workspaceId, sessionId, false);
 	});
 
-	transport.subscribe(WS_CHANNELS.providerLogin, (data) => {
-		useAppStore.getState().applyLoginFrame(data as LoginPush);
-	});
-
-	transport.subscribe(WS_CHANNELS.providerChanged, () => {
-		useAppStore.getState().noteProviderChanged();
-		const providerVersion = useAppStore.getState().providerVersion;
-		getTransport()
-			.request("model.list", {})
-			.then((models) => useAppStore.getState().setModelsForProviderVersion(providerVersion, models))
-			.catch(() => {});
+	transport.subscribe(WS_CHANNELS.agentChanged, () => {
+		useAppStore.getState().noteAgentChanged();
 	});
 
 	transport.subscribe(WS_CHANNELS.workspaceCreated, (data) => {

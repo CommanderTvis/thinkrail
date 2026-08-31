@@ -5,11 +5,15 @@ import { ThinkingGroup } from "./ActivityGroup";
 const tool = (id: string, toolName: string) => ({
 	kind: "tool" as const,
 	id,
-	toolCallId: id,
-	toolName,
-	args: {},
-	tool: undefined,
-	dead: false,
+	block: {
+		type: "toolCall" as const,
+		toolCallId: id,
+		toolName,
+		title: toolName,
+		kind: "other" as const,
+		status: "done" as const,
+		arguments: {},
+	},
 	streaming: false,
 });
 

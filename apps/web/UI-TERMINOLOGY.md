@@ -128,7 +128,7 @@ Children:
 | Canonical name | Implementation | `data-testid` | Responsibility |
 |---|---|---|---|
 | Welcome Heading | inline hero heading | `welcome-title` | Project name, or `PRODUCT_NAME` when no project |
-| Provider Warning Banner | `panels/ProviderWarningBanner.tsx` → `ProviderWarningBanner` | — | Gold banner shown only when no provider is connected |
+| Agent Warning Banner | `panels/AgentWarningBanner.tsx` → `AgentWarningBanner` | `welcome-agent-warning` / `welcome-provider-warning` | Gold banner shown when no agent is connected, or when the resolved agent has no provider |
 | Project Skills Notice | `panels/ProjectSkillsNotice.tsx` → `ProjectSkillsNotice` | — | Pre-workspace trust surface for committed skills |
 | Primary Card (CTA) | `Card` in `WelcomePanel` | `welcome-cta` | Filled-primary action |
 | Action Card | `Card` in `WelcomePanel` | `welcome-action` | Quiet secondary actions |
@@ -391,7 +391,7 @@ are the Top Bar's Connection Status and the Chat Header's Session Stats Bar.
 
 | Canonical name | Implementation | Responsibility |
 |---|---|---|
-| Providers | `panels/ProvidersSettings.tsx` → `ProvidersSettings` | In-app provider auth (+ `panels/JetBrainsAiCard.tsx` → `JetBrainsAiCard`) |
+| Agents | `panels/AgentsSettings.tsx` → `AgentsSettings` | Master/detail agent management: install/add/remove, default agent, launch command, and the per-agent provider ceremony (`panels/AgentProviderSetup.tsx` → `AgentProviderSetup`, + `panels/JetBrainsAiCard.tsx` → `JetBrainsAiCard`, `panels/AgentRegistryDialog.tsx` → `AgentRegistryDialog`) |
 | GitHub | `panels/GithubSettings.tsx` → `GithubSettings` | Local GitHub connection status |
 | Appearance | `panels/AppearanceSettings.tsx` → `AppearanceSettings` | Theme picker |
 | Layout | `shell/LayoutSettings.tsx` → `LayoutSettings` (injected into the dialog) | Default/apply/capture workbench presets and side-group limit |
@@ -524,7 +524,7 @@ its alternatives in parentheses.
 
 **Settings**
 
-- **Settings Dialog** with sections: **Providers**, **GitHub**, **Appearance**, **Layout**,
+- **Settings Dialog** with sections: **Agents**, **GitHub**, **Appearance**, **Layout**,
   **Terminal**, **Templates**, **Privacy**.
 
 **Shared primitives**

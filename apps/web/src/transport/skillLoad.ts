@@ -58,8 +58,8 @@ export function createSkillLoadRequests(deps: SkillLoadDependencies) {
 			const syncedTick = await prepare(params.workspaceId, false);
 			const result = await deps.getSessionMessages(params);
 			if (
-				result.summary.workspaceId !== params.workspaceId ||
-				result.summary.sessionId !== params.sessionId
+				result.summary.record.workspaceId !== params.workspaceId ||
+				result.summary.record.sessionId !== params.sessionId
 			) {
 				throw new Error("Session response did not match the requested workspace and session");
 			}

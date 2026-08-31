@@ -1,13 +1,13 @@
 import { RiArrowDownLine as ArrowDown, RiArrowUpLine as ArrowUp } from "@remixicon/react";
 import type {
 	AskUserQuestionResult,
+	ChatMessage,
+	PromptContent,
 	PromptHit,
 	QueueLane,
 	SessionQueueContent,
-	SlashCommandInfo,
+	SlashCommand,
 	TemplateInfo,
-	ThinkingLevel,
-	WireModel,
 } from "@thinkrail/contracts";
 import { type RefCallback, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
@@ -15,8 +15,6 @@ import { Popover, PopoverAnchor, PopoverTrigger } from "@/components/ui/popover"
 import {
 	EMPTY_RUNTIME,
 	SettingsSection,
-	selectCatalogModel,
-	selectCompactionTurnIds,
 	selectSkillsStale,
 	selectWorkspaceById,
 	specPathMatcher,
@@ -36,17 +34,11 @@ import {
 	type MentionCandidate,
 	type SubmitBehavior,
 } from "./Composer";
-import { ExtUiDialog } from "./ExtUiDialog";
 import { HistoryOverlay } from "./HistoryOverlay";
 import type { ChatMessageOrder } from "./messageOrder";
-import {
-	compactSubmissionError,
-	mergeNativeChatCommands,
-	parseNativeChatCommand,
-} from "./nativeCommands";
 import { planGlance } from "./planView";
 import { QueueStrip } from "./QueueStrip";
-import { type ChatRow, deriveRows, projectRows, rowIndexForTurn } from "./rows";
+import { type ChatRow, deriveRows, projectRows, rowIndexForMessage } from "./rows";
 import { SkillsDialog } from "./SkillsDialog";
 import { StreamIndicator, type StreamStatus, streamStatus } from "./StreamIndicator";
 import { SubagentTranscriptDialog } from "./SubagentTranscriptDialog";
@@ -57,27 +49,23 @@ import { stripFrontmatter } from "./templateText";
 import { useModelCatalog } from "./useModelCatalog";
 import "./tools/register";
 import { ChatTurnView } from "./turns";
-import type { ChatAttachment, ChatTurn } from "./types";
+import type { ChatAttachment } from "./types";
 import { useChatScroll } from "./useChatScroll";
 import { useChatTodos } from "./useChatTodos";
 import { useHistorySearch } from "./useHistorySearch";
-import { useTranscriptSync } from "./useTranscriptSync";
 import { advanceVirtualRows, initialVirtualRows } from "./virtualRows";
 
 const TRY_AGAIN_PROMPT = "Try again.";
 
-function turnAnchorText(turn: ChatTurn): string {
-	if (turn.kind === "user") {
-		const { content } = turn.message;
-		return typeof content === "string"
-			? content
-			: content
-					.filter((b) => b.type === "text")
-					.map((b) => b.text)
-					.join("\n");
+function messageAnchorText(message: ChatMessage): string {
+	if (message.role === "user") {
+		return message.content
+			.filter((b) => b.type === "text")
+			.map((b) => b.text)
+			.join("\n");
 	}
-	if (turn.kind === "assistant") {
-		return turn.message.content
+	if (message.role === "assistant") {
+		return message.blocks
 			.filter((b) => b.type === "text")
 			.map((b) => b.text)
 			.join("\n");
@@ -85,7 +73,7 @@ function turnAnchorText(turn: ChatTurn): string {
 	return "";
 }
 
-function templateToCommand(t: TemplateInfo): SlashCommandInfo {
+function templateToCommand(t: TemplateInfo): SlashCommand {
 	return {
 		name: t.name,
 		...(t.description ? { description: t.description } : {}),
@@ -169,21 +157,14 @@ export default function ChatView({
 	workspaceId: string;
 	onOpenFile?: ((path: string) => void) | undefined;
 }) {
-	const sessionRuntime = useAppStore((s) => s.sessions[sessionId]);
-	const runtime = sessionRuntime ?? EMPTY_RUNTIME;
-	const status = useAppStore((s) => s.status);
-	const connectionGeneration = useAppStore((s) => s.connectionGeneration);
-	useTranscriptSync({
-		workspaceId,
-		sessionId,
-		runtime,
-		status,
-		connectionGeneration,
-		enabled: sessionRuntime !== undefined,
-	});
+	const runtime = useAppStore((s) => s.sessions[sessionId]) ?? EMPTY_RUNTIME;
 	const composerGrowthLimit = useAppStore((state) => state.composerGrowthLimit);
 	const chatMessageOrder = useAppStore((state) => state.chatMessageOrder);
-	const { models, refreshing: modelsRefreshing, refresh: onRefreshModels } = useModelCatalog();
+	const {
+		refreshing: configRefreshing,
+		refresh: onRefreshConfig,
+		selectOption: onSelectConfigOption,
+	} = useModelCatalog(sessionId);
 	const projectId = useAppStore(
 		(s) =>
 			Object.values(s.workspaces)
@@ -206,26 +187,21 @@ export default function ChatView({
 	const specNodes = useAppStore((s) => s.specsByWorkspace[workspaceId]);
 	const isSpec = useMemo(() => specPathMatcher(specNodes ?? []), [specNodes]);
 	const {
-		turns,
-		toolResults,
+		messages,
 		isStreaming,
-		currentAssistantId,
-		stats,
+		configOptions,
 		commands,
+		usage,
+		capabilities,
+		retries,
+		compacting,
 		draft,
 		queue,
-		pendingExtUi,
-		extUiStatus,
-		extUiWidget,
-		model: sessionModel,
-		thinkingLevel,
 	} = runtime;
 
-	const currentModel = selectCatalogModel(models, sessionModel) ?? sessionModel;
-
 	const chronologicalRows = useMemo(
-		() => deriveRows(turns, toolResults, isStreaming, isSpec),
-		[turns, toolResults, isStreaming, isSpec],
+		() => deriveRows(messages, isStreaming, { retries, compacting }, isSpec),
+		[messages, isStreaming, retries, compacting, isSpec],
 	);
 	const rows = useMemo(
 		() => projectRows(chronologicalRows, chatMessageOrder),
@@ -247,18 +223,13 @@ export default function ChatView({
 	}
 	const firstItemIndex = virtualRows.firstItemIndex;
 
-	const currentStreamStatus = useMemo<StreamStatus | null>(() => {
-		const last = turns[turns.length - 1];
-		return isStreaming && last?.kind !== "retry" ? streamStatus(turns, currentAssistantId) : null;
-	}, [turns, isStreaming, currentAssistantId]);
-
 	const recentPrompts = useMemo(() => {
-		const texts = turns
-			.filter((t) => t.kind === "user")
-			.map((t) => turnAnchorText(t))
+		const texts = messages
+			.filter((m): m is Extract<ChatMessage, { role: "user" }> => m.role === "user" && !m.hidden)
+			.map(messageAnchorText)
 			.filter(Boolean);
 		return [...new Set(texts.reverse())];
-	}, [turns]);
+	}, [messages]);
 
 	const [mentionQuery, setMentionQuery] = useState<string | null>(null);
 	const [mentionCandidates, setMentionCandidates] = useState<MentionCandidate[]>([]);
@@ -300,22 +271,22 @@ export default function ChatView({
 		showScrollButton,
 		scrollButtonLabel,
 		scrollToLatest,
-		armImmediateTurn,
 		releaseFollow,
 		runwayActive,
 		followState,
 		containerProps,
 	} = useChatScroll(virtuosoRef, isStreaming, chatMessageOrder, latestUserRow, latestRow);
+	const streamPhase = isStreaming ? streamStatus(messages, null) : null;
 	const listContext = useMemo<ChatListContext>(
 		() => ({
 			messageOrder: chatMessageOrder,
-			status: currentStreamStatus,
+			status: streamPhase,
 			runwayActive,
 			headerRef,
 			streamEdgeRef,
 			runwayRef,
 		}),
-		[chatMessageOrder, currentStreamStatus, headerRef, runwayActive, runwayRef, streamEdgeRef],
+		[chatMessageOrder, streamPhase, runwayActive, headerRef, streamEdgeRef, runwayRef],
 	);
 	const composerRef = useRef<ComposerHandle>(null);
 	const askFocusScope = useRef<object>({}).current;
@@ -338,7 +309,9 @@ export default function ChatView({
 	useEffect(() => {
 		getTransport()
 			.request("session.getCommands", { sessionId })
-			.then((c) => useAppStore.getState().setCommands(sessionId, c))
+			.then((c) =>
+				useAppStore.getState().applyChatEvent(sessionId, { type: "commands", commands: c }),
+			)
 			.catch(() => {});
 	}, [sessionId]);
 
@@ -359,20 +332,12 @@ export default function ChatView({
 	}, [slashActive, workspaceId]);
 
 	const mergedCommands = useMemo(
-		() =>
-			mergeNativeChatCommands([
-				...commands.filter((command) => command.source !== "prompt"),
-				...templates.map(templateToCommand),
-			]),
-		[commands, templates],
+		() => [
+			...(capabilities.slashCommands ? commands.filter((c) => c.source !== "prompt") : []),
+			...templates.map(templateToCommand),
+		],
+		[commands, templates, capabilities.slashCommands],
 	);
-
-	useEffect(() => {
-		getTransport()
-			.request("session.getStats", { sessionId })
-			.then((st) => useAppStore.getState().setStats(sessionId, st))
-			.catch(() => {});
-	}, [sessionId, isStreaming]);
 
 	useEffect(() => {
 		if (mentionQuery === null) {
@@ -407,20 +372,6 @@ export default function ChatView({
 
 	const onMentionQuery = useCallback((q: string | null) => setMentionQuery(q), []);
 
-	const onSelectModel = (model: WireModel) => {
-		useAppStore.getState().setCurrentModel(sessionId, model);
-		getTransport()
-			.request("session.setModel", { sessionId, model })
-			.catch(() => {});
-	};
-
-	const onSelectThinking = (level: ThinkingLevel) => {
-		useAppStore.getState().setThinkingLevel(sessionId, level);
-		getTransport()
-			.request("session.setThinkingLevel", { sessionId, level })
-			.catch(() => {});
-	};
-
 	const restoreTextToDraft = (text: string) => {
 		if (!text.trim()) return;
 		const current = useAppStore.getState().sessions[sessionId]?.draft ?? "";
@@ -430,9 +381,18 @@ export default function ChatView({
 	};
 
 	const restoreQueueContentToDraft = (content: SessionQueueContent): void => {
-		const messages = [...content.steering, ...content.followUp];
-		restoreTextToDraft(messages.map((message) => message.text).join("\n\n"));
-		const images = messages.flatMap((message) => message.images ?? []);
+		const queued = [...content.steering, ...content.followUp];
+		const text = queued
+			.map((blocks) =>
+				blocks
+					.filter((block) => block.type === "text")
+					.map((block) => block.text)
+					.join(""),
+			)
+			.filter(Boolean)
+			.join("\n\n");
+		restoreTextToDraft(text);
+		const images = queued.flatMap((blocks) => blocks.filter((block) => block.type === "image"));
 		composerRef.current?.restoreAttachments(
 			images.map((image, index) => ({
 				name: `queued-image-${index + 1}`,
@@ -441,7 +401,7 @@ export default function ChatView({
 		);
 	};
 
-	const drainQueueToDraft = async (): Promise<void> => {
+	const _drainQueueToDraft = async (): Promise<void> => {
 		const content = await getTransport().request("session.clearQueue", {
 			sessionId,
 			requireTextOnly: true,
@@ -449,34 +409,16 @@ export default function ChatView({
 		restoreQueueContentToDraft(content);
 	};
 
-	const performCompact = (instructions?: string) => {
-		const observedTurnIds = selectCompactionTurnIds(useAppStore.getState(), sessionId);
-		void drainQueueToDraft()
-			.then(() =>
-				getTransport().request("session.compact", {
-					sessionId,
-					...(instructions ? { instructions } : {}),
-				}),
-			)
-			.catch((err) =>
-				useAppStore
-					.getState()
-					.appendCompactionFailureUnlessObserved(sessionId, observedTurnIds, errorText(err)),
-			);
-	};
-
 	const performSend = (
 		text: string,
 		attachments: ChatAttachment[],
 		behavior: Exclude<SubmitBehavior, "interrupt">,
 	) => {
-		const queued = behavior !== "send";
-		if (!queued && (text || attachments.length > 0)) {
-			armImmediateTurn();
-			useAppStore.getState().appendUserMessage(sessionId, text, attachments);
-		}
-		const images = attachments.map((a) => a.content);
-		const params = { sessionId, text, ...(images.length > 0 ? { images } : {}) };
+		const content: PromptContent[] = [
+			...(text ? [{ type: "text" as const, text }] : []),
+			...attachments.map((a) => a.content),
+		];
+		if (content.length === 0) return;
 		const method =
 			behavior === "steer"
 				? "session.steer"
@@ -484,10 +426,19 @@ export default function ChatView({
 					? "session.followUp"
 					: "session.prompt";
 		getTransport()
-			.request(method, params)
+			.request(method, { sessionId, content })
+			.then(({ messageId }) => {
+				const message: ChatMessage = {
+					role: "user",
+					id: messageId,
+					timestamp: Date.now(),
+					content,
+				};
+				useAppStore.getState().applyChatEvent(sessionId, { type: "message_start", message });
+			})
 			.catch((err) => {
-				useAppStore.getState().appendErrorTurn(sessionId, errorText(err));
-				if (queued) restoreTextToDraft(text);
+				useAppStore.getState().appendNotice(sessionId, "error", errorText(err));
+				restoreTextToDraft(text);
 			});
 	};
 
@@ -496,16 +447,6 @@ export default function ChatView({
 		attachments: ChatAttachment[],
 		behavior: SubmitBehavior,
 	): ComposerSubmitDisposition => {
-		const nativeCommand = parseNativeChatCommand(text);
-		if (nativeCommand) {
-			const submissionError = compactSubmissionError(
-				attachments.length > 0,
-				queue.hasImages === true,
-			);
-			if (submissionError) return { accepted: false, reason: submissionError };
-			performCompact(nativeCommand.instructions);
-			return { accepted: true };
-		}
 		if (behavior !== "interrupt") {
 			performSend(text, attachments, behavior);
 			return { accepted: true };
@@ -514,7 +455,7 @@ export default function ChatView({
 			.request("session.abort", { sessionId })
 			.then(() => performSend(text, attachments, "send"))
 			.catch((err) => {
-				useAppStore.getState().appendErrorTurn(sessionId, errorText(err));
+				useAppStore.getState().appendNotice(sessionId, "error", errorText(err));
 				restoreTextToDraft(text);
 			});
 		return { accepted: true };
@@ -613,15 +554,14 @@ export default function ChatView({
 			return;
 		}
 		if (useAppStore.getState().chatLocationRequest !== chatLocationRequest) return;
-		const { messageIndex, anchorText } = chatLocationRequest;
+		const { messageId, anchorText } = chatLocationRequest;
 		const prefix = anchorText.slice(0, 40);
-		const mappedId = runtime.turnIdByMessageIndex?.[messageIndex];
-		const mapped = mappedId ? turns.find((t) => t.id === mappedId) : undefined;
-		const target =
-			mapped && turnAnchorText(mapped).includes(prefix)
-				? mapped
-				: turns.findLast((t) => turnAnchorText(t).includes(prefix));
-		const index = target ? rowIndexForTurn(rows, target.id) : -1;
+		const target = messages.find((m) => m.id === messageId);
+		const resolved =
+			target && messageAnchorText(target).includes(prefix)
+				? target
+				: messages.findLast((m) => messageAnchorText(m).includes(prefix));
+		const index = resolved ? rowIndexForMessage(rows, resolved.id) : -1;
 		if (index === -1) {
 			toast.error("couldn't locate the message — the session may have changed");
 			useAppStore.getState().clearChatLocation();
@@ -631,15 +571,7 @@ export default function ChatView({
 		virtuosoRef.current?.scrollToIndex({ index, align: "center" });
 		setFlashRowId(rows[index]?.id ?? null);
 		useAppStore.getState().clearChatLocation();
-	}, [
-		chatLocationRequest,
-		releaseFollow,
-		rows,
-		runtime.turnIdByMessageIndex,
-		sessionId,
-		turns,
-		workspaceId,
-	]);
+	}, [chatLocationRequest, sessionId, rows, messages, workspaceId]);
 
 	const historyOpenRequest = useAppStore((s) => s.historyOpenRequest);
 	const historyOverlayOpen = historyState.open;
@@ -678,10 +610,7 @@ export default function ChatView({
 		[workspaceId],
 	);
 
-	const askStates = useMemo(
-		() => deriveAskStates(runtime.turns, runtime.askAnswers),
-		[runtime.turns, runtime.askAnswers],
-	);
+	const askStates = useMemo(() => deriveAskStates(messages), [messages]);
 	const askContext = useMemo(
 		() => ({ states: askStates, focusScope: askFocusScope }),
 		[askStates, askFocusScope],
@@ -704,17 +633,6 @@ export default function ChatView({
 		[sessionId],
 	);
 
-	const onExtUiReply = (value: string | boolean | null) => {
-		if (!pendingExtUi) return;
-		const id = pendingExtUi.id;
-		useAppStore.getState().clearPendingExtUi(sessionId, id);
-		getTransport()
-			.request("session.extUiReply", { response: { id, value } })
-			.catch(() => {});
-	};
-
-	const widgetEntries = Object.entries(extUiWidget);
-
 	return (
 		<ChatActionsContext.Provider value={chatActions}>
 			<AskStatesContext.Provider value={askContext}>
@@ -727,8 +645,9 @@ export default function ChatView({
 						<PopoverAnchor asChild>
 							<div className="shrink-0">
 								<ChatHeader
-									stats={stats}
-									statusEntries={Object.entries(extUiStatus)}
+									usage={usage}
+									capabilities={capabilities}
+									agent={capabilities.agent}
 									left={
 										plan.data ? (
 											<PopoverTrigger asChild>
@@ -748,7 +667,9 @@ export default function ChatView({
 										) : null
 									}
 									skillsStale={skillsStale}
-									{...(projectId ? { onOpenSkills: () => setSkillsOpen(true) } : {})}
+									{...(projectId && capabilities.skills
+										? { onOpenSkills: () => setSkillsOpen(true) }
+										: {})}
 								/>
 							</div>
 						</PopoverAnchor>
@@ -833,14 +754,9 @@ export default function ChatView({
 							</button>
 						) : null}
 					</div>
-					{widgetEntries.length > 0 ? (
-						<div className="shrink-0 border-border-default border-t bg-container-elevated-bg px-12 py-4 text-text-muted tr-text-metadata">
-							{widgetEntries.map(([key, lines]) => (
-								<div key={key}>{lines.join(" ")}</div>
-							))}
-						</div>
+					{queue.messages ? (
+						<QueueStrip queue={queue.messages} onEdit={onEditQueued} onRemove={onRemoveQueued} />
 					) : null}
-					<QueueStrip queue={queue} onEdit={onEditQueued} onRemove={onRemoveQueued} />
 					<div className="relative shrink-0">
 						<HistoryOverlay
 							state={historyState}
@@ -865,15 +781,13 @@ export default function ChatView({
 							commands={mergedCommands}
 							mentionCandidates={mentionCandidates}
 							recentPrompts={recentPrompts}
-							models={models}
-							modelsRefreshing={modelsRefreshing}
-							onRefreshModels={onRefreshModels}
-							currentModel={currentModel}
-							thinkingLevel={thinkingLevel}
+							configOptions={configOptions}
+							configCapabilities={capabilities}
+							configRefreshing={configRefreshing}
+							onRefreshConfig={onRefreshConfig}
+							onSelectConfigOption={onSelectConfigOption}
 							onMentionQuery={onMentionQuery}
 							onSlashActive={setSlashActive}
-							onSelectModel={onSelectModel}
-							onSelectThinking={onSelectThinking}
 							onSubmit={onSubmit}
 							onAbort={onAbort}
 							onHistoryOpen={onHistoryOpen}
@@ -890,9 +804,6 @@ export default function ChatView({
 						workspaceId={workspaceId}
 						initialBody={saveAsTemplateHit?.text ?? ""}
 					/>
-					{pendingExtUi ? (
-						<ExtUiDialog key={pendingExtUi.id} request={pendingExtUi} onReply={onExtUiReply} />
-					) : null}
 					{transcriptChildId ? (
 						<SubagentTranscriptDialog
 							workspaceId={workspaceId}

@@ -1,0 +1,131 @@
+[
+	{
+		"direction": "out",
+		"frame": {
+			"jsonrpc": "2.0",
+			"id": 40,
+			"method": "session/prompt",
+			"params": {
+				"sessionId": "sess-stops",
+				"prompt": [{ "type": "text", "text": "Answer briefly." }]
+			}
+		}
+	},
+	{
+		"direction": "in",
+		"frame": { "jsonrpc": "2.0", "id": 40, "result": { "stopReason": "end_turn" } }
+	},
+	{
+		"direction": "out",
+		"frame": {
+			"jsonrpc": "2.0",
+			"id": 41,
+			"method": "session/prompt",
+			"params": {
+				"sessionId": "sess-stops",
+				"prompt": [{ "type": "text", "text": "Write the whole book." }]
+			}
+		}
+	},
+	{
+		"direction": "in",
+		"frame": { "jsonrpc": "2.0", "id": 41, "result": { "stopReason": "max_tokens" } }
+	},
+	{
+		"direction": "out",
+		"frame": {
+			"jsonrpc": "2.0",
+			"id": 42,
+			"method": "session/prompt",
+			"params": {
+				"sessionId": "sess-stops",
+				"prompt": [{ "type": "text", "text": "Keep calling tools forever." }]
+			}
+		}
+	},
+	{
+		"direction": "in",
+		"frame": { "jsonrpc": "2.0", "id": 42, "result": { "stopReason": "max_turn_requests" } }
+	},
+	{
+		"direction": "out",
+		"frame": {
+			"jsonrpc": "2.0",
+			"id": 43,
+			"method": "session/prompt",
+			"params": {
+				"sessionId": "sess-stops",
+				"prompt": [{ "type": "text", "text": "Do the thing the agent will refuse." }]
+			}
+		}
+	},
+	{
+		"direction": "in",
+		"frame": { "jsonrpc": "2.0", "id": 43, "result": { "stopReason": "refusal" } }
+	},
+	{
+		"direction": "out",
+		"frame": {
+			"jsonrpc": "2.0",
+			"id": 44,
+			"method": "session/prompt",
+			"params": {
+				"sessionId": "sess-stops",
+				"prompt": [{ "type": "text", "text": "Start a long job." }]
+			}
+		}
+	},
+	{
+		"direction": "in",
+		"frame": {
+			"jsonrpc": "2.0",
+			"method": "session/update",
+			"params": {
+				"sessionId": "sess-stops",
+				"update": {
+					"sessionUpdate": "tool_call",
+					"toolCallId": "call-long",
+					"title": "A call the cancellation outran",
+					"kind": "execute",
+					"status": "in_progress"
+				}
+			}
+		}
+	},
+	{
+		"direction": "out",
+		"frame": {
+			"jsonrpc": "2.0",
+			"method": "session/cancel",
+			"params": { "sessionId": "sess-stops" }
+		}
+	},
+	{
+		"direction": "in",
+		"frame": { "jsonrpc": "2.0", "id": 44, "result": { "stopReason": "cancelled" } }
+	},
+	{
+		"direction": "out",
+		"frame": {
+			"jsonrpc": "2.0",
+			"id": 45,
+			"method": "session/prompt",
+			"params": {
+				"sessionId": "sess-stops",
+				"prompt": [{ "type": "text", "text": "Ask a provider that is down." }]
+			}
+		}
+	},
+	{
+		"direction": "in",
+		"frame": {
+			"jsonrpc": "2.0",
+			"id": 45,
+			"error": {
+				"code": -32603,
+				"message": "provider request failed",
+				"data": { "details": "503 from the upstream provider" }
+			}
+		}
+	}
+]

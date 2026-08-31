@@ -1,26 +1,27 @@
+export type {
+	AgentCredentials,
+	AgentCredentialsResolver,
+	ProviderRouting,
+} from "./agentAuth";
+export {
+	agentAuthMethods,
+	agentProviders,
+	authenticateAgent,
+	disableAgentProvider,
+	logoutAgent,
+	setAgentCredentials,
+	setAgentProvider,
+} from "./agentAuth";
 export {
 	connectJbcentral,
 	disconnectJbcentral,
 	getJbcentralStatus,
-	initializeJbcentralRuntime,
 	jbcentralLogin,
 	resetJbcentralStateForTests,
 	setJbcentralAppliedPublisher,
 	setJbcentralChangedPublisher,
+	startJbcentralWatch,
 	startProxyJbcentral,
-	stopJbcentralRuntime,
+	stopJbcentralWatch,
 	updateJbcentral,
 } from "./jbcentral";
-export {
-	cancelAllLogins,
-	cancelLogin,
-	logoutProvider,
-	resolveLogin,
-	setLoginPublisher,
-	startLogin,
-} from "./providerLogin";
-export {
-	buildProviderReport,
-	getProviderStatus,
-	type ProviderStatusSources,
-} from "./providerStatus";

@@ -379,8 +379,8 @@ export function HistoryOverlay({
 		const sel = resolveHistorySelection(stage, result, selected);
 		if (!sel) return null;
 		return sel.kind === "prompt"
-			? `p:${sel.hit.sessionId}:${sel.hit.messageIndex ?? sel.hit.timestamp}`
-			: `m:${sel.hit.sessionId}:${sel.hit.messageIndex}`;
+			? `p:${sel.hit.sessionId}:${sel.hit.messageId ?? sel.hit.timestamp}`
+			: `m:${sel.hit.sessionId}:${sel.hit.messageId}`;
 	}, [stage, result, selected]);
 
 	useEffect(() => {
@@ -489,7 +489,7 @@ export function HistoryOverlay({
 							</div>
 							{result.messages.map((hit, i) => (
 								<MessageRow
-									key={`${hit.sessionId}:${hit.messageIndex}`}
+									key={`${hit.sessionId}:${hit.messageId}`}
 									hit={hit}
 									query={query}
 									isSelected={result.prompts.length + i === selected}

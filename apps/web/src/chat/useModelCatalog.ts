@@ -1,46 +1,40 @@
-import type { WireModel } from "@thinkrail/contracts";
-import { useCallback, useEffect } from "react";
+import type { ConfigOption, ConfigValue } from "@thinkrail/contracts";
+import { useCallback, useState } from "react";
 import { useAppStore } from "@/store";
 import { getTransport } from "@/transport";
 
-export function useModelCatalog(active = true): {
-	models: WireModel[];
+export function useModelCatalog(sessionId: string): {
 	refreshing: boolean;
-	refresh: (force: boolean) => void;
-	fresh: boolean;
+	refresh: () => void;
+	selectOption: (optionId: string, value: ConfigValue) => void;
 } {
-	const models = useAppStore((s) => s.models);
-	const refreshing = useAppStore((s) => s.modelsRefreshing);
-	const fresh = useAppStore((s) => s.modelsFresh);
+	const [refreshing, setRefreshing] = useState(false);
 
-	useEffect(() => {
-		if (!active) return;
-		const state = useAppStore.getState();
-		state.dropModelsFreshness();
-		if (state.models.length === 0) void readModels();
-	}, [active]);
+	const applyOptions = useCallback(
+		(options: ConfigOption[]) => {
+			useAppStore.getState().applyChatEvent(sessionId, { type: "config_options", options });
+		},
+		[sessionId],
+	);
 
-	const refresh = useCallback((force: boolean) => {
-		if (!force) {
-			void readModels();
-			return;
-		}
-		const state = useAppStore.getState();
-		if (state.modelsRefreshing) return;
-		const providerVersion = state.beginModelsRefresh();
+	const refresh = useCallback(() => {
+		setRefreshing(true);
 		getTransport()
-			.request("model.refresh", { force: true })
-			.then((r) => useAppStore.getState().finishModelsRefresh(providerVersion, r))
-			.catch(() => useAppStore.getState().finishModelsRefresh(providerVersion, null));
-	}, []);
+			.request("agent.refreshConfig", { sessionId })
+			.then(applyOptions)
+			.catch(() => {})
+			.finally(() => setRefreshing(false));
+	}, [sessionId, applyOptions]);
 
-	return { models, refreshing, refresh, fresh };
-}
+	const selectOption = useCallback(
+		(optionId: string, value: ConfigValue) => {
+			getTransport()
+				.request("session.setConfigOption", { sessionId, optionId, value })
+				.then(applyOptions)
+				.catch(() => {});
+		},
+		[sessionId, applyOptions],
+	);
 
-function readModels(): Promise<void> {
-	const providerVersion = useAppStore.getState().providerVersion;
-	return getTransport()
-		.request("model.list", {})
-		.then((models) => useAppStore.getState().setModelsForProviderVersion(providerVersion, models))
-		.catch(() => {});
+	return { refreshing, refresh, selectOption };
 }

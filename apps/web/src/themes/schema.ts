@@ -12,6 +12,7 @@ export const THEME_COLOR_KEYS = [
 	"sidebar",
 	"input",
 	"elevated",
+	"logoChip",
 	"hover",
 	"border",
 	"borderStrong",

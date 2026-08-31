@@ -3,7 +3,7 @@ import {
 	RiArrowDownSLine as ChevronDown,
 	RiRefreshLine as RefreshCw,
 } from "@remixicon/react";
-import type { WireModel } from "@thinkrail/contracts";
+import type { ConfigChoiceMeta, ConfigOption } from "@thinkrail/contracts";
 import { useState } from "react";
 import {
 	Command,
@@ -22,40 +22,42 @@ function formatContext(tokens: number): string {
 	return String(tokens);
 }
 
-function subLine(model: WireModel): string {
-	const parts = [`${formatContext(model.contextWindow)} context`];
-	if (model.reasoning) parts.push("reasoning");
-	return parts.join(" · ");
+function subLine(meta: ConfigChoiceMeta | undefined): string | null {
+	if (!meta) return null;
+	const parts: string[] = [];
+	if (meta.contextWindow !== undefined) parts.push(`${formatContext(meta.contextWindow)} context`);
+	if (meta.reasoning) parts.push("reasoning");
+	return parts.length > 0 ? parts.join(" · ") : null;
 }
 
 export function ModelSelector({
-	models,
-	current,
+	option,
 	onSelect,
-	refreshing,
+	refreshing = false,
 	onRefresh,
 	container,
 	className,
 	placeholder,
-	defaultOption,
-	onSelectDefault,
 }: {
-	models: WireModel[];
-	current: WireModel | null;
-	onSelect: (model: WireModel) => void;
-	refreshing: boolean;
-	onRefresh: (force: boolean) => void;
+	option: ConfigOption | undefined;
+	onSelect: (value: string) => void;
+	refreshing?: boolean;
+	onRefresh?: (force: boolean) => void;
 	container?: HTMLElement | null;
 	className?: string;
 	placeholder?: string;
-	defaultOption?: string;
-	onSelectDefault?: () => void;
 }) {
 	const [open, setOpen] = useState(false);
-	const providers = [...new Set(models.map((m) => m.provider))];
+	if (option?.control.type !== "select" || option.control.groups.length === 0) {
+		return null;
+	}
+	const { value: currentId, groups } = option.control;
+	const current = groups
+		.flatMap((group) => group.choices)
+		.find((choice) => choice.id === currentId);
 
-	const select = (model: WireModel) => {
-		onSelect(model);
+	const select = (id: string) => {
+		onSelect(id);
 		setOpen(false);
 	};
 
@@ -64,7 +66,7 @@ export function ModelSelector({
 			open={open}
 			onOpenChange={(next) => {
 				setOpen(next);
-				if (next) onRefresh(false);
+				if (next) onRefresh?.(false);
 			}}
 		>
 			<PopoverTrigger
@@ -85,67 +87,51 @@ export function ModelSelector({
 					<CommandInput placeholder="Search models…" />
 					<CommandList>
 						<CommandEmpty>No models found.</CommandEmpty>
-						{defaultOption !== undefined && onSelectDefault !== undefined && (
-							<CommandGroup>
-								<CommandItem
-									value={defaultOption}
-									data-testid="model-option-default"
-									onSelect={() => {
-										onSelectDefault();
-										setOpen(false);
-									}}
-								>
-									<span className="flex w-14 shrink-0 justify-center">
-										{current === null ? <Check className="size-14 text-primary" /> : null}
-									</span>
-									<span className="truncate">{defaultOption}</span>
-								</CommandItem>
-							</CommandGroup>
-						)}
-						{providers.map((provider) => (
-							<CommandGroup key={provider} heading={provider}>
-								{models
-									.filter((m) => m.provider === provider)
-									.map((m) => {
-										const isCurrent = current?.provider === m.provider && current?.id === m.id;
-										return (
-											<CommandItem
-												key={`${m.provider}:${m.id}`}
-												value={`${m.provider} ${m.name} ${m.id}`}
-												data-testid="model-option"
-												data-model-id={m.id}
-												onSelect={() => select(m)}
-											>
-												<span className="flex w-14 shrink-0 justify-center">
-													{isCurrent ? <Check className="size-14 text-primary" /> : null}
-												</span>
-												<span className="flex min-w-0 flex-col">
-													<span className="truncate">{m.name}</span>
-													<span className="truncate text-text-muted tr-text-metadata">
-														{subLine(m)}
-													</span>
-												</span>
-												<span className="ml-auto shrink-0 text-text-muted tr-text-metadata">
-													{m.id}
-												</span>
-											</CommandItem>
-										);
-									})}
+						{groups.map((group) => (
+							<CommandGroup key={group.id} heading={group.name ?? undefined}>
+								{group.choices.map((choice) => {
+									const isCurrent = choice.id === currentId;
+									const sub = subLine(choice.meta);
+									return (
+										<CommandItem
+											key={choice.id}
+											value={`${group.name ?? ""} ${choice.name} ${choice.id}`}
+											data-testid="model-option"
+											data-model-id={choice.id}
+											onSelect={() => select(choice.id)}
+										>
+											<span className="flex w-3.5 shrink-0 justify-center">
+												{isCurrent ? <Check className="size-3.5 text-primary" /> : null}
+											</span>
+											<span className="flex min-w-0 flex-col">
+												<span className="truncate">{choice.name}</span>
+												{sub ? (
+													<span className="truncate text-text-muted tr-text-metadata">{sub}</span>
+												) : null}
+											</span>
+											<span className="ml-auto shrink-0 text-text-muted tr-text-metadata">
+												{choice.id}
+											</span>
+										</CommandItem>
+									);
+								})}
 							</CommandGroup>
 						))}
 					</CommandList>
 				</Command>
-				<button
-					type="button"
-					data-testid="model-refresh"
-					data-refreshing={refreshing}
-					disabled={refreshing}
-					onClick={() => onRefresh(true)}
-					className="flex w-full items-center gap-8 border-border-default border-t px-8 py-4 tr-text-metadata text-text-muted outline-none transition-colors hover:bg-control-bg-hovered hover:text-text-default disabled:cursor-default disabled:hover:bg-transparent disabled:hover:text-text-muted"
-				>
-					<RefreshCw className={cn("size-14 shrink-0", refreshing && "animate-spin")} />
-					{refreshing ? "Updating catalog…" : "Refresh catalog"}
-				</button>
+				{onRefresh ? (
+					<button
+						type="button"
+						data-testid="model-refresh"
+						data-refreshing={refreshing}
+						disabled={refreshing}
+						onClick={() => onRefresh(true)}
+						className="flex w-full items-center gap-8 border-border-default border-t px-8 py-4 tr-text-metadata text-text-muted outline-none transition-colors hover:bg-control-bg-hovered hover:text-text-default disabled:cursor-default disabled:hover:bg-transparent disabled:hover:text-text-muted"
+					>
+						<RefreshCw className={cn("size-3.5 shrink-0", refreshing && "animate-spin")} />
+						{refreshing ? "Updating catalog…" : "Refresh catalog"}
+					</button>
+				) : null}
 			</PopoverContent>
 		</Popover>
 	);

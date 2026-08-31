@@ -125,6 +125,17 @@ export function setProjectTrust(
 	return project;
 }
 
+export function setProjectAgent(id: string, agentId: string | null): Project {
+	const projects = getProjects();
+	const project = projects.find((p) => p.id === id);
+	if (!project) throw new Error(`Unknown project: ${id}`);
+	if (agentId === null) delete project.agentId;
+	else project.agentId = agentId;
+	saveProjects(projects);
+	emit(project);
+	return project;
+}
+
 export function acknowledgeProjectSkills(id: string, names: string[]): Project {
 	const projects = getProjects();
 	const project = projects.find((p) => p.id === id);

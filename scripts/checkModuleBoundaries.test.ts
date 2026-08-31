@@ -9,8 +9,10 @@ const roots: string[] = [];
 const modules = {
 	"packages/contracts": "@thinkrail/contracts",
 	"packages/shared": "@thinkrail/shared",
+	"packages/acp": "@thinkrail/acp",
 	"packages/pi-delegation": "pi-delegation",
 	"packages/pi-subagents": "pi-subagents",
+	"packages/pi-agent": "@thinkrail/pi-agent",
 	"packages/server": "@thinkrail/server",
 	"apps/web": "@thinkrail/web",
 	"apps/cli": "@thinkrail/cli",
@@ -32,17 +34,25 @@ function fixture(): string {
 	roots.push(root);
 	const dependencies: Record<string, Record<string, string>> = {
 		"packages/shared": { "@thinkrail/contracts": "workspace:*" },
+		"packages/acp": { "@thinkrail/contracts": "workspace:*" },
 		"packages/pi-subagents": { "pi-delegation": "workspace:*" },
+		"packages/pi-agent": {
+			"@thinkrail/contracts": "workspace:*",
+			"@thinkrail/acp": "workspace:*",
+			"pi-delegation": "workspace:*",
+			"pi-subagents": "workspace:*",
+		},
 		"packages/server": {
 			"@thinkrail/contracts": "workspace:*",
 			"@thinkrail/shared": "workspace:*",
-			"pi-delegation": "workspace:*",
-			"pi-subagents": "workspace:*",
+			"@thinkrail/acp": "workspace:*",
 		},
 		"apps/web": { "@thinkrail/contracts": "workspace:*" },
 		"apps/cli": {
 			"@thinkrail/server": "workspace:*",
 			"@thinkrail/shared": "workspace:*",
+			"@thinkrail/acp": "workspace:*",
+			"@thinkrail/pi-agent": "workspace:*",
 		},
 		"apps/desktop": {
 			"@thinkrail/server": "workspace:*",
@@ -66,12 +76,14 @@ test("accepts the declared package rings and thin launcher edges", () => {
 		"packages/shared/src/value.ts",
 		'import type { Project } from "@thinkrail/contracts";',
 	);
+	write(root, "packages/acp/src/value.ts", 'import type { Project } from "@thinkrail/contracts";');
 	write(root, "packages/pi-subagents/src/value.ts", 'export * from "pi-delegation";');
 	write(
 		root,
-		"packages/server/src/value.ts",
-		'import "pi-delegation"; import "pi-subagents"; export * from "@thinkrail/contracts";',
+		"packages/pi-agent/src/value.ts",
+		'import "pi-delegation"; import "pi-subagents"; import { NS } from "@thinkrail/acp/meta";',
 	);
+	write(root, "packages/server/src/value.ts", 'export * from "@thinkrail/acp";');
 	write(root, "apps/web/src/value.tsx", 'import type { Project } from "@thinkrail/contracts";');
 	write(root, "apps/cli/src/value.ts", 'import { bootHost } from "@thinkrail/server";');
 	write(

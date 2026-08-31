@@ -1,5 +1,5 @@
-import type { AgentSettlement, PiEvent } from "@thinkrail/contracts";
-import { notifyExtUi } from "../agent";
+import type { ChatEvent, TurnSettlement } from "@thinkrail/contracts";
+import { getAgentSessions } from "../agent";
 import { clearReviewPending, readReviewMeta } from "../todos";
 import { getWorkspace } from "../workspaces";
 
@@ -25,13 +25,13 @@ export function reviewerWorkerFor(
 
 export type ReviewerTermination = "crashed" | "aborted" | "no-verdict";
 
-export function reviewerTermination(terminal: AgentSettlement | null): ReviewerTermination {
-	if (terminal?.errorMessage) return "crashed";
+export function reviewerTermination(terminal: TurnSettlement | null): ReviewerTermination {
+	if (terminal?.error) return "crashed";
 	switch (terminal?.stopReason) {
-		case "error":
-		case "length":
+		case "failed":
+		case "maxTokens":
 			return "crashed";
-		case "aborted":
+		case "cancelled":
 			return "aborted";
 		default:
 			return "no-verdict";
@@ -66,9 +66,9 @@ export interface ReviewerCleanup {
 
 export function maybeCleanupStuckReviewSession(
 	sessionId: string,
-	event: PiEvent,
+	event: ChatEvent,
 ): ReviewerCleanup | null {
-	if (event.type !== "agent_settled") return null;
+	if (event.type !== "turn_settled") return null;
 	const mapping = reviewerToWorker.get(sessionId);
 	if (!mapping) return null;
 	try {
@@ -80,8 +80,8 @@ export function maybeCleanupStuckReviewSession(
 		for (const itemId of itemIds) {
 			clearReviewPending(ws.worktreePath, mapping.sessionId, itemId);
 		}
-		const notice = TERMINATION_NOTICE[reviewerTermination(event.terminal)];
-		notifyExtUi(sessionId, notice.message, notice.level);
+		const notice = TERMINATION_NOTICE[reviewerTermination(event.message.marker)];
+		getAgentSessions().notice(sessionId, notice.level, notice.message);
 		return { ...mapping, itemIds };
 	} catch (err) {
 		console.warn(`cleanup reviewer termination (${sessionId}): ${err}`);

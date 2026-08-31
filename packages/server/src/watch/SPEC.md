@@ -32,7 +32,7 @@ truth) and visible-panel polling (laggy, wasteful over Tailscale).
   bound is **pinned by the e2e churn canary** in `live-refresh.spec.ts`: ~200 writes over ~3s must
   reach the client as ≤ 8 frames while a mid-storm `/health` round-trip stays fast). Skill relevance is
   accumulated **before and independently of** that cap as `skillChange: "none" | "detected" | "unknown"`:
-  `host` injects `agent`'s project-skill path predicate; every concrete event contributes `detected`/`none`
+  a caller injects a project-skill path predicate; every concrete event contributes `detected`/`none`
   even when its path cannot be retained, while a null filename contributes `unknown` (`detected` wins). A
   duplicate already in the retained set does not make the batch truncated. Thus a 100+ file build cannot
   masquerade as a skill edit, while a skill path after the cap is still detected. The **startup nudge** — a
@@ -83,9 +83,17 @@ truth) and visible-panel polling (laggy, wasteful over Tailscale).
   `truncated: false`, `skillChange: "none"`) so the clients' git-derived reads re-read — `git.status` and an
   open `uncommitted`-scope diff tab are relative to `HEAD`, and would otherwise keep reporting a committed
   change as uncommitted until the next file edit.
-- **Composition seams:** never imports `host` or `agent` — `host` injects both the publish callback and
-  `agent`'s pure project-skill path classifier at wiring time (the publisher-tee pattern). A missing
-  classifier degrades concrete events to `skillChange: "unknown"`, never false-clean.
+- **Composition seams:** never imports `host` or `agent` — `host` injects the publish callback at wiring
+  time (the publisher-tee pattern). A missing classifier degrades concrete events to
+  `skillChange: "unknown"`, never false-clean.
+- **`setSkillPathClassifier` is currently installed by nobody, on purpose.** Skills moved agent-side with
+  [[architecture]] Decision #13: a skill lives wherever the agent keeps it, in a layout ThinkRail does not
+  define and cannot enumerate without asking that agent over the ThinkRail `_ext` channel. Naming a
+  directory here would be the host guessing another program's convention — exactly the coupling the ACP
+  migration removed. So every concrete event reports `skillChange: "unknown"` and the client's skill
+  surfaces stay conservative; `ChatCapabilities.skills` is what actually gates whether any of it is
+  visible. The seam stays because it is the right shape for the day the agent tells us its skill roots —
+  it is the classifier, not the plumbing, that is missing.
 - **Self-healing per read (out-of-band worktree churn is normal — e2e resets, `rm -rf` in a terminal):**
   every `ensureWatch` re-stats the root and **re-creates the watcher when the inode changed** (a
   deleted+recreated path leaves the old stream silently following a dead inode), **reaps zombie

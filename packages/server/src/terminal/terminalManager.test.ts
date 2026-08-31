@@ -8,6 +8,7 @@ import {
 	attachTerminal,
 	closeTerminalTab,
 	closeWorkspaceTerminals,
+	createAgentTerminal,
 	listTerminals,
 	persistTerminalSessions,
 	reserveTerminal,
@@ -16,6 +17,7 @@ import {
 	reviveTerminalSessions,
 	setTerminalPublisher,
 	setTerminalTabsPublisher,
+	waitForAgentTerminalExit,
 	writeTerminal,
 } from "./terminalManager";
 
@@ -475,4 +477,22 @@ describe("membership survives an ungraceful exit", () => {
 
 		expect(listTerminals(WS)).toHaveLength(0);
 	});
+});
+
+test("a utility terminal closes its own tab when the command exits", async () => {
+	const before = listTerminals(WS).length;
+	const id = createAgentTerminal({
+		workspaceId: WS,
+		command: "/bin/sh",
+		args: ["-c", "echo signed-in"],
+		env: {},
+		cwd: join(dataDir, "worktree"),
+	});
+
+	expect(listTerminals(WS).some((tab) => tab.tabKey.startsWith("agent:"))).toBe(true);
+	await waitForAgentTerminalExit(id);
+	await Bun.sleep(50);
+
+	expect(listTerminals(WS).some((tab) => tab.tabKey.startsWith("agent:"))).toBe(false);
+	expect(listTerminals(WS).length).toBe(before);
 });

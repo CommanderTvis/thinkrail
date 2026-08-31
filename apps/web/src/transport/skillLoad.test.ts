@@ -1,6 +1,38 @@
 import { expect, test } from "bun:test";
-import type { WorkspaceFsChangedPayload, WorkspaceWatchReadyResult } from "@thinkrail/contracts";
+import type {
+	ChatCapabilities,
+	SessionSummary,
+	WorkspaceFsChangedPayload,
+	WorkspaceWatchReadyResult,
+} from "@thinkrail/contracts";
 import { createSkillLoadRequests } from "./skillLoad";
+
+const capabilities: ChatCapabilities = {
+	agent: { id: "pi", name: "pi", origin: "bundled" },
+	derivedFrom: {},
+} as unknown as ChatCapabilities;
+
+function summary(sessionId: string, workspaceId: string): SessionSummary {
+	return {
+		record: {
+			sessionId,
+			workspaceId,
+			cwd: `/tmp/${workspaceId}`,
+			agentId: "pi",
+			title: "Chat",
+			createdAt: 0,
+			updatedAt: 1,
+			messageCount: 0,
+			promptCount: 0,
+			lastSettlement: null,
+			usage: null,
+			config: [],
+		},
+		agent: { id: "pi", name: "pi", origin: "bundled" },
+		isStreaming: false,
+		live: false,
+	};
+}
 
 test("session-message loads reject a response for a different workspace or session", async () => {
 	let requestedMismatch: "workspace" | "session" = "workspace";
@@ -8,20 +40,21 @@ test("session-message loads reject a response for a different workspace or sessi
 		watchReady: async () => ({ startupNudge: false }),
 		noteFsChanged: () => {},
 		workspaceTick: () => 0,
-		createSession: async () => ({ sessionId: "created", model: null, thinkingLevel: "medium" }),
+		createSession: async () => ({
+			sessionId: "created",
+			agent: { id: "pi", name: "pi", origin: "bundled" },
+			capabilities,
+			configOptions: [],
+		}),
 		getSessionMessages: async () => ({
-			summary: {
-				sessionId: requestedMismatch === "session" ? "other-session" : "requested-session",
-				workspaceId: requestedMismatch === "workspace" ? "other-workspace" : "requested-workspace",
-				title: "Chat",
-				model: null,
-				thinkingLevel: "medium",
-				isStreaming: false,
-				messageCount: 0,
-				updatedAt: 1,
-				live: false,
-			},
+			summary: summary(
+				requestedMismatch === "session" ? "other-session" : "requested-session",
+				requestedMismatch === "workspace" ? "other-workspace" : "requested-workspace",
+			),
 			messages: [],
+			configOptions: [],
+			capabilities,
+			plan: null,
 		}),
 		reloadSessionResources: async () => ({ ok: true }),
 	});
@@ -61,23 +94,21 @@ test("skill-load requests share startup, fold the replay fallback before the bas
 		createSession: async () => {
 			order.push("create");
 			tick += 1;
-			return { sessionId: "created", model: null, thinkingLevel: "medium" };
+			return {
+				sessionId: "created",
+				agent: { id: "pi", name: "pi", origin: "bundled" },
+				capabilities,
+				configOptions: [],
+			};
 		},
 		getSessionMessages: async ({ sessionId, workspaceId }) => {
 			order.push("messages");
 			return {
-				summary: {
-					sessionId,
-					workspaceId,
-					title: "Chat",
-					model: null,
-					thinkingLevel: "medium",
-					isStreaming: false,
-					messageCount: 0,
-					updatedAt: 1,
-					live: false,
-				},
+				summary: summary(sessionId, workspaceId),
 				messages: [],
+				configOptions: [],
+				capabilities,
+				plan: null,
 			};
 		},
 		reloadSessionResources: async () => {
@@ -131,17 +162,7 @@ test("a prewarm-started preparation never becomes a real load's baseline: the fi
 		workspaceTick: () => 3,
 		createSession: async () => ({ sessionId: "created", model: null, thinkingLevel: "medium" }),
 		getSessionMessages: async ({ sessionId, workspaceId }) => ({
-			summary: {
-				sessionId,
-				workspaceId,
-				title: "Chat",
-				model: null,
-				thinkingLevel: "medium",
-				isStreaming: false,
-				messageCount: 0,
-				updatedAt: 1,
-				live: false,
-			},
+			summary: summary(sessionId, workspaceId),
 			messages: [],
 		}),
 		reloadSessionResources: async () => ({ ok: true }),
@@ -183,17 +204,7 @@ test("a failed prewarm leaves the eventual session load able to retry preparatio
 		workspaceTick: () => 7,
 		createSession: async () => ({ sessionId: "created", model: null, thinkingLevel: "medium" }),
 		getSessionMessages: async ({ sessionId, workspaceId }) => ({
-			summary: {
-				sessionId,
-				workspaceId,
-				title: "Chat",
-				model: null,
-				thinkingLevel: "medium",
-				isStreaming: false,
-				messageCount: 0,
-				updatedAt: 1,
-				live: false,
-			},
+			summary: summary(sessionId, workspaceId),
 			messages: [],
 		}),
 		reloadSessionResources: async () => ({ ok: true }),

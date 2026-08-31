@@ -220,6 +220,10 @@ ref off the workspace-create critical path.
   instead of rendering an empty change set. The `workspaces` module's `diffStats` follows the same rule from
   the other end — it returns *no* stats (and logs why) rather than a fabricated `+0 −0`. A review surface that
   calls a dirty worktree clean is the worst failure this product can have.
+- **The index-preservation tests must break signing for real.** They inject a commit failure through
+  `commit.gpgsign` + an unreachable `gpg.program`, which only bites when `gpg.format` is `openpgp` — so
+  the repo pins that too. Without the pin, a developer whose global config signs over SSH (1Password,
+  `gpg.format = ssh`) gets a *successful* commit and two failures that look environmental.
 - `gitStatus` reports the **live** current branch for a user-owned (`kind: "default" | "external"`)
   workspace (its branch moves out-of-band — a terminal `git checkout` — and the persisted snapshot
   self-heals only at list time; the Changes header must not lag).

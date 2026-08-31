@@ -1,13 +1,13 @@
+import type { ToolCallStatus } from "@thinkrail/contracts";
 import type { ReactNode } from "react";
 import { parseToolResultContent, toolValueText } from "./toolResultContent";
-import type { ToolStatus } from "./types";
 
 export interface ToolRenderProps {
 	toolCallId: string;
 	toolName: string;
 	args: Record<string, unknown>;
 	result: unknown;
-	status: ToolStatus;
+	status: ToolCallStatus;
 	workspaceRoot?: string | undefined;
 	onOpenFile?: ((path: string) => void) | undefined;
 	streaming: boolean;

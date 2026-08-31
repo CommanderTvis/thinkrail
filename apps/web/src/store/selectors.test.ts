@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import type { Project, WireModel, Workspace } from "@thinkrail/contracts";
+import type { Project, Workspace } from "@thinkrail/contracts";
 import type { WorkspaceLayoutDocument } from "../shell/layout";
 import type { EditorTab } from "./appStore";
 import {
@@ -15,13 +15,13 @@ import {
 	selectAttentionCenterResourceCacheKey,
 	selectAttentionCenterResourceReady,
 	selectAttentionCenterTab,
-	selectCatalogModel,
 	selectContextProject,
 	selectHistoryTarget,
 	selectKnownChatLocation,
 	selectLayoutResourcePlacement,
 	selectLayoutTabPlaced,
 	selectLayoutTabPlacement,
+	selectResolvedAgentId,
 	selectSkillsStale,
 	specPathMatcher,
 } from "./selectors";
@@ -402,37 +402,21 @@ test("specPathMatcher recognizes a spec by graph membership, in either reported 
 	expect(specPathMatcher([])(".thinkrail/context/TASK-x.md")).toBe(false);
 });
 
-const catalogModel = (
-	provider: string,
-	id: string,
-	thinkingLevels: WireModel["thinkingLevels"],
-) => ({
-	id,
-	name: id,
-	provider,
-	contextWindow: 200_000,
-	reasoning: thinkingLevels.length > 1,
-	thinkingLevels,
-});
+test("selectResolvedAgentId follows session.create's own precedence", () => {
+	const overridden: Project = { ...projects[1], id: "p2", agentId: "junie" } as Project;
+	const state = {
+		projects: [projects[0], overridden],
+		defaultAgentId: "pi",
+		defaultAgent: { id: "pi", name: "pi", origin: "bundled" as const },
+	};
 
-test("selectCatalogModel matches on {provider,id} — an id alone is ambiguous across providers", () => {
-	const bedrock = catalogModel("bedrock", "opus-5", ["off", "medium"]);
-	const anthropic = catalogModel("anthropic", "opus-5", ["off", "high"]);
-	expect(selectCatalogModel([bedrock, anthropic], { provider: "anthropic", id: "opus-5" })).toBe(
-		anthropic,
-	);
-	expect(selectCatalogModel([bedrock, anthropic], null)).toBeNull();
-});
-
-test("selectCatalogModel returns the LIVE entry, not the stale ref handed to it", () => {
-	const stale = catalogModel("anthropic", "opus-5", ["off", "low"]);
-	const live = catalogModel("anthropic", "opus-5", ["off", "low", "medium", "high"]);
-	expect(selectCatalogModel([live], stale)?.thinkingLevels).toEqual(live.thinkingLevels);
-});
-
-test("selectCatalogModel is null when the ref left the catalog (caller keeps its snapshot)", () => {
-	const gone = catalogModel("anthropic", "opus-4", ["off"]);
-	expect(selectCatalogModel([catalogModel("anthropic", "opus-5", ["off"])], gone)).toBeNull();
+	expect(selectResolvedAgentId(state, "p2")).toBe("junie");
+	expect(selectResolvedAgentId(state, "p1")).toBe("pi");
+	expect(selectResolvedAgentId(state, null)).toBe("pi");
+	expect(selectResolvedAgentId({ ...state, defaultAgentId: null }, "p1")).toBe("pi");
+	expect(
+		selectResolvedAgentId({ ...state, defaultAgentId: null, defaultAgent: null }, "p1"),
+	).toBeNull();
 });
 
 test("selectAgentReviewCommentCount counts only OPEN agent-authored comments", () => {

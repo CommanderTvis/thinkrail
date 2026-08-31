@@ -1,0 +1,211 @@
+[
+	{
+		"direction": "out",
+		"frame": {
+			"jsonrpc": "2.0",
+			"id": 10,
+			"method": "session/prompt",
+			"params": {
+				"sessionId": "sess-blocks",
+				"prompt": [
+					{ "type": "text", "text": "/skill:review packages/acp" },
+					{
+						"type": "resource_link",
+						"uri": "file:///tmp/fixture-worktree/SPEC.md",
+						"name": "SPEC.md",
+						"mimeType": "text/markdown",
+						"title": "Module spec",
+						"description": "The spec under review",
+						"size": 4096
+					},
+					{ "type": "image", "data": "aW1hZ2U=", "mimeType": "image/png" }
+				]
+			}
+		}
+	},
+	{
+		"direction": "in",
+		"frame": {
+			"jsonrpc": "2.0",
+			"method": "session/update",
+			"params": {
+				"sessionId": "sess-blocks",
+				"update": {
+					"sessionUpdate": "user_message_chunk",
+					"messageId": "agent-msg-user",
+					"content": { "type": "text", "text": "<skill name=\"review\">packages/acp</skill>" }
+				}
+			}
+		}
+	},
+	{
+		"direction": "in",
+		"frame": {
+			"jsonrpc": "2.0",
+			"method": "session/update",
+			"params": {
+				"sessionId": "sess-blocks",
+				"update": {
+					"sessionUpdate": "agent_thought_chunk",
+					"messageId": "agent-msg-1",
+					"content": { "type": "text", "text": "The spec names six sub-modules." }
+				}
+			}
+		}
+	},
+	{
+		"direction": "in",
+		"frame": {
+			"jsonrpc": "2.0",
+			"method": "session/update",
+			"params": {
+				"sessionId": "sess-blocks",
+				"update": {
+					"sessionUpdate": "agent_message_chunk",
+					"messageId": "agent-msg-1",
+					"content": { "type": "text", "text": "Here is what I found" }
+				}
+			}
+		}
+	},
+	{
+		"direction": "in",
+		"frame": {
+			"jsonrpc": "2.0",
+			"method": "session/update",
+			"params": {
+				"sessionId": "sess-blocks",
+				"update": {
+					"sessionUpdate": "agent_message_chunk",
+					"messageId": "agent-msg-1",
+					"content": { "type": "text", "text": " in the module spec." }
+				}
+			}
+		}
+	},
+	{
+		"direction": "in",
+		"frame": {
+			"jsonrpc": "2.0",
+			"method": "session/update",
+			"params": {
+				"sessionId": "sess-blocks",
+				"update": {
+					"sessionUpdate": "agent_message_chunk",
+					"messageId": "agent-msg-1",
+					"content": { "type": "text", "text": "" }
+				}
+			}
+		}
+	},
+	{
+		"direction": "in",
+		"frame": {
+			"jsonrpc": "2.0",
+			"method": "session/update",
+			"params": {
+				"sessionId": "sess-blocks",
+				"update": {
+					"sessionUpdate": "agent_message_chunk",
+					"messageId": "agent-msg-1",
+					"content": {
+						"type": "image",
+						"data": "cGxvdA==",
+						"mimeType": "image/png",
+						"uri": "file:///tmp/fixture-worktree/plot.png"
+					}
+				}
+			}
+		}
+	},
+	{
+		"direction": "in",
+		"frame": {
+			"jsonrpc": "2.0",
+			"method": "session/update",
+			"params": {
+				"sessionId": "sess-blocks",
+				"update": {
+					"sessionUpdate": "agent_message_chunk",
+					"messageId": "agent-msg-1",
+					"content": { "type": "audio", "data": "YXVkaW8=", "mimeType": "audio/wav" }
+				}
+			}
+		}
+	},
+	{
+		"direction": "in",
+		"frame": {
+			"jsonrpc": "2.0",
+			"method": "session/update",
+			"params": {
+				"sessionId": "sess-blocks",
+				"update": {
+					"sessionUpdate": "agent_message_chunk",
+					"messageId": "agent-msg-1",
+					"content": {
+						"type": "resource_link",
+						"uri": "file:///tmp/fixture-worktree/packages/acp/SPEC.md",
+						"name": "SPEC.md",
+						"mimeType": "text/markdown"
+					}
+				}
+			}
+		}
+	},
+	{
+		"direction": "in",
+		"frame": {
+			"jsonrpc": "2.0",
+			"method": "session/update",
+			"params": {
+				"sessionId": "sess-blocks",
+				"update": {
+					"sessionUpdate": "agent_message_chunk",
+					"messageId": "agent-msg-1",
+					"content": {
+						"type": "resource",
+						"resource": {
+							"uri": "file:///tmp/fixture-worktree/packages/acp/src/index.ts",
+							"mimeType": "text/x-typescript",
+							"text": "export * from \"./connection\";\n"
+						}
+					}
+				}
+			}
+		}
+	},
+	{
+		"direction": "in",
+		"frame": {
+			"jsonrpc": "2.0",
+			"method": "session/update",
+			"params": {
+				"sessionId": "sess-blocks",
+				"update": {
+					"sessionUpdate": "agent_message_chunk",
+					"messageId": "agent-msg-2",
+					"content": { "type": "text", "text": "A second message, grouped by its own id." }
+				}
+			}
+		}
+	},
+	{
+		"direction": "in",
+		"frame": {
+			"jsonrpc": "2.0",
+			"id": 10,
+			"result": {
+				"stopReason": "end_turn",
+				"usage": {
+					"totalTokens": 1400,
+					"inputTokens": 1200,
+					"outputTokens": 200,
+					"thoughtTokens": 40,
+					"cachedReadTokens": 900,
+					"cachedWriteTokens": 100
+				}
+			}
+		}
+	}
+]

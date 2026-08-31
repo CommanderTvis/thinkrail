@@ -1,4 +1,9 @@
-import type { ContextUsage, SessionStats } from "@thinkrail/contracts";
+import type { ChatCapabilityFlags, SessionUsage } from "@thinkrail/contracts";
+
+export type UsageCapabilities = Pick<
+	ChatCapabilityFlags,
+	"cost" | "tokenBreakdown" | "contextWindow"
+>;
 
 export function formatTokens(count: number): string {
 	if (count < 1_000) return count.toString();
@@ -19,33 +24,46 @@ export function formatElapsed(ms: number): string {
 	return m > 0 ? `${m}m ${s}s` : `${s}s`;
 }
 
-export function usageParts(stats: SessionStats): string[] {
+export function usageParts(
+	usage: SessionUsage,
+	capabilities: Pick<ChatCapabilityFlags, "cost" | "tokenBreakdown">,
+): string[] {
 	const parts: string[] = [];
-	if (stats.tokens.input) parts.push(`↑${formatTokens(stats.tokens.input)}`);
-	if (stats.tokens.output) parts.push(`↓${formatTokens(stats.tokens.output)}`);
-	if (stats.tokens.cacheRead) parts.push(`R${formatTokens(stats.tokens.cacheRead)}`);
-	if (stats.tokens.cacheWrite) parts.push(`W${formatTokens(stats.tokens.cacheWrite)}`);
-	if (stats.cost) parts.push(formatCost(stats.cost));
+	if (capabilities.tokenBreakdown && usage.tokens) {
+		const { input, output, cacheRead, cacheWrite } = usage.tokens;
+		if (input) parts.push(`↑${formatTokens(input)}`);
+		if (output) parts.push(`↓${formatTokens(output)}`);
+		if (cacheRead) parts.push(`R${formatTokens(cacheRead)}`);
+		if (cacheWrite) parts.push(`W${formatTokens(cacheWrite)}`);
+	}
+	if (capabilities.cost && usage.cost) parts.push(`$${usage.cost.amount.toFixed(3)}`);
 	return parts;
 }
 
-export function contextPart(usage: ContextUsage): { bar: string; text: string } {
-	const filled =
-		usage.percent === null ? 0 : Math.round(Math.min(100, Math.max(0, usage.percent)) / 20);
+export function contextPart(usage: SessionUsage): { bar: string; text: string } | null {
+	if (usage.contextWindow === null) return null;
+	const percent =
+		usage.contextUsed === null
+			? null
+			: Math.min(100, Math.max(0, (usage.contextUsed / usage.contextWindow) * 100));
+	const filled = percent === null ? 0 : Math.round(percent / 20);
 	const contextWindow = formatTokens(usage.contextWindow);
 	return {
 		bar: `${"▰".repeat(filled)}${"▱".repeat(5 - filled)}`,
-		text:
-			usage.percent === null
-				? `?/${contextWindow}`
-				: `${usage.percent.toFixed(1)}%/${contextWindow}`,
+		text: percent === null ? `?/${contextWindow}` : `${percent.toFixed(1)}%/${contextWindow}`,
 	};
 }
 
-export function SessionStatsBar({ stats }: { stats: SessionStats | null }) {
-	if (!stats) return null;
-	const parts = usageParts(stats);
-	const context = stats.contextUsage ? contextPart(stats.contextUsage) : null;
+export function SessionStatsBar({
+	usage,
+	capabilities,
+}: {
+	usage: SessionUsage | null;
+	capabilities: UsageCapabilities;
+}) {
+	if (!usage) return null;
+	const parts = usageParts(usage, capabilities);
+	const context = capabilities.contextWindow ? contextPart(usage) : null;
 	if (parts.length === 0 && !context) return null;
 
 	return (

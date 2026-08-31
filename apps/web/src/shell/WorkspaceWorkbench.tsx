@@ -517,13 +517,13 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 			changeAttention({ ...currentAttention, lastFocusedCenterGroupId: groupId });
 			const navigation = useAppStore.getState().beginCenterNavigation(workspaceId, groupId);
 			void createSessionWithSkillBaseline({ workspaceId })
-				.then(({ result: { sessionId, model, thinkingLevel }, syncedTick }) => {
+				.then(({ result: { sessionId, capabilities, configOptions }, syncedTick }) => {
 					const store = useAppStore.getState();
 					store.openChatSession(
 						workspaceId,
 						sessionId,
-						model,
-						thinkingLevel,
+						capabilities,
+						configOptions,
 						syncedTick,
 						layoutOpenOptionsForNavigation(store, workspaceId, navigation),
 					);

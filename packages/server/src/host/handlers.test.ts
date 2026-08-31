@@ -3,6 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Workspace, WorkspaceWatchReadyResult } from "@thinkrail/contracts";
+import { WS_METHODS } from "@thinkrail/contracts";
 import { TodoStore } from "pi-todos/core";
 import { addComment, getReviewSnapshot } from "../reviews";
 import { todoReviewRecord } from "../todos";
@@ -44,6 +45,18 @@ afterEach(() => {
 	else process.env.THINKRAIL_DATA_DIR = savedDataDir;
 });
 
+test("the registry answers every wire method and nothing else", async () => {
+	const source = await Bun.file(new URL("./handlers.ts", import.meta.url)).text();
+	const wire = Object.values(WS_METHODS);
+	const declared = [...source.matchAll(/^\t"([a-zA-Z.]+)":/gm)].map((match) => match[1] as string);
+
+	expect(wire.filter((method) => !declared.includes(method))).toEqual([]);
+	expect(declared.filter((method) => !wire.includes(method as never))).toEqual([]);
+	await expect(handleRequest("session.nonsense", {}, CTX)).rejects.toThrow(
+		"Unknown method: session.nonsense",
+	);
+});
+
 test("request diagnostics expose only registered method names", async () => {
 	expect(requestMethodDiagnostic("workspace.list")).toBe("workspace.list");
 	expect(requestMethodDiagnostic("secret prompt value")).toBe("unknown method");
@@ -70,7 +83,7 @@ test("workspace.watchReady waits for startup once, then reports an already-ready
 	expect(second).toEqual({ startupNudge: false });
 });
 
-test("todo.requestFix on a chat that isn't on disk rolls the record back and never marks findings sent", async () => {
+test("todo.requestFix on a chat that is no longer running rolls the record back and never marks findings sent", async () => {
 	const rows = (await handleRequest("workspace.list", { projectId: "p1" }, CTX)) as Workspace[];
 	const workspace = rows[0];
 	if (!workspace) throw new Error("expected a workspace");
@@ -99,7 +112,7 @@ test("todo.requestFix on a chat that isn't on disk rolls the record back and nev
 			{ workspaceId: workspace.id, sessionId, id: todo.id, feedback: "please fix" },
 			CTX,
 		),
-	).rejects.toThrow("no longer on disk");
+	).rejects.toThrow("no longer running");
 
 	expect(todoReviewRecord({ workspaceId: workspace.id, sessionId, id: todo.id })).toBeUndefined();
 	const after = (await getReviewSnapshot(workspace.id)).comments.find((c) => c.id === finding.id);

@@ -2,143 +2,90 @@
 id: submodule-server-history
 type: submodule-design
 status: active
-title: history — chat-history search index
+title: history — search over the host-owned transcript corpus
 parent: module-server
-depends-on: [module-contracts]
-tags: [v1, history]
+depends-on: [module-contracts, submodule-server-transcript]
+references: [architecture, submodule-server-host]
+covers: [prompt-recall, conversation-search, jump-to-message, agent-agnostic-history]
+tags: [v1, acp, history]
 ---
 
 ## Responsibility
-The `history.search` backend: a **lazy in-memory index** over pi's session JSONL files (prompt recall +
-full-conversation matches). Enumerates and reads session files **itself** (async `readdir`/`stat`/
-`readFile`, replicating pi's pinned discovery layout below) — it must **never call
-`SessionManager.listAll()`** on any search/refresh path: `listAll` reads and JSON-parses *every session
-file in full* just to build its `SessionInfo`s (`messageCount`/`allMessagesText` we never use), so an
-index refresh through it costs the whole corpus even when nothing changed, on the event loop every live
-session shares. **Never writes** session files. Because discovery walks every pi session on disk, the
-host handler's `all` scope (`host/historyScope.ts`'s `filter = () => true`) deliberately surfaces pi-CLI
-sessions outside any registered ThinkRail workspace too — a bit more than `session.getMessages` itself
-ever exposes for a single session, but consistent with an owner-scoped host (no multi-tenant isolation
-to preserve).
 
-## Design
-- `extract.ts` — pure JSONL→`ExtractedSession | null` (`extractSession`): the session's identity
-  (`id`/`cwd` from the header, mirroring pi's own rejection rule — the first parseable entry must be a
-  `type: "session"` header with a string `id`, else `null`), its `title` (the **latest** `session_info`
-  entry's name, including explicit clears — the same latest-wins rule as pi's `buildSessionInfo`), and its
-  `HistoryEntry[]` — all from **one parse**, so the index never needs a second source (`listAll`) for
-  metadata. Pi session files are **trees** (abandoned branches) that compaction rewrites, so it resolves
-  the file the way pi does before the client renders it — `parseSessionEntries` →
-  `migrateSessionEntries` → `buildSessionContext` (follow the current leaf, apply the latest compaction,
-  drop summarized/abandoned entries) — then indexes the resolved messages, filtered through contracts'
-  **`isTranscriptMessageRole`**, the very guard `getSessionMessages` sends by (one policy, not a local copy
-  of it). So `messageIndex` matches the client's `turnIdByMessageIndex` exactly
-  (no raw-file-order drift), and abandoned/summarized text never becomes a hit — the compaction summary is
-  sent (it renders the client's compaction marker), so it consumes an index slot without being searchable.
-  The internal
-  `TODO_NUDGE_PREFIX` control message (hidden from the transcript on hydrate) is skipped after its index
-  slot is consumed, so alignment holds; a **superseded auto-retry attempt** (the shared
-  `isRetriedAttempt` reading from contracts — an errored assistant immediately followed by another
-  assistant, the adjacent shape pi's `_prepareRetry` produces,
-  which hydration renders as no turn / null anchor) is skipped the same way, so a
-  failed partial's text never becomes a hit that could only resolve to "couldn't locate the message". Entry text is **full, never truncated** — a hit's `text` is what
-  recall inserts and what the overlay's preview presents as the whole prompt, so a cap would silently
-  corrupt recall of long pasted-log prompts and make terms past the cutoff unsearchable (the memory
-  precedent is pi itself: `SessionInfo.allMessagesText` holds every session's full text in memory). Tool
-  results/thinking not indexed (V1).
-- `historyIndex.ts` — `HistoryIndex`: cold build on first search (async per-file IO yields the event loop;
-  blocks the search up to a budget, then returns partial with `indexing: true`). Discovery is its own
-  async enumeration (see "pi file format" below for the pinned layout): a custom `sessionDir` is a flat,
-  non-recursive dir of `.jsonl` files; the default root is `<agentDir>/sessions` — agent dir resolved
-  **per refresh** via pi's exported `getAgentDir()`, which reads `PI_CODING_AGENT_DIR` live — holding one
-  level of per-cwd directories, including top-level symlinks Pi treats as candidate directories. Broken
-  or non-directory symlinks degrade to the same unreadable-directory empty result as Pi. Freshness = `(mtime, size)`
-  revalidation throttled to ~2 s (pi appends live messages to the file, so the file IS the live feed — no
-  agent-module hook; size is compared alongside mtime so an append landing in the same coarse mtime tick
-  still reloads); only a **new or changed** file is read (once, `readFile`) and re-parsed — an unchanged
-  corpus costs one `readdir` walk + one `stat` per file, no reads, no parses. A warm revalidation runs in
-  the **background** — a bulk change (first refresh after restart, a git checkout) can still mean many
-  parses, so a search never blocks on it; results are at most one cycle stale, and the background
-  refresh swallows its own errors (an unhandled rejection could crash the in-process host). `indexing` is
-  reported whenever any build is in flight (cold OR a background revalidation), so the client's retry loop
-  polls until a just-written session lands — read-your-writes without blocking the search. Matching:
-  case-insensitive substring AND over whitespace terms (query length + result `limit` clamped to the
-  protocol caps, `MAX_HISTORY_QUERY_LENGTH`/`MAX_HISTORY_LIMIT`, at both the handler and `search()`);
-  strict recency order; prompts deduped by normalized text keeping newest; caps + true totals.
-  The messages section (and `messageTotal`) is filtered to `role === "assistant"` only — a user-role hit
-  is always a textual duplicate of its own prompt entry (user text IS a prompt in this extraction), so it
-  would add no text, only a location; that location moves onto the prompt hit instead, via the two
-  fields below.
-- Jump anchors are drift-tolerant: hits carry `anchorText` (message-text prefix) the client validates.
-  Every prompt hit now also carries its kept-newest occurrence's `messageIndex`/`anchorText` —
-  the same two fields `MessageHit` always had — making the prompt row itself jumpable. Both fields are
-  optional on `PromptHit` (absent only when the host predates this feature).
-- `testFixtures.ts` — test-only session-file builders (pinned by A5): `writeFixtureSession` writes a
-  minimal but real pi-shaped JSONL, one flat file per session, that `historyIndex` tests, the e2e fixture
-  seeder, and its own format-pinning test (`testFixtures.test.ts`) drive against; `defaultSessionDirFor`
-  replicates pi's private default-layout directory encoding (not importable — see "pi file format" below)
-  so fixtures can land where a real no-arg `listAll()` would actually look.
+The `history.search` backend: prompt recall plus full-conversation matches, as **one exported
+function** ranking `TranscriptStore.readCorpus()`. No index, no file discovery, no `(mtime, size)`
+revalidation, no singleton, no cold-build budget of its own.
 
-## On-disk JSONL structure (observed from pi session files)
-- **`message` entries:** `{ type: "message", ..., message: { role: "user"|"assistant"|"toolResult", content: string|array, timestamp: ms-number } }`
-  — `message.role` determines renderability; `message.timestamp` is milliseconds since epoch.
-- **`custom_message` entries:** `{ type: "custom_message", customType: string, content: string|array, timestamp: ISO-string, display: boolean, ... }`
-  — top-level structure (no `message` wrapper); always renderable as role "custom"; `timestamp` is ISO 8601 string at entry level.
+All of that existed because the corpus used to live in **pi's** session files: a foreign, per-cwd
+directory layout the host had to enumerate, `stat`, re-read and re-resolve (`parseSessionEntries` →
+`migrateSessionEntries` → `buildSessionContext`) because compaction rewrote those trees behind our
+back. [[submodule-server-transcript]] owns that corpus now, is the only writer of it, and hands it
+over already derived — so freshness follows from ownership instead of polling, and the whole
+discovery half of this module (`extract.ts`, `historyIndex.ts`, `HistoryIndex`, its singleton, its
+disk-writing `testFixtures.ts`) is **deleted rather than ported**. What is left is ranking.
 
-## pi file format (pinned v0.84.3 — `@earendil-works/pi-coding-agent`)
-Verified by reading `dist/core/session-manager.{js,d.ts}` in the installed package (source of truth over
-any assumption — re-verify on a pi version bump). These facts now pin **two** consumers: the fixtures
-below, and `historyIndex.ts`'s own discovery walk (which must see exactly the files pi's `SessionManager`
-would):
-- **Header line** (always line 1, `SessionHeader`): `{ type: "session", version?: number, id: string,
-  timestamp: string /* ISO */, cwd: string, parentSession?: string }`. `readSessionHeader`/`buildSessionInfo`
-  reject the file (return `null`/`[]`) unless the first line parses as JSON with `type === "session"` and a
-  string `id`. `CURRENT_SESSION_VERSION = 3`; pi's own writer stamps `version: 3` — fixtures should too, so
-  a real `SessionManager` that later opens one never runs migration.
-- **File naming:** discovery is driven **purely by the `.jsonl` suffix** — `listSessionsFromDir` does
-  `readdir(dir).filter(f => f.endsWith(".jsonl"))`; nothing parses the filename. pi's own writer names new
-  files `<isoTimestamp-with-:-and-.-replaced-by-'-'>_<sessionId>.jsonl`, but any `*.jsonl` name works for
-  discovery — fixtures don't need to match that exact pattern.
-- **`cwd` recovery — and the non-recursive-custom-dir trap:** `cwd` always comes from the header's `cwd`
-  field (`header.cwd`), never from directory placement. But *directory structure interacts with discovery*:
-  `SessionManager.listAll()` (no args) walks pi's real default root (`~/.pi/agent/sessions/`) **one level of
-  directories or symbolic links** — normally one dir per encoded cwd (`getDefaultSessionDirPath`:
-  `--<cwd, / and \ and : → '-'>--`) — and flattens the `.jsonl` files found inside each; a symlink whose
-  target cannot be read as a directory contributes nothing. But `listAll(sessionDir)` / `list(cwd, sessionDir)`
-  — the path taken whenever a **custom** `sessionDir` string is passed (exactly what `HistoryIndex`'s
-  constructor and this module's tests do) — calls `listSessionsFromDir(customDir)`, which does a **flat,
-  non-recursive** `readdir(customDir)`. Files placed in subdirectories of a custom `sessionDir` are invisible
-  to `listAll`. Consequence for fixtures: multi-session, multi-cwd test fixtures must write all `.jsonl`
-  files **flat, directly under** the given dir; different `cwd`s are expressed via each file's own header
-  `cwd` field, never via subdirectory nesting.
-- **Default-layout encoding is not importable — fixtures replicate it (pinned by A5):** the per-cwd
-  subdirectory name above is computed by `getDefaultSessionDirPath`, a *private* (unexported) helper inside
-  `core/session-manager.js`. The mkdir-ing wrapper that IS exported from that module (`getDefaultSessionDir`)
-  is not re-exported from the package root `@earendil-works/pi-coding-agent` index either (checked
-  `dist/index.js`: only `SessionManager` + a handful of pure tree-traversal helpers cross that boundary) —
-  so nothing importable computes this path. `testFixtures.ts` exports `defaultSessionDirFor(agentDir, cwd)`,
-  a from-scratch replica of the exact regex (`--<cwd, / and \ and : → '-'>--`), pinned in
-  `testFixtures.test.ts` against a real `SessionManager.list(cwd)` / `listAll()` call — re-verify against
-  `dist/core/session-manager.js` on a pi version bump.
-- **`PI_CODING_AGENT_DIR` is read live, not cached (pinned by A5):** `getAgentDir()` (`config.js`) reads
-  `process.env.PI_CODING_AGENT_DIR` directly in its function body on every call — there is no top-level
-  capture at module load. So a same-process test (or the e2e seeder) can set the env var immediately before
-  the `SessionManager` call it needs to affect and restore it in a `finally`/`afterAll`; no subprocess is
-  needed to observe a "live" env read. (Existing precedent: `agent/agentSessionManager.test.ts` already
-  does this for its disk-reopen case.)
+## Hits are identified, not counted
+
+A hit carries **`messageId`, copied straight from the corpus entry**. The old `messageIndex` was a
+position in the *resolved* message list, so two independent implementations — this module's extractor
+and the client's hydrate — had to agree on that resolution exactly: it is why the extractor consumed
+an index slot for a control message before skipping it, and why a superseded retry attempt had to be
+skipped rather than filtered. The log never renumbers and the host mints the ids, so a jump now
+anchors on identity and that entire class of drift is gone. `anchorText` (the first 120 characters)
+survives only as the client's cheap sanity check.
+
+## Matching
+
+Case-insensitive substring **AND** over whitespace-split terms. Query length and result `limit` are
+clamped to the protocol caps (`MAX_HISTORY_QUERY_LENGTH` / `MAX_HISTORY_LIMIT`) **here and only
+here** — the handler passes them through unclamped. Strict recency order; prompts deduped by
+normalized text keeping the newest; the page is capped but the totals are pre-cap. `indexing` mirrors
+`TranscriptCorpusSnapshot.complete`, so a client polling a host whose first corpus load is still
+running keeps its read-your-writes retry loop.
+
+The two sections split by role: **prompts** are the user entries, **messages** the assistant ones and
+only when the query is non-empty. A user-role message hit would be a textual duplicate of its own
+prompt entry, adding a location and no text — that location rides on the prompt hit instead
+(`messageId` + `anchorText` are on `PromptHit` too). Entry text is **full, never truncated**: a hit's
+`text` is what recall inserts into the composer and what the overlay previews, so a cap would
+silently corrupt recall of a long pasted-log prompt and make terms past the cutoff unsearchable. The
+`snippet` on a message hit is the windowed view, never the stored one.
+
+What is searchable is exactly what the corpus contains — user and assistant text, hidden and empty
+messages already dropped by [[submodule-server-transcript]]. Tool output, thinking and markers are
+not indexed (V1).
+
+## Scope is injected, as a whole corpus session
+
+`includes(session)` decides membership and `projectOf(session)` supplies the one label the corpus
+cannot: both receive the whole `TranscriptCorpusSession`. `workspaceId` is **on** that session, so a
+hit's `workspaceId` is copied from the transcript and the old cwd→workspace path guess disappears
+along with the `filter(cwd, sessionId)` / `labels(cwd)` pair. This module still knows nothing about
+projects or workspaces; `host` builds both callbacks from its registries at the `history.search`
+handler.
+
+`scope: "all"` is now exactly "every transcript this host recorded" — an owner-scoped host with no
+multi-tenant isolation to preserve, and no longer a window onto agent sessions started outside
+ThinkRail, because those never enter the corpus.
 
 ## Boundary
-- **Public surface (`index.ts`):** `HistoryIndex`, `getHistoryIndex()`, `matchesTerms`, `makeSnippet`,
-  `clampLimit`, `extractSession`, types. **No test helpers** — `writeFixtureSession`/`defaultSessionDirFor`
-  are disk-writing test-only builders and must not enter the runtime module graph; they're reachable only
-  through the server package's dedicated **`@thinkrail/server/history-test-fixtures`** subpath export
-  (package.json), the sanctioned test boundary — same pattern as `@thinkrail/server/agent`. In-package
-  tests import them relatively (`./testFixtures`); the e2e seeder imports the subpath.
-- **Allowed deps:** `@earendil-works/pi-coding-agent` (`getAgentDir` — the default sessions root — plus
-  the exported session-tree helpers `parseSessionEntries`/`migrateSessionEntries`/`buildSessionContext`
-  used by `extract.ts`; **not `SessionManager`** in production code — see Responsibility. Tests may use
-  `SessionManager` to *pin* layout/format facts against the real thing), `@thinkrail/contracts`,
-  `node:fs`, `node:fs/promises`, `node:path`.
-- **Forbidden:** importing `agent`/`workspaces`/`projects` (scope mapping is injected by the host handler
-  via the `filter`/`labels` callbacks passed into `search()`); writing anything to disk (`writeFixtureSession`
-  is test-only, never called from production code paths).
+
+- **Owns:** hit ranking — term matching, snippet windowing, limit/query clamping, prompt dedupe,
+  ordering, section split and totals.
+- **Public surface (`index.ts`):** `searchHistory(input, store?)` and `SearchHistoryInput`. The
+  `store` argument defaults to the process-wide `getTranscriptStore()`; tests pass one built over a
+  temp data dir with `@thinkrail/server/transcript-test-fixtures`. No test helpers ship from here —
+  this module writes nothing to disk at all.
+- **Allowed deps:** `@thinkrail/contracts`, `../transcript` **through its barrel**
+  (`getTranscriptStore`, `TranscriptStore`).
+- **Forbidden:** any pi package or ACP type; `projects` / `workspaces` / `agent` / `host`; reading or
+  writing the filesystem itself — the corpus arrives from the store, and this module never touches a
+  path.
+
+## Accepted costs
+
+A chat started outside ThinkRail cannot be found, because it is not in our transcript ([[architecture]]
+Decision #15 states the trade). Ranking is a linear scan over resident corpus text on the event loop:
+that is the same shape as before, minus the per-search `readdir`/`stat` walk, and it stays honest
+while the corpus is the size one owner's chat history can reach. If it ever stops being honest, the
+fix belongs in the store (which owns residency), not in a second index here.

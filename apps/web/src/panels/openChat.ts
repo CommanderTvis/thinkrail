@@ -1,4 +1,4 @@
-import { messagesToRuntime } from "../chat/hydrate";
+import { hydrateRuntime } from "../chat/hydrate";
 import {
 	type CenterNavigationStamp,
 	type LayoutOpenOptions,
@@ -45,7 +45,7 @@ export async function openChatInTab(
 	}
 	try {
 		const {
-			result: { summary, messages },
+			result: { summary, messages, configOptions, capabilities, plan },
 			syncedTick,
 		} = await getSessionMessagesWithSkillBaseline({ sessionId, workspaceId });
 		const current = useAppStore.getState();
@@ -63,7 +63,7 @@ export async function openChatInTab(
 			: routed;
 		current.hydrateSession(
 			summary,
-			messagesToRuntime(messages, summary.lastSettlement),
+			hydrateRuntime(messages, configOptions, capabilities, plan),
 			true,
 			summary.live ? undefined : syncedTick,
 			effectiveOptions,

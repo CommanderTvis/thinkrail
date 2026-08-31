@@ -12,7 +12,6 @@ import { useFold } from "./foldState";
 import type { ActivityStep, RoutineToolStep, ThinkingStep } from "./rows";
 import { ToolRendererBody } from "./ToolRendererBody";
 import { getToolSummary, type ToolRenderProps } from "./toolRegistry";
-import type { ToolStatus } from "./types";
 
 export function ActivityGroup({
 	id,
@@ -257,7 +256,7 @@ export function summarizeSteps(steps: ActivityStep[]): string {
 	const flatSteps = flattenActivitySteps(steps);
 	const counts = new Map<string, number>();
 	for (const step of flatSteps) {
-		const name = step.kind === "thinking" ? "thinking" : step.toolName;
+		const name = step.kind === "thinking" ? "thinking" : step.block.toolName;
 		counts.set(name, (counts.get(name) ?? 0) + 1);
 	}
 	const names = [...counts.entries()].map(([name, n]) => (n > 1 ? `${name} ×${n}` : name));
@@ -273,8 +272,9 @@ function liveActivityTicker(steps: ActivityStep[], workspaceRoot: string | undef
 	const current = flatSteps[flatSteps.length - 1];
 	if (!current) return "Working…";
 	if (current.kind === "thinking") return "Thinking…";
-	const summary = getToolSummary(current.toolName, toolRenderProps(current, workspaceRoot));
-	return summary ? `${current.toolName} · ${summary}` : `${current.toolName}…`;
+	const toolName = current.block.toolName;
+	const summary = getToolSummary(toolName, toolRenderProps(current, workspaceRoot));
+	return summary ? `${toolName} · ${summary}` : `${toolName}…`;
 }
 
 function toolRenderProps(
@@ -282,12 +282,13 @@ function toolRenderProps(
 	workspaceRoot: string | undefined,
 	onOpenFile?: ((path: string) => void) | undefined,
 ): ToolRenderProps {
+	const { block } = step;
 	return {
-		toolCallId: step.toolCallId,
-		toolName: step.toolName,
-		args: step.args,
-		result: step.tool?.raw,
-		status: step.tool?.status ?? (step.dead ? "error" : "running"),
+		toolCallId: block.toolCallId,
+		toolName: block.toolName,
+		args: block.arguments,
+		result: block.result,
+		status: block.status,
 		workspaceRoot,
 		onOpenFile,
 		streaming: step.streaming,
@@ -306,19 +307,21 @@ function RoutineToolRow({
 	onOpenFile?: ((path: string) => void) | undefined;
 }) {
 	const [expanded, toggle] = useFold(step.id);
-	const status: ToolStatus = step.tool?.status ?? (step.dead ? "error" : "running");
+	const { block } = step;
+	const status = block.status;
+	const isError = status === "error" || status === "abandoned";
 	const renderProps = toolRenderProps(step, workspaceRoot, onOpenFile);
-	const summary = getToolSummary(step.toolName, renderProps);
+	const summary = getToolSummary(block.toolName, renderProps);
 	return (
 		<div
 			data-testid="activity-step"
 			data-activity-node-id={step.id}
 			data-activity-parent-id={parentId}
 			data-activity-node-kind="tool"
-			data-activity-node-label={step.toolName}
+			data-activity-node-label={block.toolName}
 			data-activity-node-meta={summary}
 			data-step="tool"
-			data-tool={step.toolName}
+			data-tool={block.toolName}
 			data-status={status}
 			data-expanded={expanded}
 			className="text-text-muted tr-text-metadata"
@@ -327,19 +330,19 @@ function RoutineToolRow({
 				expanded={expanded}
 				onToggle={toggle}
 				icon={
-					status === "running" ? (
+					status === "running" || status === "pending" ? (
 						<Loader2 className="size-12 shrink-0 animate-spin motion-reduce:animate-none" />
-					) : status === "error" ? (
+					) : isError ? (
 						<X className="size-12 shrink-0 text-feedback-error" />
 					) : (
 						<Check className="size-12 shrink-0 text-feedback-success" />
 					)
 				}
-				name={step.toolName}
+				name={block.toolName}
 				summary={summary}
 			/>
 			{expanded ? (
-				<div className={cn("px-8 pb-4 pl-16", status === "error" && "text-feedback-error")}>
+				<div className={cn("px-8 pb-4 pl-16", isError && "text-feedback-error")}>
 					<ToolRendererBody {...renderProps} imageLabel={summary} />
 				</div>
 			) : null}

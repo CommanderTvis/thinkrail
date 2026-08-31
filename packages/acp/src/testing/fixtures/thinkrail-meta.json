@@ -1,0 +1,132 @@
+[
+	{
+		"direction": "out",
+		"frame": {
+			"jsonrpc": "2.0",
+			"id": 50,
+			"method": "session/prompt",
+			"params": {
+				"sessionId": "sess-meta",
+				"prompt": [{ "type": "text", "text": "Summarise the branch." }],
+				"_meta": { "dev.thinkrail.v1": { "steer": { "mode": "steer" } } }
+			}
+		}
+	},
+	{
+		"direction": "in",
+		"frame": {
+			"jsonrpc": "2.0",
+			"method": "session/update",
+			"params": {
+				"sessionId": "sess-meta",
+				"update": { "sessionUpdate": "session_info_update" },
+				"_meta": {
+					"dev.thinkrail.v1": {
+						"retry": {
+							"scope": "turn",
+							"phase": "scheduled",
+							"attempt": 1,
+							"maxAttempts": 5,
+							"delayMs": 2000,
+							"error": "429 from the provider"
+						}
+					}
+				}
+			}
+		}
+	},
+	{
+		"direction": "in",
+		"frame": {
+			"jsonrpc": "2.0",
+			"method": "session/update",
+			"params": {
+				"sessionId": "sess-meta",
+				"update": { "sessionUpdate": "session_info_update" },
+				"_meta": {
+					"dev.thinkrail.v1": { "retry": { "scope": "turn", "phase": "cleared" } }
+				}
+			}
+		}
+	},
+	{
+		"direction": "in",
+		"frame": {
+			"jsonrpc": "2.0",
+			"method": "session/update",
+			"params": {
+				"sessionId": "sess-meta",
+				"update": { "sessionUpdate": "session_info_update" },
+				"_meta": {
+					"dev.thinkrail.v1": { "compaction": { "phase": "start", "reason": "threshold" } }
+				}
+			}
+		}
+	},
+	{
+		"direction": "in",
+		"frame": {
+			"jsonrpc": "2.0",
+			"method": "session/update",
+			"params": {
+				"sessionId": "sess-meta",
+				"update": { "sessionUpdate": "session_info_update" },
+				"_meta": {
+					"dev.thinkrail.v1": {
+						"compaction": {
+							"phase": "end",
+							"reason": "threshold",
+							"summary": "Folded 40 messages into a summary.",
+							"tokensBefore": 180000,
+							"supersededMessageId": "agent-msg-9"
+						}
+					}
+				}
+			}
+		}
+	},
+	{
+		"direction": "in",
+		"frame": {
+			"jsonrpc": "2.0",
+			"method": "session/update",
+			"params": {
+				"sessionId": "sess-meta",
+				"update": { "sessionUpdate": "session_info_update" },
+				"_meta": {
+					"dev.thinkrail.v1": { "queue": { "steering": 1, "followUp": 2 } }
+				}
+			}
+		}
+	},
+	{
+		"direction": "in",
+		"frame": {
+			"jsonrpc": "2.0",
+			"method": "session/update",
+			"params": {
+				"sessionId": "sess-meta",
+				"update": { "sessionUpdate": "session_info_update" },
+				"_meta": { "dev.thinkrail.v1": { "queue": "not-a-queue" } }
+			}
+		}
+	},
+	{
+		"direction": "in",
+		"frame": {
+			"jsonrpc": "2.0",
+			"method": "session/update",
+			"params": {
+				"sessionId": "sess-meta",
+				"update": {
+					"sessionUpdate": "agent_message_chunk",
+					"content": { "type": "text", "text": "The branch replaces pi with ACP." }
+				}
+			}
+		}
+	},
+	{
+		"direction": "in",
+		"frame": { "jsonrpc": "2.0", "id": 50, "result": { "stopReason": "end_turn" } }
+	}
+]

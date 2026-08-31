@@ -1,0 +1,219 @@
+[
+	{
+		"direction": "out",
+		"frame": {
+			"jsonrpc": "2.0",
+			"id": 30,
+			"method": "session/prompt",
+			"params": {
+				"sessionId": "sess-signals",
+				"prompt": [{ "type": "text", "text": "Plan the migration." }]
+			}
+		}
+	},
+	{
+		"direction": "in",
+		"frame": {
+			"jsonrpc": "2.0",
+			"method": "session/update",
+			"params": {
+				"sessionId": "sess-signals",
+				"update": {
+					"sessionUpdate": "plan",
+					"entries": [
+						{ "content": "Read the specs", "priority": "high", "status": "completed" },
+						{ "content": "Move the agent code", "priority": "medium", "status": "in_progress" },
+						{ "content": "Rewrite the wire", "priority": "low", "status": "pending" }
+					]
+				}
+			}
+		}
+	},
+	{
+		"direction": "in",
+		"frame": {
+			"jsonrpc": "2.0",
+			"method": "session/update",
+			"params": {
+				"sessionId": "sess-signals",
+				"update": {
+					"sessionUpdate": "plan_update",
+					"plan": {
+						"type": "items",
+						"planId": "plan-1",
+						"entries": [
+							{ "content": "Read the specs", "priority": "high", "status": "completed" },
+							{ "content": "Move the agent code", "priority": "medium", "status": "completed" },
+							{ "content": "Rewrite the wire", "priority": "low", "status": "in_progress" }
+						]
+					}
+				}
+			}
+		}
+	},
+	{
+		"direction": "in",
+		"frame": {
+			"jsonrpc": "2.0",
+			"method": "session/update",
+			"params": {
+				"sessionId": "sess-signals",
+				"update": {
+					"sessionUpdate": "plan_update",
+					"plan": {
+						"type": "markdown",
+						"planId": "plan-1",
+						"content": "# Migration\n\nA plan ThinkRail has no entry list for."
+					}
+				}
+			}
+		}
+	},
+	{
+		"direction": "in",
+		"frame": {
+			"jsonrpc": "2.0",
+			"method": "session/update",
+			"params": {
+				"sessionId": "sess-signals",
+				"update": {
+					"sessionUpdate": "plan_update",
+					"plan": {
+						"type": "file",
+						"planId": "plan-1",
+						"uri": "file:///tmp/fixture-worktree/PLAN.md"
+					}
+				}
+			}
+		}
+	},
+	{
+		"direction": "in",
+		"frame": {
+			"jsonrpc": "2.0",
+			"method": "session/update",
+			"params": {
+				"sessionId": "sess-signals",
+				"update": { "sessionUpdate": "plan_removed", "planId": "plan-1" }
+			}
+		}
+	},
+	{
+		"direction": "in",
+		"frame": {
+			"jsonrpc": "2.0",
+			"method": "session/update",
+			"params": {
+				"sessionId": "sess-signals",
+				"update": {
+					"sessionUpdate": "available_commands_update",
+					"availableCommands": [
+						{
+							"name": "review",
+							"description": "Review the working tree",
+							"input": { "hint": "<path>" }
+						},
+						{ "name": "compact", "description": "Compact the conversation" }
+					]
+				}
+			}
+		}
+	},
+	{
+		"direction": "in",
+		"frame": {
+			"jsonrpc": "2.0",
+			"method": "session/update",
+			"params": {
+				"sessionId": "sess-signals",
+				"update": { "sessionUpdate": "current_mode_update", "currentModeId": "plan" }
+			}
+		}
+	},
+	{
+		"direction": "in",
+		"frame": {
+			"jsonrpc": "2.0",
+			"method": "session/update",
+			"params": {
+				"sessionId": "sess-signals",
+				"update": {
+					"sessionUpdate": "config_option_update",
+					"configOptions": [
+						{
+							"id": "mode",
+							"name": "Mode",
+							"category": "mode",
+							"type": "select",
+							"currentValue": "plan",
+							"options": [
+								{ "value": "plan", "name": "Plan" },
+								{ "value": "build", "name": "Build", "description": "Write code" }
+							]
+						},
+						{
+							"id": "model_config.temperature",
+							"name": "Deterministic",
+							"category": "model_config",
+							"type": "boolean",
+							"currentValue": false
+						}
+					]
+				}
+			}
+		}
+	},
+	{
+		"direction": "in",
+		"frame": {
+			"jsonrpc": "2.0",
+			"method": "session/update",
+			"params": {
+				"sessionId": "sess-signals",
+				"update": {
+					"sessionUpdate": "session_info_update",
+					"title": "Plan the ACP migration",
+					"updatedAt": "2026-08-20T12:00:00Z"
+				}
+			}
+		}
+	},
+	{
+		"direction": "in",
+		"frame": {
+			"jsonrpc": "2.0",
+			"method": "session/update",
+			"params": {
+				"sessionId": "sess-signals",
+				"update": { "sessionUpdate": "session_info_update" }
+			}
+		}
+	},
+	{
+		"direction": "in",
+		"frame": {
+			"jsonrpc": "2.0",
+			"method": "session/update",
+			"params": {
+				"sessionId": "sess-signals",
+				"update": {
+					"sessionUpdate": "usage_update",
+					"used": 48000,
+					"size": 200000,
+					"cost": { "amount": 0.42, "currency": "EUR" }
+				}
+			}
+		}
+	},
+	{
+		"direction": "in",
+		"frame": {
+			"jsonrpc": "2.0",
+			"id": 30,
+			"result": {
+				"stopReason": "end_turn",
+				"usage": { "totalTokens": 900, "inputTokens": 800, "outputTokens": 100 }
+			}
+		}
+	}
+]

@@ -1,11 +1,8 @@
-import { afterEach, beforeAll, beforeEach, expect, test } from "bun:test";
+import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
-import { ModelRuntime } from "@earendil-works/pi-coding-agent";
 import { isPortFree } from "@thinkrail/shared/freePort";
-import { configurePiRuntime, configurePiRuntimeFactory } from "../agent";
 import { resetJbcentralStateForTests } from "../auth";
 import { type BootedHost, bootHost, HostAlreadyRunningError } from "./boot";
 
@@ -14,23 +11,12 @@ process.setMaxListeners(50);
 const booted: BootedHost[] = [];
 const tmpDirs: string[] = [];
 const originalDataDir = process.env.THINKRAIL_DATA_DIR;
-let testRuntime: ModelRuntime;
-
-beforeAll(async () => {
-	testRuntime = await ModelRuntime.create({
-		credentials: new InMemoryCredentialStore(),
-		modelsPath: null,
-		allowModelNetwork: false,
-	});
-});
 
 beforeEach(async () => {
+	const dataDir = mkdtempSync(join(tmpdir(), "thinkrail-boot-data-"));
+	tmpDirs.push(dataDir);
+	process.env.THINKRAIL_DATA_DIR = dataDir;
 	await resetJbcentralStateForTests();
-	configurePiRuntime(null);
-	configurePiRuntimeFactory(async () => testRuntime);
-	const dir = mkdtempSync(join(tmpdir(), "thinkrail-boot-data-"));
-	tmpDirs.push(dir);
-	process.env.THINKRAIL_DATA_DIR = dir;
 });
 
 afterEach(async () => {
@@ -39,8 +25,6 @@ afterEach(async () => {
 	if (originalDataDir === undefined) delete process.env.THINKRAIL_DATA_DIR;
 	else process.env.THINKRAIL_DATA_DIR = originalDataDir;
 	await resetJbcentralStateForTests();
-	configurePiRuntimeFactory();
-	configurePiRuntime(null);
 });
 
 function grabFreePort(): number {

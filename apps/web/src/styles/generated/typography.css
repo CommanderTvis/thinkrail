@@ -243,15 +243,6 @@
 	text-transform: none;
 	font-style: normal;
 }
-.tr-code-otp {
-	font-family: var(--tr-font-family-code);
-	font-size: var(--tr-font-size-s18);
-	font-weight: var(--tr-font-weight-regular);
-	line-height: var(--tr-line-height-metadata);
-	letter-spacing: var(--tr-letter-spacing-widest);
-	text-transform: none;
-	font-style: normal;
-}
 .tr-code-text-small {
 	font-family: var(--tr-font-family-code);
 	font-size: var(--tr-font-size-s11);

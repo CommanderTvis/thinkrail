@@ -12,10 +12,10 @@ import { PRODUCT_NAME } from "../constants/branding";
 import { useAppStore } from "../store";
 import { getTransport } from "../transport";
 import { AddProjectMenu } from "./AddProjectMenu";
+import { AgentWarningBanner } from "./AgentWarningBanner";
 import { enterDefaultWorkspace } from "./defaultWorkspace";
 import { NewWorkspaceDialog } from "./NewWorkspaceDialog";
 import { ProjectSkillsNotice } from "./ProjectSkillsNotice";
-import { ProviderWarningBanner } from "./ProviderWarningBanner";
 import { useOpenProject } from "./useOpenProject";
 
 const SETUP_PROMPT = "/skill:setting-up-a-project ";
@@ -110,7 +110,7 @@ export function WelcomePanel() {
 				{project ? project.name : PRODUCT_NAME}
 			</h1>
 
-			<ProviderWarningBanner />
+			<AgentWarningBanner projectId={project?.id ?? null} />
 			{project ? <ProjectSkillsNotice projectId={project.id} /> : null}
 
 			<div className="mt-24 flex flex-wrap justify-center gap-12">

@@ -11,7 +11,6 @@ import {
 	writeFileSync,
 } from "node:fs";
 import { basename, join, relative, resolve, sep } from "node:path";
-import type { BundledExtensions } from "@thinkrail/server";
 import { resolveBuildRuntimeSources } from "@thinkrail/server/build-support";
 import { version } from "@thinkrail/shared/version";
 import { ptyLibraryName, runtimeTarget } from "./src/runtimeTarget";
@@ -24,12 +23,6 @@ const webDir = join(stageDir, "web");
 const generatedEntry = join(stageDir, "server-entry.ts");
 const environment = process.argv.find((value) => value.startsWith("--env="))?.slice(6) ?? "dev";
 const shouldRun = process.argv.includes("--run");
-const bundledRuntimeKeys = {
-	factories: "factories",
-	skillsDir: "skillsDir",
-	trashHelpers: "trashHelpers",
-	webAccessFactory: "webAccessFactory",
-} as const satisfies { [Key in keyof BundledExtensions]-?: Key };
 process.env.THINKRAIL_DESKTOP_VERSION = version;
 if (!new Set(["dev", "canary", "stable"]).has(environment)) {
 	throw new Error(`unsupported Electrobun environment: ${environment}`);
@@ -62,24 +55,14 @@ function stageSkills(roots: string[]): void {
 }
 
 async function buildBundles(): Promise<void> {
-	const sources = resolveBuildRuntimeSources();
-	const factoryImports = sources.extensions
-		.map((extension, index) => `import factory${index} from ${JSON.stringify(extension.entry)};`)
-		.join("\n");
 	writeFileSync(
 		generatedEntry,
-		`${factoryImports}
-import { bootHost, registerBundledRuntime } from "@thinkrail/server";
+		`import { bootHost, setBundledTrashHelpers } from "@thinkrail/server";
 
 export async function startDesktopHost(options) {
-  await registerBundledRuntime({
-    ${bundledRuntimeKeys.factories}: [${sources.extensions.map((_, index) => `factory${index}`).join(", ")}],
-    ${bundledRuntimeKeys.skillsDir}: options.runtimeDir + "/skills",
-    ${bundledRuntimeKeys.trashHelpers}: {
-      macos: options.runtimeDir + "/macos-trash",
-      windows: options.runtimeDir + "/windows-trash.exe",
-    },
-    ${bundledRuntimeKeys.webAccessFactory}: factory0,
+  setBundledTrashHelpers({
+    macos: options.runtimeDir + "/macos-trash",
+    windows: options.runtimeDir + "/windows-trash.exe",
   });
   return bootHost({
     port: 0,

@@ -1,8 +1,33 @@
 import type {
+	AgentAuthMethod,
+	AgentAuthResult,
+	AgentDescriptor,
+	AgentPlan,
+	AgentProviderInfo,
+	AgentRegistryEntry,
+	AskUserQuestionResult,
+	ChatCapabilities,
+	ChatMessage,
+	ConfigOption,
+	ConfigValue,
+	DetectedAgent,
+	ElicitationResponse,
+	InstalledAgent,
+	MessageId,
+	PermissionDecision,
+	PromptContent,
+	QueueLane,
+	RemovedQueuedMessage,
+	SessionId,
+	SessionQueueContent,
+	SessionSummary,
+	SkillCatalogEntry,
+	SlashCommand,
+} from "./chatProtocol";
+import type {
 	AppConfig,
 	AppConfigUpdate,
 	BranchList,
-	DelegationRunDetails,
 	DelegationRunStatus,
 	DiffStats,
 	EditorInfo,
@@ -16,14 +41,14 @@ import type {
 	HistorySearchResult,
 	JbcentralActionResult,
 	JbcentralConnectResult,
+	JbcentralInstall,
 	JbcentralLoginResult,
-	LoginReply,
+	JbcentralStatus,
 	OpenBranchReview,
 	OpenPrResult,
 	PrDraft,
 	Project,
 	ProjectPathStatus,
-	ProviderStatusReport,
 	ReviewAnchor,
 	ReviewComment,
 	ReviewCommentKind,
@@ -38,25 +63,6 @@ import type {
 	TodoStatus,
 	Workspace,
 } from "./domain";
-import { isDelegationRunDetails } from "./domain";
-import type {
-	AskUserAnswersDetails,
-	AskUserQuestionResult,
-	ExtUiResponse,
-	ImageContent,
-	QueueLane,
-	RefreshedModels,
-	RemovedQueuedMessage,
-	SessionQueueContent,
-	SessionStats,
-	SessionSummary,
-	SkillCatalogEntry,
-	SlashCommandInfo,
-	ThinkingLevel,
-	TranscriptMessage,
-	WireCustomMessage,
-	WireModel,
-} from "./piProtocol";
 
 export interface TerminalDataPush {
 	id: string;
@@ -86,7 +92,7 @@ export interface TerminalTabsPush {
 	tabs: TerminalTabInfo[];
 }
 
-export const PROTOCOL_VERSION = 54;
+export const PROTOCOL_VERSION = 55;
 
 export type HostPlatform = "darwin" | "linux" | "win32";
 
@@ -97,6 +103,8 @@ export interface ServerWelcome {
 	projects: Project[];
 	recentProjects: Project[];
 	config: AppConfig;
+	defaultAgent: AgentDescriptor | null;
+	agentProtocolVersion: number | null;
 }
 
 export interface WorkspaceRemoved {
@@ -164,6 +172,7 @@ export const WS_METHODS = {
 	terminalResize: "terminal.resize",
 	terminalClose: "terminal.close",
 	dialogSelectDirectory: "dialog.selectDirectory",
+	dialogSelectFile: "dialog.selectFile",
 	skillList: "skill.list",
 	skillsState: "skills.state",
 	sessionCreate: "session.create",
@@ -173,33 +182,35 @@ export const WS_METHODS = {
 	sessionClearQueue: "session.clearQueue",
 	sessionRemoveQueued: "session.removeQueued",
 	sessionAbort: "session.abort",
-	sessionDispose: "session.dispose",
 	sessionDelete: "session.delete",
-	sessionSetModel: "session.setModel",
-	sessionSetThinkingLevel: "session.setThinkingLevel",
-	sessionCompact: "session.compact",
-	sessionGetStats: "session.getStats",
+	sessionSetConfigOption: "session.setConfigOption",
 	sessionGetCommands: "session.getCommands",
 	sessionReloadResources: "session.reloadResources",
-	sessionExtUiReply: "session.extUiReply",
 	sessionAnswerQuestion: "session.answerQuestion",
+	sessionAnswerPermission: "session.answerPermission",
 	sessionList: "session.list",
 	sessionGetMessages: "session.getMessages",
+	agentList: "agent.list",
+	agentRegistry: "agent.registry",
+	agentInstall: "agent.install",
+	agentAdd: "agent.add",
+	agentRemove: "agent.remove",
+	agentDetect: "agent.detect",
+	agentSelect: "agent.select",
+	agentRefreshConfig: "agent.refreshConfig",
+	agentAuthMethods: "agent.authMethods",
+	agentAuthenticate: "agent.authenticate",
+	agentLogout: "agent.logout",
+	agentAnswerElicitation: "agent.answerElicitation",
+	agentProviders: "agent.providers",
+	agentSetProvider: "agent.setProvider",
+	agentDisableProvider: "agent.disableProvider",
+	agentJbcentralConnect: "agent.jbcentralConnect",
+	agentJbcentralDisconnect: "agent.jbcentralDisconnect",
+	agentJbcentralStartProxy: "agent.jbcentralStartProxy",
+	agentJbcentralLogin: "agent.jbcentralLogin",
+	agentJbcentralUpdate: "agent.jbcentralUpdate",
 	subagentGetTranscript: "subagent.getTranscript",
-	modelList: "model.list",
-	modelRefresh: "model.refresh",
-	modelDefault: "model.default",
-	modelClampThinking: "model.clampThinking",
-	providerStatus: "provider.status",
-	providerLoginStart: "provider.loginStart",
-	providerLoginReply: "provider.loginReply",
-	providerLoginCancel: "provider.loginCancel",
-	providerLogout: "provider.logout",
-	providerJbcentralConnect: "provider.jbcentralConnect",
-	providerJbcentralDisconnect: "provider.jbcentralDisconnect",
-	providerJbcentralStartProxy: "provider.jbcentralStartProxy",
-	providerJbcentralLogin: "provider.jbcentralLogin",
-	providerJbcentralUpdate: "provider.jbcentralUpdate",
 	settingsUpdate: "settings.update",
 	historySearch: "history.search",
 	reviewGet: "review.get",
@@ -219,12 +230,11 @@ export const WS_METHODS = {
 export const WS_CHANNELS = {
 	serverWelcome: "server.welcome",
 	projectUpdated: "project.updated",
-	piEvent: "pi.event",
-	piExtensionUi: "pi.extensionUi",
-	sessionCreated: "session.created",
+	chatEvent: "chat.event",
+	agentElicitation: "agent.elicitation",
+	agentPermission: "agent.permission",
 	sessionDeleted: "session.deleted",
-	providerLogin: "provider.login",
-	providerChanged: "provider.changed",
+	agentChanged: "agent.changed",
 	terminalData: "terminal.data",
 	terminalExit: "terminal.exit",
 	terminalDetached: "terminal.detached",
@@ -240,59 +250,31 @@ export const WS_CHANNELS = {
 export type WsMethod = (typeof WS_METHODS)[keyof typeof WS_METHODS];
 export type WsChannel = (typeof WS_CHANNELS)[keyof typeof WS_CHANNELS];
 
-export const ASK_USER_ANSWERS_CUSTOM_TYPE = "ask-user-answers";
-
-export interface AskUserAnswersMessage extends WireCustomMessage<AskUserAnswersDetails> {
-	customType: typeof ASK_USER_ANSWERS_CUSTOM_TYPE;
-	details: AskUserAnswersDetails;
-}
-
-export function isAskUserAnswersMessage(message: unknown): message is AskUserAnswersMessage {
-	if (!message || typeof message !== "object") return false;
-	const m = message as { role?: unknown; customType?: unknown; details?: unknown };
-	if (m.role !== "custom" || m.customType !== ASK_USER_ANSWERS_CUSTOM_TYPE) return false;
-	const details = m.details as Partial<AskUserAnswersDetails> | undefined;
-	return (
-		typeof details?.toolCallId === "string" &&
-		!!details.result &&
-		Array.isArray(details.result.answers) &&
-		typeof details.result.cancelled === "boolean"
-	);
-}
-
-export const SUBAGENT_COMPLETION_CUSTOM_TYPE = "subagent-completion";
-
-export interface SubagentCompletionMessage extends WireCustomMessage<DelegationRunDetails> {
-	customType: typeof SUBAGENT_COMPLETION_CUSTOM_TYPE;
-	details: DelegationRunDetails;
-}
-
-export function isSubagentCompletionMessage(
-	message: unknown,
-): message is SubagentCompletionMessage {
-	if (!message || typeof message !== "object") return false;
-	const m = message as { role?: unknown; customType?: unknown; details?: unknown };
-	if (m.role !== "custom" || m.customType !== SUBAGENT_COMPLETION_CUSTOM_TYPE) return false;
-	return isDelegationRunDetails(m.details);
-}
-
-export function customMessageText(content: WireCustomMessage["content"]): string {
-	if (typeof content === "string") return content;
-	return content
-		.filter((c): c is Extract<typeof c, { type: "text" }> => c.type === "text")
-		.map((c) => c.text)
-		.join("");
-}
-
 export interface Ack {
 	ok: true;
 }
 
-export interface ReviewSendResult {
-	sessionId: string;
-	model: WireModel | null;
-	thinkingLevel: ThinkingLevel;
+export interface SessionCreated {
+	sessionId: SessionId;
+	agent: AgentDescriptor;
+	capabilities: ChatCapabilities;
+	configOptions: ConfigOption[];
+}
+
+export interface ReviewSendResult extends SessionCreated {
 	reused: boolean;
+}
+
+export interface AgentProvidersReport {
+	providers: AgentProviderInfo[];
+	jbcentral?: JbcentralStatus;
+	jbcentralInstall?: JbcentralInstall;
+	anyConfigured: boolean;
+}
+
+export interface AgentRegistryList {
+	entries: AgentRegistryEntry[];
+	stale: boolean;
 }
 
 export interface WorkspaceWatchReadyResult {
@@ -432,23 +414,21 @@ export interface WsMethodMap {
 		result: { closed: boolean; busy: boolean };
 	};
 	"dialog.selectDirectory": { params: Record<string, never>; result: { path: string | null } };
-	"skill.list": { params: { projectId: string }; result: SlashCommandInfo[] };
+	"dialog.selectFile": { params: Record<string, never>; result: { path: string | null } };
+	"skill.list": { params: { projectId: string }; result: SlashCommand[] };
 	"skills.state": { params: { workspaceId: string }; result: SkillCatalogEntry[] };
-	"session.create": {
-		params: { workspaceId: string; model?: WireModel; thinkingLevel?: ThinkingLevel };
-		result: { sessionId: string; model: WireModel | null; thinkingLevel: ThinkingLevel };
-	};
+	"session.create": { params: { workspaceId: string }; result: SessionCreated };
 	"session.prompt": {
-		params: { sessionId: string; text: string; images?: ImageContent[] };
-		result: Ack;
+		params: { sessionId: string; content: PromptContent[] };
+		result: { messageId: MessageId };
 	};
 	"session.steer": {
-		params: { sessionId: string; text: string; images?: ImageContent[] };
-		result: Ack;
+		params: { sessionId: string; content: PromptContent[] };
+		result: { messageId: MessageId };
 	};
 	"session.followUp": {
-		params: { sessionId: string; text: string; images?: ImageContent[] };
-		result: Ack;
+		params: { sessionId: string; content: PromptContent[] };
+		result: { messageId: MessageId };
 	};
 	"session.clearQueue": {
 		params: { sessionId: string; requireTextOnly?: boolean };
@@ -462,51 +442,68 @@ export interface WsMethodMap {
 		params: { sessionId: string; restoreQueue?: boolean };
 		result: Ack & { restoredQueue?: SessionQueueContent };
 	};
-	"session.dispose": { params: { sessionId: string }; result: Ack };
 	"session.delete": { params: { workspaceId: string; sessionId: string }; result: Ack };
-	"session.setModel": { params: { sessionId: string; model: WireModel }; result: Ack };
-	"session.setThinkingLevel": { params: { sessionId: string; level: ThinkingLevel }; result: Ack };
-	"session.compact": { params: { sessionId: string; instructions?: string }; result: Ack };
-	"session.getStats": { params: { sessionId: string }; result: SessionStats };
-	"session.getCommands": { params: { sessionId: string }; result: SlashCommandInfo[] };
+	"session.setConfigOption": {
+		params: { sessionId: string; optionId: string; value: ConfigValue };
+		result: ConfigOption[];
+	};
+	"session.getCommands": { params: { sessionId: string }; result: SlashCommand[] };
 	"session.reloadResources": { params: { sessionId: string }; result: Ack };
-	"session.extUiReply": { params: { response: ExtUiResponse }; result: Ack };
 	"session.answerQuestion": {
 		params: { sessionId: string; toolCallId: string; result: AskUserQuestionResult };
 		result: Ack;
 	};
+	"session.answerPermission": { params: { decision: PermissionDecision }; result: Ack };
 	"session.list": { params: { workspaceId: string }; result: SessionSummary[] };
 	"session.getMessages": {
 		params: { sessionId: string; workspaceId: string };
-		result: { summary: SessionSummary; messages: TranscriptMessage[] };
+		result: {
+			summary: SessionSummary;
+			messages: ChatMessage[];
+			configOptions: ConfigOption[];
+			capabilities: ChatCapabilities;
+			plan: AgentPlan | null;
+		};
 	};
+	"agent.list": { params: Record<string, never>; result: InstalledAgent[] };
+	"agent.registry": { params: { refresh?: boolean }; result: AgentRegistryList };
+	"agent.install": { params: { id: string }; result: InstalledAgent };
+	"agent.add": {
+		params: { id: string; name: string; command: string; args: string[] };
+		result: InstalledAgent;
+	};
+	"agent.remove": { params: { id: string }; result: Ack };
+	"agent.detect": { params: Record<string, never>; result: DetectedAgent[] };
+	"agent.select": { params: { projectId: string; agentId: string | null }; result: Project };
+	"agent.refreshConfig": { params: { sessionId: string }; result: ConfigOption[] };
+	"agent.authMethods": { params: { agentId: string }; result: AgentAuthMethod[] };
+	"agent.authenticate": {
+		params: { agentId: string; methodId: string; env?: Record<string, string> };
+		result: AgentAuthResult;
+	};
+	"agent.logout": { params: { agentId: string; methodId?: string }; result: Ack };
+	"agent.answerElicitation": { params: { response: ElicitationResponse }; result: Ack };
+	"agent.providers": { params: { agentId: string }; result: AgentProvidersReport };
+	"agent.setProvider": {
+		params: {
+			agentId: string;
+			providerId: string;
+			apiType: string;
+			baseUrl: string;
+			headers?: Record<string, string>;
+		};
+		result: Ack;
+	};
+	"agent.disableProvider": { params: { agentId: string; providerId: string }; result: Ack };
+	"agent.jbcentralConnect": { params: Record<string, never>; result: JbcentralConnectResult };
+	"agent.jbcentralDisconnect": { params: Record<string, never>; result: JbcentralActionResult };
+	"agent.jbcentralStartProxy": { params: Record<string, never>; result: JbcentralActionResult };
+	"agent.jbcentralLogin": { params: Record<string, never>; result: JbcentralLoginResult };
+	"agent.jbcentralUpdate": { params: Record<string, never>; result: JbcentralActionResult };
 	"subagent.getTranscript": {
 		params: { workspaceId: string; parentSessionId: string; childSessionId: string };
-		result: { messages: TranscriptMessage[]; status?: DelegationRunStatus };
+		result: { messages: ChatMessage[]; status?: DelegationRunStatus };
 	};
-	"model.list": { params: Record<string, never>; result: WireModel[] };
-	"model.clampThinking": {
-		params: { provider: string; id: string; level: ThinkingLevel };
-		result: { level: ThinkingLevel };
-	};
-	"model.refresh": { params: { force?: boolean }; result: RefreshedModels };
-	"model.default": {
-		params: Record<string, never>;
-		result: { model: WireModel | null; thinkingLevel: ThinkingLevel };
-	};
-	"provider.status": { params: Record<string, never>; result: ProviderStatusReport };
-	"provider.loginStart": {
-		params: { providerId: string; type?: "oauth" | "api_key" };
-		result: { loginId: string };
-	};
-	"provider.loginReply": { params: LoginReply; result: Ack };
-	"provider.loginCancel": { params: { loginId: string }; result: Ack };
-	"provider.logout": { params: { providerId: string }; result: Ack };
-	"provider.jbcentralConnect": { params: Record<string, never>; result: JbcentralConnectResult };
-	"provider.jbcentralDisconnect": { params: Record<string, never>; result: JbcentralActionResult };
-	"provider.jbcentralStartProxy": { params: Record<string, never>; result: JbcentralActionResult };
-	"provider.jbcentralLogin": { params: Record<string, never>; result: JbcentralLoginResult };
-	"provider.jbcentralUpdate": { params: Record<string, never>; result: JbcentralActionResult };
 	"settings.update": { params: { config: AppConfigUpdate }; result: AppConfig };
 	"history.search": {
 		params: { query: string; scope: HistoryScope; limit?: number };
@@ -532,8 +529,6 @@ export interface WsMethodMap {
 			workspaceId: string;
 			id: string;
 			sessionId?: string;
-			model?: WireModel;
-			thinkingLevel?: ThinkingLevel;
 		};
 		result: ReviewSendResult;
 	};
@@ -542,8 +537,6 @@ export interface WsMethodMap {
 			workspaceId: string;
 			commentIds?: string[];
 			sessionId?: string;
-			model?: WireModel;
-			thinkingLevel?: ThinkingLevel;
 		};
 		result: { sessions: ReviewSendResult[] };
 	};

@@ -1,9 +1,9 @@
 import { createHash, randomUUID } from "node:crypto";
 import { join, normalize } from "node:path";
 import type {
+	AgentDescriptor,
 	HostPlatform,
 	ServerWelcome,
-	SessionCreatedPayload,
 	SessionDeletedPayload,
 	TerminalTabsPush,
 	WorkspaceFsChangedPayload,
@@ -11,16 +11,11 @@ import type {
 import { PROTOCOL_VERSION, WS_CHANNELS } from "@thinkrail/contracts";
 import { errorCodeOf } from "@thinkrail/shared/codedError";
 import {
-	disposeAllSessions,
-	getSessionWorkspaceId,
-	isProjectSkillPath,
-	setExtUiPublisher,
-	setReviewCommentHandler,
-	setSessionCreatedPublisher,
-	setSessionDeletedPublisher,
-	setSessionPublisher,
-	setSkillAdmissionResolver,
-	settleSessionsForShutdown,
+	BUNDLED_AGENT_ID,
+	disposeAgentSessions,
+	getAgentSessions,
+	listInstalledAgents,
+	setAgentPublishers,
 } from "../agent";
 import {
 	type AnalyticsOptions,
@@ -30,24 +25,17 @@ import {
 	track,
 } from "../analytics";
 import {
-	cancelAllLogins,
-	initializeJbcentralRuntime,
+	setAgentCredentials,
 	setJbcentralAppliedPublisher,
 	setJbcentralChangedPublisher,
-	setLoginPublisher,
-	stopJbcentralRuntime,
+	startJbcentralWatch,
+	stopJbcentralWatch,
 } from "../auth";
 import { resolveWorktreeFile } from "../fs";
 import { logger } from "../log";
 import { loadWorkspaces } from "../persistence";
-import {
-	getProjects,
-	listProjects,
-	listRecentProjects,
-	openProject,
-	setProjectPublisher,
-} from "../projects";
-import { reanchorWorkspace, resolveCommentFromAgent, setReviewPublisher } from "../reviews";
+import { listProjects, listRecentProjects, openProject, setProjectPublisher } from "../projects";
+import { reanchorWorkspace, setReviewPublisher } from "../reviews";
 import { getConfig, setSettingsPublisher } from "../settings";
 import {
 	closeAllTerminals,
@@ -58,23 +46,14 @@ import {
 	setTerminalTabsPublisher,
 } from "../terminal";
 import { isTodoToolEnd, maybeAttachChangeArtifacts } from "../todos";
-import {
-	setRepoMetaPublisher,
-	setSkillPathClassifier,
-	setWatchPublisher,
-	stopAllWatches,
-} from "../watch";
-import { getWorkspace, refreshUserOwnedWorkspace, setWorkspacePublisher } from "../workspaces";
-import {
-	isPromptCommitted,
-	isSettledTurn,
-	maybeAutoRenameWorkspace,
-	maybeNaiveNameWorkspace,
-} from "./autoRename";
+import { setRepoMetaPublisher, setWatchPublisher, stopAllWatches } from "../watch";
+import { refreshUserOwnedWorkspace, setWorkspacePublisher } from "../workspaces";
+import { setAgentCatalogPublisher } from "./agentCatalog";
+import { installAgentCredentials } from "./agentCredentials";
+import { isPromptCommitted, maybeNaiveNameWorkspace } from "./autoRename";
 import { setFsNudgePublisher } from "./fsNudge";
 import { handleRequest, requestMethodDiagnostic } from "./handlers";
 import { provisionInitialTerminal } from "./initialTerminal";
-import { trackLoginOutcome } from "./loginAnalytics";
 import { RequestReplayCache } from "./requestReplayCache";
 import { terminalDeliveryForSendStatus } from "./terminalSend";
 import {
@@ -112,11 +91,27 @@ const CLIENT_REPLAY_RETENTION_MS = 60_000;
 
 const log = logger("host");
 
+const BROADCAST_CHANNELS = [
+	WS_CHANNELS.chatEvent,
+	WS_CHANNELS.agentPermission,
+	WS_CHANNELS.agentElicitation,
+	WS_CHANNELS.sessionDeleted,
+	WS_CHANNELS.agentChanged,
+	WS_CHANNELS.projectUpdated,
+	WS_CHANNELS.terminalTabs,
+	WS_CHANNELS.workspaceCreated,
+	WS_CHANNELS.workspaceUpdated,
+	WS_CHANNELS.workspaceRemoved,
+	WS_CHANNELS.workspaceFsChanged,
+	WS_CHANNELS.settingsChanged,
+	WS_CHANNELS.reviewChanged,
+] as const;
+
 const isRequestId = (id: unknown): id is string => typeof id === "string";
 
 export async function createServer(options: CreateServerOptions = {}): Promise<RunningServer> {
-	await initializeJbcentralRuntime();
-	getConfig();
+	startJbcentralWatch();
+	installAgentCredentials();
 	const {
 		port = 24242,
 		host = "localhost",
@@ -132,6 +127,14 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	const terminalBackpressured = new Set<string>();
 	let stopping = false;
 	let shutdownPromise: Promise<void> | undefined;
+	let defaultAgent: AgentDescriptor | null = null;
+
+	const refreshDefaultAgent = async (): Promise<void> => {
+		const wanted = getConfig().defaultAgentId ?? BUNDLED_AGENT_ID;
+		const agents = await listInstalledAgents();
+		defaultAgent = agents.find((agent) => agent.id === wanted) ?? null;
+	};
+	await refreshDefaultAgent();
 
 	const armClientReap = (clientKey: string): void => {
 		reapTimers.set(
@@ -177,20 +180,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 					clearTimeout(pendingReap);
 					reapTimers.delete(ws.data.clientKey);
 				}
-				ws.subscribe(WS_CHANNELS.piEvent);
-				ws.subscribe(WS_CHANNELS.piExtensionUi);
-				ws.subscribe(WS_CHANNELS.sessionCreated);
-				ws.subscribe(WS_CHANNELS.sessionDeleted);
-				ws.subscribe(WS_CHANNELS.providerLogin);
-				ws.subscribe(WS_CHANNELS.providerChanged);
-				ws.subscribe(WS_CHANNELS.projectUpdated);
-				ws.subscribe(WS_CHANNELS.terminalTabs);
-				ws.subscribe(WS_CHANNELS.workspaceCreated);
-				ws.subscribe(WS_CHANNELS.workspaceUpdated);
-				ws.subscribe(WS_CHANNELS.workspaceRemoved);
-				ws.subscribe(WS_CHANNELS.workspaceFsChanged);
-				ws.subscribe(WS_CHANNELS.settingsChanged);
-				ws.subscribe(WS_CHANNELS.reviewChanged);
+				for (const channel of BROADCAST_CHANNELS) ws.subscribe(channel);
 				const hostPlatform: HostPlatform =
 					process.platform === "darwin" || process.platform === "win32"
 						? process.platform
@@ -201,6 +191,12 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 					projects: listProjects(),
 					recentProjects: listRecentProjects(),
 					config: getConfig(),
+					defaultAgent,
+					agentProtocolVersion:
+						defaultAgent === null
+							? null
+							: (getAgentSessions().capabilitiesFor(defaultAgent.id)?.agent.protocolVersion ??
+								null),
 					...(appVersion ? { appVersion } : {}),
 				};
 				const welcomeStatus = ws.send(
@@ -298,6 +294,10 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		},
 	});
 
+	const broadcast = (channel: (typeof BROADCAST_CHANNELS)[number], data: unknown): void => {
+		server.publish(channel, JSON.stringify({ channel, data }));
+	};
+
 	setTerminalPublisher((clientKey, channel, data) => {
 		if (terminalBackpressured.has(clientKey)) return "unavailable";
 		const ws = sockets.get(clientKey);
@@ -313,35 +313,13 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		}
 	});
 
-	setSkillAdmissionResolver((workspaceId) => {
-		try {
-			const { projectId, skillOverrides } = getWorkspace(workspaceId);
-			const project = getProjects().find((p) => p.id === projectId);
-			return {
-				trusted: project?.trusted === true,
-				acknowledged: project?.acknowledgedSkills ?? [],
-				disabled: project?.disabledSkills ?? [],
-				disabledGroups: project?.disabledGroups ?? [],
-				overrides: skillOverrides ?? {},
-			};
-		} catch {
-			return { trusted: false, acknowledged: [], disabled: [], disabledGroups: [], overrides: {} };
-		}
-	});
-
 	setProjectPublisher((project) => {
-		server.publish(
-			WS_CHANNELS.projectUpdated,
-			JSON.stringify({ channel: WS_CHANNELS.projectUpdated, data: project }),
-		);
+		broadcast(WS_CHANNELS.projectUpdated, project);
 	});
 
 	setTerminalTabsPublisher((workspaceId, tabs) => {
 		const data: TerminalTabsPush = { workspaceId, tabs };
-		server.publish(
-			WS_CHANNELS.terminalTabs,
-			JSON.stringify({ channel: WS_CHANNELS.terminalTabs, data }),
-		);
+		broadcast(WS_CHANNELS.terminalTabs, data);
 	});
 
 	setWorkspacePublisher((event) => {
@@ -351,20 +329,17 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 				: event.kind === "updated"
 					? WS_CHANNELS.workspaceUpdated
 					: WS_CHANNELS.workspaceRemoved;
-		const data =
-			event.kind === "removed" ? { projectId: event.projectId, id: event.id } : event.workspace;
-		server.publish(channel, JSON.stringify({ channel, data }));
+		broadcast(
+			channel,
+			event.kind === "removed" ? { projectId: event.projectId, id: event.id } : event.workspace,
+		);
 	});
 
 	const publishFsChanged = (payload: WorkspaceFsChangedPayload) => {
-		server.publish(
-			WS_CHANNELS.workspaceFsChanged,
-			JSON.stringify({ channel: WS_CHANNELS.workspaceFsChanged, data: payload }),
-		);
+		broadcast(WS_CHANNELS.workspaceFsChanged, payload);
 		reanchorWorkspace(payload.workspaceId);
 	};
 	setWatchPublisher(publishFsChanged);
-	setSkillPathClassifier(isProjectSkillPath);
 	setFsNudgePublisher(publishFsChanged);
 
 	setRepoMetaPublisher((workspaceId) => {
@@ -373,87 +348,56 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	});
 
 	setReviewPublisher((payload) => {
-		server.publish(
-			WS_CHANNELS.reviewChanged,
-			JSON.stringify({
-				channel: WS_CHANNELS.reviewChanged,
-				data: markClientStale(payload, payload.workspaceId),
-			}),
-		);
+		broadcast(WS_CHANNELS.reviewChanged, markClientStale(payload, payload.workspaceId));
 	});
-	setReviewCommentHandler((sessionId, commentId, note) => ({
-		resolvedBody: resolveCommentFromAgent(sessionId, commentId, note).body,
-	}));
 	installTodoReviewSeams();
 	reconcilePendingReviewsOnBoot();
 
 	setSettingsPublisher((config) => {
-		server.publish(
-			WS_CHANNELS.settingsChanged,
-			JSON.stringify({ channel: WS_CHANNELS.settingsChanged, data: config }),
-		);
+		broadcast(WS_CHANNELS.settingsChanged, config);
 		setAnalyticsSending(config.analyticsEnabled);
+		void refreshDefaultAgent();
 	});
 
-	setSessionCreatedPublisher((payload: SessionCreatedPayload) => {
-		server.publish(
-			WS_CHANNELS.sessionCreated,
-			JSON.stringify({ channel: WS_CHANNELS.sessionCreated, data: payload }),
-		);
-	});
-
-	setSessionDeletedPublisher((payload: SessionDeletedPayload) => {
-		server.publish(
-			WS_CHANNELS.sessionDeleted,
-			JSON.stringify({ channel: WS_CHANNELS.sessionDeleted, data: payload }),
-		);
-	});
-
-	setSessionPublisher((payload) => {
-		server.publish(
-			WS_CHANNELS.piEvent,
-			JSON.stringify({ channel: WS_CHANNELS.piEvent, data: payload }),
-		);
-		if (isPromptCommitted(payload.event)) {
-			const workspaceId = getSessionWorkspaceId(payload.sessionId);
-			if (workspaceId) void maybeNaiveNameWorkspace(payload.sessionId, workspaceId);
-		} else if (isSettledTurn(payload.event)) {
-			const workspaceId = getSessionWorkspaceId(payload.sessionId);
-			if (workspaceId) void maybeAutoRenameWorkspace(payload.sessionId, workspaceId);
-			handleReviewerSettled(payload.sessionId, payload.event);
-			maybeResumeReflection(payload.sessionId);
-		}
-		if (isTodoToolEnd(payload.event)) {
-			const workspaceId = getSessionWorkspaceId(payload.sessionId);
-			if (workspaceId)
+	setAgentPublishers({
+		chat(payload) {
+			broadcast(WS_CHANNELS.chatEvent, payload);
+			const workspaceId = getAgentSessions().workspaceOf(payload.sessionId);
+			if (workspaceId === undefined) return;
+			if (isPromptCommitted(payload.event)) {
+				void maybeNaiveNameWorkspace(payload.sessionId, workspaceId);
+			} else if (payload.event.type === "turn_settled") {
+				handleReviewerSettled(payload.sessionId, payload.event);
+				maybeResumeReflection(payload.sessionId);
+			}
+			if (isTodoToolEnd(payload.event)) {
 				void maybeAttachChangeArtifacts(workspaceId, payload.sessionId).then(() =>
 					maybeAutoReReview(workspaceId, payload.sessionId),
 				);
-		}
+			}
+		},
+		permission(push) {
+			broadcast(WS_CHANNELS.agentPermission, push);
+		},
+		elicitation(push) {
+			broadcast(WS_CHANNELS.agentElicitation, push);
+		},
+		sessionDeleted(payload: SessionDeletedPayload) {
+			broadcast(WS_CHANNELS.sessionDeleted, payload);
+		},
 	});
 
-	setExtUiPublisher((request) => {
-		server.publish(
-			WS_CHANNELS.piExtensionUi,
-			JSON.stringify({ channel: WS_CHANNELS.piExtensionUi, data: request }),
-		);
-	});
-
-	setLoginPublisher((push) => {
-		server.publish(
-			WS_CHANNELS.providerLogin,
-			JSON.stringify({ channel: WS_CHANNELS.providerLogin, data: push }),
-		);
-		trackLoginOutcome(push);
-	});
 	setJbcentralAppliedPublisher(() => {
-		track({ name: "provider_login", params: { provider: "jbcentral", method: "central" } });
+		track({ name: "provider_login", params: { agent: BUNDLED_AGENT_ID, method: "central" } });
 	});
 	setJbcentralChangedPublisher(() => {
-		server.publish(
-			WS_CHANNELS.providerChanged,
-			JSON.stringify({ channel: WS_CHANNELS.providerChanged, data: {} }),
-		);
+		void refreshDefaultAgent();
+		broadcast(WS_CHANNELS.agentChanged, {});
+	});
+
+	setAgentCatalogPublisher(() => {
+		void refreshDefaultAgent();
+		broadcast(WS_CHANNELS.agentChanged, {});
 	});
 
 	initializeAnalytics({
@@ -477,10 +421,9 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		if (stopping) return;
 		stopping = true;
 		void shutdownAnalytics();
-		cancelAllLogins();
-		stopJbcentralRuntime();
+		stopJbcentralWatch();
 		stopAllWatches();
-		disposeAllSessions();
+		void disposeAgentSessions();
 		for (const timer of reapTimers.values()) clearTimeout(timer);
 		reapTimers.clear();
 		sockets.clear();
@@ -491,11 +434,13 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		setSettingsPublisher(null);
 		setJbcentralAppliedPublisher(() => {});
 		setJbcentralChangedPublisher(() => {});
+		setAgentCatalogPublisher(null);
+		setAgentCredentials(null);
 		server.stop(true);
 	};
 	const shutdown = (): Promise<void> => {
 		shutdownPromise ??= (async () => {
-			await Promise.allSettled([settleSessionsForShutdown(), shutdownAnalytics()]);
+			await Promise.allSettled([disposeAgentSessions(), shutdownAnalytics()]);
 			stop();
 		})();
 		return shutdownPromise;

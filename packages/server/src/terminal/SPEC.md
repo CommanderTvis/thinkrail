@@ -26,7 +26,10 @@ identities. A tab's shell outlives every client that looks at it; each frontend 
   `persistTerminalSessions`, `reviveTerminalSessions`, `closeAllTerminals`, `resetTerminalState` (test seam),
   `setTerminalPublisher`,
   `setTerminalTabsPublisher`;
-  the `TerminalDeliveryResult` type shared with the host publisher adapter.
+  the `TerminalDeliveryResult` type shared with the host publisher adapter; plus the **agent-owned
+  terminal group** — `createAgentTerminal`, `readAgentTerminal`, `waitForAgentTerminalExit`,
+  `killAgentTerminal`, `releaseAgentTerminal` and their `AgentTerminalRequest` / `AgentTerminalOutput` /
+  `AgentTerminalExit` types.
 - **Allowed deps:** `persistence`, `contracts` (`WS_CHANNELS`), `bun-pty`, `process.env`.
 - **Forbidden:** `host`; sibling features. No WebSocket type crosses this boundary — clients are opaque keys.
 
@@ -92,7 +95,27 @@ identities. A tab's shell outlives every client that looks at it; each frontend 
   *catalog* is the exception: which terminals exist is shared domain state (architecture #12), so every
   reservation or removal fans out on `terminal.tabs` as an idempotent per-workspace snapshot.
 - **A shell dies from exactly five causes:** tab closed, workspace archived, natural exit, host stop, orphan
-  sweep on attach. Unmounting a view kills nothing.
+  sweep on attach. Unmounting a view kills nothing. **An agent terminal has a sixth: the agent released
+  it** — see below; that is the one lifetime this module does not key to a tab the user opened.
+- **An agent's command is a real tab, not a hidden subprocess.** [[architecture]] Decision #18 delegates
+  ACP `terminal/*` to the host, and the whole point is that the user can *watch* it. So
+  `createAgentTerminal` spawns into the same PTY registry and the same per-workspace tab catalog every
+  other terminal uses — one registry, one catalog, `attachTerminal` finds it like any other tab — with
+  three differences: it runs the agent's `command`/`args` instead of the login shell, it starts with no
+  attached client (nobody has to be looking), and it carries a byte-capped output buffer beside the
+  screen recorder. The recorder replays a *screen* for xterm; ACP asks for the *bytes* with a
+  `truncated` flag and an `outputByteLimit` the agent chooses, which the recorder cannot answer — so the
+  two are separate on purpose rather than one buffer serving both badly. Over the cap the buffer keeps
+  the **tail**, for the same reason the ACP client's diagnostics do: the end of a command explains it.
+- **Release ends the terminal.** ACP's `terminal/release` means the agent is done, and a tab nobody
+  opened should not outlive that — so release kills a still-running command and removes the tab, rather
+  than leaving the user to close a growing pile of dead ones. What was on screen is not lost: the tool
+  call in the transcript keeps the output. Every path that disposes an entry (release, tab close,
+  workspace archive, host stop) settles a pending `waitForAgentTerminalExit`, because an agent blocked
+  on an exit that can never arrive is a wedged turn.
+- **The cwd is contained by the caller, not here.** `AgentTerminalRequest.cwd` is required and absolute;
+  `agent`'s delegates resolve it through `fs`'s worktree guard before calling, so path containment
+  lives in exactly one module.
 - **No idle culling.** Terminal "activity" can only mean last PTY I/O, so a quiet long-running command would be
   culled mid-flight (Jupyter's `cull_inactive_timeout` does exactly this). **No abandoned-client reap** either.
 - **Revive, not reconnect, across a host restart.** Shells cannot survive it. **Membership is persisted on
@@ -103,6 +126,18 @@ identities. A tab's shell outlives every client that looks at it; each frontend 
   Recordings are best-effort, so an unclean exit gives back the right tabs with blank screens.
 - **Not tmux.** Would buy restart survival at the cost of a dep we can't assume on Windows, a competing tab
   model, env-propagation breakage, and `capture-pane` polling. We already accept no crash isolation.
+
+## Utility terminals close themselves
+
+A terminal whose `tabKey` carries the `agent:` prefix was opened by the host, not the user — today that
+is an agent's terminal-kind sign-in. When its process exits the tab record is **removed** and no replay
+screen is retained, so it leaves the strip instead of lingering. Without that, the tab outlived its
+process and the next attach spawned a fresh shell into it: a sign-in flow silently became a general
+shell in the worktree, which is both a surprise and a wider capability than the user asked for.
+
+Input stays enabled while the process runs, deliberately: device-code and paste-code sign-ins prompt for
+a value, so a read-only utility terminal would break the flow it exists to serve. Auto-close is what
+bounds it — the window in which anything can be typed is exactly the lifetime of the command.
 
 ## Restrictions
 

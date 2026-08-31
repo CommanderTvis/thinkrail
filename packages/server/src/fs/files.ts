@@ -1,5 +1,5 @@
-import { readdirSync, readFileSync } from "node:fs";
-import { isAbsolute, join, relative, resolve } from "node:path";
+import { mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import type { FileNode } from "@thinkrail/contracts";
 import { loadWorkspaces } from "../persistence";
 
@@ -36,4 +36,10 @@ export function readFile(workspaceId: string, path: string): { content: string }
 
 export function resolveWorktreeFile(workspaceId: string, path: string): string {
 	return resolveInWorktree(workspaceId, path).abs;
+}
+
+export function writeFile(workspaceId: string, path: string, content: string): void {
+	const { abs } = resolveInWorktree(workspaceId, path);
+	mkdirSync(dirname(abs), { recursive: true });
+	writeFileSync(abs, content, "utf8");
 }

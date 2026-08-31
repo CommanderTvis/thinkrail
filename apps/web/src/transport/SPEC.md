@@ -31,42 +31,44 @@ batches high-frequency Pi events without allowing later wire messages to overtak
   Receipts are deliberately best-effort and never retransmitted — one can die in a socket buffer exactly like a
   response can, and the request it named is already gone from `pending`, so nothing would replay or re-ack it;
   `resume` repairs them all at once by restating the truth rather than confirming the confirmations —, channel
-  `subscribe` with last-value replay for snapshots; append-only terminal data and the one-shot terminal
-  exit/detach + session-creation/deletion + `provider.changed` invalidation channels are never cached or replayed to
-  late subscribers, reconnect/backoff;
+  `subscribe` with last-value replay for snapshots; `terminalData`/`terminalExit`/`terminalDetached`/
+  `sessionDeleted`/`agentChanged` are never cached or replayed to late subscribers (append-only terminal data
+  and one-shot exit/detach/deletion/invalidation pushes), reconnect/backoff;
   `inferUrl` defaults to
   same-origin; **`httpBase()`** derives the host's HTTP origin
   from the WS `url` — for building host HTTP URLs like the `/files/<workspaceId>/<path>` worktree-file
-  endpoint the markdown viewer points relative `<img>`s at, targeting the same host the transport dials); `piEventBatcher.ts`
-  (the browser-side bounded queue for consecutive `pi.event` frames: exact arrival order, no dropped events,
-  one atomic delivery at roughly 30 Hz, a 128-event forced-flush ceiling, and `flush`/`dispose` lifecycle);
-  `wireTransport.ts` (`initTransport`/
-  `getTransport` singleton; routes `server.welcome`, **`project.updated`**, `pi.event`, `pi.extensionUi`,
-  **`session.created`**, **`session.deleted`**, **`provider.changed`**, **the `workspace.created`/`updated`/`removed` lifecycle
-  trio, and `workspace.fsChanged`** into the store — and
-  folds every connection transition through
+  endpoint the markdown viewer points relative `<img>`s at, targeting the same host the transport dials); `wireTransport.ts` (`initTransport`/
+  `getTransport` singleton; routes `server.welcome`, **`project.updated`**, `chat.event`, `agent.elicitation`,
+  `agent.permission`, `session.deleted`, `agent.changed`, `layout.changed`, the
+  `workspace.created`/`updated`/`removed` lifecycle trio, `workspace.fsChanged`, `settings.changed`, and
+  `review.changed` into the store — and folds every connection transition through
   `setStatus`, whose connected generation gives active-workspace hydration a distinct trigger on every
-  reconnect; the complete welcome (protocol + open/recent project views + optional config) via the atomic
-  `installWelcomeSnapshot`, whose separate `welcomeGeneration` is the cold-navigation readiness edge;
-  project snapshots via `applyProjectUpdated`, consecutive `pi.event` frames through the batcher into one
-  `handlePiEvents(payloads)` store commit, `pi.extensionUi` via `applyExtUi(request)`,
+  reconnect; the complete welcome (protocol + open/recent project views + the negotiated default-agent facts
+  + optional config) via the atomic `installWelcomeSnapshot`, whose separate `welcomeGeneration` is the cold-navigation readiness edge;
+  project snapshots via `applyProjectUpdated`, `chat.event` via `applyChatEvent(sessionId, event)`,
+  `agent.elicitation` via `applyElicitation(push)`, `agent.permission` via `applyPermission(push)`,
   `workspace.created` via `addWorkspace(workspace)`, `workspace.updated` via `updateWorkspace(workspace)`,
   `workspace.removed` via `applyWorkspaceRemoved(projectId, id)`, `session.created` via `noteClosedChats`
   (peer-created domain state enters history only, never local placement), `session.deleted` via the idempotent
   `deleteChat(workspaceId, sessionId)` tombstone fold (an online fast path; because this event channel is
   deliberately not replayed, workbench hydration repairs any deletion missed while disconnected from the next
-  authoritative `session.list`), `provider.changed` via the atomic store invalidation
-  `noteProviderChanged()` plus a `model.list` re-read installed through the store's monotonic provider-version
-  guard (the model-catalog hook uses the same guarded write for every list/refresh, so an older reply cannot
-  restore a removed generation's models; provider settings observes the same version and re-reads
-  `provider.status`), `workspace.fsChanged` via `noteFsChanged(payload)`, and
+  authoritative `session.list`), `agent.changed` via the atomic, deliberately data-free store invalidation
+  `noteAgentChanged()` — a bare tick bump; unlike the old `provider.changed`, wireTransport does **not** itself
+  re-fetch or re-install anything on this channel, because there is no more global model catalog to refresh —
+  a consumer (the agent picker, Settings → Agents) reads the tick and re-reads `agent.list`/`agent.providers`/`agent.detect`
+  on its own, `layout.changed` via a revision-aware store fold (older or duplicate
+  documents are not reinstalled, though their echoed mutation ids still settle matching pending writes;
+  mutation ids distinguish this client's acknowledgements from remote commits,
+  and the shell layout integration cancels an in-progress pointer draft only for a nonmatching accepted
+  revision before rendering it),
+  `workspace.fsChanged` via `noteFsChanged(payload)`, and
   **`settings.changed`** via `applyConfig(config)` — the post-startup server-synced app config broadcast;
   welcome config lands in the atomic install above. Before `WsTransport` dispatches any response or non-Pi
   push, `wireTransport` flushes queued Pi events synchronously; connection-status transitions do the same.
   This dispatch barrier preserves cross-message order and the store's transcript-revision fence while still
   collapsing consecutive stream frames. All subscriptions happen once at init, never in component effects);
   `errorText.ts` (**`errorText(err, fallback?)`** — normalizes a rejected `request` (the host's error
-  string / a timeout / a thrown non-Error) into a short, display-ready line for an error turn/notice);
+  string / a timeout / a thrown non-Error) into a short, display-ready line for a notice/toast);
   `requestError.ts` (**`RequestError`** + **`wsErrorCode(err)`** — a rejection that carries the host's named
   `WsResponse.errorCode`. A coded response rejects with a `RequestError`, everything else (timeout or an unnamed
   host error) with a plain `Error`, so *having* a code is exactly how a caller tells "this
@@ -83,21 +85,42 @@ batches high-frequency Pi events without allowing later wire messages to overtak
   in-flight preparation and a settled prewarm re-issues (re-warming an evicted watcher on project
   re-selection stays cheap). The wrappers then issue `session.create` / `session.getMessages` /
   `session.reloadResources`, so no call site can accidentally reverse readiness and baseline ordering. The
-  `session.getMessages` wrapper also rejects unless the returned summary exactly matches both requested
-  workspace and session, making that untrusted-response identity check one shared installation boundary rather
-  than a caller convention).
+  `session.getMessages` wrapper also rejects unless the returned `summary.record.workspaceId`/
+  `summary.record.sessionId` (`SessionSummary` is composition — `record: SessionRecord` carries the identity
+  fields, `SessionSummary` itself wraps it with process facts) exactly match both requested workspace and
+  session, making that untrusted-response identity check one shared installation boundary rather than a
+  caller convention).
 - **Public surface (barrel):** `initTransport`, `getTransport`, `prewarmWorkspaceSkillLoad`, the three
   skill-load-safe session request wrappers, `errorText`, `RequestError`, `wsErrorCode`, `ConnectionStatus`,
   `TransportOptions`.
-- **Allowed deps:** `contracts` (method maps, `WS_CHANNELS`, `Project` for welcome + `project.updated`, `SessionEventPayload`
-  for `pi.event`, `ExtUiRequest` for `pi.extensionUi`, `Workspace` for `workspace.created`/`updated`,
-  `WorkspaceRemoved` for `workspace.removed`, `SessionCreatedPayload` for `session.created`,
-  `SessionDeletedPayload` for `session.deleted`,
-  `provider.changed`, `WorkspaceFsChangedPayload` for `workspace.fsChanged`, and `AppConfig` for
-  `server.welcome`'s config + `settings.changed`); `store`
+- **Allowed deps:** `contracts` (method maps, `WS_CHANNELS`, `Project` for welcome + `project.updated`,
+  `ChatEventPayload` for `chat.event`, `ElicitationPush` for `agent.elicitation`, `PermissionPush` for
+  `agent.permission`, `Workspace` for `workspace.created`/`updated`,
+  `WorkspaceRemoved` for `workspace.removed`, `SessionDeletedPayload` for `session.deleted`,
+  `WorkspaceFsChangedPayload` for `workspace.fsChanged`, `LayoutChangedPayload` for `layout.changed`,
+  `ReviewChangedPayload` for `review.changed`,
+  `AppConfig` for `server.welcome`'s config + `settings.changed`, `ServerWelcome` for the welcome payload
+  shape including `defaultAgent`/`agentProtocolVersion`); `store`
   (welcome + event routing — a runtime edge owned by the parent graph); `lib` (plain-HTTP-safe random page
   identity); the browser `WebSocket`.
 - **Forbidden:** `server`/`shared`/any `pi` package; importing `panels`/`shell`; or requesting, subscribing to, or folding current-layout state. Layout persistence uses only `httpBase()` as part of its frontend-local storage identity.
+
+## What changed under the ACP migration
+
+`pi.event` → `chat.event` (`ChatEventPayload { sessionId, event: ChatEvent }`, folded through
+`applyChatEvent` rather than `handlePiEvent`). `pi.extensionUi` is retired outright and **split** into two
+new channels with opposite routing shapes: `agent.elicitation` (session-optional — an agent may ask before
+any session exists) and `agent.permission` (always session-scoped, inline on the tool card it names, never
+a modal). `provider.login` is gone entirely — interactive auth is elicitation or a workspace terminal now.
+`provider.changed` is renamed `agent.changed` and its handling gets *simpler*, not just renamed: the old
+handler re-read `model.list` and installed it through a provider-version guard because the model catalog
+used to be global store state; under ACP config options are per-session (seeded by `session.create`,
+kept current by the `config_options` chat event, refreshed by `agent.refreshConfig`), so there is nothing
+global left for this channel to refresh — it is purely an invalidation tick for whichever panel cares.
+`terminal.tabs` joins `WS_CHANNELS` as a formally-named channel but is still subscribed ad hoc by
+`panels/TerminalWorkbench.tsx`, not centrally here, matching `terminal.data`/`terminal.exit`/
+`terminal.detached`'s existing pattern (`panels/TerminalInstance.tsx`) — terminal streams are consumed
+where the terminal body mounts, not routed through the store.
 
 ## Get right
 

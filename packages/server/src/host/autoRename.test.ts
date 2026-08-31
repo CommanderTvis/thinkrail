@@ -2,15 +2,9 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { Message, PiEvent } from "@thinkrail/contracts";
-import { setOneShotRunner } from "../assist";
+import type { ChatEvent, ChatMessage, StopReason } from "@thinkrail/contracts";
 import { createWorkspace, listWorkspaces, removeWorkspace, renameWorkspace } from "../workspaces";
-import {
-	isPromptCommitted,
-	isSettledTurn,
-	maybeAutoRenameWorkspace,
-	maybeNaiveNameWorkspace,
-} from "./autoRename";
+import { isPromptCommitted, maybeNaiveNameWorkspace } from "./autoRename";
 
 async function worktrees(projectId = "p1") {
 	return (await listWorkspaces(projectId)).filter((w) => w.kind !== "default");
@@ -53,157 +47,40 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-	setOneShotRunner(null);
 	rmSync(dataDir, { recursive: true, force: true });
 	if (savedDataDir === undefined) delete process.env.THINKRAIL_DATA_DIR;
 	else process.env.THINKRAIL_DATA_DIR = savedDataDir;
 });
 
-function user(text: string): Message {
-	return { role: "user", content: text, timestamp: 0 } as Message;
+let seq = 0;
+
+function user(text: string): ChatMessage {
+	seq += 1;
+	return { role: "user", id: `u${seq}`, timestamp: seq, content: [{ type: "text", text }] };
 }
 
-function assistant(text: string, stopReason = "stop"): Message {
-	return { role: "assistant", content: [{ type: "text", text }], stopReason } as unknown as Message;
+function assistant(text: string): ChatMessage {
+	seq += 1;
+	return { role: "assistant", id: `a${seq}`, timestamp: seq, blocks: [{ type: "text", text }] };
 }
 
-const firstTurn = async (): Promise<Message[]> => [
+function settled(stopReason: StopReason): ChatMessage {
+	seq += 1;
+	return {
+		role: "marker",
+		id: `m${seq}`,
+		timestamp: seq,
+		marker: { kind: "turnSettled", stopReason },
+	};
+}
+
+const firstTurn = async (): Promise<ChatMessage[]> => [
 	user("add a login form to the settings page"),
 	assistant("Done — added the form."),
+	settled("completed"),
 ];
 
-function fakeRunner(text: string): { calls: () => number; prompts: string[] } {
-	let calls = 0;
-	const prompts: string[] = [];
-	setOneShotRunner(async (req) => {
-		calls += 1;
-		prompts.push(req.prompt);
-		return { text, model: { provider: "test", id: "fake" } };
-	});
-	return { calls: () => calls, prompts };
-}
-
-test("renames the workspace off the first settled turn and flags it", async () => {
-	const ws = await createWorkspace("p1");
-	const runner = fakeRunner("Add Login Flow");
-
-	const renamed = await maybeAutoRenameWorkspace("s1", ws.id, firstTurn);
-
-	expect(renamed?.name).toBe("Add Login Flow");
-	expect(renamed?.branch).toBe("add-login-flow");
-	expect(renamed?.renamed).toBe(true);
-	expect(renamed?.worktreePath).toBe(ws.worktreePath);
-	expect(runner.calls()).toBe(1);
-	expect((await worktrees())[0]?.name).toBe("Add Login Flow");
-});
-
-test("a renamed workspace is never touched again", async () => {
-	const ws = await createWorkspace("p1");
-	const runner = fakeRunner("Add Login Flow");
-	await maybeAutoRenameWorkspace("s1", ws.id, firstTurn);
-
-	expect(await maybeAutoRenameWorkspace("s1", ws.id, firstTurn)).toBeNull();
-	expect(runner.calls()).toBe(1);
-});
-
-test("a user-named workspace never invokes the namer", async () => {
-	const ws = await createWorkspace("p1", "chosen name");
-	const runner = fakeRunner("Something Else");
-
-	expect(await maybeAutoRenameWorkspace("s1", ws.id, firstTurn)).toBeNull();
-	expect(runner.calls()).toBe(0);
-});
-
-test("a failed suggestion leaves the flag unset so a later turn retries", async () => {
-	const ws = await createWorkspace("p1");
-	fakeRunner("!!! ???");
-
-	expect(await maybeAutoRenameWorkspace("s1", ws.id, firstTurn)).toBeNull();
-	expect((await worktrees())[0]?.renamed).toBeUndefined();
-
-	fakeRunner("Fix The Parser");
-	const retried = await maybeAutoRenameWorkspace("s1", ws.id, firstTurn);
-	expect(retried?.name).toBe("Fix The Parser");
-});
-
-test("a throwing runner degrades to null", async () => {
-	const ws = await createWorkspace("p1");
-	setOneShotRunner(async () => {
-		throw new Error("no-model");
-	});
-
-	expect(await maybeAutoRenameWorkspace("s1", ws.id, firstTurn)).toBeNull();
-	expect((await worktrees())[0]?.renamed).toBeUndefined();
-});
-
-test("an errored or aborted run never names the workspace", async () => {
-	const ws = await createWorkspace("p1");
-	const runner = fakeRunner("Add Login Flow");
-
-	const errored = async (): Promise<Message[]> => [user("do a thing"), assistant("", "error")];
-	expect(await maybeAutoRenameWorkspace("s1", ws.id, errored)).toBeNull();
-
-	const aborted = async (): Promise<Message[]> => [user("do a thing"), assistant("", "aborted")];
-	expect(await maybeAutoRenameWorkspace("s1", ws.id, aborted)).toBeNull();
-	expect(runner.calls()).toBe(0);
-});
-
-test("a retracted first prompt is never naming material — the first clean turn is", async () => {
-	const ws = await createWorkspace("p1");
-	const runner = fakeRunner("Fix Header Layout");
-
-	const transcript = async (): Promise<Message[]> => [
-		user("refactor the billing engine"),
-		assistant("Starting on billing…", "aborted"),
-		user("fix the header layout"),
-		assistant("Done — header fixed."),
-	];
-	const renamed = await maybeAutoRenameWorkspace("s1", ws.id, transcript);
-
-	expect(renamed?.name).toBe("Fix Header Layout");
-	expect(runner.prompts[0]).toContain("fix the header layout");
-	expect(runner.prompts[0]).not.toContain("billing");
-});
-
-test("a workspace archived during the one-shot is not renamed or resurrected", async () => {
-	const ws = await createWorkspace("p1");
-	let release = (): void => {};
-	const gate = new Promise<void>((resolve) => {
-		release = resolve;
-	});
-	setOneShotRunner(async () => {
-		await gate;
-		return { text: "Too Late", model: { provider: "test", id: "fake" } };
-	});
-
-	const pending = maybeAutoRenameWorkspace("s1", ws.id, firstTurn);
-	removeWorkspace(ws.id);
-	release();
-
-	expect(await pending).toBeNull();
-	expect(await worktrees()).toHaveLength(0);
-});
-
-test("a user rename landing during the one-shot wins; the late suggestion is dropped", async () => {
-	const ws = await createWorkspace("p1");
-	let release = (): void => {};
-	const gate = new Promise<void>((resolve) => {
-		release = resolve;
-	});
-	setOneShotRunner(async () => {
-		await gate;
-		return { text: "Too Late", model: { provider: "test", id: "fake" } };
-	});
-
-	const pending = maybeAutoRenameWorkspace("s1", ws.id, firstTurn);
-	renameWorkspace(ws.id, "user picked this");
-	release();
-
-	expect(await pending).toBeNull();
-	expect((await worktrees())[0]?.name).toBe("user picked this");
-});
-
-test("naive-rename names the workspace instantly from the first prompt, provisionally", async () => {
+test("names the workspace from the first prompt, provisionally (the branch moves, the flag does not)", async () => {
 	const ws = await createWorkspace("p1");
 
 	const named = await maybeNaiveNameWorkspace("s1", ws.id, firstTurn);
@@ -215,7 +92,7 @@ test("naive-rename names the workspace instantly from the first prompt, provisio
 	expect((await worktrees())[0]?.renamed).toBeUndefined();
 });
 
-test("naive-rename fires only while the name is pristine (workspace-N)", async () => {
+test("it fires only while the workspace is pristine (branch still workspace-N)", async () => {
 	const ws = await createWorkspace("p1");
 	await maybeNaiveNameWorkspace("s1", ws.id, firstTurn);
 
@@ -223,96 +100,106 @@ test("naive-rename fires only while the name is pristine (workspace-N)", async (
 	expect((await worktrees())[0]?.name).toBe("Add A Login Form To");
 });
 
-test("naive-rename never touches a user-named workspace", async () => {
+test("it never touches a user-named workspace", async () => {
 	const ws = await createWorkspace("p1", "chosen name");
 
 	expect(await maybeNaiveNameWorkspace("s1", ws.id, firstTurn)).toBeNull();
 	expect((await worktrees())[0]?.name).toBe("chosen name");
 });
 
-test("the agentic pass refines a provisional naive name and locks it", async () => {
+test("a killed turn is never naming material — the first clean turn is", async () => {
 	const ws = await createWorkspace("p1");
-	fakeRunner("Add Login Flow");
+	const transcript = async (): Promise<ChatMessage[]> => [
+		user("refactor the billing engine"),
+		assistant("Starting on billing…"),
+		settled("cancelled"),
+		user("fix the header layout"),
+		assistant("Done — header fixed."),
+		settled("completed"),
+	];
 
-	const provisional = await maybeNaiveNameWorkspace("s1", ws.id, firstTurn);
-	expect(provisional?.name).toBe("Add A Login Form To");
-	expect(provisional?.renamed).toBeUndefined();
+	const named = await maybeNaiveNameWorkspace("s1", ws.id, transcript);
 
-	const refined = await maybeAutoRenameWorkspace("s1", ws.id, firstTurn);
-	expect(refined?.name).toBe("Add Login Flow");
-	expect(refined?.renamed).toBe(true);
-
-	expect(await maybeNaiveNameWorkspace("s1", ws.id, firstTurn)).toBeNull();
-	expect((await worktrees())[0]?.name).toBe("Add Login Flow");
+	expect(named?.name).toBe("Fix The Header Layout");
 });
 
-test("naive-rename resolves null when the first prompt is blank or unusable", async () => {
+test("it resolves null when the first prompt is blank or the transcript is empty", async () => {
 	const ws = await createWorkspace("p1");
-	const punctOnly = async (): Promise<Message[]> => [user("!!! ??? ..."), assistant("hm")];
+	const punctOnly = async (): Promise<ChatMessage[]> => [user("!!! ??? ..."), assistant("hm")];
 
 	expect(await maybeNaiveNameWorkspace("s1", ws.id, punctOnly)).toBeNull();
 	expect((await worktrees())[0]?.name).toBe("workspace-1");
 	expect(await maybeNaiveNameWorkspace("s1", ws.id, async () => [])).toBeNull();
 });
 
-test("isPromptCommitted: only a user message_end has the prompt in the transcript", async () => {
-	expect(
-		isPromptCommitted({ type: "message_end", message: { role: "user" } } as unknown as PiEvent),
-	).toBe(true);
-	expect(
-		isPromptCommitted({
-			type: "message_end",
-			message: { role: "assistant" },
-		} as unknown as PiEvent),
-	).toBe(false);
-	expect(isPromptCommitted({ type: "agent_start" } as PiEvent)).toBe(false);
-	expect(isPromptCommitted({ type: "turn_start" } as PiEvent)).toBe(false);
-});
-
-test("isSettledTurn: only agent_settled closes automatic work", async () => {
-	expect(isSettledTurn({ type: "agent_settled", terminal: null })).toBe(true);
-	expect(isSettledTurn({ type: "agent_end", messages: [], willRetry: false } as PiEvent)).toBe(
-		false,
-	);
-	expect(isSettledTurn({ type: "agent_end", messages: [], willRetry: true } as PiEvent)).toBe(
-		false,
-	);
-	expect(isSettledTurn({ type: "turn_start" } as PiEvent)).toBe(false);
-	expect(isSettledTurn({ type: "agent_start" } as PiEvent)).toBe(false);
-});
-
-test("a transcript without a user prompt never invokes the namer", async () => {
-	const ws = await createWorkspace("p1");
-	const runner = fakeRunner("Add Login Flow");
-
-	expect(await maybeAutoRenameWorkspace("s1", ws.id, async () => [])).toBeNull();
-	expect(runner.calls()).toBe(0);
-});
-
 test("an unknown workspace resolves null", async () => {
-	fakeRunner("Add Login Flow");
-	expect(await maybeAutoRenameWorkspace("s1", "nope", firstTurn)).toBeNull();
+	expect(await maybeNaiveNameWorkspace("s1", "nope", firstTurn)).toBeNull();
 });
 
-test("concurrent settling turns dedupe to one attempt", async () => {
+test("a workspace archived during the read is not renamed or resurrected", async () => {
 	const ws = await createWorkspace("p1");
 	let release = (): void => {};
 	const gate = new Promise<void>((resolve) => {
 		release = resolve;
 	});
-	let calls = 0;
-	setOneShotRunner(async () => {
-		calls += 1;
+
+	const pending = maybeNaiveNameWorkspace("s1", ws.id, async () => {
 		await gate;
-		return { text: "Slow Name", model: { provider: "test", id: "fake" } };
+		return firstTurn();
+	});
+	removeWorkspace(ws.id);
+	release();
+
+	expect(await pending).toBeNull();
+	expect(await worktrees()).toHaveLength(0);
+});
+
+test("a user rename landing during the read wins; the late name is dropped", async () => {
+	const ws = await createWorkspace("p1");
+	let release = (): void => {};
+	const gate = new Promise<void>((resolve) => {
+		release = resolve;
 	});
 
-	const first = maybeAutoRenameWorkspace("s1", ws.id, firstTurn);
-	const second = maybeAutoRenameWorkspace("s2", ws.id, firstTurn);
+	const pending = maybeNaiveNameWorkspace("s1", ws.id, async () => {
+		await gate;
+		return firstTurn();
+	});
+	renameWorkspace(ws.id, "user picked this");
+	release();
+
+	expect(await pending).toBeNull();
+	expect((await worktrees())[0]?.name).toBe("user picked this");
+});
+
+test("concurrent prompt-commits dedupe to one attempt", async () => {
+	const ws = await createWorkspace("p1");
+	let release = (): void => {};
+	const gate = new Promise<void>((resolve) => {
+		release = resolve;
+	});
+	let reads = 0;
+	const slow = async (): Promise<ChatMessage[]> => {
+		reads += 1;
+		await gate;
+		return firstTurn();
+	};
+
+	const first = maybeNaiveNameWorkspace("s1", ws.id, slow);
+	const second = maybeNaiveNameWorkspace("s2", ws.id, slow);
 	release();
 	const [a, b] = await Promise.all([first, second]);
 
-	expect(a?.name).toBe("Slow Name");
+	expect(a?.name).toBe("Add A Login Form To");
 	expect(b).toBeNull();
-	expect(calls).toBe(1);
+	expect(reads).toBe(1);
+});
+
+test("isPromptCommitted: only a user message_start carries the prompt", () => {
+	const started = (message: ChatMessage): ChatEvent => ({ type: "message_start", message });
+	expect(isPromptCommitted(started(user("hi")))).toBe(true);
+	expect(isPromptCommitted(started(assistant("hi")))).toBe(false);
+	expect(isPromptCommitted(started(settled("completed")))).toBe(false);
+	expect(isPromptCommitted({ type: "turn_start" })).toBe(false);
+	expect(isPromptCommitted({ type: "message_end", messageId: "u1", endedAt: 1 })).toBe(false);
 });

@@ -10,9 +10,9 @@ tags: [v1]
 
 ## Responsibility
 
-The single Zustand store: connection status, projects/workspaces, one frontend-local workbench frame plus
-per-workspace views/attention, terminal catalogs, and one **per-session chat runtime** for every live
-`AgentSession` (so several chats stream concurrently).
+The single Zustand store: connection status, projects/workspaces, accepted host-synchronized workbench
+snapshots plus device-local attention, terminal catalogs, and one **per-session chat runtime** for every live
+ACP session (so several chats stream concurrently).
 
 ## Boundary
 
@@ -20,10 +20,14 @@ per-workspace views/attention, terminal catalogs, and one **per-session chat run
   monotonic edges with different meanings: `setStatus("connected")` advances **`connectionGeneration`**
   for reconnect hydration, while **`welcomeGeneration`** advances only when one complete
   `server.welcome` snapshot lands. **`installWelcomeSnapshot(protocolVersion, projects, recentProjects,
-  config?)`** installs protocol + both sorted project views + optional config + navigation repair and then
-  advances that readiness edge in one Zustand write; route validation never observes a protocol-only or
-  project-only intermediate state. `installProjectSnapshot` remains the project-only primitive for focused
-  callers. **`projects`** is the open rail, while **`recentProjects`** is the last-opened-ordered set of every
+  defaultAgent, agentProtocolVersion, config?)`** installs protocol + both sorted project views +
+  the welcome's agent facts (`defaultAgent: AgentDescriptor | null` — the agent a new chat starts on
+  absent a project override, `null` meaning the host has no usable agent at all, which is the Welcome
+  screen's "install an agent" fork; `agentProtocolVersion: number | null` — the ACP version negotiated
+  with that agent, so a capability gap can be attributed to the agent rather than the host) + optional
+  config + navigation repair and then advances that readiness edge in one Zustand write; route validation
+  never observes a protocol-only or project-only intermediate state. `installProjectSnapshot` remains the
+  project-only primitive for focused callers. **`projects`** is the open rail, while **`recentProjects`** is the last-opened-ordered set of every
   known open + closed project. **`applyProjectUpdated(project)`** is the one full-snapshot updater for
   `project.updated` pushes and authoritative project-mutation responses: it upserts/sorts Recents and either
   upserts/sorts the rail or removes the row when `closed === true`. Both actions reconcile stale navigation
@@ -112,96 +116,163 @@ per-workspace views/attention, terminal catalogs, and one **per-session chat run
   An empty pre-hydration cache is never absence: a domain read must be authoritative for the current connection
   generation before reconciliation may prune a local reference.
 
-  **Workspace-local attention** is selected tab per stable frame group, last-focused center group,
-  last-focused auxiliary group, and group navigation clocks. Selection/focus never mutates the frame.
-  Frame replacement reconciles each workspace's attention to a surviving group/tab. Navigation clocks advance
-  at request time for local focus-changing opens and explicit re-selection; the stamp travels with the intent
-  so acceptance does not count twice. A slow completion is discarded when newer navigation overtakes it.
-  Preview identity is workspace-local per center group: `preview` replaces that group's slot and `keep`
-  promotes one-way. A coalesced preview→keep gesture carries `claimPreview` on its single final intent, so no
-  intermediate state persists. Arrangement-agnostic opens enter the store, but only shell layout integration
-  resolves them against that workspace's last focus and commits local placement. Reopening an existing
-  canonical resource changes attention only unless non-identity metadata changed. A late chat-title event may
-  repair cache/history labels or a still-queued open, but cannot recreate a locally closed placement or steal
-  focus. `syncLegacySelection` mirrors the selected resource into temporary editor/terminal compatibility
-  state without becoming placement authority; its selector includes the matched cache/catalog key so identity
-  repair retriggers the mirror.
+  **Device-local layout attention** is separate: selected tab per stable group, last-focused center group,
+  last-focused group per auxiliary region (left/right/bottom), and per-group navigation clocks keyed by
+  host/workspace. Selection/focus
+  mutations never alter or publish
+  the shared document. Installing a structural snapshot reconciles attention deterministically to the nearest
+  surviving tab/group. Navigation clocks advance at request time for every local focus-changing open and
+  for an explicit re-selection of the already-active center tab (that click still supersedes older work); that
+  stamp travels with the layout intent, so accepting the resulting open/select never increments the same
+  group a second time. If structural reconciliation removed the stamped group, the completion reroutes and
+  advances its surviving destination exactly once. A slow preview completion is discarded if a newer
+  navigation overtook it. Preview identity itself is structural
+  and shared per center group; `preview` replaces only that group's slot, while `keep` promotes it one-way.
+  A coalesced preview→keep gesture carries `claimPreview` on its single final open intent so the kept tab
+  replaces that slot without publishing an intermediate structural snapshot.
+  Arrangement-agnostic open intents enter the store, but only the shell layout integration resolves them
+  against local last focus and commits placement. `syncLegacySelection` mirrors the selected workbench
+  resource into the temporary file/chat/terminal render-cache projection without incrementing navigation,
+  atomically clearing the incompatible editor/terminal mirror (and clearing both while the selected resource
+  has no cache yet); its reactive selector returns the matched cache/catalog key (not only a readiness
+  boolean), so replacing a canonical cache id with a stable shared placement id retriggers the mirror.
+  this keeps migration-era feature selectors coherent after initial or remote hydration without making cache
+  state a second placement authority. Reopening an existing canonical resource changes attention
+  only unless its non-identity metadata changed; for example, a session-info title update updates a queued open in place
+  (retargeting a cache alias to the stable placement id when needed) or emits a non-activating refresh for an
+  actually placed chat. A structurally accepted close is never undone
+  by a late title event; that event instead repairs the retained cache/history label without stealing focus.
 
   **`terminalsByWorkspace` remains a mirror of terminal domain state, never placement authority.** The host
-  owns terminal existence keyed by `(workspaceId, tabKey)`; a workspace view locally references that key.
-  `setWorkspaceTerminals` adopts `terminal.list` / `terminal.tabs`, retaining an omitted local tab only while
-  reservation is in flight, removes dead references, and offers unrepresented catalog tabs to local placement
-  reconciliation without changing frame geometry or attention. `addTerminal` mints a durable key and emits one
-  local placement intent; captured group destination preserves contextual creation, while an uncaptured request
-  resolves to bottom. Default-terminal reservation is a host-owned workspace-creation handshake and surfaces
-  receive the resulting catalog entry. Confirmed close removes domain membership and every local reference;
-  rejection preserves placement. There is no workspace-global `activeTerminal`: workspace attention decides
-  which bodies mount, while host exclusive attach/takeover decides which client controls a PTY. The
-  **per-session chat state** — `sessions: Record<sessionId, SessionRuntime>`, where a `SessionRuntime` holds
-  one chat's `turns` (pi-canonical) / `toolResults` / `askAnswers` (the `ask-user-answers` replies keyed
-  by tool call id — indexed by the reducer and hydration, never turned into bubbles; the sibling
-  `subagent-completion` custom message is instead **appended as a `subagentCompletion` turn** — a
-  detached subagent's terminal report is transcript-positioned, rendered by `chat`'s completion card —
-  both narrowed by the shared contracts guards) /
-  `currentAssistantId` / `attemptAssistantId` (scopes overflow removal to the attempt actually observed) /
-  `isStreaming` / `model` / `thinkingLevel` / **`eventRevision`** (browser-local, incremented for every
-  received Pi event; the compare-and-install fence for an authoritative transcript read) /
-  **`syncedConnectionGeneration`** (which connected host generation the runtime's transcript was last read
-  from) / `stats` / `commands` / `draft` and its **extension-UI state** (`pendingExtUi` (typed by
-  `chat`'s `ExtUiDialogRequest`) + `extUiQueue` (overlapping dialogs FIFO so none orphans its server
-  promise) + `extUiStatus` / `extUiWidget`). `openChatSession` creates a runtime; `closeChatRuntime` /
-  `clearWorkspaceState` drop it; per-session mutators (`appendUserMessage` / **`appendErrorTurn`** / `setStats` / `setCommands` /
-  `setCurrentModel` / `setThinkingLevel` / `setChatDraft` / `clearPendingExtUi`) take a `sessionId`.
-  **`appendErrorTurn(sessionId, text)`** appends an `error` turn for a **rejected** turn-driving wire call
-  (`session.prompt`/`steer`/`followUp`/`create`) — e.g. `prompt()` throwing "no API key" / a bad model —
-  so a failed send lands in the chat instead of being swallowed; it carries no recovery action because Pi
-  never accepted the missing turn. A *streaming* fault instead ends the run through
-  **`reduceSessionEvent`** at `agent_settled`, using the host-projected final terminal metadata:
-  `stopReason: "error"` carries Pi's `errorMessage`, and `stopReason: "length"` becomes an actionable
-  truncation error — neither may become "✓ Done". That settlement-created error turn alone carries the
-  web-local `recovery: "try-again"` marker; hydration gives the same marker only to its synthesized current
-  final failure. `appendUserMessage` consumes every prior marker in the same optimistic write that adds the
-  follow-on user turn, while `agent_start` consumes it for work begun by another client or a custom message.
-  Thus the renderer can offer one ordinary `Try again.` send without parsing errors or leaving an actionable
-  historical failure. `agent_end` is attempt-level and never clears `isStreaming`; settlement alone finishes
-  retries, compaction, and queued continuations. The
-  **compaction lifecycle is a first-class turn**: `compaction_start` appends a `compaction` turn
-  (`running`), `compaction_end` settles the trailing running one in place (success → `done` +
-  tokens-before/after from the typed `CompactionEndResult`, guarded — wire data is untrusted; `aborted`
-  → `cancelled`; `errorMessage` → `failed` carrying the message, e.g. pi's one-shot overflow-recovery
-  cap — a failed compaction must be visible, never swallowed) or appends the settled turn when no
-  running one exists (reconnect mid-compaction). A successful `compaction_end` with `willRetry: true`
-  additionally marks the turn `resuming` (pi continues the same run; settlement clears the flag — a
-  settled transcript never claims ongoing work) and still removes the superseded assistant attempt. A
-  successful live turn without a durable `summary` is also the chat integration's signal to read Pi's
-  canonical compacted transcript; the reducer never guesses the cut boundary itself. The
-  reducer relies on pi's guarantee that every emitted `compaction_start` is paired with a
-  `compaction_end` (both success and failure paths emit it), the same trust every other event pair gets.
-  Manual-command transport rejection uses one atomic store mutation: given the compaction-turn ids observed
-  before the request, append a failed compaction turn only if none of the current ids is new. Thus a Pi failure
-  already represented by `compaction_end` is never duplicated, while rejection before lifecycle begins is
-  still visible on the same compaction surface.
-  **`auto_retry_start` mirrors pi's live-context surgery**: pi's `_prepareRetry` trims the failed
-  attempt's assistant message from the live context before re-running the turn (the retry re-streams it
-  as a new message) while *keeping it in the session file*, so the reducer drops the superseded failed
-  assistant turn (`removeSupersededAssistant`, the same rule as the overflow-compaction path) —
-  otherwise the client renders the reply twice (frozen failed partial + retried copy). Hydration applies
-  the same presentation rule to the persisted copy (`chat/hydrate.ts` hides retried attempts — an
-  errored assistant followed by another assistant before any user message), so live and reloaded clients
-  agree. Closed
-  chats are reopenable: the workbench close command atomically removes local placement and invokes
-  **`closeChatToHistory`**, which **keeps the runtime + host session alive**, records it in
-  **`closedChatsByWorkspace`** (`ClosedChat[]`, per workspace, most-recent-first), and clears pending
-  jump/history-open requests—but never a newer `routeChatTarget`, whose lifecycle belongs to navigation
-  supersession and reconciliation. File, diff, and registered-document render caches follow the same local
-  transition; after queued opens settle, shell reclaims only caches absent from local placement and queued
-  intent. No peer can restore placement remotely. **`reopenChat(workspaceId, …)`** restores runtime/history
-  membership in its captured workspace even after another workspace becomes active; shell adds placement to
-  that workspace's locally chosen center group through the one transition path. **`noteClosedChats`** records
-  disk-only sessions (from `session.list`) and peer-created sessions (from the `session.created` summary)
-  there too—idempotently, skipping live/open sessions while refreshing an existing history row from a newer
-  summary—so a chat that survived a host restart or was created in another frontend is reopenable without
-  gaining local placement. **`deleteChat(workspaceId, sessionId)`** is the idempotent
+  owns terminal existence and keys shells by `(workspaceId, tabKey)`; the layout snapshot merely references a
+  tab key at one eligible location. `setWorkspaceTerminals` adopts `terminal.list` / `terminal.tabs`, retaining
+  an omitted local tab only while its host-catalog reservation is in flight. `addTerminal` mints a durable key
+  — or, given an optional trailing `requestedTabKey`, reuses one the host already minted elsewhere
+  (`panels/SPEC.md`'s `AgentProviderSetup` paragraph: an `agent.authenticate` `"terminal"` outcome places the
+  exact login shell the host opened, the same `ToolOutput.terminal` convention that `terminalId` *is* the tab
+  key) — and emits one placement intent (it never edits topology itself): a captured group destination
+  preserves contextual Group Header creation, while an uncaptured request resolves to bottom. An optional
+  caller key makes the one first-workspace seed idempotent across clients; duplicate local requests for that
+  key are a no-op. The parent shell reserves that key without a process before intent consumption. The
+  initial-workspace request may then establish a hidden placement without revealing, unfolding, or attaching
+  it; attach waits for the visibility gate and consumes any initial command only for a newly created shell.
+  A failed same-generation reservation atomically rejects both the pending mirror and its placement intent.
+  Confirmed
+  close removes the domain tab and queues a resource-removal intent; the shell layout integration prunes
+  every stale placement through the next whole-document commit. A stale layout reference never reattaches or
+  recreates an absent catalog entry. There is no workspace-global
+  `activeTerminal`: each browser's selected tab per group decides which terminal body mounts, while the host's
+  existing exclusive attach/takeover contract decides which client controls a given PTY.
+
+  **The per-session chat state — `sessions: Record<sessionId, SessionRuntime>` — is the ACP redesign's
+  center of gravity, and it is deliberately thin.** Under pi the store had to *reconstruct* a turn model from
+  a stream of low-level deltas (assemble assistant messages from partials, splice out superseded retries,
+  synthesize a "✓ Done" / error / truncation closer, track a side table of tool results and another of ask
+  answers, fold extension-UI dialog kinds). Under ACP the wire already carries the render-ready shape:
+  `ChatEvent` is *simultaneously* the push frame, the transcript store's input, and this reducer's input
+  ([[module-contracts]]), so `SessionRuntime.messages: ChatMessage[]` is not derived from the protocol — it
+  *is* the protocol's own transcript, folded in place. A `ToolCallBlock` carries its own status/output/error,
+  so there is no side `toolResults` table; a `QuestionAnswersMarker` lands in `messages` like any other
+  marker, so there is no side `askAnswers` table; a superseded retry gets `AssistantMessage.superseded =
+  true` rather than being spliced out, so there is no `attemptAssistantId` bookkeeping; a settled turn's
+  outcome (success, refusal, truncation, error) arrives pre-rendered as a `MarkerMessage<TurnSettledMarker>`
+  the reducer simply appends, so the store never classifies "was this a failure" itself. The pure
+  **`reduceChatEvent(rt, event)`** implements exactly the wire's three write modes plus message/turn
+  lifecycle: `message_start` **upserts** by `ChatMessage.id` (append if new, replace in place if known —
+  the one rule that covers the composer's optimistic echo, its later replacement by the host's own record,
+  and any agent-side rewrite, with no text-matching or skill-echo heuristic); `chunk` appends `delta` onto
+  the `TextBlock`/`ThinkingBlock` at `(messageId, index)`, creating it if absent; `block` **sets** the whole
+  block at that index (image/resource/toolCall — these arrive complete); `tool_call_update` **replaces** the
+  named fields (and `output` wholesale) on the matching `ToolCallBlock`, found by scanning for its
+  `toolCallId` — no id→message index is kept because a transcript is short enough that the scan is cheap and
+  keeping one is one more thing to invalidate. `turn_start` sets `isStreaming`; `turn_settled` appends its
+  marker message **and** clears `isStreaming` plus every retry countdown plus the compaction-in-progress
+  flag in the same write — one event, one terminal fact, matching [[architecture]]'s "no attempt-level
+  boundary" invariant. `message_end` / `message_superseded` patch the named `AssistantMessage` by id.
+  `config_options` / `commands` / `usage` / `plan` / `capabilities` / `agent_status` each replace their
+  named field wholesale (all are republish-whole-set semantics on the wire, never patches). `session_info`
+  is a **no-op inside the pure reducer** — its `title` instead renames the chat tab (see below), because
+  that lives outside a session runtime; misreading this silently drops a title update, so it is the one
+  hazard worth a pointer here rather than in code. `retry_scheduled` / `retry_cleared` write/clear one
+  `RetryScope` (`turn` | `summarization`) key of `retries`, so the two flows never clear each other.
+  `compaction_start` / `compaction_end` only drive the ephemeral `compacting: CompactionReason | null`
+  progress flag — the durable outcome is the separate `CompactionMarker` message the host appends via its
+  own `message_start`, so the reducer does not synthesize a "done"/"failed" record here; a compaction that
+  fails and kills the turn is explained by that turn's own `TurnSettledMarker.error` instead.
+  `queue_changed` replaces `queue: { steering, followUp }`. **`applyChatEvent(sessionId, event)`** is the
+  *only* per-session mutator that consumes `ChatEvent` — it special-cases `session_info` (renaming the tab;
+  see `renameChatTab`, ported unchanged in mechanics from the old `applyExtUi`'s `setTitle` case, now
+  triggered by a different event shape) and otherwise folds through `reduceChatEvent` via `withRuntime`
+  (a no-op for an unknown session id). It replaces `handlePiEvent`; there is no longer a distinct
+  `appendUserMessage`, because the composer's optimistic echo is just a locally-built `ChatMessage` fed
+  through the exact same `{ type: "message_start", message }` event — one write path, not two. The one
+  legitimate case of the client fabricating a transcript entry the host never saw — a rejected
+  `session.prompt`/`steer`/`followUp` call — goes through **`appendNotice(sessionId, level, text)`**, which
+  appends a client-synthesized `MarkerMessage<NoticeMarker>` (`level: "error"` for a failed send); this
+  replaces `appendErrorTurn`.
+
+  **Elicitation is one global, session-agnostic modal queue — not per-session state** — because
+  `ElicitationRequest.sessionId` is *optional* (an agent may ask before any chat exists, during auth or
+  provider setup) and the UI contract is "rendered as the modal dialog: one at a time, with a FIFO queue
+  behind it" ([[module-contracts]]) app-wide, not per chat. **`activeElicitation: ElicitationRequest |
+  null`** + **`elicitationQueue: ElicitationRequest[]`** live on `AppState` directly; **`applyElicitation(push)`**
+  folds an inbound `ElicitationPush` (`request` queues behind a busy dialog or becomes active; `cancel`
+  drops the named request from wherever it sits — active promotes the next queued one, queued just filters)
+  and **`clearActiveElicitation(id)`** is the optimistic "I just answered" drop (id-checked, so a stale clear
+  racing a newer dialog is a no-op) called once `agent.answerElicitation` is dispatched. **Permission is the
+  opposite shape — per-session, per-tool-call, and never a modal**, because it "renders inline on the tool
+  card it names" ([[module-contracts]]): each `SessionRuntime` carries **`permissions: Record<ToolCallId,
+  PermissionRequest>`**, folded by **`applyPermission(push)`** (`request` is `sessionId`-routed and keyed by
+  `toolCallId`; `cancel` carries only a `PermissionRequest.id` with **no** `sessionId` on the wire, so it
+  scans every open session's `permissions` for the matching entry — small and correct, since the wire gives
+  no session hint to route by) and cleared by **`clearPermission(sessionId, toolCallId)`** the instant
+  `session.answerPermission` is dispatched, mirroring the elicitation optimistic-clear.
+
+  **Config options (model / thinking-level / mode pickers) are session-scoped state now, not a global
+  catalog** — `agent.refreshConfig` takes a `sessionId` and `ConfigOption[]` is what `session.create` /
+  `session.getMessages` / `session.setConfigOption` all answer, so there is no more global `models` list,
+  `providerVersion` guard, or `modelsFresh`/`modelsRefreshing` provenance flags to maintain: a picker's
+  "Refresh catalog" row is just `agent.refreshConfig({ sessionId })` awaited and its `ConfigOption[]` result
+  routed through the *same* `applyChatEvent(sessionId, { type: "config_options", options })` the push event
+  uses — one arrival shape for a push, a direct refresh reply, or a `session.setConfigOption` reply alike,
+  never three. `SessionRuntime.capabilities: ChatCapabilities` is seeded from `session.create`'s /
+  `session.getMessages`'s response and kept current by the `capabilities` event; it is never null once a
+  runtime exists (`EMPTY_RUNTIME`'s placeholder capabilities record has every flag false/`"none"`, for the
+  brief pre-creation render only). The host-wide **`agentChangeTick: number`** + **`noteAgentChanged()`**
+  (bumped on the `agent.changed` push, mirroring `fsChangesByWorkspace`'s tick convention) is the *entire*
+  reaction to that channel here — it is deliberately data-free and non-replayable
+  ([[module-contracts]]), so the store does not re-fetch anything on its own; a consumer (the agent
+  picker, Settings → Agents) reads the tick and re-reads `agent.list`/`agent.providers`/`agent.detect` itself, the same
+  way a panel reacts to `fsChangesByWorkspace`'s tick. **`defaultAgentId: string | null`** rides
+  `applyConfig`'s fold of `AppConfig` (host-owned, `settings.update`-written) alongside the pre-existing
+  theme/analytics/terminal/layout fields.
+
+  **Genuinely retired, not translated:** the extension-UI bridge (`pendingExtUi` / `extUiQueue` /
+  `extUiStatus` / `extUiWidget`, `applyExtUi`'s `select`/`confirm`/`input`/`editor`/`notify`/`setStatus`/
+  `setWidget` cases, `clearPendingExtUi`) — elicitation and permission are its replacements, and `notify`
+  is now the durable `NoticeMarker` a producer appends like any other message, never a push the store
+  folds specially. The **in-app login stream** (`activeLogin`, `beginLogin`, `applyLoginFrame`,
+  `clearLoginInput`, `clearLogin`, the `foldLoginFrame` reducer, and the `auth` module's `LoginState` type
+  dependency) — interactive auth is elicitation or an `AuthMethodTerminal` in a real workspace PTY now
+  ([[module-contracts]]'s "Genuinely lost" section); the `auth` module's presentational dialog and its
+  reducer are unused by the store as of this change and are next-phase's to reconcile or retire.
+
+  Closed
+  chats are reopenable: the workbench close command first publishes the shared placement removal and only
+  after host acceptance invokes **`closeChatToHistory`**, which **keeps the runtime + session alive** and
+  records it in **`closedChatsByWorkspace`** (`ClosedChat[]`, per workspace, most-recent-first) and clears
+  any pending jump/history-open request for that session — but **never a `routeChatTarget`**: the close
+  acceptance is a delayed echo of an older click, while a route target may have been installed by a newer
+  Back/Forward to that very chat; target lifecycle belongs to navigation supersession (`navTick` currency)
+  and reconciliation consumption/absence, not to tab closure. File, diff, and registered-document render caches
+  follow the same acceptance-before-removal order; once no layout
+  write is pending, the shell reclaims only caches absent from both accepted placement and queued opens,
+  without advancing user-navigation clocks. A newer remote restoration keeps or rehydrates them instead of
+  losing the placement. **`reopenChat(workspaceId, …)`** restores
+  runtime/history membership in its captured workspace even after another workspace becomes active; the shell layout integration adds
+  placement to the locally chosen center group through the one structural commit path. **`noteClosedChats`** records
+  disk-only sessions (from `session.list`) there too — idempotently (skips live/open/already-listed) — so a
+  chat that survived a host restart is reopenable. **`deleteChat(workspaceId, sessionId)`** is the idempotent
   fold for both a confirmed local `session.delete` and the `session.deleted` broadcast: it atomically drops
   every tab the chat owns — its transcript, live plan page, and any dependent legacy document cache — plus
   its history row/runtime + skill baseline, records a page-lifetime tombstone, removes queued opens for the
@@ -216,122 +287,37 @@ per-workspace views/attention, terminal catalogs, and one **per-session chat run
   that authoritative read lands, **`reconcileWorkspaceSessions`** applies the same tombstone fold to every
   baseline id absent from the host result, repairing deletion events missed while disconnected without
   deleting a session created after the read began or advancing a user-navigation clock. Otherwise
-  **`hydrateSession`** rebuilds browser-local
-  runtime/render state from a host `SessionSummary` + converted transcript on connect; placement comes only
-  from this surface's local workspace view, a local create intent, or an explicit reopen—peer-created/live
-  sessions remain discoverable in history without opening a tab—the
-  live summary's `lastSettlement` is authoritative when present; otherwise only a failure on
-  the persisted transcript's final conversational message is current (historical `length` attempts followed
-  by later work must not become stale warnings). Hydration is a no-op if a runtime already exists, so a
-  live/ahead chat is never clobbered. **`reconcileSession(summary, hydrated, expectedEventRevision,
-  connectionGeneration)`** is the separate authoritative path for an existing runtime after successful
-  compaction or reconnect. It compare-and-installs only at the expected Pi-event revision, rejects a removed
-  workspace/session or cross-workspace identity, replaces turns/tool results/ask answers/queue/model/thinking
-  + streaming state, and preserves draft/stats/commands/extension UI/placement/history/focus. It marks the
-  connected generation and advances the revision so two reads cannot regress one another. When the latest
-  live compaction matches the durable record, its id + estimated-after count survive, and `resuming` survives
-  only while the returned summary is still streaming. The
-  pure **`reduceSessionEvent`** folds a `PiEvent` into a runtime; **`handlePiEvents` folds an ordered batch in
-  one atomic store write while incrementing each affected runtime's revision once per event, even for a
-  UI-ignored event**, because ignored still means it crossed the snapshot ordering boundary. The
-  single-event **`handlePiEvent`** delegates to that same path so tests and non-wire callers cannot drift.
-  Transport flushes a pending batch before delivering any later response or non-Pi push, preserving the
-  revision fence's received-message ordering. **Only idle sends enter the transcript
-  optimistically** (`ChatView.onSubmit` → `appendUserMessage`); the last-turn echo dedup below is
-  sufficient precisely because nothing intervenes before the echo. A **streaming send (`steer`/`followUp`)
-  never appends a turn**: its text lives in `queue` (folded verbatim from the host-projected
-  `queue_update`, seeded from the summary at hydration), alongside the optional conservative `hasImages`
-  aggregate that guards destructive text-only queue restoration; the turn lands only via pi's canonical
-  user `message_start` —
-  at its true position, converging live with hydrated. (Mirrors pi's own interactive mode; replaces the
-  optimistic-append-for-everything model whose last-turn dedup missed whenever assistant content landed
-  between the append and the echo — reproduced live as a duplicated, mispositioned queued bubble.)
-  For the idle echo: an equal Pi `message_start` echo is ignored, while Pi's canonical expanded `<skill>`
-  echo **replaces** the immediately preceding matching raw `/skill:<name> …` turn in place (same turn id),
-  so live and hydrated transcripts both contain one canonical skill invocation; a malformed or mismatched
-  block appends normally. **`handlePiEvent(event,
-  sessionId)`** and **`applyExtUi(request)`** route by id via the `withRuntime` helper (a no-op for an
-  unknown session). A `notify` at `error` level becomes an **`error`** turn (the same
-  banner a session error gets — an extension crash must not read as chatter); every other level stays a
-  `system` turn. Level is the *only* input, so the host's own error notifies ride the same road: the
-  `Review send failed: …` that `host/handlers` publishes after a rolled-back send renders as that banner
-  too. That is deliberate — a send that silently rolled back is exactly what a user must not scroll past. A **fire-and-forget** ext-UI frame (`notify`/`setStatus`/`setWidget`/`setTitle`)
-  that has **no runtime to land in** is held in **`extUiOrphans`** (bounded, newest 64) instead of being
-  dropped, and **both** runtime-installing actions — `openChatSession` *and* `hydrateSession` — drain that
-  session's frames through the shared `replayExtUiOrphans` the moment its runtime exists. The admission
-  test is **"no runtime"**, not "unknown session": every kind except `setTitle` is reduced by
-  `withRuntime`, so a session that merely has a tab or a `closedChats` entry would pass a "do we know it"
-  test and then be dropped by `withRuntime` — neither applied nor buffered. **No path builds that state
-  today** — `closeChatToHistory` keeps the runtime, `closeChatRuntime` has no production caller, and both
-  `openTab` sites that place a chat tab are guarded by its runtime already existing — so this rule is a
-  guard, not a live fix, and it is pinned by seeding the store directly rather than through an action
-  sequence no user can perform. It starts earning its keep the moment anything places a chat tab before
-  its transcript is hydrated. `setTitle` is
-  the one exception, and it decides for itself: `renameChat` renames the tab or the `closedChats` entry
-  and reports whether it found the session **at all**, so only a title for a session in neither map is
-  buffered. Admission falls out of the rename instead of being computed beside it — one walk over
-  `tabsByWorkspace`/`closedChatsByWorkspace`, not the same two predicates twice. A **dialog** (`select`/`confirm`/
-  `input`/`editor`) is never buffered: it is one half of a round trip whose other half may already have
-  been answered by another client or lost to a host restart, so a replayed one would block the chat on
-  a question nobody is waiting for. Why buffer at all: the host publishes what an extension does in
-  `session_start` *before* it answers the RPC that installs the runtime, so an unbuffered client silently
-  loses every status, title, widget and notify an extension sets at startup. This is **not only the
-  create path** — pi re-emits `session_start` (`reason: "resume"`/`"startup"`) whenever the host attaches
-  a session from disk, i.e. on every chat opened after a host restart, and those paths install the
-  runtime through `hydrateSession`, not `openChatSession`. **Known gaps:** the 64-slot ring is one global
-  list, and the host broadcasts ext-UI frames to every client, so a burst of sessions attaching at once
-  can evict frames a client still needs; and nothing purges frames for a session that is deleted or whose
-  workspace is removed. Per-session buckets plus a purge on those two events are the fix when either
-  becomes real. The host-wide **`models`** list stays global (not per session), plus
-  **`modelsRefreshing`** — the awaited `model.refresh` in-flight flag — and **`modelsFresh`**, the
-  *provenance* of that list: true only while it holds the installed result of an awaited forced refresh,
-  which `NewWorkspaceDialog` needs before it may substitute a model the catalog lacks. It lives here,
-  beside the list, precisely **because `models` is app-wide**: `setModelsForProviderVersion` (a guarded
-  `model.list` snapshot, whose handler answers from before the detached refresh it starts) **drops** it in the same write, so authority
-  falls with the list any consumer replaced — held as one consumer's local flag it would outlive its
-  subject and confirm a removed model that `create()` then rejects. `beginModelsRefresh` captures and
-  returns the current provider version; `finishModelsRefresh(version, RefreshedModels|null)` lands only a
-  matching reply (list + provenance + cleared in-flight flag in one write; `null` = failed refresh — keep
-  the current list *and* its
-  provenance, since nothing was installed). Provenance comes from the **host's** `complete`, never from
-  "a reply arrived": the host caps how long it waits for pi, so a reply can carry the registry as it
-  stands while the pass that would settle it still runs — such a list is installed (it *is* current) but
-  drops authority, since concluding a model is gone from it is exactly the mistake. **`dropModelsFreshness`** is the third writer: authority is
-  given up *without* replacing the list, which is what a consumer activating must do **synchronously** —
-  a flag an earlier consumer set can otherwise straddle the activation and let an inherited list pass as
-  this opening's own truth before its own `model.list` reply lands. **`providerVersion`** is the monotonic,
-  data-free `provider.changed` generation observed from the host; **`noteProviderChanged()`** atomically
-  increments it and clears `models`, freshness, and any old refresh spinner. Both `model.list` and
-  `model.refresh` replies install through version-guarded store actions, so no picker or older async reply can
-  offer a removed runtime generation. Transport owns the guarded re-read; the Providers settings pane observes
-  the version and re-reads status. Other catalog transport work lives in `chat/useModelCatalog`, not here (the
-  store→transport edge stays type-only). The **in-app login** state
-  **`activeLogin: LoginState | null`** (type from `auth`) is **flat + session-less** (a login runs on the
-  Welcome screen before any session exists — routing it through a session runtime would drop its frames):
-  the pure **`foldLoginFrame`** reducer lives here (as `reduceExtUi`/`reduceSessionEvent` do — `auth` stays
-  presentational), and **`beginLogin(loginId, providerId)`** opens the login (a no-op if a frame already
-  created it — the frame can beat the `loginStart` response), **`applyLoginFrame(push)`** folds an inbound
-  `provider.login` frame (creating `activeLogin` if the frame arrived first; ignoring frames for a different
-  live login), **`clearLoginInput()`** drops the live input the instant a reply is sent (no double-submit),
-  and **`clearLogin()`** dismisses it. The **settings surface** state — **`settingsOpen`** +
-  **`settingsSection`** (a const-object enum: `Providers`/`Github`/`Appearance`/`Chat`/`Layout`/`Terminal`/`Templates`/`Privacy`) with
-  **`openSettings(section?)`** (deep-links to a section, defaults to Providers) / **`closeSettings()`** /
-  **`setSettingsSection()`** — lives here so the top-bar gear AND the Welcome provider warning open Settings
+  **`hydrateSession(summary, hydrated, activate?, syncedTick?, options?)`** rebuilds browser-local
+  runtime/render state from a host `SessionSummary` + **`HydratedRuntime`** (from `chat/hydrate.ts` —
+  `{ messages, configOptions, capabilities, plan }`, one field per part of `session.getMessages`'s response
+  the runtime needs) on connect: `summary.record.{workspaceId,sessionId,title}` place the tab (composition,
+  not flat fields — see [[module-contracts]]'s `SessionSummary`), `summary.isStreaming` seeds the runtime's
+  live flag, and hydration installs `hydrated.{messages,plan}` plus a fresh runtime built from
+  `hydrated.{capabilities,configOptions}`. There is no more failure-classification step here: a hydrated
+  transcript's last `TurnSettledMarker` (if any) already says what happened, durably, so the old
+  `lastSettlement`-vs-persisted-transcript fallback logic is gone along with `messagesToRuntime`'s pi-era
+  retry/compaction/ask-answer reinterpretation — see `chat/hydrate.ts`'s own doc comment in this file's
+  sibling module. Hydration is a no-op if a runtime already exists, so a
+  live/ahead chat is never clobbered; `summary.queue`, present only for a live session with something
+  queued, seeds the pending strip so a client attaching mid-run sees what is waiting.
+  **`openChatSession(workspaceId, sessionId, capabilities,
+  configOptions, syncedTick?, options?)`** creates a fresh runtime for a brand-new chat (the `session.create`
+  path); `closeChatRuntime` / `clearWorkspaceState` drop a runtime. Per-session mutators taking a
+  `sessionId`: `applyChatEvent`, `appendNotice`, `setChatDraft`, `applyPermission`/`clearPermission`.
+  The **settings surface** state — **`settingsOpen`** +
+  **`settingsSection`** (a const-object enum: `Agents`/`Github`/`Appearance`/`Layout`/`Terminal`/`Templates`/`Privacy`) with
+  **`openSettings(section?)`** (deep-links to a section, defaults to Agents — agents are the first-class
+  settings concept and providers nest under one) / **`closeSettings()`** /
+  **`setSettingsSection()`** — lives here so the top-bar gear AND the Welcome agent warning open Settings
   to a section without prop-drilling through the shell. The **theme** state — **`theme: ThemeId`** (the
   host-owned selected opaque id; the themes module resolves visual fallback) with **`applyConfig(config)`**
   (folds the server-synced `AppConfig` in from
   `server.welcome` / the `settings.changed` broadcast) — lives here too; it's a **pure value only** (the
   theme-application side-effect is the shell's, keyed off `theme`), and defaults to
-  `DEFAULT_CONFIG.theme` until the welcome arrives. **`composerGrowthLimit: ComposerGrowthLimit`**,
-  **`customLayoutPresets: LayoutPreset[]`**, and **`analyticsEnabled: boolean`** ride the same `applyConfig`
-  fold (host-owned, defaulted from `DEFAULT_CONFIG`) — the Chat, shared Layout catalog, and Privacy read
-  sides. **`chatMessageOrder: ChatMessageOrder`** is instead one client-local presentation preference,
-  initialized to oldest-first and hydrated by `chat/messageOrder` from a host-qualified browser
-  localStorage key or the native shell's injected backend-profile/window-scoped adapter;
-  `setChatMessageOrder` changes it without a server round trip, and `applyConfig` can never overwrite it.
-  `ChatView` projects each runtime from that value without rewriting canonical turns. The instantiated
-  workbench frame, current/default preset id, and group limits are separate local values hydrated by
-  `shell/layoutState`; `applyConfig` can never overwrite them. The
+  `DEFAULT_CONFIG.theme` until the welcome arrives. **`layoutSettings: LayoutSettings`**,
+  **`analyticsEnabled: boolean`**, and **`defaultAgentId: string | null`** ride the same `applyConfig` fold
+  (host-owned, defaulted from `DEFAULT_CONFIG`). Layout settings are not a second copy of
+  any workspace document: they carry only the portable preset catalog/default and group limit. The
   **toast queue** — **`toasts: Toast[]`** (oldest-first) with **`pushToast(toast) → id`** / **`dismissToast(id)`**
   and the ergonomic **`toast.error/success/info(message, title?)`** helper (wraps `pushToast` so a non-React
   call site — a `.catch` in a fire-and-forget wire call — can fire one) — lives here so any surface can raise
@@ -339,8 +325,8 @@ per-workspace views/attention, terminal catalogs, and one **per-session chat run
   `pushToast` **coalesces an identical live toast** (same variant/title/message — a retried failure returns
   the existing id instead of stacking a twin) and **caps the queue at 5** (oldest drop — the viewport doesn't
   scroll, so the newest must stay visible).
-  It's the home for a **rejected wire call with no better place to land** (no chat tab to host an error turn),
-  complementing `appendErrorTurn` (which handles the in-chat case).
+  It's the home for a **rejected wire call with no better place to land** (no chat tab to host a notice),
+  complementing `appendNotice` (which handles the in-chat case).
   The host-wide **`templatesVersion: number`** counter + **`bumpTemplatesVersion()`** (increment) is a bare
   invalidation signal, the same shape as `fsChangesByWorkspace`'s `tick` below — **`panels/TemplatesSettings.tsx`**
   and **`chat/TemplateEditorDialog.tsx`** call it after a `template.save`/`delete`, and the Templates
@@ -366,8 +352,9 @@ components. The **Skills-reload badge** rides the same tick without a separate s
   later non-skill batch never clears it. A fresh watcher's synthetic startup nudge remains conservative
   `unknown`. Transport's centralized skill-load preparation awaits `workspace.watchReady`, folds a duplicate
   unknown fallback unless the watcher was already known ready (the event push may have died during
-  reconnect), then captures the load's baseline tick. The newly loaded session stays clean; a real skill
-  frame after readiness remains newer than the baseline. Each chat records
+  reconnect), then captures the store tick only
+  afterward; then wrappers issue `session.create` / `session.getMessages` / `session.reloadResources`, so no
+  call site can accidentally reverse readiness and baseline ordering. Each chat records
   **`skillsSyncedTickBySession: Record<sessionId, tick>`** = the tick it loaded skills at.
   It advances **only when resources are actually (re)loaded against current disk**: a fresh
   `openChatSession`, a disk-only `hydrateSession` attach, and **`markSkillsSynced(sessionId, syncedTick)`** on
@@ -441,13 +428,15 @@ branch's review — a commit sha means nothing in another worktree — and dropp
   deep link; the requester activates the target project+workspace, the workbench shell integration
   opens/hydrates the target
   chat, `ChatView` consumes + clears — is **`ChatLocationRequest { workspaceId, projectId, sessionId,
-  messageIndex, anchorText, navigation? }`**, set by **`requestChatLocation(req)`** (which captures and
+  messageId, anchorText, navigation? }`** (`messageId: MessageId` — the transcript never renumbers, so
+  there is no positional index to carry or resolve; a hit just names the message it points at directly),
+  set by **`requestChatLocation(req)`** (which captures and
   advances an already-hydrated destination group's local clock *before* switching workspaces, and sets `selectedProjectId` +
   `activeWorkspaceId` **atomically**, the same invariant `activateWorkspace` upholds, since the target chat
   can live in a different project/workspace than the one the search ran from — the caller
   `useHistorySearch.openMessage` loads the destination project's workspaces first when absent) and cleared
-  by **`clearChatLocation()`**; the target's anchor resolves against the runtime's `turnIdByMessageIndex`
-  (see `chat/SPEC.md`'s hydration bullet), falling back to the newest `anchorText` match when absent.
+  by **`clearChatLocation()`**; the target resolves directly against `messages.find(m => m.id ===
+  messageId)`, falling back to the newest `anchorText` match when absent.
   The sibling transient **`historyOpenRequest { id, sessionId }`** — set by **`requestHistoryOpen(target)`**,
   cleared by **`clearHistoryOpen()`** — carries the shell's app-wide `Ctrl+R` to a chat, which opens (or,
   when already open, re-scopes) its history overlay; it goes through the store precisely because the chord
@@ -467,7 +456,10 @@ branch's review — a commit sha means nothing in another worktree — and dropp
   `openFileInTab`/`ChatView` read the worktree root through it),
   `selectWorkspaceTerminals` (the host-owned terminal catalog; the layout visibility gate derives mounted
   identities from its supplied document + local attention, while host attachment remains exclusive per terminal),
-  `selectActiveWorkspaceProjectId`, `selectHistoryTarget` + `HistoryTarget` (the shell's `Ctrl+R` routing
+  `selectActiveWorkspaceProjectId`, `selectResolvedAgentId` (a project id's effective agent — its own
+  `agentId` override, else `AppConfig.defaultAgentId`, else the connected `defaultAgent`, mirroring
+  `session.create`'s host-side precedence for callers that need to know it before opening a chat, e.g.
+  `AgentWarningBanner`), `selectHistoryTarget` + `HistoryTarget` (the shell's `Ctrl+R` routing
   target: the locally selected chat resource, or the workspace's newest chat otherwise),
   `selectContextProject`, the layout placement selectors (recursive center plus left/right/bottom auxiliary
   groups), `selectAttentionCenterTab` (the selected resource in local last center focus),
@@ -484,19 +476,22 @@ branch's review — a commit sha means nothing in another worktree — and dropp
   only** and is anchored at a separator: unanchored, `/wt/src/a-foo.ts` would match `src/foo.ts`; applied to
   relative reports, `module-b/SPEC.md` would match the *root* `SPEC.md`) + `specPathMatcher` (is a written
   path a spec-graph node?);
-  `selectCatalogModel` (a model ref resolved against the **live** `models` list — a session's own `model`
-  is the snapshot it was created with, so host-computed facts on it, today `thinkingLevels`, are read
-  through this; callers fall back to the snapshot when the ref has left the catalog);
+  `SessionRuntime`, `RetryProgress`, `reduceChatEvent` (the pure per-runtime `ChatEvent` fold),
+  `applyChatEvent`/`appendNotice`/`applyElicitation`/`clearActiveElicitation`/`applyPermission`/
+  `clearPermission`/`noteAgentChanged` (the chat-runtime action surface),
   `toast` (the fire-from-anywhere helper),
-  `Toast` (type), web-local frame/workspace-view/attention selectors and atomic actions, resource render-state types
-  (file/diff/virtual-document/plan/chat), `TerminalTab`, `ClosedChat`, `SessionRuntime` +
-  `EMPTY_RUNTIME` (ChatView's pre-creation fallback), `ChatLocationRequest` (type), `reduceSessionEvent`.
-- **Allowed deps:** `contracts` (`Project`/`Workspace`/`Model`/`ThinkingLevel`/`SessionStats`/
-  `SlashCommandInfo`/`ExtUiRequest`/`LoginPush`/`WorkspaceFsChangedPayload`/`LayoutPreset`/`AppConfig`/`ThemeId`;
-  `DEFAULT_CONFIG` for the pre-welcome default; `PiEvent`/`LoginFrame`, **type-only**); `lib` (the shared
-  path + array + canonical-message primitives — `normalizePath`/`isAbsolutePath` for
-  `matchesWorktreePath`, `shallowEqualArrays` for the snapshot-identity guard, `userText` plus the skill
-  invocation parser/matcher for user-message echo reconciliation; a leaf, so the edge adds no cycle); `chat`
-  (`ChatTurn`/`ToolResultState`, **type-only**); `auth` (`LoginState`, **type-only**); `transport`
-  (`ConnectionStatus`, **type-only**); `zustand`.
-- **Forbidden:** `server`/`shared`/`pi`; importing `panels`, shell runtime (the web-local layout state edge is type-only), or transport runtime.
+  `Toast` (type), `WorkspaceLayoutSnapshot`/attention selectors and actions, resource render-state types
+  (file/diff/virtual-document/plan/chat), `TerminalTab`, `ClosedChat`, `EMPTY_RUNTIME` (ChatView's
+  pre-creation fallback), `ChatLocationRequest` (type).
+- **Allowed deps:** `contracts` (`Project`/`Workspace`/`AgentDescriptor`/`AgentPlan`/`AgentStatus`/
+  `ChatCapabilities`/`ChatEvent`/`ChatMessage`/`ConfigOption`/`ElicitationPush`/`ElicitationRequest`/
+  `PermissionPush`/`PermissionRequest`/`RetryScope`/`SessionSummary`/`SessionUsage`/`SlashCommand`/
+  `ToolCallId`/`WorkspaceFsChangedPayload`/`WorkspaceLayoutSnapshot`/`LayoutChangedPayload`/`AppConfig`/
+  `ThemeId`; `DEFAULT_CONFIG` for the pre-welcome default); `lib` (the shared
+  path + array primitives — `shallowEqualArrays` for the snapshot-identity guard; a leaf, so the edge adds
+  no cycle); `chat` (`HydratedRuntime`, **type-only** — the `session.getMessages` → runtime projection);
+  `transport` (`ConnectionStatus`, **type-only**); `zustand`. The `auth` (`LoginState`) and skill-invocation
+  (`lib/skillInvocation`) type-only dependencies from the pi-era design are dropped: login no longer routes
+  through the store (see the retired-login paragraph above), and echo reconciliation no longer needs
+  text-based skill-command matching now that `message_start` upserts by id.
+- **Forbidden:** `server`/`shared`/`pi`; importing `panels`/`shell` or transport runtime.

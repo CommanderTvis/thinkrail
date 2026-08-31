@@ -1,47 +1,11 @@
-import type {
-	AssistantMessage,
-	DelegationRunDetails,
-	ExtUiRequest,
-	ImageContent,
-	UserMessage,
-} from "@thinkrail/contracts";
+import type { ImageBlock } from "@thinkrail/contracts";
 
 export interface ChatAttachment {
 	name: string;
-	content: ImageContent;
+	content: ImageBlock;
 }
-
-export type ExtUiDialogRequest = Extract<
-	ExtUiRequest,
-	{ kind: "select" | "confirm" | "input" | "editor" }
->;
 
 export type FailureRecovery = "try-again";
-
-export type ChatTurn =
-	| { kind: "user"; id: string; message: UserMessage; attachmentNames?: string[] }
-	| { kind: "assistant"; id: string; message: AssistantMessage; streaming: boolean }
-	| { kind: "system"; id: string; text: string; endedAt?: number }
-	| ({ kind: "compaction"; id: string } & CompactionState)
-	| { kind: "error"; id: string; text: string; recovery?: FailureRecovery }
-	| { kind: "subagentCompletion"; id: string; details: DelegationRunDetails; text: string }
-	| {
-			kind: "retry";
-			id: string;
-			source: "turn" | "summarization";
-			attempt: number;
-			maxAttempts: number;
-			delayMs: number;
-	  };
-
-export interface CompactionState {
-	status: "running" | "done" | "failed" | "cancelled";
-	detail?: string;
-	summary?: string;
-	tokensBefore?: number;
-	tokensAfter?: number;
-	resuming?: boolean;
-}
 
 export type ToolStatus = "running" | "done" | "error";
 

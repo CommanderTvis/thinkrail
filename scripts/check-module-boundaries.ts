@@ -20,13 +20,29 @@ interface ModuleRule {
 const MODULE_RULES: readonly ModuleRule[] = [
 	{ root: "packages/contracts", allowed: [] },
 	{ root: "packages/shared", allowed: ["packages/contracts"] },
+	{ root: "packages/acp", allowed: ["packages/contracts"] },
 	{ root: "packages/pi-delegation", allowed: [] },
 	{ root: "packages/pi-subagents", allowed: ["packages/pi-delegation"] },
+	{
+		root: "packages/pi-agent",
+		allowed: [
+			"packages/contracts",
+			"packages/shared",
+			"packages/acp",
+			"packages/spec-graph",
+			"packages/pi-delegation",
+			"packages/pi-subagents",
+			"packages/pi-thinkrail-workflow",
+			"packages/pi-todos",
+			"packages/pi-visualize",
+		],
+	},
 	{
 		root: "packages/server",
 		allowed: [
 			"packages/contracts",
 			"packages/shared",
+			"packages/acp",
 			"packages/spec-graph",
 			"packages/pi-delegation",
 			"packages/pi-subagents",
@@ -36,7 +52,10 @@ const MODULE_RULES: readonly ModuleRule[] = [
 		],
 	},
 	{ root: "apps/web", allowed: ["packages/contracts"] },
-	{ root: "apps/cli", allowed: ["packages/server", "packages/shared"] },
+	{
+		root: "apps/cli",
+		allowed: ["packages/server", "packages/shared", "packages/acp", "packages/pi-agent"],
+	},
 	{
 		root: "apps/desktop",
 		allowed: ["packages/server", "packages/shared", "packages/contracts"],

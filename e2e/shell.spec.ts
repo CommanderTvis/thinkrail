@@ -44,5 +44,8 @@ test("renders the branded shell and, with no workspace, the Welcome screen", asy
 	expect(faviconSvg).toContain("prefers-color-scheme: dark");
 
 	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
-	await expect(page.getByTestId("connection-status")).toHaveAttribute("aria-label", "Connected");
+	await expect(page.getByTestId("connection-status")).toHaveAttribute(
+		"aria-label",
+		"ThinkRail app connected",
+	);
 });

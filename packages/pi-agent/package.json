@@ -1,0 +1,39 @@
+{
+	"name": "@thinkrail/pi-agent",
+	"version": "0.0.0",
+	"private": true,
+	"type": "module",
+	"exports": {
+		".": "./src/index.ts",
+		"./acp": "./src/acp/index.ts",
+		"./engine": "./src/engine/index.ts"
+	},
+	"bin": {
+		"thinkrail-acp-pi": "./src/main.ts"
+	},
+	"scripts": {
+		"typecheck": "tsc --noEmit",
+		"test": "bun test"
+	},
+	"dependencies": {
+		"@agentclientprotocol/sdk": "catalog:",
+		"@earendil-works/pi-agent-core": "catalog:",
+		"@earendil-works/pi-ai": "catalog:",
+		"@earendil-works/pi-coding-agent": "catalog:",
+		"@thinkrail/acp": "workspace:*",
+		"@thinkrail/contracts": "workspace:*",
+		"pi-delegation": "workspace:*",
+		"pi-spec-graph": "workspace:*",
+		"pi-subagents": "workspace:*",
+		"pi-thinkrail-workflow": "workspace:*",
+		"pi-todos": "workspace:*",
+		"pi-visualize": "workspace:*",
+		"pi-web-access": "0.13.0",
+		"typebox": "catalog:",
+		"zod": "catalog:"
+	},
+	"devDependencies": {
+		"@types/bun": "catalog:",
+		"typescript": "catalog:"
+	}
+}

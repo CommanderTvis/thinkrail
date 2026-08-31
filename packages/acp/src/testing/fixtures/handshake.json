@@ -1,0 +1,102 @@
+[
+	{
+		"direction": "out",
+		"frame": {
+			"jsonrpc": "2.0",
+			"id": 1,
+			"method": "initialize",
+			"params": {
+				"protocolVersion": 1,
+				"clientCapabilities": {
+					"fs": { "readTextFile": true, "writeTextFile": true },
+					"terminal": true
+				},
+				"clientInfo": { "name": "thinkrail", "version": "0.0.0" }
+			}
+		}
+	},
+	{
+		"direction": "in",
+		"frame": {
+			"jsonrpc": "2.0",
+			"id": 1,
+			"result": {
+				"protocolVersion": 1,
+				"agentInfo": { "name": "fixture-agent", "version": "1.2.3" },
+				"agentCapabilities": {
+					"loadSession": true,
+					"promptCapabilities": { "image": true, "embeddedContext": true },
+					"mcpCapabilities": { "http": true, "sse": false, "acp": true },
+					"sessionCapabilities": { "list": {}, "delete": {}, "close": {} }
+				},
+				"authMethods": [
+					{ "id": "oauth", "name": "Sign in", "description": "Sign in with the provider" }
+				]
+			}
+		}
+	},
+	{
+		"direction": "out",
+		"frame": {
+			"jsonrpc": "2.0",
+			"id": 2,
+			"method": "session/new",
+			"params": {
+				"cwd": "/tmp/fixture-worktree",
+				"mcpServers": [{ "type": "acp", "name": "thinkrail", "serverId": "thinkrail-tools" }]
+			}
+		}
+	},
+	{
+		"direction": "in",
+		"frame": {
+			"jsonrpc": "2.0",
+			"id": 2,
+			"result": {
+				"sessionId": "sess-handshake",
+				"configOptions": [
+					{
+						"id": "model",
+						"name": "Model",
+						"category": "model",
+						"type": "select",
+						"currentValue": "fast",
+						"options": [
+							{
+								"group": "hosted",
+								"name": "Hosted",
+								"options": [
+									{ "value": "fast", "name": "Fast", "description": "Cheap and quick" },
+									{ "value": "deep", "name": "Deep" }
+								]
+							}
+						]
+					},
+					{
+						"id": "thought_level",
+						"name": "Thinking",
+						"category": "thought_level",
+						"type": "select",
+						"currentValue": "medium",
+						"options": [{ "value": "off", "name": "Off" }, { "value": "medium", "name": "Medium" }]
+					},
+					{
+						"id": "web_search",
+						"name": "Web search",
+						"category": "_thinkrail_tools",
+						"type": "boolean",
+						"currentValue": true
+					}
+				]
+			}
+		}
+	},
+	{
+		"direction": "out",
+		"frame": {
+			"jsonrpc": "2.0",
+			"method": "session/cancel",
+			"params": { "sessionId": "sess-handshake" }
+		}
+	}
+]

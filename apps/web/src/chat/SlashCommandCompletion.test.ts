@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import type { SlashCommandInfo } from "@thinkrail/contracts";
+import type { SlashCommand } from "@thinkrail/contracts";
 import {
 	matchSlashCommands,
 	selectedSlashCommandValue,
@@ -8,7 +8,7 @@ import {
 	slashCompletionKeyAction,
 } from "./SlashCommandCompletion";
 
-function command(name: string): SlashCommandInfo {
+function command(name: string): SlashCommand {
 	return {
 		name,
 		description: `${name} description`,

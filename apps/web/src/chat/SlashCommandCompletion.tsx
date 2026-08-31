@@ -1,16 +1,16 @@
-import type { SlashCommandInfo } from "@thinkrail/contracts";
+import type { SlashCommand } from "@thinkrail/contracts";
 import { type ReactNode, useState } from "react";
 import { cn } from "@/lib/utils";
 
-export type SlashCommandItem = Omit<SlashCommandInfo, "source"> & {
-	source: SlashCommandInfo["source"] | "builtin";
+export type SlashCommandItem = Omit<SlashCommand, "source"> & {
+	source?: SlashCommand["source"] | "builtin";
 };
 
 const MAX_MATCHES = 8;
 
 export async function slashCommandCatalogOrEmpty(
-	load: () => Promise<SlashCommandInfo[]>,
-): Promise<SlashCommandInfo[]> {
+	load: () => Promise<SlashCommand[]>,
+): Promise<SlashCommand[]> {
 	try {
 		return await load();
 	} catch {
@@ -138,7 +138,7 @@ export function SlashCommandMenu<T extends SlashCommandItem>({
 		>
 			{commands.map((command, index) => (
 				<button
-					key={`${command.source}:${command.sourceInfo.path}:${command.name}`}
+					key={`${command.source ?? "agent"}:${command.sourceInfo?.path ?? ""}:${command.name}`}
 					type="button"
 					data-testid="slash-command"
 					data-source={command.source}
@@ -152,11 +152,12 @@ export function SlashCommandMenu<T extends SlashCommandItem>({
 					{command.description ? (
 						<span className="truncate tr-text-metadata">{command.description}</span>
 					) : null}
-					<span className="ml-auto shrink-0 text-text-muted tr-text-metadata">
-						{command.source === "builtin"
-							? "Pi/built-in"
-							: `${command.source}/${command.sourceInfo.scope}`}
-					</span>
+					{command.source ? (
+						<span className="ml-auto shrink-0 text-text-muted tr-text-metadata">
+							{command.source}
+							{command.sourceInfo ? `/${command.sourceInfo.scope}` : ""}
+						</span>
+					) : null}
 				</button>
 			))}
 			{footer}

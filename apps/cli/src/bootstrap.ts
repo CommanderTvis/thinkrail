@@ -1,11 +1,10 @@
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
-import { type BuildKind, bootHost } from "@thinkrail/server";
+import type { BuildKind } from "@thinkrail/server";
 import { printStartupMark } from "@thinkrail/shared/startupMark";
 import { channel, version } from "@thinkrail/shared/version";
-import { type CliOptions, parseArgs, parseSubcommand, USAGE } from "./args";
-import { runUninstall } from "./uninstall";
-import { runUpdate } from "./update";
+import { bundledAgentLaunch, runBundledAgent } from "./acpPi";
+import { type CliOptions, parseArgs, parseSubcommand, type Subcommand, USAGE } from "./args";
 
 const DEFAULT_STATIC_DIR = resolve(import.meta.dir, "../../web/dist");
 
@@ -21,13 +20,30 @@ function openBrowser(url: string): void {
 	} catch {}
 }
 
+async function runSubcommand(subcommand: Subcommand, argv: readonly string[]): Promise<number> {
+	const rest = argv.slice(1);
+	switch (subcommand) {
+		case "acp-pi":
+			return runBundledAgent();
+		case "agent": {
+			const { runAgentCommand } = await import("./agents");
+			return runAgentCommand(rest);
+		}
+		case "update": {
+			const { runUpdate } = await import("./update");
+			return runUpdate(rest, process.env);
+		}
+		case "uninstall": {
+			const { runUninstall } = await import("./uninstall");
+			return runUninstall(rest, process.env);
+		}
+	}
+}
+
 async function bootstrap(build: BuildKind): Promise<void> {
 	const argv = Bun.argv.slice(2);
 	const subcommand = parseSubcommand(argv);
-	if (subcommand) {
-		const run = subcommand === "update" ? runUpdate : runUninstall;
-		process.exit(await run(argv.slice(1), process.env));
-	}
+	if (subcommand) process.exit(await runSubcommand(subcommand, argv));
 
 	let options: CliOptions;
 	try {
@@ -52,6 +68,9 @@ async function bootstrap(build: BuildKind): Promise<void> {
 	if (!existsSync(staticDir)) {
 		console.warn(`Web app not found at ${staticDir} — run \`bun run build:web\` to build the UI.`);
 	}
+
+	const { bootHost, setBundledAgentLaunch } = await import("@thinkrail/server");
+	setBundledAgentLaunch(bundledAgentLaunch(build));
 
 	const { port, requested } = await bootHost({
 		port: options.port,

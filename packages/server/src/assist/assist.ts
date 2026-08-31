@@ -1,30 +1,9 @@
-import type {
-	AssistantMessage,
-	TextContent,
-	TranscriptMessage,
-	UserMessage,
-} from "@thinkrail/contracts";
-import { completeOnce, type OneShotRequest, type OneShotResult } from "../agent";
+import type { AssistantMessage, ChatMessage, StopReason, UserMessage } from "@thinkrail/contracts";
 
 export interface WorkspaceNameTurn {
 	prompt: string;
 	answer: string;
 }
-
-export type OneShotRunner = (req: OneShotRequest) => Promise<OneShotResult>;
-
-let runOneShot: OneShotRunner = completeOnce;
-
-export function setOneShotRunner(fn: OneShotRunner | null): void {
-	runOneShot = fn ?? completeOnce;
-}
-
-const NAME_SYSTEM =
-	"You name coding workspaces. Given the first turn of a session, reply with a short, human-readable " +
-	'name (2-4 words, Title Case) that captures the task — e.g. "Fix Auth Redirect". Reply with the ' +
-	"name only — no quotes, no prose, no kebab-case, no slashes.";
-
-const NAME_TIMEOUT_MS = 12_000;
 
 const MAX_NAME_LENGTH = 60;
 
@@ -34,6 +13,8 @@ const NAIVE_MIN_WORDS = 2;
 const NAIVE_MAX_WORDS = 5;
 const NAIVE_MIN_CHARS = 10;
 const NAIVE_MAX_CHARS = 40;
+
+const KILLED_STOP_REASONS: readonly StopReason[] = ["failed", "cancelled", "refused"];
 
 export function naiveWorkspaceName(prompt: string): string | null {
 	const words = prompt
@@ -63,31 +44,6 @@ function titleCaseWord(word: string): string {
 	return word.charAt(0).toUpperCase() + word.slice(1);
 }
 
-export async function suggestWorkspaceName(turn: WorkspaceNameTurn): Promise<string | null> {
-	const prompt = buildNamePrompt(turn);
-	if (!prompt) return null;
-	try {
-		const { text } = await runOneShot({
-			system: NAME_SYSTEM,
-			prompt,
-			tier: "cheap",
-			maxTokens: 32,
-			signal: AbortSignal.timeout(NAME_TIMEOUT_MS),
-		});
-		return toWorkspaceName(text);
-	} catch {
-		return null;
-	}
-}
-
-function buildNamePrompt(turn: WorkspaceNameTurn): string | null {
-	const prompt = turn.prompt.trim();
-	if (!prompt) return null;
-	const answer = turn.answer.trim();
-	const answerPart = answer ? `\n\nAgent answer:\n${clip(answer, 1500)}` : "";
-	return `User request:\n${clip(prompt, 1500)}${answerPart}`;
-}
-
 export function toWorkspaceName(raw: string): string | null {
 	const name = raw
 		.trim()
@@ -103,46 +59,44 @@ export function toWorkspaceName(raw: string): string | null {
 	return name.length > 0 ? name : null;
 }
 
-export function extractFirstTurn(messages: TranscriptMessage[]): WorkspaceNameTurn | null {
+export function extractFirstTurn(messages: readonly ChatMessage[]): WorkspaceNameTurn | null {
 	for (let i = 0; i < messages.length; i += 1) {
 		const message = messages[i];
-		if (message?.role !== "user") continue;
-		let firstAssistant: AssistantMessage | undefined;
-		let lastAssistant: AssistantMessage | undefined;
+		if (message?.role !== "user" || message.hidden === true) continue;
+		let answer: string | undefined;
+		let killed = false;
 		let j = i + 1;
-		for (; j < messages.length && messages[j]?.role !== "user"; j += 1) {
-			const m = messages[j];
-			if (m?.role === "assistant") {
-				firstAssistant ??= m as AssistantMessage;
-				lastAssistant = m as AssistantMessage;
+		for (; j < messages.length && !isVisibleUser(messages[j]); j += 1) {
+			const next = messages[j];
+			if (next?.role === "assistant") answer ??= assistantText(next);
+			if (next?.role === "marker" && next.marker.kind === "turnSettled") {
+				killed = KILLED_STOP_REASONS.includes(next.marker.stopReason);
 			}
 		}
-		const killed = lastAssistant?.stopReason === "error" || lastAssistant?.stopReason === "aborted";
-		const prompt = userText(message as UserMessage);
+		const prompt = userText(message);
 		if (killed || !prompt.trim()) {
 			i = j - 1;
 			continue;
 		}
-		return { prompt, answer: firstAssistant ? assistantText(firstAssistant) : "" };
+		return { prompt, answer: answer ?? "" };
 	}
 	return null;
 }
 
+function isVisibleUser(message: ChatMessage | undefined): boolean {
+	return message?.role === "user" && message.hidden !== true;
+}
+
 function userText(message: UserMessage): string {
-	if (typeof message.content === "string") return message.content;
 	return message.content
-		.filter((c): c is TextContent => c.type === "text")
-		.map((c) => c.text)
+		.filter((block) => block.type === "text")
+		.map((block) => block.text)
 		.join("");
 }
 
 function assistantText(message: AssistantMessage): string {
-	return message.content
-		.filter((c): c is TextContent => c.type === "text")
-		.map((c) => c.text)
+	return message.blocks
+		.filter((block) => block.type === "text")
+		.map((block) => block.text)
 		.join("");
-}
-
-function clip(text: string, max: number): string {
-	return text.length <= max ? text : `${text.slice(0, max)}…`;
 }

@@ -1,0 +1,286 @@
+[
+	{
+		"direction": "out",
+		"frame": {
+			"jsonrpc": "2.0",
+			"id": 20,
+			"method": "session/prompt",
+			"params": {
+				"sessionId": "sess-tools",
+				"prompt": [{ "type": "text", "text": "Refactor the assembler." }]
+			}
+		}
+	},
+	{
+		"direction": "in",
+		"frame": {
+			"jsonrpc": "2.0",
+			"method": "session/update",
+			"params": {
+				"sessionId": "sess-tools",
+				"update": {
+					"sessionUpdate": "tool_call",
+					"toolCallId": "call-read",
+					"title": "Read assembler.ts",
+					"name": "read_file",
+					"kind": "read",
+					"status": "pending",
+					"rawInput": { "path": "packages/acp/src/translate/assembler.ts" },
+					"locations": [
+						{ "path": "packages/acp/src/translate/assembler.ts", "line": 42 },
+						{ "path": "packages/acp/src/translate/toolCall.ts" }
+					]
+				}
+			}
+		}
+	},
+	{
+		"direction": "in",
+		"frame": {
+			"jsonrpc": "2.0",
+			"method": "session/update",
+			"params": {
+				"sessionId": "sess-tools",
+				"update": {
+					"sessionUpdate": "tool_call_update",
+					"toolCallId": "call-read",
+					"status": "in_progress"
+				}
+			}
+		}
+	},
+	{
+		"direction": "in",
+		"frame": {
+			"jsonrpc": "2.0",
+			"method": "session/update",
+			"params": {
+				"sessionId": "sess-tools",
+				"update": {
+					"sessionUpdate": "tool_call_update",
+					"toolCallId": "call-read",
+					"status": "completed",
+					"content": [
+						{ "type": "content", "content": { "type": "text", "text": "240 lines read." } },
+						{
+							"type": "content",
+							"content": { "type": "image", "data": "dGh1bWI=", "mimeType": "image/png" }
+						},
+						{
+							"type": "content",
+							"content": {
+								"type": "resource",
+								"resource": { "uri": "file:///tmp/a.ts", "text": "const a = 1;\n" }
+							}
+						}
+					],
+					"rawOutput": { "lines": 240 }
+				}
+			}
+		}
+	},
+	{
+		"direction": "in",
+		"frame": {
+			"jsonrpc": "2.0",
+			"method": "session/update",
+			"params": {
+				"sessionId": "sess-tools",
+				"update": {
+					"sessionUpdate": "tool_call",
+					"toolCallId": "call-edit",
+					"title": "Edit assembler.ts",
+					"name": "edit_file",
+					"kind": "edit",
+					"status": "completed",
+					"content": [
+						{
+							"type": "diff",
+							"path": "packages/acp/src/translate/assembler.ts",
+							"oldText": "const open = this.#message;\n",
+							"newText": "const open = this.#message ?? null;\n"
+						}
+					]
+				}
+			}
+		}
+	},
+	{
+		"direction": "in",
+		"frame": {
+			"jsonrpc": "2.0",
+			"method": "session/update",
+			"params": {
+				"sessionId": "sess-tools",
+				"update": {
+					"sessionUpdate": "tool_call",
+					"toolCallId": "call-execute",
+					"title": "bun test",
+					"name": "bash",
+					"kind": "execute",
+					"status": "in_progress",
+					"rawInput": { "command": "bun test" },
+					"content": [{ "type": "terminal", "terminalId": "term-7" }]
+				}
+			}
+		}
+	},
+	{
+		"direction": "in",
+		"frame": {
+			"jsonrpc": "2.0",
+			"method": "session/update",
+			"params": {
+				"sessionId": "sess-tools",
+				"update": {
+					"sessionUpdate": "tool_call",
+					"toolCallId": "call-search",
+					"title": "Search for toToolName",
+					"kind": "search",
+					"status": "completed"
+				}
+			}
+		}
+	},
+	{
+		"direction": "in",
+		"frame": {
+			"jsonrpc": "2.0",
+			"method": "session/update",
+			"params": {
+				"sessionId": "sess-tools",
+				"update": {
+					"sessionUpdate": "tool_call",
+					"toolCallId": "call-delete",
+					"title": "Delete stale snapshot",
+					"kind": "delete",
+					"status": "failed"
+				}
+			}
+		}
+	},
+	{
+		"direction": "in",
+		"frame": {
+			"jsonrpc": "2.0",
+			"method": "session/update",
+			"params": {
+				"sessionId": "sess-tools",
+				"update": {
+					"sessionUpdate": "tool_call",
+					"toolCallId": "call-move",
+					"title": "Rename fixture",
+					"kind": "move",
+					"status": "completed"
+				}
+			}
+		}
+	},
+	{
+		"direction": "in",
+		"frame": {
+			"jsonrpc": "2.0",
+			"method": "session/update",
+			"params": {
+				"sessionId": "sess-tools",
+				"update": {
+					"sessionUpdate": "tool_call",
+					"toolCallId": "call-think",
+					"title": "Consider the ordering",
+					"kind": "think",
+					"status": "completed"
+				}
+			}
+		}
+	},
+	{
+		"direction": "in",
+		"frame": {
+			"jsonrpc": "2.0",
+			"method": "session/update",
+			"params": {
+				"sessionId": "sess-tools",
+				"update": {
+					"sessionUpdate": "tool_call",
+					"toolCallId": "call-fetch",
+					"title": "Fetch the ACP registry",
+					"kind": "fetch",
+					"status": "completed",
+					"rawInput": "not-an-object"
+				}
+			}
+		}
+	},
+	{
+		"direction": "in",
+		"frame": {
+			"jsonrpc": "2.0",
+			"method": "session/update",
+			"params": {
+				"sessionId": "sess-tools",
+				"update": {
+					"sessionUpdate": "tool_call",
+					"toolCallId": "call-switch-mode",
+					"title": "Switch to plan mode",
+					"kind": "switch_mode",
+					"status": "completed"
+				}
+			}
+		}
+	},
+	{
+		"direction": "in",
+		"frame": {
+			"jsonrpc": "2.0",
+			"method": "session/update",
+			"params": {
+				"sessionId": "sess-tools",
+				"update": {
+					"sessionUpdate": "tool_call",
+					"toolCallId": "call-other",
+					"title": "Something the client cannot name",
+					"kind": "other",
+					"status": "pending",
+					"name": null
+				}
+			}
+		}
+	},
+	{
+		"direction": "in",
+		"frame": {
+			"jsonrpc": "2.0",
+			"method": "session/update",
+			"params": {
+				"sessionId": "sess-tools",
+				"update": {
+					"sessionUpdate": "tool_call_update",
+					"toolCallId": "call-never-announced",
+					"title": "An update for a call the agent never announced",
+					"kind": "edit",
+					"status": "completed",
+					"locations": [{ "path": "packages/acp/SPEC.md" }],
+					"rawInput": { "path": "packages/acp/SPEC.md" }
+				}
+			}
+		}
+	},
+	{
+		"direction": "in",
+		"frame": {
+			"jsonrpc": "2.0",
+			"method": "session/update",
+			"params": {
+				"sessionId": "sess-tools",
+				"update": {
+					"sessionUpdate": "agent_message_chunk",
+					"content": { "type": "text", "text": "Done — one call is still running." }
+				}
+			}
+		}
+	},
+	{
+		"direction": "in",
+		"frame": { "jsonrpc": "2.0", "id": 20, "result": { "stopReason": "end_turn" } }
+	}
+]

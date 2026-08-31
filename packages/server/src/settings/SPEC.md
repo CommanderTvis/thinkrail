@@ -10,12 +10,19 @@ tags: [v1]
 
 ## Responsibility
 
-The server-synchronized app config: opaque theme selection, analytics switch, terminal replay budget, chat
-composer growth preset, bounded custom layout-preset catalog, and plan-review policy. `reviewModel` /
-`reviewEffort` select the reviewer/reflector runtime (unset means pi
-default); `reviewAutoFix: false` records a `request_changes` verdict and waits instead of auto-sending a fix.
-The module reads, normalizes, persists, caches, and broadcasts values that intentionally follow the owner
-across frontends.
+The server-synced app config — OUR settings (an opaque theme selection, the **global default agent id**,
+the analytics switch, terminal replay budget, the chat composer growth preset, a bounded custom layout-preset catalog (the workbench frame itself is
+frontend-local now), and the plan-review policy — `reviewModel`/`reviewEffort`
+(the model + effort the reviewer & reflector sessions run on; unset ⇒ the agent's default) and
+`reviewAutoFix` (default true; when false a `request_changes` verdict records findings and waits instead
+of auto-sending a fix — `host/todoReview` reads it at the verdict gate)), an extensible `AppConfig` bag.
+Reads/merges/persists it and fans changes out to every client,
+so a preference set on one client follows the user to the others (architecture #9: shared domain state). The
+web client owns the available theme manifests; settings stores only the selected string id. The same
+opacity holds for `defaultAgentId`: it is a string this module stores and never validates —
+[[architecture]] Decision #15's global half, whose per-project override lives on `Project.agentId`, and
+which `agent` resolves against the installed catalog at the moment a chat uses it. `null` means the
+bundled agent.
 
 Current workbench frame, workspace resource placement, current/default preset selection, side/bottom group limits, selection, and focus are explicitly absent. Those are frontend-surface-local view state under [[submodule-web-shell-layout-state]]. Built-in layout presets remain web-owned.
 

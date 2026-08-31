@@ -7,13 +7,11 @@
 		".": "./src/index.ts"
 	},
 	"scripts": {
-		"test": "bun test",
-		"typecheck": "tsc --noEmit"
+		"typecheck": "tsc --noEmit",
+		"test": "bun test"
 	},
 	"devDependencies": {
-		"@earendil-works/pi-agent-core": "catalog:",
 		"@types/bun": "catalog:",
-		"@earendil-works/pi-ai": "catalog:",
 		"typescript": "catalog:"
 	}
 }

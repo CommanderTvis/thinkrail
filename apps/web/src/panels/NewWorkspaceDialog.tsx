@@ -7,9 +7,8 @@ import {
 	RiSparkling2Line as Sparkles,
 	RiAlertLine as TriangleAlert,
 } from "@remixicon/react";
-import type { SlashCommandInfo, ThinkingLevel, WireModel, Workspace } from "@thinkrail/contracts";
-import { useCallback, useEffect, useId, useRef, useState } from "react";
-import { ModelSelector } from "@/chat/ModelSelector";
+import type { PromptContent, SlashCommand, Workspace } from "@thinkrail/contracts";
+import { useEffect, useId, useRef, useState } from "react";
 import { SkillsButton } from "@/chat/SkillsButton";
 import { SkillsDialog } from "@/chat/SkillsDialog";
 import {
@@ -18,8 +17,6 @@ import {
 	slashCommandCatalogOrEmpty,
 	useSlashCommandCompletion,
 } from "@/chat/SlashCommandCompletion";
-import { ThinkingSelector } from "@/chat/ThinkingSelector";
-import { useModelCatalog } from "@/chat/useModelCatalog";
 import { Button } from "@/components/ui/button";
 import {
 	Command,
@@ -39,23 +36,13 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
-import { selectCatalogModel, toast, useAppStore } from "@/store";
+import { toast, useAppStore } from "@/store";
 import { createSessionWithSkillBaseline, errorText, getTransport } from "@/transport";
 import { BranchPicker } from "./BranchPicker";
 import { useBranchList } from "./branches";
 import { enterDefaultWorkspace } from "./defaultWorkspace";
 
 type WorkspaceTarget = "worktree" | "default";
-
-export function reconcileModel(
-	models: readonly WireModel[],
-	model: WireModel,
-	catalogFresh: boolean,
-): WireModel | "unavailable" | null {
-	const found = selectCatalogModel(models, model);
-	if (found) return found;
-	return catalogFresh && models.length > 0 ? "unavailable" : null;
-}
 
 const PILL =
 	"flex h-32 min-w-0 items-center gap-8 rounded-[var(--radius-sm)] border border-control-border-default bg-clip-padding bg-control-bg px-8 tr-text-ui text-text-default outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary data-[open=true]:border-control-border-active data-[open=true]:bg-control-bg-selected";
@@ -81,15 +68,12 @@ export function NewWorkspaceDialog({
 	const [target, setTarget] = useState<WorkspaceTarget>("worktree");
 	const [baseRef, setBaseRef] = useState<string>("");
 	const [prompt, setPrompt] = useState("");
-	const [skillCommands, setSkillCommands] = useState<SlashCommandInfo[]>([]);
+	const [skillCommands, setSkillCommands] = useState<SlashCommand[]>([]);
 	const [aliasSkills, setAliasSkills] = useState<string[]>([]);
-	const [model, setModel] = useState<WireModel | null>(null);
-	const [thinkingLevel, setThinkingLevel] = useState<ThinkingLevel>("medium");
 	const [creating, setCreating] = useState(false);
 	const [trusting, setTrusting] = useState(false);
 	const [manageSkills, setManageSkills] = useState(false);
 	const promptRef = useRef<HTMLTextAreaElement>(null);
-	const hostDefaultAsked = useRef(false);
 	const targetGroupName = useId();
 	const [dialogEl, setDialogEl] = useState<HTMLElement | null>(null);
 
@@ -118,7 +102,6 @@ export function NewWorkspaceDialog({
 		setPrompt(initialPrompt ?? "");
 		setTarget("worktree");
 		setCreating(false);
-		hostDefaultAsked.current = false;
 	}, [open, projectId, initialPrompt]);
 
 	useEffect(() => {
@@ -156,65 +139,6 @@ export function NewWorkspaceDialog({
 			cancelled = true;
 		};
 	}, [open, selectedProjectId]);
-
-	const {
-		models,
-		refreshing: modelsRefreshing,
-		refresh: onRefreshModels,
-		fresh: catalogFresh,
-	} = useModelCatalog(open);
-
-	const applyHostDefault = useCallback(() => {
-		let cancelled = false;
-		getTransport()
-			.request("model.default", {})
-			.then((d) => {
-				if (cancelled) return;
-				setModel(d.model);
-				setThinkingLevel(d.thinkingLevel);
-			})
-			.catch(() => {});
-		return () => {
-			cancelled = true;
-		};
-	}, []);
-
-	useEffect(() => {
-		if (!open) return;
-		return applyHostDefault();
-	}, [open, applyHostDefault]);
-
-	useEffect(() => {
-		if (!open || !model) return;
-		const next = reconcileModel(models, model, catalogFresh);
-		if (next === null) return;
-		if (next !== "unavailable") {
-			if (next !== model) setModel(next);
-			return;
-		}
-		if (hostDefaultAsked.current) return;
-		hostDefaultAsked.current = true;
-		return applyHostDefault();
-	}, [open, models, model, catalogFresh, applyHostDefault]);
-
-	useEffect(() => {
-		if (!open || !model) return;
-		if (model.thinkingLevels.includes(thinkingLevel)) return;
-		let cancelled = false;
-		getTransport()
-			.request("model.clampThinking", {
-				provider: model.provider,
-				id: model.id,
-				level: thinkingLevel,
-			})
-			.then((r) => {
-				if (!cancelled) setThinkingLevel(r.level);
-			})
-			.catch(() => {});
-		return () => {
-			cancelled = true;
-		};
-	}, [open, model, thinkingLevel]);
 
 	const prefetchBase = (ref: string) => {
 		if (!ref.startsWith("origin/")) return;
@@ -269,26 +193,34 @@ export function NewWorkspaceDialog({
 		onOpenChange(false);
 
 		const text = prompt.trim();
+		let session: Awaited<ReturnType<typeof createSessionWithSkillBaseline>>;
 		try {
-			const { result: session, syncedTick } = await createSessionWithSkillBaseline({
-				workspaceId: workspace.id,
-				...(model ? { model } : {}),
-				thinkingLevel,
-			});
-			store.openChatSession(
-				workspace.id,
-				session.sessionId,
-				session.model,
-				session.thinkingLevel,
-				syncedTick,
-			);
-			if (!text) return;
-			store.appendUserMessage(session.sessionId, text);
-			getTransport()
-				.request("session.prompt", { sessionId: session.sessionId, text })
-				.catch((err) => store.appendErrorTurn(session.sessionId, errorText(err)));
+			session = await createSessionWithSkillBaseline({ workspaceId: workspace.id });
 		} catch (err) {
 			toast.error(errorText(err), "Couldn't start the chat");
+			return;
+		}
+		const { result, syncedTick } = session;
+		store.openChatSession(
+			workspace.id,
+			result.sessionId,
+			result.capabilities,
+			result.configOptions,
+			syncedTick,
+		);
+		if (!text) return;
+		const content: PromptContent[] = [{ type: "text", text }];
+		try {
+			const { messageId } = await getTransport().request("session.prompt", {
+				sessionId: result.sessionId,
+				content,
+			});
+			store.applyChatEvent(result.sessionId, {
+				type: "message_start",
+				message: { role: "user", id: messageId, timestamp: Date.now(), content },
+			});
+		} catch (err) {
+			store.appendNotice(result.sessionId, "error", errorText(err));
 		}
 	};
 
@@ -462,25 +394,7 @@ export function NewWorkspaceDialog({
 					)}
 				</div>
 
-				<div className="flex flex-wrap items-center gap-8">
-					<div className="flex min-w-0 flex-1 flex-wrap items-center gap-8">
-						<ModelSelector
-							models={models}
-							current={model}
-							refreshing={modelsRefreshing}
-							onRefresh={onRefreshModels}
-							container={dialogEl}
-							onSelect={(m) => {
-								setModel(m);
-							}}
-						/>
-						<ThinkingSelector
-							level={thinkingLevel}
-							levels={model?.thinkingLevels ?? []}
-							container={dialogEl}
-							onSelect={setThinkingLevel}
-						/>
-					</div>
+				<div className="flex items-center justify-end gap-8">
 					<button
 						type="button"
 						data-testid="create-workspace"

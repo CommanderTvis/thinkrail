@@ -1,5 +1,5 @@
 import type {
-	AskUserQuestionResult,
+	ChatMessage,
 	GitFileChange,
 	ReviewComment,
 	TodoGroupItem,
@@ -7,7 +7,6 @@ import type {
 	TodoPlan,
 } from "@thinkrail/contracts";
 import { type AskState, deriveAskStates } from "./askState";
-import type { ChatTurn } from "./types";
 
 export type ItemChangeSet =
 	| { kind: "commit"; sha: string; files: GitFileChange[] }
@@ -201,12 +200,8 @@ export function planGlance(isStreaming: boolean, askStates: Record<string, AskSt
 	return awaiting ? "waiting_question" : "waiting";
 }
 
-export function sessionGlance(rt: {
-	isStreaming: boolean;
-	turns: ChatTurn[];
-	askAnswers: Record<string, AskUserQuestionResult>;
-}): PlanGlance {
-	return planGlance(rt.isStreaming, deriveAskStates(rt.turns, rt.askAnswers));
+export function sessionGlance(rt: { isStreaming: boolean; messages: ChatMessage[] }): PlanGlance {
+	return planGlance(rt.isStreaming, deriveAskStates(rt.messages));
 }
 
 export function shouldNudgeOnAdd(glance: PlanGlance): boolean {

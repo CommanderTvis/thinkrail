@@ -13,7 +13,7 @@ tags: [v1, chat, subagents]
 
 Presentational renderers for the **`pi-subagents`** capability, joined by tool name / custom-message
 type: `AgentCard` (the `Agent` tool — also registered for `get_subagent_result`, whose result carries
-the same `DelegationRunDetails`), `SubagentCompletionCard` (the `subagent-completion` custom message a
+the same `DelegationRunDetails`), and
 detached run injects — rendered by `turns.tsx` as its own `subagentCompletion` row, not through the tool
 registry), and the pure `runDetails` module (defensive `DelegationRunDetails` readers, token/cost/
 duration formatters, and the collapsed-header summary line). Run *liveness* is deliberately not

@@ -1,6 +1,6 @@
 import {
+	RiRobotLine as Bot,
 	RiGitBranchLine as GitBranch,
-	RiKeyLine as KeyRound,
 	RiLayoutTop2Line as LayoutPanelTop,
 	RiLayoutGridLine as LayoutTemplate,
 	type RemixiconComponentType as LucideIcon,
@@ -15,17 +15,17 @@ import type { ReactNode } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib";
 import { SettingsSection, useAppStore } from "@/store";
+import { AgentsSettings } from "./AgentsSettings";
 import { AppearanceSettings } from "./AppearanceSettings";
 import { ChatSettings } from "./ChatSettings";
 import { GithubSettings } from "./GithubSettings";
 import { PrivacySettings } from "./PrivacySettings";
-import { ProvidersSettings } from "./ProvidersSettings";
 import { ReviewSettings } from "./ReviewSettings";
 import { TemplatesSettings } from "./TemplatesSettings";
 import { TerminalSettings } from "./TerminalSettings";
 
 const SECTIONS: { id: SettingsSection; label: string; icon: LucideIcon }[] = [
-	{ id: SettingsSection.Providers, label: "Providers", icon: KeyRound },
+	{ id: SettingsSection.Agents, label: "Agents", icon: Bot },
 	{ id: SettingsSection.Github, label: "GitHub", icon: GitBranch },
 	{ id: SettingsSection.Appearance, label: "Appearance", icon: Palette },
 	{ id: SettingsSection.Chat, label: "Chat", icon: MessageSquareText },
@@ -50,7 +50,7 @@ export function SettingsDialog({ layoutSettings }: { layoutSettings: ReactNode }
 		>
 			<DialogContent
 				data-testid="settings-dialog"
-				className="flex h-[80vh] max-h-[85vh] w-full max-w-[52rem] flex-col gap-0 overflow-hidden p-0"
+				className="flex h-[80vh] max-h-[85vh] w-full max-w-[56rem] flex-col gap-0 overflow-hidden p-0"
 			>
 				<DialogHeader className="border-border-default border-b px-16 py-12">
 					<DialogTitle>Settings</DialogTitle>
@@ -97,8 +97,8 @@ export function SettingsDialog({ layoutSettings }: { layoutSettings: ReactNode }
 					</nav>
 
 					<div className="min-h-0 flex-1 overflow-y-auto p-16">
-						{section === SettingsSection.Providers ? (
-							<ProvidersSettings />
+						{section === SettingsSection.Agents ? (
+							<AgentsSettings />
 						) : section === SettingsSection.Github ? (
 							<GithubSettings />
 						) : section === SettingsSection.Chat ? (

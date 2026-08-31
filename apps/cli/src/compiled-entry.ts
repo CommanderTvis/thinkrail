@@ -6,7 +6,6 @@ import { parseSubcommand } from "./args";
 import {
 	bundledExtensionFactories,
 	bundledSkillsVersion,
-	bundledWebAccessFactory,
 	embeddedSkillFiles,
 } from "./bundled-extensions.generated";
 import { stagingRoot } from "./paths";
@@ -32,21 +31,26 @@ async function stage(
 	return dir;
 }
 
-if (parseSubcommand(Bun.argv.slice(2)) === undefined) {
-	const staticDir = await stage("web", webAssetsVersion, embeddedWebAssets);
+const subcommand = parseSubcommand(Bun.argv.slice(2));
+if (subcommand === "acp-pi") {
 	const skillsDir = await stage("skills", bundledSkillsVersion, embeddedSkillFiles);
+	const { registerBundledRuntime } = await import("@thinkrail/pi-agent");
+	const [webAccessFactory] = bundledExtensionFactories;
+	if (!webAccessFactory) throw new Error("bundled extensions are missing pi-web-access");
+	await registerBundledRuntime({
+		factories: bundledExtensionFactories,
+		skillsDir,
+		webAccessFactory,
+	});
+} else if (subcommand === undefined) {
+	const staticDir = await stage("web", webAssetsVersion, embeddedWebAssets);
 	const runtimeDir = await stage("runtime", runtimeAssetsVersion, embeddedRuntimeAssets);
 	const macosTrash = join(runtimeDir, "macos-trash");
 	const windowsTrash = join(runtimeDir, "windows-trash.exe");
 	if (process.platform !== "win32") chmodSync(macosTrash, 0o755);
 	process.env.THINKRAIL_STATIC_DIR ??= staticDir;
-	const { registerBundledRuntime } = await import("@thinkrail/server");
-	await registerBundledRuntime({
-		factories: bundledExtensionFactories,
-		skillsDir,
-		trashHelpers: { macos: macosTrash, windows: windowsTrash },
-		webAccessFactory: bundledWebAccessFactory,
-	});
+	const { setBundledTrashHelpers } = await import("@thinkrail/server");
+	setBundledTrashHelpers({ macos: macosTrash, windows: windowsTrash });
 }
 const { launch } = await import("./bootstrap");
 await launch("binary");

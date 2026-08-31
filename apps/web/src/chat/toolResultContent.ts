@@ -1,10 +1,10 @@
-import { ACCEPTED_IMAGE_TYPES, type ImageContent } from "@thinkrail/contracts";
+import { ACCEPTED_IMAGE_TYPES, type ImageBlock } from "@thinkrail/contracts";
 
 const acceptedImageTypes = new Set(ACCEPTED_IMAGE_TYPES);
 
 export interface ParsedToolResultContent {
 	text: string;
-	images: ImageContent[];
+	images: ImageBlock[];
 }
 
 export function toolValueText(value: unknown): string {
@@ -31,7 +31,7 @@ export function parseToolResultContent(result: unknown): ParsedToolResultContent
 	}
 
 	const text: string[] = [];
-	const images: ImageContent[] = [];
+	const images: ImageBlock[] = [];
 	for (const block of content) {
 		if (typeof block !== "object" || block === null) continue;
 		const candidate = block as {

@@ -1,19 +1,25 @@
-import type { DelegationRunDetails, UserMessage } from "@thinkrail/contracts";
+import type {
+	ChatMessage,
+	CompactionReason,
+	MarkerMessage,
+	NoticeLevel,
+	RetryScope,
+	StopReason,
+	ToolCallBlock,
+	TurnSettledMarker,
+	UserMessage,
+} from "@thinkrail/contracts";
 import type { ChatMessageOrder } from "./messageOrder";
 import { resolveProminence } from "./toolRegistry";
 import { strArg } from "./tools/toolHelpers";
-import type { ChatTurn, CompactionState, FailureRecovery, ToolResultState } from "./types";
+import type { FailureRecovery } from "./types";
 
-export interface ToolCallData {
-	toolCallId: string;
-	toolName: string;
-	args: Record<string, unknown>;
-	tool: ToolResultState | undefined;
-	dead: boolean;
+export interface ToolStepData {
+	block: ToolCallBlock;
 	streaming: boolean;
 }
 
-export type RoutineToolStep = { kind: "tool"; id: string } & ToolCallData;
+export type RoutineToolStep = { kind: "tool"; id: string } & ToolStepData;
 
 export interface ThinkingStep {
 	kind: "thinking";
@@ -25,28 +31,34 @@ export interface ThinkingStep {
 
 export type ActivityStep = RoutineToolStep | ThinkingStep;
 
+export interface RetryRowData {
+	scope: RetryScope;
+	attempt: number;
+	maxAttempts: number;
+	delayMs: number;
+}
+
+export interface LiveProgress {
+	retries: Partial<Record<RetryScope, Omit<RetryRowData, "scope">>>;
+	compacting: CompactionReason | null;
+}
+
 export type ChatRow =
-	| { kind: "user"; id: string; message: UserMessage; attachmentNames?: string[] }
-	| { kind: "system"; id: string; text: string }
-	| { kind: "error"; id: string; text: string; recovery?: FailureRecovery }
-	| ({ kind: "compaction"; id: string } & CompactionState)
+	| { kind: "user"; id: string; message: UserMessage }
+	| { kind: "notice"; id: string; level: NoticeLevel; text: string; recovery?: FailureRecovery }
+	| { kind: "settled"; id: string; stopReason: StopReason; error?: string }
 	| {
-			kind: "retry";
+			kind: "compaction";
 			id: string;
-			source: "turn" | "summarization";
-			attempt: number;
-			maxAttempts: number;
-			delayMs: number;
+			reason: CompactionReason;
+			summary: string;
+			tokensBefore?: number;
 	  }
+	| ({ kind: "retry"; id: string } & RetryRowData)
+	| { kind: "compacting"; id: string; reason: CompactionReason }
 	| { kind: "markdown"; id: string; text: string }
-	| { kind: "subagentCompletion"; id: string; details: DelegationRunDetails; text: string }
-	| ({ kind: "tool"; id: string } & ToolCallData)
-	| {
-			kind: "activity";
-			id: string;
-			steps: ActivityStep[];
-			live: boolean;
-	  }
+	| ({ kind: "tool"; id: string } & ToolStepData)
+	| { kind: "activity"; id: string; steps: ActivityStep[]; live: boolean }
 	| { kind: "divider"; id: string; data: TurnDividerData };
 
 export function projectRows(rows: ChatRow[], messageOrder: ChatMessageOrder): ChatRow[] {
@@ -74,6 +86,8 @@ export function projectRows(rows: ChatRow[], messageOrder: ChatMessageOrder): Ch
 	return projected;
 }
 
+const RETRY_SCOPES: readonly RetryScope[] = ["turn", "summarization"];
+
 function nestRoutineRun(steps: ActivityStep[]): ActivityStep[] {
 	const nested: ActivityStep[] = [];
 	let currentThinking: ThinkingStep | undefined;
@@ -91,9 +105,9 @@ function nestRoutineRun(steps: ActivityStep[]): ActivityStep[] {
 }
 
 export function deriveRows(
-	turns: ChatTurn[],
-	toolResults: Record<string, ToolResultState>,
+	messages: ChatMessage[],
 	isStreaming: boolean,
+	progress: LiveProgress,
 	isSpec?: (path: string) => boolean,
 ): ChatRow[] {
 	const rows: ChatRow[] = [];
@@ -106,100 +120,81 @@ export function deriveRows(
 		run = [];
 	};
 
-	for (let i = 0; i < turns.length; i++) {
-		const turn = turns[i];
-		if (!turn) continue;
-		if (turn.kind === "assistant") {
-			const { message } = turn;
-			const dead = message.stopReason === "aborted" || message.stopReason === "error";
-			for (let b = 0; b < message.content.length; b++) {
-				const block = message.content[b];
+	for (let i = 0; i < messages.length; i++) {
+		const message = messages[i];
+		if (!message) continue;
+
+		if (message.role === "assistant") {
+			const streaming = message.endedAt === undefined;
+			for (let b = 0; b < message.blocks.length; b++) {
+				const block = message.blocks[b];
 				if (!block) continue;
 				if (block.type === "thinking") {
-					if (block.thinking.trim().length === 0) continue;
+					if (block.text.trim().length === 0) continue;
 					run.push({
 						kind: "thinking",
-						id: `${turn.id}:thinking:${b}`,
-						text: block.thinking,
-						streaming: turn.streaming,
+						id: `${message.id}:thinking:${b}`,
+						text: block.text,
+						streaming,
 						tools: [],
 					});
 				} else if (block.type === "text") {
 					if (block.text.trim().length === 0) continue;
 					flushRun();
-					rows.push({ kind: "markdown", id: `${turn.id}:text:${b}`, text: block.text });
+					rows.push({ kind: "markdown", id: `${message.id}:text:${b}`, text: block.text });
 				} else if (block.type === "toolCall") {
-					const data: ToolCallData = {
-						toolCallId: block.id,
-						toolName: block.name,
-						args: block.arguments,
-						tool: toolResults[block.id],
-						dead,
-						streaming: turn.streaming,
-					};
-					if (resolveProminence(block.name).prominence === "primary") {
+					if (resolveProminence(block.toolName).prominence === "primary") {
 						flushRun();
-						rows.push({ kind: "tool", id: block.id, ...data });
+						rows.push({ kind: "tool", id: block.toolCallId, block, streaming });
 					} else {
-						run.push({ kind: "tool", id: block.id, ...data });
+						run.push({ kind: "tool", id: block.toolCallId, block, streaming });
 					}
 				}
 			}
-		} else {
-			flushRun();
-			switch (turn.kind) {
-				case "user":
-					rows.push({
-						kind: "user",
-						id: turn.id,
-						message: turn.message,
-						...(turn.attachmentNames ? { attachmentNames: turn.attachmentNames } : {}),
-					});
-					break;
-				case "system":
-					rows.push({ kind: "system", id: turn.id, text: turn.text });
-					break;
-				case "error":
-					rows.push({
-						kind: "error",
-						id: turn.id,
-						text: turn.text,
-						...(turn.recovery ? { recovery: turn.recovery } : {}),
-					});
-					break;
-				case "compaction":
-					rows.push(turn);
-					break;
-				case "retry":
-					rows.push({
-						kind: "retry",
-						id: turn.id,
-						source: turn.source,
-						attempt: turn.attempt,
-						maxAttempts: turn.maxAttempts,
-						delayMs: turn.delayMs,
-					});
-					break;
-				case "subagentCompletion":
-					rows.push({
-						kind: "subagentCompletion",
-						id: turn.id,
-						details: turn.details,
-						text: turn.text,
-					});
-					break;
-			}
+			continue;
 		}
-		const roundEnded =
-			turn.kind !== "user" &&
-			(turns[i + 1]?.kind === "user" || (i === turns.length - 1 && !isStreaming));
-		if (roundEnded) {
+
+		if (message.role === "user") {
 			flushRun();
-			const data = turnDivider(turns, i, isSpec);
-			if (data) rows.push({ kind: "divider", id: `${turn.id}:divider`, data });
+			if (!message.hidden) rows.push({ kind: "user", id: message.id, message });
+			continue;
+		}
+
+		const marker = message.marker;
+		if (marker.kind === "questionAnswers") continue;
+
+		flushRun();
+		if (marker.kind === "notice") {
+			rows.push({ kind: "notice", id: message.id, level: marker.level, text: marker.text });
+		} else if (marker.kind === "compaction") {
+			rows.push({
+				kind: "compaction",
+				id: message.id,
+				reason: marker.reason,
+				summary: marker.summary,
+				...(marker.tokensBefore !== undefined ? { tokensBefore: marker.tokensBefore } : {}),
+			});
+		} else if (marker.kind === "turnSettled") {
+			rows.push({
+				kind: "settled",
+				id: message.id,
+				stopReason: marker.stopReason,
+				...(marker.error !== undefined ? { error: marker.error } : {}),
+			});
+			const data = turnDivider(messages, i, isSpec);
+			if (data) rows.push({ kind: "divider", id: `${message.id}:divider`, data });
 		}
 	}
 	flushRun(isStreaming);
+
+	for (const scope of RETRY_SCOPES) {
+		const retry = progress.retries[scope];
+		if (retry) rows.push({ kind: "retry", id: `retry:${scope}`, scope, ...retry });
+	}
+	if (progress.compacting) {
+		rows.push({ kind: "compacting", id: "compacting", reason: progress.compacting });
+	}
+
 	return rows;
 }
 
@@ -214,45 +209,47 @@ const SPEC_WRITER_TOOL = "spec_create";
 
 const FILE_WRITER_TOOLS = new Set(["write", "edit"]);
 
+function isSettledMarker(
+	message: ChatMessage | undefined,
+): message is MarkerMessage<TurnSettledMarker> {
+	return message?.role === "marker" && message.marker.kind === "turnSettled";
+}
+
 export function turnDivider(
-	turns: ChatTurn[],
+	messages: ChatMessage[],
 	endIndex: number,
 	isSpec: (path: string) => boolean = () => false,
 ): TurnDividerData | null {
-	let userIdx = -1;
-	for (let i = endIndex; i >= 0; i--) {
-		if (turns[i]?.kind === "user") {
-			userIdx = i;
+	const end = messages[endIndex];
+	if (!isSettledMarker(end)) return null;
+
+	let startIndex = -1;
+	for (let i = endIndex - 1; i >= 0; i--) {
+		if (messages[i]?.role === "user") {
+			startIndex = i;
 			break;
 		}
 	}
-	if (userIdx < 0) return null;
 
 	let toolCount = 0;
 	const written = new Map<string, boolean>();
-	let endMs: number | null = null;
-	for (let i = userIdx + 1; i <= endIndex; i++) {
-		const turn = turns[i];
-		if (turn?.kind === "assistant") {
-			if (turn.message.timestamp) endMs = turn.message.timestamp;
-			for (const block of turn.message.content) {
-				if (block.type !== "toolCall") continue;
-				toolCount++;
-				const specWrite = block.name === SPEC_WRITER_TOOL;
-				if (!specWrite && !FILE_WRITER_TOOLS.has(block.name)) continue;
-				const path = strArg(block.arguments, "path");
-				if (!path) continue;
-				if (specWrite || isSpec(path)) written.set(path, true);
-				else if (!written.has(path)) written.set(path, false);
-			}
-		} else if (turn?.kind === "system" && turn.endedAt != null) {
-			endMs = turn.endedAt;
+	for (let i = startIndex + 1; i < endIndex; i++) {
+		const message = messages[i];
+		if (message?.role !== "assistant") continue;
+		for (const block of message.blocks) {
+			if (block.type !== "toolCall") continue;
+			toolCount++;
+			const specWrite = block.toolName === SPEC_WRITER_TOOL;
+			if (!specWrite && !FILE_WRITER_TOOLS.has(block.toolName)) continue;
+			const path = strArg(block.arguments, "path");
+			if (!path) continue;
+			if (specWrite || isSpec(path)) written.set(path, true);
+			else if (!written.has(path)) written.set(path, false);
 		}
 	}
 
-	const user = turns[userIdx];
-	const startMs = user?.kind === "user" ? user.message.timestamp : null;
-	const elapsedMs = startMs != null && endMs != null ? endMs - startMs : null;
+	const elapsedMs =
+		end.marker.startedAt !== undefined ? end.timestamp - end.marker.startedAt : null;
 
 	const specs: string[] = [];
 	const changedFiles: string[] = [];
@@ -260,6 +257,6 @@ export function turnDivider(
 	return { elapsedMs, toolCount, specs, changedFiles };
 }
 
-export function rowIndexForTurn(rows: ChatRow[], turnId: string): number {
-	return rows.findIndex((r) => r.id === turnId || r.id.startsWith(`${turnId}:text:`));
+export function rowIndexForMessage(rows: ChatRow[], messageId: string): number {
+	return rows.findIndex((r) => r.id === messageId || r.id.startsWith(`${messageId}:text:`));
 }
