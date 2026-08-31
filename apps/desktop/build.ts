@@ -96,9 +96,9 @@ export async function startDesktopHost(options) {
     ${bundledRuntimeKeys.webAccessFactory}: factory0,
   });
   return bootHost({
-    port: 0,
+    port: options.port ?? 0,
     host: "127.0.0.1",
-    portMode: "exact",
+    portMode: options.port ? "free" : "exact",
     staticDir: options.staticDir,
     appVersion: options.appVersion,
     analytics: { channel: options.channel, build: "desktop" },

@@ -38,10 +38,18 @@ engine architecture.
 ## V1 profile and topology
 
 V1 ships only the local-host profile. One Electrobun Bun process owns the native shell and server on the
-same event loop; the accepted in-process crash trade-off is unchanged. The host binds loopback port `0`
-and its actual port forms the window origin. The packaged `web/dist`, `/ws`, `/files`, and SPA fallback
-therefore remain same-origin and the web client has no desktop branch. A dynamic loopback port is never
-persisted.
+same event loop; the accepted in-process crash trade-off is unchanged. The host's actual port forms the
+window origin. The packaged `web/dist`, `/ws`, `/files`, and SPA fallback therefore remain same-origin and
+the web client has no desktop branch.
+
+**The port a profile listened on is remembered** (`host-ports.json`, beside the route and preference
+stores) and asked for again on the next launch, taking the next free one when it is occupied. A loopback
+port used to be picked fresh every launch, and the origin it forms is the webview's *storage identity*:
+a new port is an empty `localStorage`, so the whole frontend-local workbench — open tabs, panes, widths,
+attention — started over on every restart. The route and the bounded preference map survive a changing
+port by riding the preload instead, but the workbench document is far past what that channel carries, and
+a browser profile that lasts one run is the wrong shape for anything else the client stores. A remembered
+port is best-effort: an occupied one is not an error, it is a search.
 
 Desktop, CLI, and source hosts do not exclude one another by data directory. Every launcher binds an
 independent serving port and initializes its own in-process services. If multiple hosts use the same mutable
@@ -61,10 +69,13 @@ another.
    with those factories, the named `pi-web-access` factory needed by delegation children, the staged skills,
    and macOS/Windows trash helpers. The generator's key map must satisfy every key of the server-owned
    `BundledExtensions` contract, so adding a required launcher field fails desktop typecheck instead of
-   producing a packaged-only `undefined`. It then calls `bootHost()` on loopback port `0` with the staged web
-   directory, baked version, and `desktop` analytics provenance.
+   producing a packaged-only `undefined`. It then calls `bootHost()` with this profile's remembered
+   loopback port (`portMode: "free"`, so an occupied one searches upward; `0` on a first run), the staged
+   web directory, baked version, and `desktop` analytics provenance. `bootHost()` acquires ownership before its
+   mutable initialization.
 4. Restore the valid route fragment and bounded client-preference map for
-   `{ backendProfileId: "local", windowId: "main" }`. The route is appended to the fresh origin; the
+   `{ backendProfileId: "local", windowId: "main" }`, and record the port the host actually took. The
+   route is appended to the origin; the
    preference map is serialized as data and prepended to the preload source so the web client can hydrate
    before React mounts despite the changing port. Open one normal native `BrowserWindow` with the system
    renderer.

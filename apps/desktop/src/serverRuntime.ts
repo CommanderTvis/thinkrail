@@ -3,6 +3,8 @@ export interface DesktopHostOptions {
 	staticDir: string;
 	appVersion: string;
 	channel: string;
+	/** The port this profile listened on last time; taken when free, searched upward when not. */
+	port?: number | undefined;
 }
 
 export interface DesktopHost {

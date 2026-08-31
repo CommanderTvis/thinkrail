@@ -12,6 +12,7 @@ import Electrobun, {
 import { installDesktopApplicationMenu } from "./applicationMenu";
 import { stagedClaudePlugin } from "./claudePlugin";
 import { externalNavigationUrl } from "./externalNavigation";
+import { HostPortStore } from "./hostPortStore";
 import {
 	injectInitialDesktopPreferences,
 	readDesktopPreferenceRemove,
@@ -43,14 +44,18 @@ async function start(): Promise<void> {
 	const serverRuntime = (await import(
 		pathToFileURL(join(runtimeDir, "server-runtime.ts")).href
 	)) as DesktopServerRuntime;
+	const userData = process.env.THINKRAIL_DESKTOP_USER_DATA ?? Utils.paths.userData;
+	// The webview's origin is its storage identity, and the port is in it — see SPEC.md.
+	const hostPorts = new HostPortStore(join(userData, "host-ports.json"));
 	const host = await serverRuntime.startDesktopHost({
 		runtimeDir,
 		staticDir: join(PATHS.VIEWS_FOLDER, "web"),
 		appVersion: version,
 		channel,
+		port: hostPorts.read(BACKEND_PROFILE_ID),
 	});
+	hostPorts.write(BACKEND_PROFILE_ID, host.port);
 	const origin = `http://127.0.0.1:${host.port}`;
-	const userData = process.env.THINKRAIL_DESKTOP_USER_DATA ?? Utils.paths.userData;
 	const routes = new RouteStore(join(userData, "routes.json"));
 	const preferences = new PreferenceStore(join(userData, "preferences.json"));
 	const initialRoute = routes.read(BACKEND_PROFILE_ID, WINDOW_ID);

@@ -1,5 +1,6 @@
 import type { LayoutPreset } from "@thinkrail/contracts";
 import { useEffect } from "react";
+import { getStablePreferenceAdapter } from "../../clientPreferences";
 import { type LayoutAttention, randomId } from "../../lib";
 import {
 	DEFAULT_LOCAL_LAYOUT_PREFERENCES,
@@ -156,6 +157,17 @@ function retainSurfaceLease(release: () => void): void {
 
 async function resolveSurfaceId(storage: StoragePair, endpoint: string): Promise<string> {
 	if (storageOverride) return claimLayoutSurfaceId(storage.session, async () => true);
+	// A native window's surface identity rides the stable preference channel: sessionStorage lives one
+	// WKWebView process, so keying by it made every desktop launch a brand-new surface. One window per
+	// profile means no claim protocol is needed — the adapter is already scoped to this window.
+	const adapter = getStablePreferenceAdapter();
+	if (adapter) {
+		const existing = adapter.getItem(SURFACE_ID_KEY);
+		if (existing) return existing;
+		const minted = randomId("surface");
+		adapter.setItem(SURFACE_ID_KEY, minted);
+		return minted;
+	}
 	const pendingLease: { release?: () => void } = {};
 	try {
 		const id = await claimLayoutSurfaceId(storage.session, async (candidate) => {
