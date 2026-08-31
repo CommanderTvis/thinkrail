@@ -234,6 +234,8 @@ export interface LocalLayoutPreferences {
 	verticalCenterTabsWidth: number;
 	/** How a pane is arranged when one is first made; joining an existing pane follows that pane. */
 	defaultPaneDirection: LayoutTabPane["direction"];
+	/** Whether a single click opens a file in the reusable preview slot rather than a tab of its own. */
+	previewTabs: boolean;
 }
 
 export const DEFAULT_LOCAL_LAYOUT_PREFERENCES: LocalLayoutPreferences = {
@@ -243,6 +245,7 @@ export const DEFAULT_LOCAL_LAYOUT_PREFERENCES: LocalLayoutPreferences = {
 	verticalCenterTabs: false,
 	verticalCenterTabsWidth: VERTICAL_TABS_WIDTH.default,
 	defaultPaneDirection: "horizontal",
+	previewTabs: true,
 };
 
 export interface LocalLayoutStatePayload {

@@ -1619,6 +1619,11 @@ tab — `external-file` when the path escaped the worktree, which is most of Cla
   The strip and
   context/command surfaces also expose a keyboard-operable Keep Preview command.
 
+  **Previewing at all is a local layout preference** (Settings → Layout, `previewTabs`, on by default).
+  With it off `openTabs.ts` reads every open as a keep, so nothing claims a slot and no click waits out the
+  double-click window to learn whether it was one — the single choke point is where the intent enters, not
+  each of the a dozen callers that form one.
+
   A preview replaces only that group's slot at the same index, so browsing never reshuffles the strip. A
   double click composes preview then promote; `openTabs.ts` single-flights the underlying read and carries
   the leading click's slot claim into one final kept local transition, so no intermediate preview state is

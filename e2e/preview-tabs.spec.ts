@@ -55,6 +55,24 @@ test("a single click previews into one reusable slot, a double click keeps the t
 	await expect(tabs.first()).toHaveAttribute("data-active", "true");
 });
 
+test("with previewing off, every click keeps a tab of its own", async ({ page }) => {
+	await openWorkspaceFiles(page);
+	await page.getByTestId("open-settings").click();
+	await page.getByTestId("settings-nav-layout").click();
+	await page.getByTestId("preview-tabs").uncheck();
+	await page.getByRole("dialog").getByRole("button", { name: "Close" }).click();
+
+	const tabs = page.getByTestId("editor-tab");
+	await page.getByTestId("file-node").filter({ hasText: "README.md" }).click();
+	await expect(tabs).toHaveCount(1);
+	await expect(tabs.first()).toHaveAttribute("data-preview", "false");
+
+	// The second click would have replaced the first tab in its slot; with previewing off it opens beside it.
+	await page.getByTestId("file-node").filter({ hasText: "notes.txt" }).click();
+	await expect(tabs).toHaveCount(2);
+	await expect(tabs.nth(1)).toHaveAttribute("data-preview", "false");
+});
+
 test("a double click claims the slot on its way to keeping the tab, at any latency", async ({
 	page,
 }) => {
