@@ -4,6 +4,8 @@ export interface DesktopHostOptions {
 	appVersion: string;
 	channel: string;
 	openExternal?: (url: string) => void;
+	/** The port this profile listened on last time; taken when free, searched upward when not. */
+	port?: number | undefined;
 }
 
 export interface DesktopHost {
