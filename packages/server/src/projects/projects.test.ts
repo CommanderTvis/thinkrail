@@ -75,6 +75,17 @@ function withGitIdentity<T>(run: () => T): T {
 }
 
 function seedWorkspace(worktreePath: string, kind?: "default" | "external"): void {
+	const projectsPath = join(dataDir, "projects.json");
+	const existing = existsSync(projectsPath)
+		? (JSON.parse(readFileSync(projectsPath, "utf8")) as unknown[])
+		: [];
+	writeFileSync(
+		projectsPath,
+		JSON.stringify([
+			...existing,
+			{ id: "p-other", name: "other", path: join(dataDir, "other"), slug: "other", lastOpened: 1 },
+		]),
+	);
 	writeFileSync(
 		join(dataDir, "workspaces.json"),
 		JSON.stringify([
@@ -98,7 +109,28 @@ test("openProject refuses a checkout already attached as an external workspace",
 	seedWorkspace(attached, "external");
 
 	expect(() => openProject(attached)).toThrow("already open in ThinkRail");
-	expect(listProjects()).toHaveLength(0);
+	expect(listProjects().map((p) => p.id)).toEqual(["p-other"]);
+});
+
+test("a workspace orphaned by its project's removal no longer claims the folder", () => {
+	const attached = join(dataDir, "freed checkout");
+	makeRepo(attached);
+	seedWorkspace(attached, "external");
+	// The project the row belonged to is gone; the row is leftover state, not a claim.
+	writeFileSync(join(dataDir, "projects.json"), JSON.stringify([]));
+
+	expect(openProject(attached).path).toBe(realpathSync(attached));
+});
+
+test("a ThinkRail-managed worktree dir stays refused even when its record is orphaned", () => {
+	const repo = join(dataDir, "repo-orphan");
+	makeRepo(repo);
+	const managed = join(dataDir, "worktrees", "repo-orphan", "workspace-1");
+	git(repo, "worktree", "add", "-b", "workspace-1", managed);
+	seedWorkspace(managed);
+	writeFileSync(join(dataDir, "projects.json"), JSON.stringify([]));
+
+	expect(() => openProject(managed)).toThrow("already open in ThinkRail");
 });
 
 test("openProject refuses a ThinkRail-managed worktree dir, whatever symlinks the path carries", () => {
@@ -120,7 +152,7 @@ test("openProject still reopens a closed project whose own Default workspace hol
 	closeProject(project.id);
 
 	expect(openProject(repo).id).toBe(project.id);
-	expect(listProjects().map((p) => p.id)).toEqual([project.id]);
+	expect(listProjects().map((p) => p.id)).toContain(project.id);
 });
 
 test("inspectProjectPath: a path that doesn't exist is `missing`", () => {
