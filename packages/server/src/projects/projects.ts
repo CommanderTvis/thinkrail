@@ -1,10 +1,10 @@
 import { randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, rmdirSync, rmSync, statSync } from "node:fs";
 import { homedir } from "node:os";
-import { basename, isAbsolute, join, resolve } from "node:path";
+import { basename, isAbsolute, join, resolve, sep } from "node:path";
 import type { Project, ProjectPathStatus } from "@thinkrail/contracts";
 import { canonicalPath, git } from "../git";
-import { loadProjects, loadWorkspaces, saveProjects } from "../persistence";
+import { dataDir, loadProjects, loadWorkspaces, saveProjects } from "../persistence";
 
 type ProjectPublisher = (project: Project) => void;
 
@@ -104,7 +104,18 @@ export function openProject(inputPath: string): Project {
 	}
 
 	const wanted = canonicalPath(root);
-	if (loadWorkspaces().some((ws) => canonicalPath(ws.worktreePath) === wanted))
+	// A workspace row speaks for the folder while its project exists; orphaned by the project's removal
+	// it is leftover state, not a claim. A ThinkRail-managed worktree dir stays refused either way — that
+	// path belongs to this app's own plumbing whether or not a record still points at it.
+	const projectIds = new Set(projects.map((p) => p.id));
+	if (
+		loadWorkspaces().some(
+			(ws) =>
+				canonicalPath(ws.worktreePath) === wanted &&
+				(projectIds.has(ws.projectId) ||
+					wanted.startsWith(canonicalPath(join(dataDir(), "worktrees")) + sep)),
+		)
+	)
 		throw new Error(`This folder is already open in ThinkRail as a workspace: ${root}`);
 
 	const taken = new Set(projects.map((p) => p.slug));
