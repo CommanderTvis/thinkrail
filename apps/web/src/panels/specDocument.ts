@@ -1,17 +1,21 @@
+import type { MessageKey } from "@thinkrail/locales";
 import { defaultUrlTransform } from "react-markdown";
 import { parseFrontmatter } from "@thinkrail/resource-renderers";
 
 interface SpecRole {
-	label: string;
-	tag: string;
+	label: MessageKey;
+	tag: MessageKey;
 }
 
 export const SPEC_ROLES = {
-	"goal-and-requirements": { label: "Goal", tag: "GOAL" },
-	"architecture-design": { label: "Architecture", tag: "ARCH" },
-	"module-design": { label: "Module", tag: "MODULE" },
-	"submodule-design": { label: "Submodule", tag: "SUBMODULE" },
-	"task-spec": { label: "Task", tag: "TASK" },
+	"goal-and-requirements": { label: "panels.specTree.goal", tag: "panels.specTree.goalTag" },
+	"architecture-design": {
+		label: "panels.specTree.architecture",
+		tag: "panels.specTree.architectureTag",
+	},
+	"module-design": { label: "panels.specTree.module", tag: "panels.specTree.moduleTag" },
+	"submodule-design": { label: "panels.specTree.submodule", tag: "panels.specTree.submoduleTag" },
+	"task-spec": { label: "panels.specTree.task", tag: "panels.specTree.taskTag" },
 } as const satisfies Record<string, SpecRole>;
 
 export const SPEC_TYPES = Object.keys(SPEC_ROLES);

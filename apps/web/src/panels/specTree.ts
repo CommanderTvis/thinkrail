@@ -1,27 +1,11 @@
 import type { SpecGraphNode } from "@thinkrail/contracts";
-import type { MessageKey } from "@thinkrail/locales";
 import type { Translator } from "@thinkrail/locales/react";
+import { SPEC_ROLES } from "./specDocument";
 
 export interface SpecTreeNode {
 	node: SpecGraphNode;
 	children: SpecTreeNode[];
 }
-
-interface SpecRole {
-	label: MessageKey;
-	tag: MessageKey;
-}
-
-const SPEC_ROLES = {
-	"goal-and-requirements": { label: "panels.specTree.goal", tag: "panels.specTree.goalTag" },
-	"architecture-design": {
-		label: "panels.specTree.architecture",
-		tag: "panels.specTree.architectureTag",
-	},
-	"module-design": { label: "panels.specTree.module", tag: "panels.specTree.moduleTag" },
-	"submodule-design": { label: "panels.specTree.submodule", tag: "panels.specTree.submoduleTag" },
-	"task-spec": { label: "panels.specTree.task", tag: "panels.specTree.taskTag" },
-} as const satisfies Record<string, SpecRole>;
 
 type KnownSpecType = keyof typeof SPEC_ROLES;
 
