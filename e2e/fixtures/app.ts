@@ -20,6 +20,7 @@ import {
 	E2E_PI_AGENT_DIR,
 	E2E_PI_MODELS_SEED,
 	E2E_PICK_DIR_POINTER,
+	E2E_PICK_FILE_POINTER,
 	E2E_PLAIN_DIR,
 } from "./paths";
 import { fixtureRepoHealthy, seedFixtureRepo } from "./repo";
@@ -64,6 +65,10 @@ function resetState(): void {
 	rmSync(E2E_CENTRAL_LOG, { force: true });
 
 	if (!fixtureRepoHealthy()) seedFixtureRepo();
+	// The picker pointers are cross-spec mutable state: a spec that aimed one at its own transient dir
+	// must not decide what the next spec's "open project" opens. Every test starts from the seeds.
+	writeFileSync(E2E_PICK_DIR_POINTER, E2E_FIXTURE_REPO);
+	writeFileSync(E2E_PICK_FILE_POINTER, join(E2E_DATA_DIR, "outside.md"));
 
 	try {
 		const head = gitText(E2E_FIXTURE_REPO, "symbolic-ref", "--short", "HEAD").trim();
@@ -96,6 +101,17 @@ function resetState(): void {
 	writeFileSync(E2E_PICK_DIR_POINTER, E2E_FIXTURE_REPO);
 }
 
+/**
+ * An empty folder for `project.init` to create inside, with the host's picker pointed at it. Call it
+ * AFTER `openAppFresh` — `resetState` re-points the picker at the fixture repo.
+ */
+export function stageProjectParent(dir: string): string {
+	rmSync(dir, { recursive: true, force: true });
+	mkdirSync(dir, { recursive: true });
+	writeFileSync(E2E_PICK_DIR_POINTER, dir);
+	return dir;
+}
+
 export async function stagePlainFolder(page: Page): Promise<string> {
 	await disposeLiveSessions(page);
 	resetState();
@@ -106,7 +122,7 @@ export async function stagePlainFolder(page: Page): Promise<string> {
 	return E2E_PLAIN_DIR;
 }
 
-function loadPersistedWorkspaces(): Workspace[] {
+export function loadPersistedWorkspaces(): Workspace[] {
 	try {
 		return JSON.parse(readFileSync(join(E2E_DATA_DIR, "workspaces.json"), "utf8")) as Workspace[];
 	} catch {
@@ -166,9 +182,12 @@ export async function openFixtureProject(page: Page): Promise<void> {
 	await openAppFresh(page);
 	await page.getByTestId("add-project-menu").click();
 	await page.getByTestId("menu-open-project").click();
-	await expect(page.getByTestId("project-item").first()).toBeVisible();
-	await expect(page.getByTestId("welcome")).toBeVisible();
-	await expect(defaultWorkspaceRow(page)).toBeVisible();
+	// Opening fans out git subprocesses before the projects push lands; under six parallel lanes that
+	// round trip can outlive the default expectation window, so these wait like live-refresh does.
+	const hostExpect = expect.configure({ timeout: 10_000 });
+	await hostExpect(page.getByTestId("project-item").first()).toBeVisible();
+	await hostExpect(page.getByTestId("welcome")).toBeVisible();
+	await hostExpect(defaultWorkspaceRow(page)).toBeVisible();
 }
 
 export async function enterDefaultWorkspace(page: Page): Promise<void> {
@@ -331,4 +350,45 @@ export async function runInTerminal(page: Page, command: string): Promise<void> 
 	await visibleTerminal(page).locator(".xterm-helper-textarea").focus();
 	await page.keyboard.type(command);
 	await page.keyboard.press("Enter");
+}
+
+/** A host request made without the app's own transport — for state the UI does not surface. */
+export async function requestOverWire<T>(
+	page: Page,
+	method: string,
+	params: Record<string, unknown>,
+): Promise<T> {
+	return page.evaluate(
+		async ({ requestMethod, requestParams }) => {
+			const protocol = location.protocol === "https:" ? "wss:" : "ws:";
+			const socket = new WebSocket(`${protocol}//${location.host}/ws`);
+			await new Promise<void>((resolve) => {
+				socket.onopen = () => resolve();
+			});
+			const id = `e2e_${Math.random()}`;
+			const result = await new Promise<unknown>((resolve, reject) => {
+				socket.addEventListener("message", (event: MessageEvent<string>) => {
+					const message = JSON.parse(event.data) as {
+						id?: string;
+						result?: unknown;
+						error?: string | { message?: string };
+					};
+					if (message.id !== id) return;
+					if (message.error)
+						reject(
+							new Error(
+								typeof message.error === "string"
+									? message.error
+									: (message.error.message ?? "request failed"),
+							),
+						);
+					else resolve(message.result);
+				});
+				socket.send(JSON.stringify({ id, method: requestMethod, params: requestParams }));
+			});
+			socket.close();
+			return result;
+		},
+		{ requestMethod: method, requestParams: params },
+	) as Promise<T>;
 }
