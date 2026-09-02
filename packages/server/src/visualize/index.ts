@@ -3,6 +3,7 @@ export {
 	forgetVisualizations,
 	getVisualization,
 	recordVisualization,
+	reportVisualizationRender,
 	resetVisualizations,
 	setAgentSessionLookup,
 	setVisualizationPublisher,

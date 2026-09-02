@@ -1064,3 +1064,7 @@ the lifecycle assertable.
   scrolls, with a zoom readout and reset. The gesture math is the shared `lib/zoomGesture` the PDF
   preview uses — one answer to "what is a zoom gesture" for every zoomable surface, rather than a second
   hand-tuned curve here.
+- **The renderer reports its verdict.** `MermaidView` takes an `onRender(error | null)` that fires with
+  what the parse produced, threaded from the tool-render props. Only the terminal pane wires it — to the
+  host, so an MCP `visualize` call resolves with the real error (server's visualize/SPEC.md) instead of
+  the agent being told it drew something the user is looking at a red card for.

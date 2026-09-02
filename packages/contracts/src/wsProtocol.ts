@@ -280,6 +280,7 @@ export const WS_METHODS = {
 	blueprintClose: "blueprint.close",
 	blueprintGet: "blueprint.get",
 	visualizationGet: "visualization.get",
+	visualizationReport: "visualization.report",
 	blueprintSelect: "blueprint.select",
 	blueprintEdit: "blueprint.edit",
 	blueprintConfirmEdits: "blueprint.confirmEdits",
@@ -757,6 +758,11 @@ export interface WsMethodMap {
 	"visualization.get": {
 		params: { workspaceId: string; tabKey: string };
 		result: TerminalVisualization | null;
+	};
+	/** What the renderer made of a drawing: the agent's answer waits on this. */
+	"visualization.report": {
+		params: { workspaceId: string; tabKey: string; revision: number; error?: string };
+		result: Ack;
 	};
 	"blueprint.select": {
 		params: { workspaceId: string; controlId: string; optionId: string };

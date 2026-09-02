@@ -1,5 +1,5 @@
 import { RiFullscreenLine as Maximize2 } from "@remixicon/react";
-import { type ReactNode, useEffect, useState } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { onThemeSwap } from "@/themes";
 import { CodeBlock } from "../CodeBlock";
@@ -11,13 +11,18 @@ export function MermaidView({
 	title,
 	fallback,
 	interactive = false,
+	onRender,
 }: {
 	source: string;
 	title?: string;
 	fallback?: ReactNode;
 	/** Fill the space and be navigable in place — a pane, rather than a card in a transcript. */
 	interactive?: boolean;
+	/** What the renderer made of this source: `null` when it drew, the parse error when it did not. */
+	onRender?: (error: string | null) => void;
 }) {
+	const onRenderRef = useRef(onRender);
+	onRenderRef.current = onRender;
 	const [svg, setSvg] = useState<string | null>(null);
 	const [error, setError] = useState<string | null>(null);
 	const [open, setOpen] = useState(false);
@@ -30,8 +35,11 @@ export function MermaidView({
 				if (res.svg !== undefined) {
 					setSvg(res.svg);
 					setError(null);
+					onRenderRef.current?.(null);
 				} else {
-					setError(res.error ?? "Failed to render diagram");
+					const message = res.error ?? "Failed to render diagram";
+					setError(message);
+					onRenderRef.current?.(message);
 				}
 			});
 		};
