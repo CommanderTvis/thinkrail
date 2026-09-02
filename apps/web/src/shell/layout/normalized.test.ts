@@ -1,7 +1,9 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, it, test } from "bun:test";
 import { closeLayoutTab, removeLayoutGroup, toolTab } from "./model";
+import type { WorkbenchCenterSplit, WorkbenchFrame } from "./normalized";
 import {
 	applyProjectedLayoutDocument,
+	frameTopology,
 	projectWorkspaceLayout,
 	reconcileWorkspaceView,
 	workbenchFrameFromDocument,
@@ -266,5 +268,58 @@ describe("normalized workbench layout", () => {
 			"before-projects",
 			"after-projects",
 		]);
+	});
+});
+
+describe("frameTopology", () => {
+	const leftGroup = { id: "l1", weight: 1, folded: false, tools: [] };
+	const frame = (): WorkbenchFrame => ({
+		version: 1,
+		center: {
+			kind: "split",
+			id: "root",
+			direction: "horizontal",
+			weights: [50, 50],
+			children: [
+				{ kind: "group", id: "a" },
+				{ kind: "group", id: "b" },
+			],
+		},
+		left: {
+			visible: true,
+			width: 260,
+			groups: [{ id: "l1", weight: 1, folded: false, tools: [] }],
+		},
+		right: { visible: false, width: 300, groups: [] },
+		bottom: { visible: true, height: 200, alignment: "full", groups: [] },
+		toolRestoreTargets: {},
+	});
+
+	it("ignores every size: a resize is not a change of shape", () => {
+		const before = frame();
+		const after = frame();
+		after.center = { ...(after.center as WorkbenchCenterSplit), weights: [30, 70] };
+		after.left = { ...after.left, width: 400, groups: [{ ...leftGroup, weight: 0.5 }] };
+		after.bottom = { ...after.bottom, height: 500 };
+		expect(frameTopology(after)).toBe(frameTopology(before));
+	});
+
+	it("sees the shape: groups, nesting, folds, visibility, alignment", () => {
+		const base = frameTopology(frame());
+		const split = frame();
+		split.center = { kind: "group", id: "a" };
+		expect(frameTopology(split)).not.toBe(base);
+
+		const folded = frame();
+		folded.left = { ...folded.left, groups: [{ ...leftGroup, folded: true }] };
+		expect(frameTopology(folded)).not.toBe(base);
+
+		const hidden = frame();
+		hidden.left = { ...hidden.left, visible: false };
+		expect(frameTopology(hidden)).not.toBe(base);
+
+		const aligned = frame();
+		aligned.bottom = { ...aligned.bottom, alignment: "left" };
+		expect(frameTopology(aligned)).not.toBe(base);
 	});
 });

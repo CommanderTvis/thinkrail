@@ -80,6 +80,34 @@ type FrameGroupLocation = {
 	index: number;
 };
 
+function centerTopology(node: WorkbenchCenterNode): string {
+	return node.kind === "group"
+		? `g:${node.id}`
+		: `s:${node.id}:${node.direction}(${centerTopology(node.children[0])},${centerTopology(node.children[1])})`;
+}
+
+function auxiliaryTopology(groups: readonly WorkbenchAuxiliaryGroup[]): string {
+	return groups
+		.map((group) => `${group.id}:${group.folded}:${group.tools.map((tool) => tool.tool).join("+")}`)
+		.join("|");
+}
+
+/**
+ * The frame's *shape*, with every size left out: which groups exist, how they nest, what is folded.
+ *
+ * A resize writes new weights into the frame, and rebuilding the projection on that is what made the
+ * columns flash at the end of every drag — the panel groups are keyed by the projection, so a size-only
+ * change tore them down and rebuilt them at the size they already had. See SPEC.md.
+ */
+export function frameTopology(frame: WorkbenchFrame): string {
+	return [
+		centerTopology(frame.center),
+		`l:${frame.left.visible}:${auxiliaryTopology(frame.left.groups)}`,
+		`r:${frame.right.visible}:${auxiliaryTopology(frame.right.groups)}`,
+		`b:${frame.bottom.visible}:${frame.bottom.alignment}:${auxiliaryTopology(frame.bottom.groups)}`,
+	].join(" ");
+}
+
 function frameCenterFromDocument(node: LayoutCenterNode): WorkbenchCenterNode {
 	if (node.kind === "group") return { kind: "group", id: node.id };
 	return {
