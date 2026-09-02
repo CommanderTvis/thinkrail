@@ -287,4 +287,48 @@ Applying a preset creates one replacement frame, raises this surface's local sid
 
 The complete current-layout grammar, including the derived `WorkspaceLayoutDocument` projection consumed by existing shell renderers, is web-local. A pristine surface instantiates Balanced; no host snapshot or prior layout schema is imported.
 
-The terminal visibility gate mounts a body only for a terminal locally selected in an unfolded visible group. Distinct terminal identities may mount concurrently; one identity has one body per browser surface. Inactive/folded/hidden tabs never attach. Global New Terminal targets last local bottom focus, creating a frame slot only through an explicit frame command; center Group Header creation captures that group. Host catalog reconciliation may place an unrepresented terminal locally without selecting it, but cannot change frame geometry.
+The terminal visibility gate mounts a body only for a terminal locally selected in an unfolded visible group. Distinct terminal identities may mount concurrently; one identity has one body per browser surface. Inactive/folded/hidden tabs never attach. Global New Terminal targets last local bottom focus, creating a frame slot only through an explicit frame command; center Group Header creation captures that group. Host catalog reconciliation may place an unrepresented terminal locally without selecting it, but cannot change frame geometry.## Embedded panes
+
+A companion view living **inside** the tab that owns it — a column beside, or a row under, the host's own
+body — and **never a tab of its own**. `components/EmbeddedSplit` is the one primitive: a host half, a
+handle, and a titled companion half with a close button. Three hosts use it today: a terminal (its
+blueprint, or the visualization the agent in it drew), a chat (the same two), and a markdown editor (its
+Preview, the third view mode beside Preview and Source).
+
+- **Not a tab, deliberately.** A tab is a thing you navigate to and can move anywhere; these are things a
+  resource *carries*. The blueprint belongs to its author, a visualization belongs to the terminal that
+  drew it, a preview belongs to its buffer — none of them survives its host, and none of them should be
+  draggable into a group that has no idea what it is. That is why `visualization` and `blueprint` are no
+  longer `LayoutTab` kinds: the layout model never learns they exist.
+- **Auto-open, then a chip.** Content arriving (a `visualize` call, a blueprint the host authors) opens
+  the pane and makes that kind lead; the header's close button folds it into a chip on the host, and the
+  chip opens it again. Which kinds are hidden, and which leads, is per host resource in
+  `store.embeddedPanes[workspaceId][hostKey]` (`embeddedHostKey("terminal" | "chat", id)`) — device-local
+  view state, like the rest of the workbench frame.
+- **A companion opens at 45% of the host.** `defaultSize` counts only at mount and the group mounts
+  with the companion at 0, so a companion that arrives later would otherwise open at the 15% minimum, a
+  sliver beside an xterm. `EmbeddedSplit` therefore resizes the companion panel imperatively when it goes
+  from absent to present (and back to 0 when it goes away); a user's own drag afterwards is kept.
+  `e2e/mcp-tools.spec.ts` pins the opening share.
+- **No companion, no handle.** The group and both panels stay mounted with stable ids (a companion
+  appearing must not re-key an xterm host), and the empty companion collapses to nothing — but the
+  handle between them is *unmounted*, never merely hidden. `react-resizable-panels` registers every
+  mounted handle for its own body-level, capture-phase pointer hit test with a hit-area margin; a
+  `display:none` handle measures 0×0 at the window origin, so the margin turns (0,0) into "on a
+  handle", and any pointer event there is swallowed (`preventDefault` + `stopImmediatePropagation`)
+  before it reaches the host's content. That is exactly where a synthesized `pointerdown` with no
+  coordinates lands, which is how the chat's pointer-intent tests (`e2e/chat-scroll.spec.ts`) caught it.
+- **One companion at a time**, newest leading: a terminal that both authors a blueprint and draws a
+  diagram shows the diagram and offers the blueprint as a chip.
+- **Direction is the Layout setting** (`defaultPaneDirection`) — the same answer that arranges tab panes,
+  because "beside or under" is one preference, not one per surface.
+- **The split wraps the host's whole chrome, not just its body.** A terminal's New-terminal button is
+  positioned over its panel's top-right corner, which is exactly where a companion's header sits; a pane
+  mounted *inside* the terminal would put its close button under that button. So `TerminalWorkbenchBody`
+  owns the split and the terminal (buttons included) is the host half.
+- **Both panels always render, with stable `id`s**, and an absent companion collapses to zero width
+  rather than unmounting. A structural change to the group re-keys its panels, which would remount the
+  host — and remounting an imperatively-attached body (xterm) kills the PTY it is attached to. This is
+  pinned by the e2e that asserts the terminal count is unchanged across open/close.
+
+

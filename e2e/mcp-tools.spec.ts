@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { expect, test } from "@playwright/test";
 import {
 	createWorkspaceViaDialog,
@@ -21,10 +23,20 @@ test("a terminal's MCP address serves the spec tools, scoped to its own worktree
 	page,
 }) => {
 	await openFixtureProject(page);
-	await createWorkspaceViaDialog(page);
+	const workspace = await createWorkspaceViaDialog(page);
 	await openTerminal(page);
 	await waitTerminalReady(page);
 	const terminal = page.getByTestId("terminal-instance");
+	// Beside a 45% companion the terminal is too narrow for a long command echo plus its answer to stay
+	// within xterm's visible rows — the only rows in the DOM — so once the pane is open, a tool's
+	// answer is read from a file it is sent to instead of from the screen.
+	const answer = () => {
+		try {
+			return readFileSync(join(workspace.worktreePath, "tool-answer.txt"), "utf8");
+		} catch {
+			return "";
+		}
+	};
 
 	await runInTerminal(
 		page,
@@ -71,9 +83,23 @@ test("a terminal's MCP address serves the spec tools, scoped to its own worktree
 			".result.content[0].text",
 		),
 	);
-	await expect(terminal).toContainText('Rendered "Wired graph" in ThinkRail (revision 1)');
-	const pane = page.getByTestId("visualization-pane");
+	// Not a tab: the drawing is an embedded pane inside the terminal's own body. (The tool's own
+	// "Rendered …" reply lands in the shell, but the split just resized xterm and rewrapped it —
+	// the pane itself is the assertion that matters.)
+	const pane = page.getByTestId("embedded-pane");
 	await expect(pane).toBeVisible();
+	// A companion opens at its intended share of the host, not at the minimum sliver the group mounted
+	// with when there was nothing to show.
+	await expect
+		.poll(async () => {
+			const box = await pane.boundingBox();
+			const host = await page.getByTestId("terminal-instance").first().boundingBox();
+			return box && host ? box.width / (box.width + host.width) : 0;
+		})
+		.toBeGreaterThan(0.4);
+	// The pane must not have cost the terminal its life: same tabs, same PTY.
+	await expect(page.getByTestId("terminal-tab")).toHaveCount(2);
+	await expect(page.getByTestId("embedded-pane-title")).toHaveText("Wired graph");
 	await expect(pane.getByTestId("mermaid-svg").locator("svg").first()).toBeVisible({
 		timeout: 20_000,
 	});
@@ -87,8 +113,17 @@ test("a terminal's MCP address serves the spec tools, scoped to its own worktree
 			".result.content[0].text",
 		),
 	);
-	await expect(terminal).toContainText("revision 2");
 	await expect(pane).toContainText("OptA");
+	await expect(page.getByTestId("terminal-tab")).toHaveCount(2);
+
+	// Closing folds it back into a chip on the terminal; the chip reopens it.
+	await page.getByTestId("embedded-pane-close").click();
+	await expect(page.getByTestId("embedded-pane")).toHaveCount(0);
+	await expect(page.getByTestId("terminal-tab")).toHaveCount(2);
+	const chip = page.getByTestId("terminal-embedded-chip");
+	await expect(chip).toHaveAttribute("data-kind", "visualization");
+	await chip.click();
+	await expect(page.getByTestId("embedded-pane")).toBeVisible();
 
 	// The blueprint check reads the file in this terminal's own worktree and reports what the panel
 	// made of it — the feedback an author writing with ordinary file tools otherwise never gets.
@@ -98,15 +133,15 @@ test("a terminal's MCP address serves the spec tools, scoped to its own worktree
 	);
 	await runInTerminal(
 		page,
-		mcpCall(
+		`${mcpCall(
 			"tools/call",
 			'{"name":"blueprint_check","arguments":{}}',
 			'.result.content[0].text | split("\\n") | join(" / ")',
-		),
+		)} > tool-answer.txt`,
 	);
-	await expect(terminal).toContainText("1 control, 2 notes");
-	await expect(terminal).toContainText('"throughput" was dropped');
-	await expect(terminal).toContainText("has no reason after it");
+	await expect.poll(answer).toContain("1 control, 2 notes");
+	expect(answer()).toContain('"throughput" was dropped');
+	expect(answer()).toContain("has no reason after it");
 
 	// A token nobody minted is turned away at the door, before any protocol handling.
 	await runInTerminal(
