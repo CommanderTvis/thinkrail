@@ -83,6 +83,7 @@ import {
 import { reanchorWorkspace, resolveCommentFromAgent, setReviewPublisher } from "../reviews";
 import { getConfig, setSettingsPublisher } from "../settings";
 import {
+	agentSessionOf,
 	agentTokenOwner,
 	closeAllTerminals,
 	persistTerminalSessions,
@@ -97,7 +98,12 @@ import {
 	workspaceForProcess,
 } from "../terminal";
 import { isTodoToolEnd, maybeAttachChangeArtifacts } from "../todos";
-import { setVisualizationPublisher, visualizeMcpTool } from "../visualize";
+import {
+	adoptVisualizationForSession,
+	setAgentSessionLookup,
+	setVisualizationPublisher,
+	visualizeMcpTool,
+} from "../visualize";
 import {
 	setRepoMetaPublisher,
 	setSkillPathClassifier,
@@ -270,6 +276,12 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 					// The blueprint's author is a terminal like any other, but its id must outlive the PTY: this
 					// is what lets the pair reopen onto the same conversation instead of a fresh opening prompt.
 					noteBlueprintAuthorSession(
+						delivery.workspaceId,
+						delivery.tabKey,
+						delivery.report.session_id,
+					);
+					// A resumed conversation brings its drawing with it, whatever tab it resumed into.
+					adoptVisualizationForSession(
 						delivery.workspaceId,
 						delivery.tabKey,
 						delivery.report.session_id,
@@ -605,6 +617,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		);
 	});
 
+	setAgentSessionLookup(agentSessionOf);
 	setVisualizationPublisher((push) => {
 		server.publish(
 			WS_CHANNELS.terminalVisualization,
@@ -781,6 +794,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		setFeedbackPublisher(null);
 		setSettingsPublisher(null);
 		setVisualizationPublisher(null);
+		setAgentSessionLookup(null);
 		setJbcentralAppliedPublisher(() => {});
 		setJbcentralChangedPublisher(() => {});
 		server.stop(true);
