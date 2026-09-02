@@ -17,6 +17,7 @@ import {
 	DEFAULT_LAYOUT_PRESET_ID,
 	emptyWorkspaceView,
 	ensureWorkbenchToolPlacementIds,
+	frameTopology,
 	instantiateWorkbenchFrame,
 	LAYOUT_TOOLS,
 	minimumBottomGroupLimit,
@@ -725,6 +726,11 @@ export async function commitWorkspaceLayout(
 			state.layoutDocumentsByWorkspace[id],
 		);
 	}
+	// Only a *structural* frame change invalidates the projection: a resize writes weights, and rebuilding
+	// the projection on that flashes every panel group at the end of a drag. See layout/SPEC.md.
+	const structureChanged =
+		frameChanged &&
+		(state.workbenchFrame === null || frameTopology(frame) !== frameTopology(state.workbenchFrame));
 	state.applyLocalLayoutState(
 		{
 			frame,
@@ -734,7 +740,7 @@ export async function commitWorkspaceLayout(
 			preferences: state.localLayoutPreferences,
 		},
 		changedWorkspaceIds,
-		frameChanged,
+		structureChanged,
 	);
 	return useAppStore.getState().layoutDocumentsByWorkspace[workspaceId] ?? document;
 }

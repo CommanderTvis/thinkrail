@@ -280,7 +280,19 @@ Applying a preset creates one replacement frame, raises this surface's local sid
 
 The complete current-layout grammar, including the derived `WorkspaceLayoutDocument` projection consumed by existing shell renderers, is web-local. A pristine surface instantiates Balanced; no host snapshot or prior layout schema is imported.
 
-The terminal visibility gate mounts a body only for a terminal locally selected in an unfolded visible group. Distinct terminal identities may mount concurrently; one identity has one body per browser surface. Inactive/folded/hidden tabs never attach. Global New Terminal targets last local bottom focus, creating a frame slot only through an explicit frame command; center Group Header creation captures that group. Host catalog reconciliation may place an unrepresented terminal locally without selecting it, but cannot change frame geometry.## Embedded panes
+The terminal visibility gate mounts a body only for a terminal locally selected in an unfolded visible group. Distinct terminal identities may mount concurrently; one identity has one body per browser surface. Inactive/folded/hidden tabs never attach. Global New Terminal targets last local bottom focus, creating a frame slot only through an explicit frame command; center Group Header creation captures that group. Host catalog reconciliation may place an unrepresented terminal locally without selecting it, but cannot change frame geometry.## Resizing does not rebuild the workbench
+
+Panel groups are keyed by the **projection epoch**, so a new projection re-keys them and React rebuilds
+them from the document's sizes. That is right when the frame's *shape* changed — a group appeared, a
+split collapsed, a side folded — and wrong for a resize: a drag writes new weights into the frame, and
+rebuilding on that flashed every column at the moment the drag ended, at the size it already had.
+
+So the epoch is bumped only when **`frameTopology`** changes: which groups exist, how they nest, which
+tools they hold, what is folded, which regions are visible, and the bottom alignment — every size left
+out by construction. A resize therefore commits its weights, persists, and re-renders in place. This is
+pinned by unit tests over `frameTopology` rather than by watching for flicker.
+
+## Embedded panes
 
 A companion view living **inside** the tab that owns it — a column beside, or a row under, the host's own
 body — and **never a tab of its own**. `components/EmbeddedSplit` is the one primitive: a host half, a
