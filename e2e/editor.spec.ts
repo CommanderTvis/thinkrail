@@ -212,3 +212,24 @@ test("a rewritten PDF shows its new bytes without reopening the tab", async ({ p
 	await page.getByTestId("pdf-reload").click();
 	await expect(firstWord).toContainText("By hand", { timeout: 10_000 });
 });
+
+test("the markdown Split view edits and previews at once, and closes back to Source", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	await createWorkspaceViaDialog(page);
+	await page.getByTestId("tab-files").click();
+	await page.getByTestId("file-node").filter({ hasText: "README.md" }).dblclick();
+	await expect(page.getByTestId("markdown-preview")).toContainText("sample-project");
+
+	await page.getByTestId("md-toggle-split").click();
+	await expect(page.getByTestId("md-toggle-split")).toHaveAttribute("data-active", "true");
+	await expect(page.getByTestId("embedded-pane-title")).toHaveText("Preview");
+	await expect(page.getByTestId("markdown-preview")).toContainText("sample-project");
+	await expect(page.getByTestId("editor-pane")).toContainText("# sample-project");
+
+	// Closing the preview half is a deliberate return to plain Source, not a hidden mode.
+	await page.getByTestId("embedded-pane-close").click();
+	await expect(page.getByTestId("md-toggle-source")).toHaveAttribute("data-active", "true");
+	await expect(page.getByTestId("markdown-preview")).toHaveCount(0);
+});

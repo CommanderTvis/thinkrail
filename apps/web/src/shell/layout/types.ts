@@ -42,21 +42,6 @@ export interface LayoutDocumentTab {
 	docPath: string;
 }
 
-/** One per workspace, so the tab needs no identity beyond its kind. */
-export interface LayoutBlueprintTab {
-	kind: "blueprint";
-	id: string;
-	name: string;
-}
-
-/** The live view an agent in a terminal draws with the MCP visualize tool — one per terminal. */
-export interface LayoutVisualizationTab {
-	kind: "visualization";
-	id: string;
-	name: string;
-	terminalTabKey: string;
-}
-
 export interface LayoutTerminalTab {
 	kind: "terminal";
 	id: string;
@@ -77,8 +62,6 @@ export type LayoutCenterTab =
 	| LayoutDiffTab
 	| LayoutChatTab
 	| LayoutDocumentTab
-	| LayoutBlueprintTab
-	| LayoutVisualizationTab
 	| LayoutTerminalTab;
 export type LayoutAuxiliaryTab = LayoutToolTab | LayoutTerminalTab;
 export type LayoutSideTab = LayoutAuxiliaryTab;

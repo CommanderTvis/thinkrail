@@ -2,17 +2,19 @@ import type { BlueprintState } from "@thinkrail/contracts";
 import { BLUEPRINT_FILE } from "@thinkrail/contracts";
 import { primaryCenterGroupId } from "@/shell/layout";
 import { terminalLayoutId } from "@/shell/terminalReconciliation";
-import { blueprintTabId, chatTabId, useAppStore } from "@/store";
+import { chatTabId, embeddedHostKey, useAppStore } from "@/store";
 import { getTransport } from "@/transport";
+import { openFileInTab } from "./openTabs";
 
 export function isBlueprintPath(path: string): boolean {
 	return path === BLUEPRINT_FILE;
 }
 
 /**
- * The spec has one surface. Opening `BLUEPRINT.md` — from Files, from Specs, from anywhere — brings back
- * the pair it belongs to rather than a second, plain view of the same document; and if the author's half
- * was closed, it is restored beside it. See panels/SPEC.md.
+ * The spec has one surface: an embedded pane on its author. Opening `BLUEPRINT.md` — from Files, from
+ * Specs, from anywhere — brings the author back with the blueprint beside it rather than a second,
+ * plain view of the same document; and if the author's tab was closed, it is restored first. See
+ * panels/SPEC.md.
  */
 export async function openBlueprintPair(workspaceId: string): Promise<void> {
 	const store = useAppStore.getState();
@@ -25,27 +27,33 @@ export async function openBlueprintPair(workspaceId: string): Promise<void> {
 	store.setWorkspaceBlueprint(state);
 
 	const author = await restoreAuthor(workspaceId, state);
-	const blueprintTab = blueprintTabId(workspaceId);
-	useAppStore.getState().enqueueLayoutIntent({
-		kind: "open",
-		workspaceId,
-		tab: { kind: "blueprint", id: blueprintTab, name: "Blueprint", workspaceId },
-		intent: "keep",
-		activate: true,
-	});
-	if (author) {
-		useAppStore.getState().enqueueLayoutIntent({
-			kind: "pane-with",
-			workspaceId,
-			tabId: blueprintTab,
-			targetId: author,
-			direction: "horizontal",
+	if (!author) {
+		// No author on record (a blueprint imported from outside the start flows): there is no host to
+		// embed into, so the file itself is the only honest surface left.
+		await openFileInTab(workspaceId, BLUEPRINT_FILE, "keep", undefined, {
+			rawBlueprintSource: true,
 		});
+		return;
 	}
+	useAppStore.getState().enqueueLayoutIntent({
+		kind: "select",
+		workspaceId,
+		tabId: author.tabId,
+		keep: true,
+	});
+	useAppStore.getState().focusEmbeddedPane(workspaceId, author.hostKey, "blueprint");
 }
 
-/** Returns the layout id of the author's tab, reopening it when the reader had closed it. */
-async function restoreAuthor(workspaceId: string, state: BlueprintState): Promise<string | null> {
+interface RestoredAuthor {
+	tabId: string;
+	hostKey: string;
+}
+
+/** The author's tab id and embedded-pane host key, reopening the tab when the reader had closed it. */
+async function restoreAuthor(
+	workspaceId: string,
+	state: BlueprintState,
+): Promise<RestoredAuthor | null> {
 	const author = state.author;
 	if (!author) return null;
 	const store = useAppStore.getState();
@@ -59,11 +67,12 @@ async function restoreAuthor(workspaceId: string, state: BlueprintState): Promis
 				.request("session.getMessages", { workspaceId, sessionId: author.sessionId })
 				.catch(() => null);
 		}
-		return id;
+		return { tabId: id, hostKey: embeddedHostKey("chat", author.sessionId) };
 	}
 
 	const id = terminalLayoutId(author.tabKey);
-	if (placed.some((tab) => tab.id === id)) return id;
+	const hostKey = embeddedHostKey("terminal", author.tabKey);
+	if (placed.some((tab) => tab.id === id)) return { tabId: id, hostKey };
 	// The terminal module's own resume offer only survives a host restart — closing the tab kills the
 	// PTY, so the recorded id has to come from the blueprint. See panels/SPEC.md.
 	const resumed = await getTransport()
@@ -78,5 +87,5 @@ async function restoreAuthor(workspaceId: string, state: BlueprintState): Promis
 		true,
 		author.tabKey,
 	);
-	return id;
+	return { tabId: id, hostKey };
 }

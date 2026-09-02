@@ -13,8 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { BUILTIN_LAYOUT_PRESETS, collectWorkbenchCenterGroups } from "@/shell/layout";
 import { applyLayoutPresetLocally } from "@/shell/layoutState";
-import { terminalLayoutId } from "@/shell/terminalReconciliation";
-import { blueprintTabId, chatTabId, isDefaultWorkspace, toast, useAppStore } from "@/store";
+import { embeddedHostKey, isDefaultWorkspace, toast, useAppStore } from "@/store";
 import { createSessionWithSkillBaseline, errorText, getTransport } from "@/transport";
 import { openBlueprintPair } from "./blueprintOpen";
 import { CHIP, CHIP_DISABLED, CHIP_OFF, CHIP_ON } from "./chips";
@@ -119,7 +118,7 @@ export function BlueprintStartDialog({
 			store.activateWorkspace(workspace);
 			onOpenChange(false);
 
-			let leftTabId: string;
+			let authorHostKey: string;
 			if (command) {
 				store.addTerminal(
 					workspace.id,
@@ -129,7 +128,7 @@ export function BlueprintStartDialog({
 					true,
 					BLUEPRINT_TERMINAL_TAB_KEY,
 				);
-				leftTabId = terminalLayoutId(BLUEPRINT_TERMINAL_TAB_KEY);
+				authorHostKey = embeddedHostKey("terminal", BLUEPRINT_TERMINAL_TAB_KEY);
 				await transport.request("blueprint.setAuthor", {
 					workspaceId: workspace.id,
 					author: { kind: "terminal", tabKey: BLUEPRINT_TERMINAL_TAB_KEY },
@@ -145,7 +144,7 @@ export function BlueprintStartDialog({
 					session.thinkingLevel,
 					syncedTick,
 				);
-				leftTabId = chatTabId(workspace.id, session.sessionId);
+				authorHostKey = embeddedHostKey("chat", session.sessionId);
 				await transport.request("blueprint.setAuthor", {
 					workspaceId: workspace.id,
 					author: { kind: "chat", sessionId: session.sessionId },
@@ -153,27 +152,8 @@ export function BlueprintStartDialog({
 				await transport.request("session.prompt", { sessionId: session.sessionId, text: opening });
 			}
 
-			// Left the author, right the specification — one group, two panes.
-			const blueprintTab = blueprintTabId(workspace.id);
-			store.enqueueLayoutIntent({
-				kind: "open",
-				workspaceId: workspace.id,
-				tab: {
-					kind: "blueprint",
-					id: blueprintTab,
-					name: "Blueprint",
-					workspaceId: workspace.id,
-				},
-				intent: "keep",
-				activate: true,
-			});
-			store.enqueueLayoutIntent({
-				kind: "pane-with",
-				workspaceId: workspace.id,
-				tabId: blueprintTab,
-				targetId: leftTabId,
-				direction: "horizontal",
-			});
+			// The author carries the specification beside it, as its embedded pane — see panels/SPEC.md.
+			store.focusEmbeddedPane(workspace.id, authorHostKey, "blueprint");
 		} catch (error) {
 			toast.error(errorText(error), "Could not start the blueprint");
 		} finally {

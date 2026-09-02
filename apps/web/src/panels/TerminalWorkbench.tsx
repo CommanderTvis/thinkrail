@@ -2,12 +2,14 @@ import { RiAddLine as Plus } from "@remixicon/react";
 import type { TerminalTabsPush } from "@thinkrail/contracts";
 import { WS_CHANNELS } from "@thinkrail/contracts";
 import { lazy, type ReactNode, Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { EmbeddedSplit } from "@/components/EmbeddedSplit";
 import { IconTooltip } from "../components/ui/tooltip";
 import type { TerminalTab } from "../store";
-import { isConnectedGeneration, toast, useAppStore } from "../store";
+import { embeddedHostKey, isConnectedGeneration, toast, useAppStore } from "../store";
 import { errorText, getTransport } from "../transport";
 import { ClaudeCodeChip } from "./ClaudeCodeChip";
 import { ConfirmDialog } from "./ConfirmDialog";
+import { useTerminalCompanion } from "./useEmbeddedCompanion";
 
 const TerminalInstance = lazy(() => import("./TerminalInstance"));
 
@@ -77,30 +79,43 @@ function useDeferredUntilPainted(): boolean {
 export function TerminalWorkbenchBody({ tab, onAdd }: { tab: TerminalTab; onAdd: () => void }) {
 	const painted = useDeferredUntilPainted();
 	const claudeCodeEnabled = useAppStore((state) => state.claudeCodeEnabled);
+	// The companion sits beside the whole terminal, chrome included: the New-terminal button covers this
+	// panel's top-right corner, which is exactly where the pane's own header lives. See panels/SPEC.md.
+	const { direction, companion, chips } = useTerminalCompanion(
+		tab.workspaceId,
+		tab.tabKey,
+		embeddedHostKey("terminal", tab.tabKey),
+	);
 	return (
-		<div data-testid="terminal-panel" className="relative h-full min-h-0 bg-container-terminal-bg">
-			<IconTooltip label="New terminal">
-				<button
-					type="button"
-					data-testid="terminal-add"
-					aria-label="New terminal"
-					onClick={onAdd}
-					className="absolute top-4 right-4 z-10 flex size-20 items-center justify-center rounded-[var(--radius-sm)] bg-container-elevated-bg text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
-				>
-					<Plus className="size-14" />
-				</button>
-			</IconTooltip>
-			<ClaudeCodeChip visible={claudeCodeEnabled && tab.agent === "claude"} />
-			<Suspense fallback={null}>
-				{painted ? (
-					<TerminalInstance
-						tabKey={tab.tabKey}
-						workspaceId={tab.workspaceId}
-						{...(tab.initialCommand ? { initialCommand: tab.initialCommand } : {})}
-					/>
-				) : null}
-			</Suspense>
-		</div>
+		<EmbeddedSplit direction={direction} companion={companion}>
+			<div
+				data-testid="terminal-panel"
+				className="relative h-full min-h-0 bg-container-terminal-bg"
+			>
+				<IconTooltip label="New terminal">
+					<button
+						type="button"
+						data-testid="terminal-add"
+						aria-label="New terminal"
+						onClick={onAdd}
+						className="absolute top-4 right-4 z-10 flex size-20 items-center justify-center rounded-[var(--radius-sm)] bg-container-elevated-bg text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
+					>
+						<Plus className="size-14" />
+					</button>
+				</IconTooltip>
+				<ClaudeCodeChip visible={claudeCodeEnabled && tab.agent === "claude"} />
+				<Suspense fallback={null}>
+					{painted ? (
+						<TerminalInstance
+							tabKey={tab.tabKey}
+							workspaceId={tab.workspaceId}
+							{...(tab.initialCommand ? { initialCommand: tab.initialCommand } : {})}
+						/>
+					) : null}
+				</Suspense>
+				{chips}
+			</div>
+		</EmbeddedSplit>
 	);
 }
 
