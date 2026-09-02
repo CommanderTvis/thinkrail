@@ -33,7 +33,7 @@ export default function VisualizationPane({
 
 	if (!visualization) return <LoadingRegion rows={8} className="h-full p-12" />;
 	return (
-		<div data-testid="visualization-pane" className="h-full overflow-auto p-12">
+		<div data-testid="visualization-pane" className="flex h-full min-h-0 flex-col p-8">
 			<VisualizationCard
 				toolCallId={`visualization-${terminalTabKey}-${visualization.revision}`}
 				toolName="visualize"
@@ -41,6 +41,7 @@ export default function VisualizationPane({
 				result={null}
 				status="done"
 				streaming={false}
+				interactive
 			/>
 		</div>
 	);
