@@ -82,6 +82,13 @@ test("a terminal's MCP address serves the spec tools, scoped to its own worktree
 	await expect(pane.getByTestId("mermaid-svg").locator("svg").first()).toBeVisible({
 		timeout: 20_000,
 	});
+	// The diagram is navigable in place — the PDF preview's gesture vocabulary, not a static picture.
+	await expect(pane.getByTestId("mermaid-pan-zoom")).toBeVisible();
+	await expect(pane.getByTestId("mermaid-zoom-level")).toHaveText("100%");
+	await pane.getByTestId("mermaid-zoom-in").click();
+	await expect(pane.getByTestId("mermaid-zoom-level")).not.toHaveText("100%");
+	await pane.getByTestId("mermaid-zoom-reset").click();
+	await expect(pane.getByTestId("mermaid-zoom-level")).toHaveText("100%");
 
 	// Calling again updates the same view in place — the live half of the contract.
 	await runInTerminal(

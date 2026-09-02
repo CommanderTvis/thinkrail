@@ -1054,3 +1054,11 @@ the lifecycle assertable.
   is the seam for extracting a standalone `packages/chat-ui` later.
 - Keep this spec at **intent + boundary + invariants**; per-component behavior belongs in the
   components' jsdoc, per-tool detail in [tools/SPEC.md](tools/SPEC.md).
+
+- **A visualization renders two ways from one renderer.** In a transcript it is a card: sized to its
+  content, with a full-screen dialog behind a corner button. Given `interactive` (the embedded pane on a
+  chat or a terminal — `shell/layout/SPEC.md`), the same `VisualizationCard` fills its pane and the
+  diagram becomes navigable in place: ⌘/Ctrl+wheel and trackpad pinch zoom, drag pans, plain wheel
+  scrolls, with a zoom readout and reset. The gesture math is the shared `lib/zoomGesture` the PDF
+  preview uses — one answer to "what is a zoom gesture" for every zoomable surface, rather than a second
+  hand-tuned curve here.

@@ -1781,10 +1781,12 @@ tab — `external-file` when the path escaped the worktree, which is most of Cla
   use and would have to keep out of our own theme. A pdf.js upgrade that renames those properties breaks
   selection silently, which is why the e2e selects real text out of the fixture rather than counting
   spans.
-- **Zoom math is `pdfZoom.ts`, deliberately free of pdf.js.** `isPdfZoomGesture` encodes the platform
+- **Zoom math is `lib/zoomGesture`, deliberately free of pdf.js.** `isZoomGesture` encodes the platform
   fact that a macOS trackpad pinch arrives as a `wheel` event with `ctrlKey` set — *not* the platform
   shortcut modifier, which is why this does not use `lib.hasPlatformModifier`. Keeping the math in a
-  dependency-free module is what lets it be unit-tested without loading the engine.
+  dependency-free module is what lets it be unit-tested without loading the engine — and what lets the
+  diagram pan/zoom (`chat/tools/visualize`) answer a pinch exactly as this does, rather than growing a
+  second curve that feels subtly different in the same window.
 - **The zoom follows the size of the gesture.** A pinch is a stream of small deltas, and stepping by a
   fixed factor on each of them made the page leap across the whole range in a flick of two fingers — the
   complaint was that it felt nothing like Preview. The scale is exponential in the delta instead

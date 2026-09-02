@@ -10,10 +10,13 @@ export function MermaidView({
 	source,
 	title,
 	fallback,
+	interactive = false,
 }: {
 	source: string;
 	title?: string;
 	fallback?: ReactNode;
+	/** Fill the space and be navigable in place — a pane, rather than a card in a transcript. */
+	interactive?: boolean;
 }) {
 	const [svg, setSvg] = useState<string | null>(null);
 	const [error, setError] = useState<string | null>(null);
@@ -54,6 +57,13 @@ export function MermaidView({
 	}
 	if (svg === null) {
 		return fallback ?? <span className="text-text-muted tr-text-metadata">Rendering diagram…</span>;
+	}
+	if (interactive) {
+		return (
+			<div data-testid="mermaid-svg" className="flex h-full min-h-0 flex-col">
+				<PanZoomView svg={svg} testid="mermaid-pan-zoom" />
+			</div>
+		);
 	}
 	return (
 		<div className="relative">

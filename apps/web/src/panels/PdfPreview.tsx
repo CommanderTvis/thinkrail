@@ -9,7 +9,7 @@ import { IconTooltip } from "@/components/ui/tooltip";
 import { worktreeFileUrl } from "./filesUrl";
 import { loadPdf, type PdfDocument, renderTextLayer } from "./pdfEngine";
 import "./pdfTextLayer.css";
-import { clampPdfScale, isPdfZoomGesture, PDF_SCALE_STEP, pdfScaleForWheel } from "./pdfZoom";
+import { clampZoomScale, isZoomGesture, ZOOM_SCALE_STEP, zoomScaleForWheel } from "@/lib";
 
 /** How long the scale has to hold still before the pages are drawn again at it. */
 const PDF_RASTER_SETTLE_MS = 120;
@@ -148,7 +148,7 @@ export default function PdfPreview({
 	}, [scale, rasterScale]);
 
 	const zoomBy = useCallback((factor: number) => {
-		setScale((current) => clampPdfScale(current * factor));
+		setScale((current) => clampZoomScale(current * factor));
 	}, []);
 
 	useEffect(() => {
@@ -157,9 +157,9 @@ export default function PdfPreview({
 		// macOS pinch arrives as a wheel event with ctrlKey set; ⌘/Ctrl+wheel is the same gesture by hand.
 		// Non-passive so the browser's own page zoom can be suppressed in favour of the document's.
 		const onWheel = (event: WheelEvent) => {
-			if (!isPdfZoomGesture(event)) return;
+			if (!isZoomGesture(event)) return;
 			event.preventDefault();
-			setScale((current) => pdfScaleForWheel(current, event.deltaY, event.deltaMode));
+			setScale((current) => zoomScaleForWheel(current, event.deltaY, event.deltaMode));
 		};
 		el.addEventListener("wheel", onWheel, { passive: false });
 		return () => el.removeEventListener("wheel", onWheel);
@@ -217,7 +217,7 @@ export default function PdfPreview({
 						type="button"
 						data-testid="pdf-zoom-out"
 						aria-label="Zoom out"
-						onClick={() => zoomBy(1 / PDF_SCALE_STEP)}
+						onClick={() => zoomBy(1 / ZOOM_SCALE_STEP)}
 						className="flex size-24 items-center justify-center rounded-[var(--radius-sm)] text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
 					>
 						<Minus className="size-14" />
@@ -228,7 +228,7 @@ export default function PdfPreview({
 						type="button"
 						data-testid="pdf-zoom-in"
 						aria-label="Zoom in"
-						onClick={() => zoomBy(PDF_SCALE_STEP)}
+						onClick={() => zoomBy(ZOOM_SCALE_STEP)}
 						className="flex size-24 items-center justify-center rounded-[var(--radius-sm)] text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
 					>
 						<Plus className="size-14" />
