@@ -1,12 +1,7 @@
-import {
-	RiBookOpenLine as BlueprintIcon,
-	RiBarChartBoxLine as VisualizationIcon,
-} from "@remixicon/react";
-import { lazy, Suspense, useEffect, useMemo } from "react";
+import { RiBookOpenLine as BlueprintIcon } from "@remixicon/react";
+import { lazy, Suspense } from "react";
 import { EmbeddedSplit } from "@/components/EmbeddedSplit";
-import { latestVisualization } from "../chat/tools/visualize/latest";
-import { VisualizationCard } from "../chat/tools/visualize/VisualizationCard";
-import { type EmbeddedPaneKind, embeddedHostKey, useAppStore } from "../store";
+import { embeddedHostKey, useAppStore } from "../store";
 
 const ChatView = lazy(() => import("../chat/ChatView"));
 const BlueprintPane = lazy(() =>
@@ -14,8 +9,12 @@ const BlueprintPane = lazy(() =>
 );
 
 /**
- * A chat with company: the blueprint it authors, or its latest visualize call, live in an embedded
- * pane beside the transcript. Composed here because chat may not import panels — see chat/SPEC.md.
+ * A chat with company: the blueprint it authors lives in an embedded pane beside the transcript.
+ * Composed here because chat may not import panels — see chat/SPEC.md.
+ *
+ * A *visualization* is deliberately not offered here: the transcript already renders the `visualize`
+ * call where it happened, and a pane repeating it beside its own card is the same picture twice. A
+ * terminal has no transcript to render into, which is why it gets one and a chat does not.
  */
 export function ChatHost({
 	workspaceId,
@@ -28,32 +27,15 @@ export function ChatHost({
 }) {
 	const paneDirection = useAppStore((s) => s.localLayoutPreferences.defaultPaneDirection);
 	const hostKey = embeddedHostKey("chat", sessionId);
-	const paneEntry = useAppStore((s) => s.embeddedPanes[workspaceId]?.[hostKey]);
+	const hidden = useAppStore(
+		(s) => s.embeddedPanes[workspaceId]?.[hostKey]?.hidden?.blueprint === true,
+	);
 	const blueprint = useAppStore((s) => s.blueprintByWorkspace[workspaceId]);
 	const authorsBlueprint =
 		blueprint?.author?.kind === "chat" && blueprint.author.sessionId === sessionId;
-	const turns = useAppStore((s) => s.sessions[sessionId]?.turns);
-	const visualization = useMemo(() => latestVisualization(turns ?? []), [turns]);
-
-	useEffect(() => {
-		if (!visualization) return;
-		useAppStore.getState().focusEmbeddedPane(workspaceId, hostKey, "visualization");
-	}, [visualization, workspaceId, hostKey]);
-
-	const available: Record<EmbeddedPaneKind, boolean> = {
-		blueprint: authorsBlueprint,
-		visualization: visualization !== null,
-	};
-	const order: EmbeddedPaneKind[] =
-		paneEntry?.focus === "visualization"
-			? ["visualization", "blueprint"]
-			: ["blueprint", "visualization"];
-	const shown = order.find((kind) => available[kind] && paneEntry?.hidden?.[kind] !== true) ?? null;
-	const hide = (kind: EmbeddedPaneKind) =>
-		useAppStore.getState().setEmbeddedPaneHidden(workspaceId, hostKey, kind, true);
 
 	const companion =
-		shown === "blueprint"
+		authorsBlueprint && !hidden
 			? {
 					title: "Blueprint",
 					content: (
@@ -61,65 +43,29 @@ export function ChatHost({
 							<BlueprintPane workspaceId={workspaceId} />
 						</Suspense>
 					),
-					onClose: () => hide("blueprint"),
+					onClose: () =>
+						useAppStore.getState().setEmbeddedPaneHidden(workspaceId, hostKey, "blueprint", true),
 				}
-			: shown === "visualization" && visualization
-				? {
-						title:
-							typeof visualization.args.title === "string" && visualization.args.title !== ""
-								? visualization.args.title
-								: "Visualization",
-						content: (
-							<div className="flex h-full min-h-0 flex-col p-8">
-								<VisualizationCard
-									toolCallId={visualization.toolCallId}
-									toolName="visualize"
-									args={visualization.args}
-									result={null}
-									status="done"
-									streaming={false}
-									interactive
-								/>
-							</div>
-						),
-						onClose: () => hide("visualization"),
-					}
-				: null;
-	const chips = (["blueprint", "visualization"] as const).filter(
-		(kind) => available[kind] && kind !== shown,
-	);
+			: null;
 
 	return (
 		<EmbeddedSplit direction={paneDirection} companion={companion}>
 			<div className="relative h-full min-h-0">
 				<ChatView sessionId={sessionId} workspaceId={workspaceId} onOpenFile={onOpenFile} />
-				{chips.length > 0 ? (
-					<div className="absolute top-44 right-12 z-20 flex items-center gap-4">
-						{chips.map((kind) => (
-							<button
-								key={kind}
-								type="button"
-								data-testid="chat-embedded-chip"
-								data-kind={kind}
-								title={kind === "blueprint" ? "Show the blueprint" : "Show the visualization"}
-								onClick={() => useAppStore.getState().focusEmbeddedPane(workspaceId, hostKey, kind)}
-								className="flex shrink-0 cursor-pointer items-center gap-2 rounded-[var(--radius-sm)] bg-container-elevated-bg px-4 tr-text-label-pill text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
-							>
-								{kind === "blueprint" ? (
-									<BlueprintIcon className="size-12 shrink-0" />
-								) : (
-									<VisualizationIcon className="size-12 shrink-0" />
-								)}
-								<span className="max-w-[10rem] truncate">
-									{kind === "blueprint"
-										? "Blueprint"
-										: typeof visualization?.args.title === "string" && visualization.args.title
-											? visualization.args.title
-											: "Visualization"}
-								</span>
-							</button>
-						))}
-					</div>
+				{authorsBlueprint && hidden ? (
+					<button
+						type="button"
+						data-testid="chat-embedded-chip"
+						data-kind="blueprint"
+						title="Show the blueprint"
+						onClick={() =>
+							useAppStore.getState().focusEmbeddedPane(workspaceId, hostKey, "blueprint")
+						}
+						className="absolute top-44 right-12 z-20 flex shrink-0 cursor-pointer items-center gap-2 rounded-[var(--radius-sm)] bg-container-elevated-bg px-4 tr-text-label-pill text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
+					>
+						<BlueprintIcon className="size-12 shrink-0" />
+						<span>Blueprint</span>
+					</button>
 				) : null}
 			</div>
 		</EmbeddedSplit>

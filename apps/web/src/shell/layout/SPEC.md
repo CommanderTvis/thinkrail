@@ -297,8 +297,8 @@ pinned by unit tests over `frameTopology` rather than by watching for flicker.
 A companion view living **inside** the tab that owns it — a column beside, or a row under, the host's own
 body — and **never a tab of its own**. `components/EmbeddedSplit` is the one primitive: a host half, a
 handle, and a titled companion half with a close button. Three hosts use it today: a terminal (its
-blueprint, or the visualization the agent in it drew), a chat (the same two), and a markdown editor (its
-Preview, the third view mode beside Preview and Source).
+blueprint, or the visualization the agent in it drew), a chat (its blueprint only), and a markdown editor
+(its Preview, the third view mode beside Preview and Source).
 
 - **Not a tab, deliberately.** A tab is a thing you navigate to and can move anywhere; these are things a
   resource *carries*. The blueprint belongs to its author, a visualization belongs to the terminal that
@@ -312,6 +312,9 @@ Preview, the third view mode beside Preview and Source).
   view state, like the rest of the workbench frame.
 - **One companion at a time**, newest leading: a terminal that both authors a blueprint and draws a
   diagram shows the diagram and offers the blueprint as a chip.
+- **A host only carries what it cannot already show.** A chat renders a `visualize` call in its own
+  transcript, so it is offered no visualization pane — the same picture beside its own card is a bug, not
+  a feature. A terminal has no transcript to render into, which is the whole reason it gets one.
 - **Direction is the Layout setting** (`defaultPaneDirection`) — the same answer that arranges tab panes,
   because "beside or under" is one preference, not one per surface.
 - **The split wraps the host's whole chrome, not just its body.** A terminal's New-terminal button is

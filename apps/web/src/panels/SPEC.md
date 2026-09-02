@@ -1066,8 +1066,8 @@ effort on the next turn.
 - **The row itself appears with the first report**, not with the first *fact*: a session that has said
   only `session_start` still gets the row, because the row also carries the attach chip, which is useful
   before any model is known.
-- **`VisualizationPane`** and the blueprint both arrive as **embedded panes** on their host — a terminal
-  or a chat — rather than tabs of their own (`shell/layout/SPEC.md`, Embedded panes;
+- **`VisualizationPane`** (terminals only) and the blueprint arrive as **embedded panes** on their host
+  rather than tabs of their own (`shell/layout/SPEC.md`, Embedded panes;
   `useEmbeddedCompanion` composes a terminal's, `shell/ChatHost` a chat's, since `chat` may not import
   `panels`). `VisualizationPane` renders a terminal agent's live drawing — the MCP `visualize` tool's view
   (server's visualize/SPEC.md). One pane per terminal, opened by the first push and updated in place by every rewrite: the
