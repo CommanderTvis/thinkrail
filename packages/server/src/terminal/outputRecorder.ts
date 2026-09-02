@@ -15,7 +15,19 @@ const ESC = "\u001b";
 
 const PRIVATE_MODE_RE = new RegExp(`${ESC}\\[\\?([0-9;]+)([hl])`, "g");
 
-const PARTIAL_MODE_RE = new RegExp(`${ESC}(?:\\[\\??[0-9;]{0,16})?$`);
+// OSC 777 asks a terminal for a desktop notification: a one-shot event, not terminal content, so
+// replaying a stale one on reattach re-fires whatever it announced. ThinkRail's own agent reports no
+// longer travel this way (see SPEC.md), but any other tool's still can. See the "never re-emits"
+// mode-restoration precedent below and outputRecorder.test.ts.
+const OSC_NOTIFY_RE = new RegExp(`${ESC}\\]777;[^\\x07${ESC}]*(?:\\x07|${ESC}\\\\)`, "g");
+
+const PARTIAL_MODE_RE = new RegExp(
+	`${ESC}(?:\\[\\??[0-9;]{0,16}|\\]777;[^\\x07${ESC}]*|\\]777|\\]77|\\]7|\\])?$`,
+);
+
+function stripOscNotify(text: string): string {
+	return text.replace(OSC_NOTIFY_RE, "");
+}
 
 export interface OutputRecorder {
 	push(chunk: string): void;
@@ -58,7 +70,8 @@ export function createOutputRecorder(options: OutputRecorderOptions = {}): Outpu
 		}
 	};
 
-	const consume = (text: string): void => {
+	const consume = (raw: string): void => {
+		const text = stripOscNotify(raw);
 		let cursor = 0;
 		PRIVATE_MODE_RE.lastIndex = 0;
 		let match = PRIVATE_MODE_RE.exec(text);

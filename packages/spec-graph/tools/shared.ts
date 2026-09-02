@@ -7,6 +7,7 @@ import {
 	DEFAULT_MAX_LINES,
 	truncateHead,
 } from "@earendil-works/pi-coding-agent";
+import type { Static, TObject } from "typebox";
 import { SpecIndex, type SpecType } from "../core/index.ts";
 
 const indexes = new Map<string, SpecIndex>();
@@ -20,14 +21,47 @@ export function getIndex(root: string): SpecIndex {
 	return index;
 }
 
-export async function textResult<T>(
-	text: string,
-	details: T,
-	continuation = "",
-): Promise<AgentToolResult<T>> {
-	if (continuation) text += `\n${continuation}`;
+export interface SpecToolOutcome<T> {
+	text: string;
+	details: T;
+	/** Paging advice, kept past any truncation of `text`. */
+	continuation?: string;
+	isError?: boolean;
+}
+
+export interface SpecToolDef<P extends TObject, T> {
+	name: string;
+	label: string;
+	description: string;
+	promptSnippet: string;
+	parameters: P;
+	run(params: Static<P>, cwd: string): Promise<SpecToolOutcome<T>> | SpecToolOutcome<T>;
+}
+
+export function defineSpecTool<P extends TObject, T>(tool: SpecToolDef<P, T>): SpecToolDef<P, T> {
+	return tool;
+}
+
+export function textResult<T>(text: string, details: T, continuation = ""): SpecToolOutcome<T> {
+	return { text, details, ...(continuation ? { continuation } : {}) };
+}
+
+export function errorResult(message: string): SpecToolOutcome<{ error: string }> {
+	const inline = `Error: ${message}`;
+	const text = truncateHead(inline).truncated ? `Error:\n${message}` : inline;
+	return { text, details: { error: message }, isError: true };
+}
+
+export function outcomeText(outcome: SpecToolOutcome<unknown>): string {
+	return outcome.continuation ? `${outcome.text}\n${outcome.continuation}` : outcome.text;
+}
+
+export async function boundedResult<T>(outcome: SpecToolOutcome<T>): Promise<AgentToolResult<T>> {
+	const { details, continuation = "" } = outcome;
+	const text = outcomeText(outcome);
+	const flag = outcome.isError ? { isError: true } : {};
 	const preview = truncateHead(text);
-	if (!preview.truncated) return { content: [{ type: "text", text }], details };
+	if (!preview.truncated) return { content: [{ type: "text", text }], details, ...flag };
 	let fullOutputPath: string | undefined;
 	let notice: string;
 	try {
@@ -54,13 +88,8 @@ export async function textResult<T>(
 				...(fullOutputPath ? { fullOutputPath } : { captureFailed: true }),
 			},
 		},
+		...flag,
 	};
-}
-
-export async function errorResult(message: string): Promise<AgentToolResult<{ error: string }>> {
-	const inline = `Error: ${message}`;
-	const text = truncateHead(inline).truncated ? `Error:\n${message}` : inline;
-	return { ...(await textResult(text, { error: message })), isError: true };
 }
 
 const SCAFFOLD_HEADINGS: Record<SpecType, string[]> = {
