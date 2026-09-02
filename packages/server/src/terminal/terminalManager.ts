@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { userInfo } from "node:os";
 import type {
 	TerminalDataPush,
 	TerminalDetachedPush,
@@ -15,15 +16,19 @@ import {
 	saveTerminalSessions,
 } from "../persistence";
 import { createTerminalCompletionQueue } from "./completionQueue";
+import { createMouseModeGuard, type MouseModeGuard } from "./mouseModeGuard";
 import {
 	createOutputBatcher,
 	type OutputBatcher,
 	type TerminalDeliveryResult,
 } from "./outputBatcher";
 import { createOutputRecorder, type OutputRecorder } from "./outputRecorder";
+import { captureProcessSnapshot } from "./processTree";
 import { nudgePtyRedraw, type PtyGrid, resizePtyIfChanged } from "./ptyGrid";
 import { terminalShell, terminalShellArgs, terminalShellStartFailure } from "./shellArgs";
 import { hasChildProcesses } from "./shellBusy";
+import { adoptedTitle } from "./terminalTitle";
+import { forgetTerminalTokens, type TerminalRef, terminalMcpUrl } from "./terminalTokens";
 
 type PushToClient = (clientKey: string, channel: string, data: unknown) => TerminalDeliveryResult;
 
@@ -34,12 +39,15 @@ interface TerminalEntry {
 	attachedClient: string | null;
 	output: OutputBatcher;
 	recorder: OutputRecorder;
+	mouseModeGuard: MouseModeGuard;
 	grid: PtyGrid;
 }
 
 interface TabRecord {
 	tabKey: string;
 	title: string;
+	/** The name the tab was opened with, restored when a program clears the title it set. */
+	defaultTitle?: string;
 }
 
 const OUTPUT_BATCH = {
@@ -55,11 +63,16 @@ const terminals = new Map<string, TerminalEntry>();
 const ptyByTab = new Map<string, string>();
 const tabsByWorkspace = new Map<string, TabRecord[]>();
 const pendingReplay = new Map<string, string>();
+/** The session an un-taken offer names, kept so a restart still has one to make. See SPEC.md. */
 
 const TAB_INDEX_SEP = "\u0000";
 
 function tabIndex(workspaceId: string, tabKey: string): string {
 	return `${workspaceId}${TAB_INDEX_SEP}${tabKey}`;
+}
+
+function entryFor(workspaceId: string, tabKey: string): TerminalEntry | undefined {
+	return terminals.get(ptyByTab.get(tabIndex(workspaceId, tabKey)) ?? "");
 }
 
 let pushToClient: PushToClient = () => "unavailable";
@@ -79,17 +92,61 @@ function membershipChanged(workspaceId: string): void {
 	persistTerminalSessions();
 }
 
+/** A pty, its shell, and the agent under it: three hops is already generous. */
+const MAX_ANCESTOR_DEPTH = 6;
+
+/**
+ * The workspace a process belongs to, or null for one ThinkRail did not spawn. A `claude` connecting to
+ * the IDE bridge names its own pid; walking up to a pty we own is what says which workspace is talking.
+ * See ideBridge/SPEC.md.
+ */
+export function workspaceForProcess(pid: number): string | null {
+	if (!Number.isInteger(pid) || pid <= 0) return null;
+	const owners = new Map<number, string>();
+	for (const entry of terminals.values()) owners.set(entry.pty.pid, entry.workspaceId);
+	if (owners.size === 0) return null;
+	const direct = owners.get(pid);
+	if (direct !== undefined) return direct;
+	const snapshot = captureProcessSnapshot();
+	if (!snapshot) return null;
+	let cursor = pid;
+	for (let step = 0; step < MAX_ANCESTOR_DEPTH; step += 1) {
+		const parent = snapshot.parentOf(cursor);
+		if (parent === null || parent <= 1) return null;
+		const owner = owners.get(parent);
+		if (owner !== undefined) return owner;
+		cursor = parent;
+	}
+	return null;
+}
+
+export function terminalRefs(): (TerminalRef & { pid: number | null })[] {
+	return [...terminals.values()].map((entry) => ({
+		workspaceId: entry.workspaceId,
+		tabKey: entry.tabKey,
+		pid: entry.pty.pid ?? null,
+	}));
+}
+
 const completions = createTerminalCompletionQueue((clientKey, channel, data) =>
 	pushToClient(clientKey, channel, data),
 );
 
-function ptyEnv(): Record<string, string> {
+function ptyEnv(workspaceId: string, tabKey: string): Record<string, string> {
 	const env: Record<string, string> = {};
 	for (const [key, value] of Object.entries(process.env)) {
 		if (typeof value === "string") env[key] = value;
 	}
 	env.TERM = "xterm-256color";
 	env.COLORTERM = "truecolor";
+	env.THINKRAIL_TERMINAL = "1";
+	// From the uid, never from utmpx: a login shell on a fresh pty otherwise asks getlogin(), which can
+	// answer with whatever stale record the reused pty device carries — root, on a real machine. See SPEC.md.
+	const username = userInfo().username;
+	env.USER = username;
+	env.LOGNAME = username;
+	const mcpUrl = terminalMcpUrl({ workspaceId, tabKey });
+	if (mcpUrl !== null) env.THINKRAIL_MCP_URL = mcpUrl;
 	return env;
 }
 
@@ -160,7 +217,7 @@ function spawnForTab(
 			name: "xterm-256color",
 			cwd: ws.worktreePath,
 			...grid,
-			env: ptyEnv(),
+			env: ptyEnv(workspaceId, tabKey),
 		});
 	} catch (cause) {
 		throw new Error(terminalShellStartFailure(process.platform, process.env, preference), {
@@ -169,6 +226,7 @@ function spawnForTab(
 	}
 
 	const id = randomUUID();
+	const mouseModeGuard = createMouseModeGuard();
 	const recorder = createOutputRecorder({ maxChars: replayBudgetChars() });
 	if (revived !== undefined) recorder.restore(revived);
 	const output = createOutputBatcher({
@@ -187,12 +245,14 @@ function spawnForTab(
 		attachedClient: clientKey,
 		output,
 		recorder,
+		mouseModeGuard,
 		grid,
 	};
 	terminals.set(id, entry);
 	ptyByTab.set(tabIndex(workspaceId, tabKey), id);
 
-	pty.onData((data) => {
+	pty.onData((raw) => {
+		const data = mouseModeGuard.transform(raw);
 		recorder.push(data);
 		output.push(data);
 	});
@@ -258,7 +318,8 @@ export function attachTerminal(
 	const isNewTab = !tabs.some((tab) => tab.tabKey === tabKey);
 	if (isNewTab) {
 		assertTerminalCatalogCapacity(tabs);
-		tabs.push({ tabKey, title: options.title ?? `Terminal ${tabs.length + 1}` });
+		const opened = options.title ?? `Terminal ${tabs.length + 1}`;
+		tabs.push({ tabKey, title: opened, defaultTitle: opened });
 	}
 
 	const index = tabIndex(workspaceId, tabKey);
@@ -293,7 +354,11 @@ export function attachTerminal(
 	pendingReplay.delete(index);
 	if (isNewTab) membershipChanged(workspaceId);
 	const replay = entry.recorder.snapshot();
-	return { id, created: true, ...(replay ? { replay } : {}) };
+	return {
+		id,
+		created: true,
+		...(replay ? { replay } : {}),
+	};
 }
 
 export function listTerminals(workspaceId: string): TerminalTabInfo[] {
@@ -319,6 +384,10 @@ export function writeTerminal(id: string, data: string, caller: string): void {
 		return;
 	}
 	entry.pty.write(data);
+}
+
+export function writeTerminalFromHost(workspaceId: string, tabKey: string, data: string): void {
+	entryFor(workspaceId, tabKey)?.pty.write(data);
 }
 
 export function resizeTerminal(id: string, cols: number, rows: number, caller: string): void {
@@ -359,6 +428,7 @@ export function closeTerminalTab(
 
 	tabs.splice(position, 1);
 	pendingReplay.delete(index);
+	forgetTerminalTokens(workspaceId, tabKey);
 	if (entry && id) disposeTerminalEntry(id, entry);
 	membershipChanged(workspaceId);
 	return { closed: true, busy: false };
@@ -373,9 +443,12 @@ export function resumeClientTerminals(clientKey: string): void {
 
 export function closeWorkspaceTerminals(workspaceId: string): void {
 	for (const [id, entry] of terminals) {
-		if (entry.workspaceId === workspaceId) disposeTerminalEntry(id, entry);
+		if (entry.workspaceId === workspaceId) {
+			disposeTerminalEntry(id, entry);
+		}
 	}
 	tabsByWorkspace.delete(workspaceId);
+	forgetTerminalTokens(workspaceId);
 	for (const key of pendingReplay.keys()) {
 		if (key.startsWith(`${workspaceId}${TAB_INDEX_SEP}`)) pendingReplay.delete(key);
 	}
@@ -387,16 +460,47 @@ export function closeAllTerminals(): void {
 	completions.clear();
 }
 
+/**
+ * The session id only exists in the agent's own hook output, which reaches the client as a terminal
+ * escape sequence — so the client is the one that can see it, and hands it back here to be persisted.
+ */
+const MAX_TAB_TITLE = 200;
+
+/**
+ * Adopt the title the program in the tab set for itself (OSC 0/2), which is how a terminal has always
+ * reported what it is running — and how Claude Code names a session.
+ *
+ * Null bytes are stripped and the length is bounded, because this is arbitrary output from whatever is
+ * running. An empty title means "no opinion" and restores the tab's own name rather than blanking it.
+ */
+export function renameTerminal(workspaceId: string, tabKey: string, title: string): void {
+	const tabs = tabsByWorkspace.get(workspaceId);
+	const tab = tabs?.find((candidate) => candidate.tabKey === tabKey);
+	if (!tabs || !tab) return;
+	const cleaned = adoptedTitle(title).slice(0, MAX_TAB_TITLE);
+	const next = cleaned === "" ? (tab.defaultTitle ?? tab.title) : cleaned;
+	if (next === tab.title) return;
+	tab.title = next;
+	// Broadcast only. A shell repaints its title on every prompt, so persisting here wrote every tab's
+	// replay buffer to disk once per command — and the name belongs to the program, not the tab, so it
+	// must not outlive it either. Persistence keeps `defaultTitle`; see SPEC.md.
+	broadcastTabs(workspaceId, listTerminals(workspaceId));
+}
+
 export function persistTerminalSessions(): void {
 	const sessions: PersistedTerminalSessions = {};
 	for (const [workspaceId, tabs] of tabsByWorkspace) {
 		if (tabs.length === 0) continue;
-		sessions[workspaceId] = tabs.map(({ tabKey, title }) => {
+		sessions[workspaceId] = tabs.map(({ tabKey, title, defaultTitle }) => {
 			const index = tabIndex(workspaceId, tabKey);
 			const id = ptyByTab.get(index);
 			const entry = id === undefined ? undefined : terminals.get(id);
 			const recorded = entry ? entry.recorder.snapshot() : pendingReplay.get(index);
-			return { tabKey, title, ...(recorded ? { recorded } : {}) };
+			return {
+				tabKey,
+				title: defaultTitle ?? title,
+				...(recorded ? { recorded } : {}),
+			};
 		});
 	}
 	saveTerminalSessions(sessions);
@@ -409,7 +513,7 @@ export function reviveTerminalSessions(): void {
 		for (const tab of tabs.slice(0, MAX_TERMINAL_TABS_PER_WORKSPACE)) {
 			if (!isValidTerminalTabKey(tab?.tabKey)) continue;
 			const title = isValidTerminalTitle(tab.title) ? tab.title : "Terminal";
-			restored.push({ tabKey: tab.tabKey, title });
+			restored.push({ tabKey: tab.tabKey, title, defaultTitle: title });
 			if (typeof tab.recorded === "string" && tab.recorded !== "") {
 				pendingReplay.set(tabIndex(workspaceId, tab.tabKey), tab.recorded);
 			}

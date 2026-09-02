@@ -21,7 +21,9 @@ e2e).
 - **Owns:** the HTTP+WS server, static serving, the WS dispatch registry, server-side feature services
   (project/workspace/git/fs/terminal + the in-process `AgentSession` manager), and `~/.thinkrail`
   persistence.
-- **Public surface:** `createServer(options) → Promise<RunningServer>` (`{ port, stop, shutdown }`) —
+- **Public surface:** `createServer(options) → Promise<RunningServer>`
+  (`{ port, waitForClient, stop, shutdown }`) — `waitForClient(ms)` answers whether anyone is holding a
+  socket yet, which is how a launcher tells a fresh start from a restart someone is already watching;
   `stop()` is synchronous resource disposal for low-level tests while `shutdown()` is the idempotent,
   bounded production lifecycle (settle sessions + drain analytics and dispose sockets/PTYS/watchers)
   every launcher must await — the public
@@ -38,7 +40,8 @@ e2e).
   (the OAuth flows + the Bedrock module) that pi otherwise reaches through binary-hostile
   variable-specifier dynamic imports (see the agent SPEC). Build-only
   **`@thinkrail/server/build-support`** is the single manifest of bundled extension entries, skill roots,
-  per-platform `bun-pty` libraries, and trash helpers consumed by both launcher packagers. Artifact
+  per-platform `bun-pty` libraries, trash helpers, and — per builtin plugin package's own `./build-support`
+  — its pi extension entries, skill roots, and assets dir, consumed by both launcher packagers. Artifact
   fixture/assertion runners live in [[module-artifact-tests]], not in this library. The package also exposes the
   **`@thinkrail/server/agent` subpath export** (the `agent` barrel): the
   server-side session surface for the **headless workflow-test harness** (`e2e/workflows/`), which
@@ -80,6 +83,9 @@ internals**. The edges between them are owned here (see the dependency graph), n
 | `reviews` | draft review comments on files/diffs: store + anchoring + context-package render | [reviews/SPEC.md](src/reviews/SPEC.md) |
 | `watch` | per-worktree fs watcher → debounced `workspace.fsChanged` invalidation push | [watch/SPEC.md](src/watch/SPEC.md) |
 | `terminal` | workspace-scoped `bun-pty` terminals | [terminal/SPEC.md](src/terminal/SPEC.md) |
+| `mcp` | ThinkRail's own tools served to non-pi agents over MCP (`/mcp/<token>`) | [mcp/SPEC.md](src/mcp/SPEC.md) |
+| `plugins` | the plugin loader: manifest validation, discovery, activation/reconciliation, and the wire/tool/settings adapters over `@thinkrail/plugin-api` | [plugins/SPEC.md](src/plugins/SPEC.md) |
+| `visualize` | a terminal agent's live drawing surface: the MCP `visualize` tool + per-terminal store | [visualize/SPEC.md](src/visualize/SPEC.md) |
 | `agent` | in-process pi sessions + current/retained runtime generations + one-shot completions | [agent/SPEC.md](src/agent/SPEC.md) |
 | `auth` | provider status/login plus native JetBrains Central lifecycle and quota orchestration | [auth/SPEC.md](src/auth/SPEC.md) |
 | `assist` | ad-hoc one-shot tasks (workspace naming, …) on a cheap model, best-effort | [assist/SPEC.md](src/assist/SPEC.md) |
@@ -98,13 +104,30 @@ the host from env via `bootHost` for dev/e2e.
 
 `host` is the **only composition root** — it wires each feature's handlers into the WS registry.
 
-- `host` → `projects`, `workspaces`, `git`, `github`, `branch-review`, `pr`, `fs`, `spec`, `todos`, `reviews`, `watch`, `terminal`, `dialog`, `editors`, `agent`, `auth`, `assist`, `settings`, `history`, `templates`, `analytics`, `feedback`, `log`, `persistence` (`dataDir`, for the crash report)
+- `host` → `projects`, `workspaces`, `git`, `github`, `branch-review`, `pr`, `fs`, `spec`, `todos`, `reviews`, `watch`, `terminal`, `mcp`, `plugins`, `visualize`, `dialog`, `editors`, `agent`, `auth`, `assist`, `settings`, `history`, `templates`, `analytics`, `feedback`, `log`, `persistence` (`dataDir`, for the crash report)
 - `workspaces` → `projects`, `git`, `persistence`
 - `branch-review` → `git`, `subprocess`
 - `pr` → `workspaces`, `git`, `todos`, `branch-review` (provider detection + gh-output parsing + the shared CLI runner), `github` (`ghSetupProblem` — the named compare-fallback reason)
 - `projects` → `git` (shared runner), `persistence`
 - `git` → `subprocess` (every child that talks to a network or another CLI)
 - `github` → `subprocess` (both `gh auth status` probes run under the same bounded runner as `git`/`branch-review`)
+  tool handle plus `plugins.mcpTools(owner, cwd)` — the seven `spec_*` tools and `blueprint_check` reach
+  it as `@thinkrail/plugin-spec-dialect`'s and `@thinkrail/plugin-blueprint`'s contributions now, not a
+  fixed import here
+- `visualize` → `contracts` + `pi-visualize/schema`/`validate` + `typebox` (external only); no sibling
+  edges — `host` installs its publisher and serves its `visualization.get` read
+  own `./host`/`./manifest`/`./build-support` (`@thinkrail/plugin-spec-dialect`, `@thinkrail/plugin-blueprint`,
+  and `@thinkrail/plugin-claude-code`), plus a manifest-only builtin's `./manifest`
+  (`@thinkrail/plugin-pdf-preview`) — no other sibling edges. `host` is the
+- `mcp` → `pi-spec-graph/tools` + `typebox` (external only — the agent-free tool definitions and their
+  schema check); no sibling edges. `host` mounts its `/mcp/<token>` route, resolving the token through
+  `terminal` and the workspace through `workspaces` before any protocol handling, and adds
+  `visualize`'s tool handle to the table
+- `plugins` → `contracts`, `plugin-api` (+`/host`), `log`, `persistence` only — no other sibling edges;
+  builtin plugin packages' own `./host`/`./manifest` join this list as Stage 4 adds each. `host` is the
+  sole caller of `installPlugins(seams)`: every core capability a plugin can reach (terminal, sessions,
+  workspaces, git, config, settings validation, the pi resource loader) arrives as an injected
+  `PluginHostSeams` closure, never a direct import — see plugins/SPEC.md, "the boundary"
 - `git`, `fs`, `spec`, `watch`, `terminal`, `settings`, `analytics`, `feedback` → `persistence` (`spec` also → `pi-spec-graph/core`, external; `analytics` also → the pi-ai built-in provider/model catalog + `posthog-node`, external—the identity-bucketing vocabulary and delivery SDK)
 - `log` → `persistence` (`dataDir`) — and **any feature module (+ `host`) may → `log`**: it is the one
   cross-cutting edge, like `persistence`, exempt from the never-each-other rule (today: `host`,
