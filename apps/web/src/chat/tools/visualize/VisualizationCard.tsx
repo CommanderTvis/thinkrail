@@ -4,7 +4,7 @@ import { ComparisonCard } from "./ComparisonCard";
 import { DiagramCard } from "./DiagramCard";
 
 export function VisualizationCard(props: ToolRenderProps) {
-	const { args, result, status } = props;
+	const { args, result, status, interactive } = props;
 
 	if (status === "error") {
 		return (
@@ -18,7 +18,11 @@ export function VisualizationCard(props: ToolRenderProps) {
 
 	const type = strArg(args, "type");
 	return (
-		<div data-testid="tool-visualize" data-status={status}>
+		<div
+			data-testid="tool-visualize"
+			data-status={status}
+			className={interactive ? "flex h-full min-h-0 flex-col" : undefined}
+		>
 			{type === "comparison" ? <ComparisonCard {...props} /> : <DiagramCard {...props} />}
 		</div>
 	);

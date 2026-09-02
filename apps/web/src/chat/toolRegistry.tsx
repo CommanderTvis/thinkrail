@@ -11,6 +11,8 @@ export interface ToolRenderProps {
 	workspaceRoot?: string | undefined;
 	onOpenFile?: ((path: string) => void) | undefined;
 	streaming: boolean;
+	/** Rendered as a pane that owns its space (navigable, full height) rather than a transcript card. */
+	interactive?: boolean;
 }
 
 export type ToolChrome = "card" | "bare";

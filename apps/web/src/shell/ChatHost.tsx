@@ -70,7 +70,7 @@ export function ChatHost({
 								? visualization.args.title
 								: "Visualization",
 						content: (
-							<div className="h-full overflow-auto p-12">
+							<div className="flex h-full min-h-0 flex-col p-8">
 								<VisualizationCard
 									toolCallId={visualization.toolCallId}
 									toolName="visualize"
@@ -78,6 +78,7 @@ export function ChatHost({
 									result={null}
 									status="done"
 									streaming={false}
+									interactive
 								/>
 							</div>
 						),

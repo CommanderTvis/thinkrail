@@ -5,15 +5,13 @@ import {
 } from "@remixicon/react";
 import type * as React from "react";
 import { useEffect, useRef, useState } from "react";
+import { clampZoomScale, isZoomGesture, ZOOM_SCALE_STEP, zoomScaleForWheel } from "@/lib";
 
-const MIN_SCALE = 0.25;
-const MAX_SCALE = 5;
-
-function clamp(scale: number): number {
-	return Math.min(MAX_SCALE, Math.max(MIN_SCALE, scale));
-}
-
-export function PanZoomView({ svg }: { svg: string }) {
+/**
+ * A diagram you can get around in: ⌘/Ctrl+wheel and trackpad pinch zoom, drag pans, plain wheel scrolls.
+ * The same gesture vocabulary the PDF preview uses, from the same shared module. See chat/SPEC.md.
+ */
+export function PanZoomView({ svg, testid }: { svg: string; testid?: string }) {
 	const [scale, setScale] = useState(1);
 	const scrollRef = useRef<HTMLDivElement>(null);
 	const drag = useRef<{ x: number; y: number; left: number; top: number } | null>(null);
@@ -21,10 +19,12 @@ export function PanZoomView({ svg }: { svg: string }) {
 	useEffect(() => {
 		const el = scrollRef.current;
 		if (!el) return;
-		const onWheel = (e: WheelEvent) => {
-			if (!e.ctrlKey && !e.metaKey) return;
-			e.preventDefault();
-			setScale((s) => clamp(s * (e.deltaY < 0 ? 1.1 : 1 / 1.1)));
+		// macOS delivers a trackpad pinch as a wheel event with ctrlKey set; non-passive so the browser's
+		// own page zoom gives way to the diagram's.
+		const onWheel = (event: WheelEvent) => {
+			if (!isZoomGesture(event)) return;
+			event.preventDefault();
+			setScale((current) => zoomScaleForWheel(current, event.deltaY, event.deltaMode));
 		};
 		el.addEventListener("wheel", onWheel, { passive: false });
 		return () => el.removeEventListener("wheel", onWheel);
@@ -65,7 +65,7 @@ export function PanZoomView({ svg }: { svg: string }) {
 		<div className="relative min-h-0 flex-1">
 			<div
 				ref={scrollRef}
-				data-testid="mermaid-fullscreen-svg"
+				data-testid={testid ?? "mermaid-fullscreen-svg"}
 				className="h-full w-full cursor-grab select-none overflow-auto active:cursor-grabbing [&_svg]:!h-auto [&_svg]:!w-[var(--zoom)] [&_svg]:!max-w-none"
 				style={{ "--zoom": `${scale * 100}%` } as React.CSSProperties}
 				onPointerDown={onPointerDown}
@@ -80,7 +80,7 @@ export function PanZoomView({ svg }: { svg: string }) {
 					type="button"
 					aria-label="Zoom out"
 					data-testid="mermaid-zoom-out"
-					onClick={() => setScale((s) => clamp(s / 1.25))}
+					onClick={() => setScale((s) => clampZoomScale(s / ZOOM_SCALE_STEP))}
 					className={btn}
 				>
 					<Minus className="size-16" />
@@ -95,7 +95,7 @@ export function PanZoomView({ svg }: { svg: string }) {
 					type="button"
 					aria-label="Zoom in"
 					data-testid="mermaid-zoom-in"
-					onClick={() => setScale((s) => clamp(s * 1.25))}
+					onClick={() => setScale((s) => clampZoomScale(s * ZOOM_SCALE_STEP))}
 					className={btn}
 				>
 					<Plus className="size-16" />

@@ -6,3 +6,4 @@ export * from "./layoutAttention";
 export * from "./mergeText";
 export * from "./skillInvocation";
 export * from "./utils";
+export * from "./zoomGesture";
