@@ -52,10 +52,12 @@ export function parseMcpList(output: string): McpListEntry[] {
 export async function listClaudeMcpServers(
 	claudeCommand: string,
 	cwd: string,
+	env: Record<string, string | undefined>,
 ): Promise<McpListEntry[]> {
 	const run = await runBounded([claudeBinary(claudeCommand), "mcp", "list"], {
 		timeoutMs: TIMEOUT_MS,
 		cwd,
+		env,
 	});
 	if (run.launchFailed)
 		throw new Error(`Could not run ${claudeBinary(claudeCommand)}: ${run.err.trim()}`);
