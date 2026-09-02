@@ -33,9 +33,11 @@ adapter over the same tool definitions, so a capability is written once and reac
   path, so the schema an agent read is exactly the contract enforced. A tool outcome whose details
   carry `error` is reported with `isError: true`.
 - **A terminal's table can carry more than the spec tools.** `serveMcp` accepts `extraTools` — handles
-  already bound to the calling terminal — which is how `blueprint_check` joins the table
-  ([[submodule-server-blueprint]]): the host binds it to the worktree the token resolved to. The handle
-  is *structural*, so that module never imports this one and is not named here.
+  already bound to the calling terminal — which is how `visualize` joins the table
+  ([[submodule-server-visualize]]): the host builds the handle from the resolved token owner, so a
+  drawing lands beside the very terminal that asked for it. `blueprint_check` joins the same way, bound
+  to the worktree the token resolved to ([[submodule-server-blueprint]]). Both handles are *structural* —
+  neither module imports this one, and neither is named here.
 - **Identity comes from the route, not the payload.** The host mounts this at `/mcp/<token>` using the
   **same per-terminal token as `/agent-status/`** (terminal/SPEC.md): one identity per terminal, two
   things it can say. The host resolves token → workspace and hands this module only a `cwd`; a request

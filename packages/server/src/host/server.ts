@@ -97,6 +97,7 @@ import {
 	workspaceForProcess,
 } from "../terminal";
 import { isTodoToolEnd, maybeAttachChangeArtifacts } from "../todos";
+import { setVisualizationPublisher, visualizeMcpTool } from "../visualize";
 import {
 	setRepoMetaPublisher,
 	setSkillPathClassifier,
@@ -249,7 +250,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 				const body: unknown = await req.json().catch(() => null);
 				const reply = await serveMcp(body, {
 					cwd: worktreePath,
-					extraTools: [blueprintCheckMcpTool(worktreePath)],
+					extraTools: [visualizeMcpTool(owner), blueprintCheckMcpTool(worktreePath)],
 				});
 				return reply.body === null
 					? new Response(null, { status: reply.status })
@@ -317,6 +318,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 				ws.subscribe(WS_CHANNELS.projectUpdated);
 				ws.subscribe(WS_CHANNELS.terminalTabs);
 				ws.subscribe(WS_CHANNELS.claudeCodeStatus);
+				ws.subscribe(WS_CHANNELS.terminalVisualization);
 				ws.subscribe(WS_CHANNELS.workspaceCreated);
 				ws.subscribe(WS_CHANNELS.workspaceUpdated);
 				ws.subscribe(WS_CHANNELS.workspaceRemoved);
@@ -603,6 +605,12 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		);
 	});
 
+	setVisualizationPublisher((push) => {
+		server.publish(
+			WS_CHANNELS.terminalVisualization,
+			JSON.stringify({ channel: WS_CHANNELS.terminalVisualization, data: push }),
+		);
+	});
 	setReviewPublisher((payload) => {
 		server.publish(
 			WS_CHANNELS.reviewChanged,
@@ -772,6 +780,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		closeAllTerminals();
 		setFeedbackPublisher(null);
 		setSettingsPublisher(null);
+		setVisualizationPublisher(null);
 		setJbcentralAppliedPublisher(() => {});
 		setJbcentralChangedPublisher(() => {});
 		server.stop(true);

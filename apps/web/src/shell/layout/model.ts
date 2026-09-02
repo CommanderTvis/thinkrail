@@ -991,7 +991,8 @@ export function moveTabToGroup(
 		movingTab.kind === "diff" ||
 		movingTab.kind === "chat" ||
 		movingTab.kind === "document" ||
-		movingTab.kind === "blueprint"
+		movingTab.kind === "blueprint" ||
+		movingTab.kind === "visualization"
 	) {
 		return { reason: "The destination group no longer exists." };
 	}

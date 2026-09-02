@@ -49,6 +49,14 @@ export interface LayoutBlueprintTab {
 	name: string;
 }
 
+/** The live view an agent in a terminal draws with the MCP visualize tool — one per terminal. */
+export interface LayoutVisualizationTab {
+	kind: "visualization";
+	id: string;
+	name: string;
+	terminalTabKey: string;
+}
+
 export interface LayoutTerminalTab {
 	kind: "terminal";
 	id: string;
@@ -70,6 +78,7 @@ export type LayoutCenterTab =
 	| LayoutChatTab
 	| LayoutDocumentTab
 	| LayoutBlueprintTab
+	| LayoutVisualizationTab
 	| LayoutTerminalTab;
 export type LayoutAuxiliaryTab = LayoutToolTab | LayoutTerminalTab;
 export type LayoutSideTab = LayoutAuxiliaryTab;
