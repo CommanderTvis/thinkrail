@@ -17,6 +17,8 @@ export function VisualizationCard(props: ToolRenderProps) {
 	}
 
 	const type = strArg(args, "type");
+	// A comparison has no mermaid to fail on, so its verdict is settled the moment it is shown.
+	if (type === "comparison") props.onRender?.(null);
 	return (
 		<div
 			data-testid="tool-visualize"

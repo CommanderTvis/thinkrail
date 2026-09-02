@@ -5,6 +5,7 @@ import {
 	forgetVisualizations,
 	getVisualization,
 	recordVisualization,
+	reportVisualizationRender,
 	resetVisualizations,
 	setAgentSessionLookup,
 	setVisualizationPublisher,
@@ -46,21 +47,47 @@ test("every rewrite is pushed with the terminal it belongs to", () => {
 	expect(pushes[1]?.visualization.title).toBe("Comparison");
 });
 
-test("the MCP tool validates before it draws, and says how to update", () => {
+test("the MCP tool validates before it draws, and says how to update", async () => {
 	const tool = visualizeMcpTool({ workspaceId: "w1", tabKey: "t1" });
 	expect(tool.name).toBe("visualize");
 
-	const bad = tool.call({ type: "diagram" });
+	const bad = await tool.call({ type: "diagram" });
 	expect(bad.isError).toBe(true);
 	expect(bad.text).toContain("mermaid");
 
-	const drawn = tool.call({ type: "diagram", title: "Wired", mermaid: "graph TD;A-->B;" });
+	const drawing = tool.call({ type: "diagram", title: "Wired", mermaid: "graph TD;A-->B;" });
+	reportVisualizationRender("w1", "t1", 1, null);
+	const drawn = await drawing;
 	expect(drawn.isError).toBeUndefined();
 	expect(drawn.text).toContain('Rendered "Wired" in ThinkRail (revision 1)');
 	expect(getVisualization("w1", "t1")?.title).toBe("Wired");
 
-	const shapeless = tool.call({ mermaid: "graph TD;A;" });
+	const shapeless = await tool.call({ mermaid: "graph TD;A;" });
 	expect(shapeless.isError).toBe(true);
+});
+
+test("a diagram the renderer refuses comes back as a tool error, and the last good one stands", async () => {
+	const tool = visualizeMcpTool({ workspaceId: "w1", tabKey: "t1" });
+	const good = tool.call({ type: "diagram", title: "Good", mermaid: "graph TD;A-->B;" });
+	reportVisualizationRender("w1", "t1", 1, null);
+	await good;
+
+	const drawing = tool.call({ type: "diagram", title: "Broken", mermaid: "graph TD;A--" });
+	reportVisualizationRender("w1", "t1", 2, "Parse error on line 1");
+	const answer = await drawing;
+	expect(answer.isError).toBe(true);
+	expect(answer.text).toContain("Parse error on line 1");
+	expect(answer.text).toContain("call visualize again");
+	expect(getVisualization("w1", "t1")?.title).toBe("Good");
+
+	// A verdict for a revision nobody is waiting on is dropped rather than answering the next call.
+	reportVisualizationRender("w1", "t1", 99, "stale");
+	// The rollback put revision 1 back, so the next drawing is 2 again — a refused attempt does not
+	// consume a number the pane ever showed.
+	const second = tool.call({ type: "diagram", title: "Better", mermaid: "graph TD;A-->B;" });
+	reportVisualizationRender("w1", "t1", 2, null);
+	expect((await second).isError).toBeUndefined();
+	expect(getVisualization("w1", "t1")?.title).toBe("Better");
 });
 
 test("forgetting a workspace drops its terminals' views and no other's", () => {

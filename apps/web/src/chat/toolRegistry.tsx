@@ -13,6 +13,8 @@ export interface ToolRenderProps {
 	streaming: boolean;
 	/** Rendered as a pane that owns its space (navigable, full height) rather than a transcript card. */
 	interactive?: boolean;
+	/** Report what the renderer made of this call — the agent's answer waits on it. */
+	onRender?: ((error: string | null) => void) | undefined;
 }
 
 export type ToolChrome = "card" | "bare";
