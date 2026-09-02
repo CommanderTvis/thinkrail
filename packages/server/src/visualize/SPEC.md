@@ -26,6 +26,15 @@ their own view at once, which is the point.
   bound to the terminal the token names. The handle validates with the schema itself
   (`Value.Check` + `pi-visualize/validate`'s shape rules) and answers with the title, the revision, and
   the fact that calling again updates in place — the sentence that teaches the agent the iteration loop.
+- **The renderer decides, and the agent hears it.** Mermaid is parsed in the browser, so whether a
+  diagram is valid is not something the host can answer. The tool call therefore *waits* (5s) for a
+  client to report what it made of that revision (`visualization.report`), and answers with the parse
+  error as an `isError` result when it failed — otherwise a typo produced a red card only the user could
+  see while the agent was told it had drawn. **A refused drawing is rolled back**: the last one that
+  rendered is restored and re-pushed, so an iteration's typo does not cost the user the picture they
+  had, and the next attempt reuses the revision number the pane never showed. No client watching is not
+  a failure — the wait times out and the drawing stands, since a headless host has nobody to disappoint.
+  A comparison has no mermaid to fail on and settles the moment it is shown.
 - **The title names the tab once.** `title`, else "Diagram"/"Comparison". `args` travel verbatim: the
   web renders them with the same `VisualizationCard` the chat uses for pi's visualize tool, so both
   agents draw with one vocabulary and one renderer (apps/web's chat/tools/visualize).

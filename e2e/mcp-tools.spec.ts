@@ -132,6 +132,21 @@ test("a terminal's MCP address serves the spec tools, scoped to its own worktree
 	await chip.click();
 	await expect(page.getByTestId("embedded-pane")).toBeVisible();
 
+	// A diagram the renderer refuses comes back to the agent as a tool error, not a red card it
+	// never sees — the verdict is the browser's, reported back over the wire.
+	await runInTerminal(
+		page,
+		`${mcpCall(
+			"tools/call",
+			'{"name":"visualize","arguments":{"type":"diagram","title":"Broken","mermaid":"graph TD;A--"}}',
+			".result.content[0].text",
+		)} > tool-answer.txt`,
+	);
+	await expect.poll(answer).toContain("The diagram did not render");
+	expect(answer()).toContain("call visualize again");
+	// And the pane keeps the last drawing that worked, rather than the typo that replaced it.
+	await expect(page.getByTestId("embedded-pane-title")).toHaveText("Wired graph");
+
 	// A resumed conversation reclaims its drawing in whatever terminal it lands in: this terminal
 	// reports the session that drew, and the pane comes back with it.
 	await runInTerminal(

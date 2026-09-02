@@ -2,7 +2,7 @@ import type { ToolRenderProps } from "../../toolRegistry";
 import { strArg } from "../toolHelpers";
 import { MermaidView } from "./MermaidView";
 
-export function DiagramCard({ args, status, interactive = false }: ToolRenderProps) {
+export function DiagramCard({ args, status, interactive = false, onRender }: ToolRenderProps) {
 	const source = strArg(args, "mermaid");
 	const title = strArg(args, "title");
 
@@ -16,7 +16,12 @@ export function DiagramCard({ args, status, interactive = false }: ToolRenderPro
 	if (interactive) {
 		return (
 			<div data-testid="tool-visualize-diagram" className="flex h-full min-h-0 flex-col">
-				<MermaidView source={source} title={title} interactive />
+				<MermaidView
+					source={source}
+					title={title}
+					interactive
+					{...(onRender ? { onRender } : {})}
+				/>
 			</div>
 		);
 	}
