@@ -1,5 +1,6 @@
 export * from "./model";
 export * from "./normalized";
+export { frameTopology } from "./normalized";
 export * from "./presets";
 export * from "./types";
 export {
