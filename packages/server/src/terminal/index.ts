@@ -1,6 +1,7 @@
 export { agentSessionExists, resumeCommand } from "./agentResume";
 export {
 	type AgentStatusDelivery,
+	agentTokenOwner,
 	forgetAgentStatusTokens,
 	readAgentStatusRequest,
 	resetAgentStatusTokens,

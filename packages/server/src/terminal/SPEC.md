@@ -233,7 +233,9 @@ decision stays the user's; the tab is otherwise an ordinary shell.
   (`agentStatus.ts`), and is what the Claude Code plugin POSTs to; the host resolves the token to a
   workspace and tab and pushes the report to clients. The token is the identity: a report never claims a
   tab, and a process that was never handed one cannot report as any. A closed tab's token is forgotten
-  with it.
+  with it. **`THINKRAIL_MCP_URL` is stamped beside it, carrying the same token on the host's `/mcp/`
+  route** (`agentMcpUrl` / `agentTokenOwner`): one identity per terminal, two things it can say — what
+  it is doing, and a call into ThinkRail's own tools (see mcp/SPEC.md).
   **This replaced an escape sequence, and the reason is the whole point.** Status used to travel as OSC
   777 written into the PTY, whose original meaning is "show a desktop notification". Every terminal that
   implements it renders whatever arrives and none filter on a target string, so the plugin — installed

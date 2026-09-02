@@ -16,7 +16,7 @@ import {
 	saveTerminalSessions,
 } from "../persistence";
 import { agentSessionExists, resumeCommand } from "./agentResume";
-import { agentStatusUrl, forgetAgentStatusTokens } from "./agentStatus";
+import { agentMcpUrl, agentStatusUrl, forgetAgentStatusTokens } from "./agentStatus";
 import { type AgentWatch, createAgentWatch } from "./agentWatch";
 import { createTerminalCompletionQueue } from "./completionQueue";
 import { createMouseModeGuard, type MouseModeGuard } from "./mouseModeGuard";
@@ -148,6 +148,8 @@ function ptyEnv(workspaceId: string, tabKey: string): Record<string, string> {
 	// terminal to render. See SPEC.md.
 	const statusUrl = agentStatusUrl(workspaceId, tabKey);
 	if (statusUrl !== null) env.THINKRAIL_AGENT_STATUS_URL = statusUrl;
+	const mcpUrl = agentMcpUrl(workspaceId, tabKey);
+	if (mcpUrl !== null) env.THINKRAIL_MCP_URL = mcpUrl;
 	// A `claude` started in this terminal finds the IDE bridge from its own environment, skipping the
 	// lock-file scan entirely — the same handoff the official VS Code extension does. See ideBridge/SPEC.md.
 	const bridgePort = ideBridgePort();

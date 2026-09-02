@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import {
+	agentMcpUrl,
 	agentStatusUrl,
+	agentTokenOwner,
 	forgetAgentStatusTokens,
 	readAgentStatusRequest,
 	resetAgentStatusTokens,
@@ -23,6 +25,18 @@ describe("agent status addresses", () => {
 		expect(first).toBe(agentStatusUrl("w1", "t1"));
 		expect(first).not.toBe(agentStatusUrl("w1", "t2"));
 		expect(first?.startsWith("http://127.0.0.1:4321/agent-status/")).toBe(true);
+	});
+
+	test("the MCP address carries the same token as the status address, on its own route", () => {
+		setAgentStatusEndpoint("http://127.0.0.1:4321");
+		const status = agentStatusUrl("w1", "t1");
+		const mcp = agentMcpUrl("w1", "t1");
+		expect(mcp?.startsWith("http://127.0.0.1:4321/mcp/")).toBe(true);
+		const token = mcp?.slice("http://127.0.0.1:4321/mcp/".length) ?? "";
+		expect(status?.endsWith(token)).toBe(true);
+		expect(agentTokenOwner(token)).toEqual({ workspaceId: "w1", tabKey: "t1" });
+		forgetAgentStatusTokens("w1", "t1");
+		expect(agentTokenOwner(token)).toBeNull();
 	});
 
 	test("no endpoint yet means no address, so a terminal is simply told nothing", () => {
