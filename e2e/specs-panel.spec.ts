@@ -1,7 +1,43 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { expect, test } from "@playwright/test";
+import { expect, type Page, test } from "@playwright/test";
 import { createWorkspaceViaDialog, openFixtureProject } from "./fixtures/app";
+
+async function proxyOneSpecGraphFailure(page: Page) {
+	let armed = false;
+	let injected = false;
+	let readCount = 0;
+	await page.routeWebSocket(/\/ws(\?|$)/, (ws) => {
+		const server = ws.connectToServer();
+		ws.onMessage((message) => {
+			const raw = typeof message === "string" ? message : message.toString();
+			let frame: { id?: string; method?: string };
+			try {
+				frame = JSON.parse(raw) as typeof frame;
+			} catch {
+				server.send(message);
+				return;
+			}
+			if (frame.id && frame.method === "spec.graph") {
+				readCount += 1;
+				if (armed && !injected) {
+					injected = true;
+					ws.send(JSON.stringify({ id: frame.id, ok: false, error: "injected spec failure" }));
+					return;
+				}
+			}
+			server.send(message);
+		});
+		server.onMessage((message) => ws.send(message));
+	});
+	return {
+		arm: () => {
+			armed = true;
+		},
+		readCount: () => readCount,
+		wasInjected: () => injected,
+	};
+}
 
 test("Specs tab renders the worktree's spec tree and opens a spec as an editor tab", async ({
 	page,
@@ -72,23 +108,82 @@ test("Specs tab renders the worktree's spec tree and opens a spec as an editor t
 	const submodule = page.locator('[data-testid="spec-node"][data-spec-id="sample-submodule"]');
 	await expect(moduleB).toBeVisible();
 	await expect(submodule).toBeVisible();
-	await expect(page.getByTestId("specs-refresh")).toBeVisible();
-	await page.getByTestId("specs-refresh").click();
-	await expect(moduleB).toBeVisible();
-	await expect(submodule).toBeVisible();
+	await expect(page.getByRole("button", { name: "Refresh specs" })).toHaveCount(0);
+	await expect(page.getByTestId("specs-retry")).toHaveCount(0);
+	const stripBottom = await page
+		.getByTestId("right-tab-strip")
+		.evaluate((element) => element.getBoundingClientRect().bottom);
+	const rootTop = await root.evaluate((element) => element.getBoundingClientRect().top);
+	expect(rootTop - stripBottom).toBeLessThanOrEqual(24);
 	await expect(submodule).toHaveAttribute("data-depth", "2");
 	await expect(submodule).toHaveAttribute("data-spec-role", "SUBMODULE");
 	await expect(submodule.getByTestId("spec-role")).toBeHidden();
 	await submodule.hover();
 	await expect(submodule.getByTestId("spec-role")).toBeVisible();
 	await expect(submodule.getByTestId("spec-role")).toHaveText("SUBMODULE");
-	const childLeftAfterRefresh = await child.evaluate(
+	const childLeftAfterUpdate = await child.evaluate(
 		(element) => element.getBoundingClientRect().left,
 	);
 	const moduleBLeft = await moduleB.evaluate((element) => element.getBoundingClientRect().left);
 	const submoduleLeft = await submodule.evaluate((element) => element.getBoundingClientRect().left);
-	expect(Math.abs(moduleBLeft - childLeftAfterRefresh)).toBeLessThanOrEqual(1);
-	expect(submoduleLeft - childLeftAfterRefresh).toBeGreaterThanOrEqual(10);
+	expect(Math.abs(moduleBLeft - childLeftAfterUpdate)).toBeLessThanOrEqual(1);
+	expect(submoduleLeft - childLeftAfterUpdate).toBeGreaterThanOrEqual(10);
 	await expect(page.getByTestId("spec-tree-branch")).toHaveCount(0);
 	await expect(page.getByTestId("spec-tree-rail")).toHaveCount(0);
+});
+
+test("Specs offers Retry only after its automatic graph read fails", async ({ page }) => {
+	await openFixtureProject(page);
+	await createWorkspaceViaDialog(page);
+
+	const root = page.locator('[data-testid="spec-node"][data-spec-id="sample-root"]');
+	await expect(root).toBeVisible();
+
+	const failure = await proxyOneSpecGraphFailure(page);
+	failure.arm();
+	await page.reload();
+	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
+	const error = page.getByTestId("specs-error");
+	const retry = error.getByRole("button", { name: "Retry", exact: true });
+	await expect(error).toContainText("Couldn't load specs.");
+	await expect(page.getByRole("button", { name: "Refresh specs" })).toHaveCount(0);
+	await expect(page.getByTestId("right-panel").getByTestId("skeleton-rows")).toHaveCount(0);
+	const failedReadCount = failure.readCount();
+	await retry.click();
+	await expect.poll(failure.readCount).toBeGreaterThan(failedReadCount);
+	await expect(page.getByTestId("specs-error")).toHaveCount(0);
+	await expect(root).toBeVisible();
+	expect(failure.wasInjected()).toBe(true);
+});
+
+test("a failed automatic Specs update keeps the previous tree until Retry succeeds", async ({
+	page,
+}) => {
+	const failure = await proxyOneSpecGraphFailure(page);
+	await openFixtureProject(page);
+	const workspace = await createWorkspaceViaDialog(page);
+	const root = page.locator('[data-testid="spec-node"][data-spec-id="sample-root"]');
+	await expect(root).toBeVisible();
+
+	const added = page.locator('[data-testid="spec-node"][data-spec-id="sample-retry"]');
+	failure.arm();
+	writeFileSync(
+		join(workspace.worktreePath, "module-a", "retry.md"),
+		"---\nid: sample-retry\ntype: module-design\ntitle: Retry Sample\nparent: sample-root\n---\n\n## Responsibility\n\nAdded after the initial graph read.\n",
+	);
+
+	const error = page.getByTestId("specs-error");
+	const retry = error.getByRole("button", { name: "Retry", exact: true });
+	await expect(error).toContainText("Couldn't update specs.");
+	await expect(retry).toBeVisible();
+	await expect(root).toBeVisible();
+	await expect(added).toHaveCount(0);
+	await expect(page.getByTestId("right-panel").getByTestId("skeleton-rows")).toHaveCount(0);
+	const failedReadCount = failure.readCount();
+	await retry.click();
+	await expect.poll(failure.readCount).toBeGreaterThan(failedReadCount);
+	await expect(page.getByTestId("specs-error")).toHaveCount(0);
+	await expect(root).toBeVisible();
+	await expect(added).toBeVisible();
+	expect(failure.wasInjected()).toBe(true);
 });
