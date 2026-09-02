@@ -7,7 +7,8 @@
 		".": "./index.ts",
 		"./index.ts": "./index.ts",
 		"./core": "./core/index.ts",
-		"./package.json": "./package.json"
+		"./package.json": "./package.json",
+		"./tools": "./tools/index.ts"
 	},
 	"description": "Teaches the pi agent a project's spec-graph: search, navigate, and manage frontmatter-tagged specs.",
 	"keywords": [
