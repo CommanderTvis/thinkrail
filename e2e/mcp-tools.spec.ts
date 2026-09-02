@@ -40,7 +40,7 @@ test("a terminal's MCP address serves the spec tools, scoped to its own worktree
 		page,
 		mcpCall("tools/list", "{}", '.result.tools | length | tostring + " tools listed"'),
 	);
-	await expect(terminal).toContainText("8 tools listed");
+	await expect(terminal).toContainText("9 tools listed");
 
 	await runInTerminal(
 		page,
@@ -61,6 +61,34 @@ test("a terminal's MCP address serves the spec tools, scoped to its own worktree
 		),
 	);
 	await expect(terminal).toContainText("wired-spec [task-spec]");
+
+	// The visualize tool draws a live view in the workbench, keyed to this very terminal.
+	await runInTerminal(
+		page,
+		mcpCall(
+			"tools/call",
+			'{"name":"visualize","arguments":{"type":"diagram","title":"Wired graph","mermaid":"graph TD;A-->B;"}}',
+			".result.content[0].text",
+		),
+	);
+	await expect(terminal).toContainText('Rendered "Wired graph" in ThinkRail (revision 1)');
+	const pane = page.getByTestId("visualization-pane");
+	await expect(pane).toBeVisible();
+	await expect(pane.getByTestId("mermaid-svg").locator("svg").first()).toBeVisible({
+		timeout: 20_000,
+	});
+
+	// Calling again updates the same view in place — the live half of the contract.
+	await runInTerminal(
+		page,
+		mcpCall(
+			"tools/call",
+			'{"name":"visualize","arguments":{"type":"comparison","title":"Wired graph","options":[{"name":"OptA","recommended":true}]}}',
+			".result.content[0].text",
+		),
+	);
+	await expect(terminal).toContainText("revision 2");
+	await expect(pane).toContainText("OptA");
 
 	// The blueprint check reads the file in this terminal's own worktree and reports what the panel
 	// made of it — the feedback an author writing with ordinary file tools otherwise never gets.

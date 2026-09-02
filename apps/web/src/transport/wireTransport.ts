@@ -14,6 +14,7 @@ import type {
 	SessionCreatedPayload,
 	SessionDeletedPayload,
 	SessionEventPayload,
+	VisualizationPush,
 	Workspace,
 	WorkspaceFsChangedPayload,
 	WorkspaceRemoved,
@@ -156,6 +157,10 @@ export function initTransport(): WsTransport {
 			todos: parseAgentTodos(push.report.todos) ?? undefined,
 		});
 		notifyClaudeCode(push.status, push.report);
+	});
+
+	transport.subscribe(WS_CHANNELS.terminalVisualization, (data) => {
+		useAppStore.getState().applyVisualization(data as VisualizationPush);
 	});
 
 	transport.subscribe(WS_CHANNELS.ideBridgeAction, (data) => {
