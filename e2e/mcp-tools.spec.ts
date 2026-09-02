@@ -111,6 +111,22 @@ test("a terminal's MCP address serves the spec tools, scoped to its own worktree
 	await chip.click();
 	await expect(page.getByTestId("embedded-pane")).toBeVisible();
 
+	// A resumed conversation reclaims its drawing in whatever terminal it lands in: this terminal
+	// reports the session that drew, and the pane comes back with it.
+	await runInTerminal(
+		page,
+		`curl -s -o /dev/null -d '{"v":1,"agent":"claude","session_id":"s-viz","event":"session_start"}' "$THINKRAIL_AGENT_STATUS_URL"`,
+	);
+	await openTerminal(page);
+	await waitTerminalReady(page);
+	await expect(page.getByTestId("embedded-pane")).toHaveCount(0);
+	await runInTerminal(
+		page,
+		`curl -s -o /dev/null -d '{"v":1,"agent":"claude","session_id":"s-viz","event":"session_start"}' "$THINKRAIL_AGENT_STATUS_URL"`,
+	);
+	await expect(page.getByTestId("embedded-pane")).toBeVisible();
+	await expect(page.getByTestId("embedded-pane-title")).toHaveText("Wired graph");
+
 	// The blueprint check reads the file in this terminal's own worktree and reports what the panel
 	// made of it — the feedback an author writing with ordinary file tools otherwise never gets.
 	await runInTerminal(

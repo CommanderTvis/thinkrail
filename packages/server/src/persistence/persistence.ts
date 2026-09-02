@@ -82,6 +82,27 @@ export function saveBlueprints(blueprints: PersistedBlueprints): void {
 	writeJson("blueprints.json", blueprints);
 }
 
+/**
+ * A drawing outlives the terminal it was made in, because the *session* does: `claude --resume` in a new
+ * tab is the same conversation, and it should find its diagram where it left it. Keyed by workspace and
+ * agent session id; see visualize/SPEC.md.
+ */
+export interface PersistedVisualization {
+	title: string;
+	args: Record<string, unknown>;
+	revision: number;
+}
+
+export type PersistedVisualizations = Record<string, Record<string, PersistedVisualization>>;
+
+export function loadVisualizations(): PersistedVisualizations {
+	return readJson<PersistedVisualizations>("visualizations.json", {});
+}
+
+export function saveVisualizations(visualizations: PersistedVisualizations): void {
+	writeJson("visualizations.json", visualizations);
+}
+
 export function normalizeClaudeCommand(value: unknown): string {
 	const trimmed = typeof value === "string" ? value.trim() : "";
 	return trimmed || DEFAULT_CONFIG.claudeCommand;

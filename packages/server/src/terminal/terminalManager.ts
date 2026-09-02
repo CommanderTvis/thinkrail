@@ -519,6 +519,12 @@ export function rememberAgentSession(workspaceId: string, tabKey: string, sessio
 	persistTerminalSessions();
 }
 
+/** Which agent conversation is live in this tab, as last reported. */
+export function agentSessionOf(workspaceId: string, tabKey: string): string | null {
+	const entry = terminals.get(ptyByTab.get(tabIndex(workspaceId, tabKey)) ?? "");
+	return entry?.agentSessionId ?? null;
+}
+
 export function persistTerminalSessions(): void {
 	const sessions: PersistedTerminalSessions = {};
 	for (const [workspaceId, tabs] of tabsByWorkspace) {

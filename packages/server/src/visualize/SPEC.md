@@ -29,10 +29,17 @@ their own view at once, which is the point.
 - **The title names the tab once.** `title`, else "Diagram"/"Comparison". `args` travel verbatim: the
   web renders them with the same `VisualizationCard` the chat uses for pi's visualize tool, so both
   agents draw with one vocabulary and one renderer (apps/web's chat/tools/visualize).
-- **In-memory on purpose.** A visualization is the agent's scratchboard, not workspace state: it lives
-  as long as the host, hydrates late-joining clients through the `visualization.get` wire method, and
-  is not persisted. A client that reopens after a host restart finds the tab (frontend-local layout)
-  showing its loading region until the agent draws again.
+- **A drawing belongs to the conversation, not to the tab.** The live view is keyed by terminal — that is
+  what the pane reads and what `visualization.get` hydrates — but every drawing is also written under the
+  agent **session id** the terminal last reported (`visualizations.json`, per workspace). When a report
+  arrives naming a session that has one, `adoptVisualizationForSession` re-attaches it to the tab now
+  reporting and pushes it as if just drawn. So `claude --resume <id>` finds its diagram whatever terminal
+  it resumed into, and a host restart does not lose it. Re-adopting is idempotent: a tab already holding
+  that revision is left alone rather than pushed at again. The session id arrives through an injected
+  `setAgentSessionLookup` — `host` binds `terminal`'s record — so this module still imports no sibling.
+  Removing a workspace forgets both indexes. **A tab that drew before it said which conversation it is**
+  (the tool call can precede the first status report) is bound to that session the moment the report
+  arrives, so the ordering of "drew" and "identified itself" never decides whether a resume can find it.
 - **Public surface (barrel):** `setVisualizationPublisher`, `recordVisualization`, `getVisualization`,
   `forgetVisualizations`, `resetVisualizations` (tests), `visualizeMcpTool`.
 - **Allowed deps:** `contracts` (the `TerminalVisualization`/`VisualizationPush` shapes),
