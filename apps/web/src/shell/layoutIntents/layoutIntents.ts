@@ -164,6 +164,13 @@ export function toLayoutTab(tab: EditorTab): LayoutCenterTab | null {
 		}
 		case "blueprint":
 			return { kind: "blueprint", id: tab.id, name: tab.name };
+		case "visualization":
+			return {
+				kind: "visualization",
+				id: tab.id,
+				name: tab.name,
+				terminalTabKey: tab.terminalTabKey,
+			};
 		case "plan":
 			return {
 				kind: "document",

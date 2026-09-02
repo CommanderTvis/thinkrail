@@ -207,6 +207,7 @@ import {
 	type TodoReviewRecord,
 	updateTodo,
 } from "../todos";
+import { forgetVisualizations, getVisualization } from "../visualize";
 import { ensureWatch, stopWatch } from "../watch";
 import {
 	createWorkspace,
@@ -437,6 +438,7 @@ const handlers: Record<string, Handler> = {
 			removeWorkspaceReviews(ws.id);
 			stopWatch(ws.id);
 			closeWorkspaceTerminals(ws.id);
+			forgetVisualizations(ws.id);
 			void archiveTeardown(ws);
 		}
 		return { ok: true } as const;
@@ -1145,6 +1147,10 @@ const handlers: Record<string, Handler> = {
 	"blueprint.close": (params) => {
 		closeBlueprint((params as { workspaceId: string }).workspaceId);
 		return { ok: true } as const;
+	},
+	"visualization.get": (params) => {
+		const { workspaceId, tabKey } = params as { workspaceId: string; tabKey: string };
+		return getVisualization(workspaceId, tabKey);
 	},
 	"blueprint.get": (params) => {
 		const { workspaceId } = params as { workspaceId: string };

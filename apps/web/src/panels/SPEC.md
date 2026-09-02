@@ -1062,6 +1062,15 @@ effort on the next turn.
 - **The row itself appears with the first report**, not with the first *fact*: a session that has said
   only `session_start` still gets the row, because the row also carries the attach chip, which is useful
   before any model is known.
+- **`VisualizationPane`** renders a terminal agent's live drawing — the MCP `visualize` tool's view
+  (server's visualize/SPEC.md). One tab per terminal (`LayoutVisualizationTab`, identity
+  `visualization/<terminalTabKey>`), opened by the first push, updated in place by every rewrite: the
+  pane reads `visualizationsByTerminal` and re-renders on the `terminal.visualization` WS push, so many
+  Claude terminals each hold an independent, live view. It reuses the chat's `VisualizationCard`
+  verbatim — pi's visualize tool and the MCP one draw with the same schema and the same renderer. A
+  pane whose store slot is empty (reload, host restart) hydrates once through `visualization.get` and
+  otherwise shows the loading region until the agent draws again. The tab takes the first push's title;
+  it is a live surface, not a document — nothing persists but the frontend-local tab itself.
 - **Claude's own plan lives under Claude's terminal.** `TodoWrite` rewrites the whole plan, so the
   plugin relays the whole plan on that one tool's `tool_complete` (`todos` on the report —
   `contracts/agentStatus.ts`'s `AgentTodoItem`), and it rides the per-terminal state like the other

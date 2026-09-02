@@ -84,6 +84,7 @@ internals**. The edges between them are owned here (see the dependency graph), n
 | `watch` | per-worktree fs watcher → debounced `workspace.fsChanged` invalidation push | [watch/SPEC.md](src/watch/SPEC.md) |
 | `terminal` | workspace-scoped `bun-pty` terminals | [terminal/SPEC.md](src/terminal/SPEC.md) |
 | `mcp` | ThinkRail's own tools served to non-pi agents over MCP (`/mcp/<token>`) | [mcp/SPEC.md](src/mcp/SPEC.md) |
+| `visualize` | a terminal agent's live drawing surface: the MCP `visualize` tool + per-terminal store | [visualize/SPEC.md](src/visualize/SPEC.md) |
 | `agent` | in-process pi sessions + current/retained runtime generations + one-shot completions | [agent/SPEC.md](src/agent/SPEC.md) |
 | `auth` | provider status/login plus native JetBrains Central lifecycle and quota orchestration | [auth/SPEC.md](src/auth/SPEC.md) |
 | `assist` | ad-hoc one-shot tasks (workspace naming, …) on a cheap model, best-effort | [assist/SPEC.md](src/assist/SPEC.md) |
@@ -104,7 +105,7 @@ the host from env via `bootHost` for dev/e2e.
 
 `host` is the **only composition root** — it wires each feature's handlers into the WS registry.
 
-- `host` → `projects`, `workspaces`, `git`, `github`, `branch-review`, `pr`, `fs`, `spec`, `todos`, `reviews`, `watch`, `terminal`, `mcp`, `dialog`, `editors`, `agent`, `auth`, `assist`, `blueprint`, `discord`, `settings`, `history`, `templates`, `analytics`, `feedback`, `log`, `persistence` (`dataDir`, for the crash report)
+- `host` → `projects`, `workspaces`, `git`, `github`, `branch-review`, `pr`, `fs`, `spec`, `todos`, `reviews`, `watch`, `terminal`, `mcp`, `visualize`, `dialog`, `editors`, `agent`, `auth`, `assist`, `blueprint`, `discord`, `settings`, `history`, `templates`, `analytics`, `feedback`, `log`, `persistence` (`dataDir`, for the crash report)
 - `workspaces` → `projects`, `git`, `persistence`
 - `branch-review` → `git`, `subprocess`
 - `pr` → `workspaces`, `git`, `todos`, `branch-review` (provider detection + gh-output parsing + the shared CLI runner), `github` (`ghSetupProblem` — the named compare-fallback reason)
@@ -114,7 +115,10 @@ the host from env via `bootHost` for dev/e2e.
 - `claudeConfig` → `fs` (the shared content hash + contained read/write of the files it reports)
 - `mcp` → `pi-spec-graph/tools` + `typebox` (external only — the agent-free tool definitions and their
   schema check); no sibling edges. `host` mounts its `/mcp/<token>` route, resolving the token through
-  `terminal` and the workspace through `workspaces` before any protocol handling
+  `terminal` and the workspace through `workspaces` before any protocol handling, and adds
+  `visualize`'s tool handle to the table
+- `visualize` → `contracts` + `pi-visualize/schema`/`validate` + `typebox` (external only); no sibling
+  edges — `host` installs its publisher and serves its `visualization.get` read
 - `git`, `fs`, `spec`, `watch`, `terminal`, `settings`, `analytics`, `feedback` → `persistence` (`spec` also → `pi-spec-graph/core`, external; `analytics` also → the pi-ai built-in provider/model catalog + `posthog-node`, external—the identity-bucketing vocabulary and delivery SDK)
 - `log` → `persistence` (`dataDir`) — and **any feature module (+ `host`) may → `log`**: it is the one
   cross-cutting edge, like `persistence`, exempt from the never-each-other rule (today: `host`,

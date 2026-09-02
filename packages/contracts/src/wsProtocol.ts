@@ -80,6 +80,7 @@ import type {
 	WireCustomMessage,
 	WireModel,
 } from "./piProtocol";
+import type { TerminalVisualization } from "./visualization";
 
 export interface TerminalDataPush {
 	id: string;
@@ -278,6 +279,7 @@ export const WS_METHODS = {
 	blueprintAuthorCommand: "blueprint.authorCommand",
 	blueprintClose: "blueprint.close",
 	blueprintGet: "blueprint.get",
+	visualizationGet: "visualization.get",
 	blueprintSelect: "blueprint.select",
 	blueprintEdit: "blueprint.edit",
 	blueprintConfirmEdits: "blueprint.confirmEdits",
@@ -297,6 +299,7 @@ export const WS_CHANNELS = {
 	terminalExit: "terminal.exit",
 	terminalDetached: "terminal.detached",
 	terminalTabs: "terminal.tabs",
+	terminalVisualization: "terminal.visualization",
 	claudeCodeStatus: "claudeCode.status",
 	workspaceCreated: "workspace.created",
 	workspaceUpdated: "workspace.updated",
@@ -751,6 +754,10 @@ export interface WsMethodMap {
 	};
 	"blueprint.close": { params: { workspaceId: string }; result: Ack };
 	"blueprint.get": { params: { workspaceId: string }; result: BlueprintState | null };
+	"visualization.get": {
+		params: { workspaceId: string; tabKey: string };
+		result: TerminalVisualization | null;
+	};
 	"blueprint.select": {
 		params: { workspaceId: string; controlId: string; optionId: string };
 		result: BlueprintMutationResult;

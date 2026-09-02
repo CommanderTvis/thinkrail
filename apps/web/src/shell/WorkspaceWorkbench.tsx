@@ -5,6 +5,7 @@ import {
 	RiGitBranchLine as GitBranch,
 	RiLoader4Line as Loader2,
 	RiChatNewLine as MessageSquarePlus,
+	RiBarChartBoxLine,
 	RiTerminalBoxLine as SquareTerminal,
 } from "@remixicon/react";
 import {
@@ -90,6 +91,7 @@ const PlanPane = lazy(() => import("../panels/PlanPane"));
 const BlueprintPane = lazy(() =>
 	import("../panels/BlueprintView").then((module) => ({ default: module.BlueprintPane })),
 );
+const VisualizationPane = lazy(() => import("../panels/VisualizationPane"));
 
 const NO_EDITOR_TABS: EditorTab[] = [];
 const NO_CLAUDE_CODE_STATUS: Record<string, ClaudeCodeSessionState> = {};
@@ -513,6 +515,15 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 					</ErrorBoundary>
 				);
 			}
+			if (tab.kind === "visualization") {
+				return (
+					<ErrorBoundary label="visualization" resetKeys={[workspaceId, tab.id]}>
+						<Suspense fallback={<MissingResource label="visualization" />}>
+							<VisualizationPane workspaceId={workspaceId} terminalTabKey={tab.terminalTabKey} />
+						</Suspense>
+					</ErrorBoundary>
+				);
+			}
 			if (tab.kind === "terminal") {
 				const terminal = terminalByKey.get(tab.tabKey);
 				const location = document ? findTabLocation(document, tab.id) : null;
@@ -697,7 +708,8 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 						tab.kind === "external-file" ||
 						tab.kind === "diff" ||
 						tab.kind === "document" ||
-						tab.kind === "blueprint"
+						tab.kind === "blueprint" ||
+						tab.kind === "visualization"
 					) {
 						for (const cache of state.tabsByWorkspace[workspaceId] ?? []) {
 							const resource = toLayoutTab(cache);
@@ -748,6 +760,9 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 						return mark;
 					}
 					if (claudeCodeEnabled && tab.kind === "tool" && tab.tool === "claude") return mark;
+					if (tab.kind === "visualization") {
+						return <RiBarChartBoxLine className="size-14 shrink-0" />;
+					}
 					if (tab.kind === "external-file") {
 						return (
 							<FileSymlink

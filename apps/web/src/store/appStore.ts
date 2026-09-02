@@ -27,10 +27,12 @@ import type {
 	SystemThemePair,
 	TerminalAgentKind,
 	TerminalTabInfo,
+	TerminalVisualization,
 	ThemeId,
 	ThemeMode,
 	ThinkingLevel,
 	UserMessage,
+	VisualizationPush,
 	WireModel,
 	Workspace,
 	WorkspaceFsChangedPayload,
@@ -179,6 +181,13 @@ export interface BlueprintTab {
 	name: string;
 	workspaceId: string;
 }
+export interface VisualizationTab {
+	kind: "visualization";
+	id: string;
+	workspaceId: string;
+	name: string;
+	terminalTabKey: string;
+}
 
 export type EditorTab =
 	| FileTab
@@ -187,10 +196,15 @@ export type EditorTab =
 	| DocTab
 	| DiffTab
 	| PlanTab
-	| BlueprintTab;
+	| BlueprintTab
+	| VisualizationTab;
 
 export function blueprintTabId(workspaceId: string): string {
 	return tupleKey("blueprint", workspaceId);
+}
+
+export function visualizationTabId(terminalTabKey: string): string {
+	return tupleKey("visualization", terminalTabKey);
 }
 
 export function chatTabId(workspaceId: string, sessionId: string): string {
@@ -865,6 +879,7 @@ interface AppState {
 	specsByWorkspace: Record<string, SpecGraphNode[]>;
 	reviewsByWorkspace: Record<string, ReviewSnapshot>;
 	blueprintByWorkspace: Record<string, BlueprintState>;
+	visualizationsByTerminal: Record<string, Record<string, TerminalVisualization>>;
 	terminalInputByWorkspace: Record<string, string>;
 	reviewFocusRequest: { workspaceId: string; commentId: string } | null;
 	fileFocusRequest: { workspaceId: string; path: string; keyPath: readonly string[] } | null;
@@ -1125,6 +1140,14 @@ interface AppState {
 	applyReviewChanged: (payload: ReviewChangedPayload) => void;
 	setWorkspaceBlueprint: (state: BlueprintState) => void;
 	applyBlueprintChanged: (state: BlueprintState) => void;
+	/** Hydration: state only. */
+	setVisualization: (
+		workspaceId: string,
+		tabKey: string,
+		visualization: TerminalVisualization,
+	) => void;
+	/** A live push: state, plus the tab the first revision opens beside its terminal. */
+	applyVisualization: (push: VisualizationPush) => void;
 	applyDiscordStatus: (status: DiscordStatus) => void;
 	pushToast: (toast: Omit<Toast, "id">) => string;
 	dismissToast: (id: string) => void;
@@ -1772,6 +1795,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	specsByWorkspace: {},
 	reviewsByWorkspace: {},
 	blueprintByWorkspace: {},
+	visualizationsByTerminal: {},
 	terminalInputByWorkspace: {},
 	reviewFocusRequest: null,
 	fileFocusRequest: null,
@@ -1917,6 +1941,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 				diffScopeByWorkspace: omitKey(state.diffScopeByWorkspace, workspaceId),
 				reviewsByWorkspace: omitKey(state.reviewsByWorkspace, workspaceId),
 				blueprintByWorkspace: omitKey(state.blueprintByWorkspace, workspaceId),
+				visualizationsByTerminal: omitKey(state.visualizationsByTerminal, workspaceId),
 				changesRequest:
 					state.changesRequest?.workspaceId === workspaceId ? null : state.changesRequest,
 				specRequest: state.specRequest?.workspaceId === workspaceId ? null : state.specRequest,
@@ -3485,6 +3510,33 @@ export const useAppStore = create<AppState>((set, get) => ({
 				? {}
 				: { blueprintByWorkspace: { ...s.blueprintByWorkspace, [state.workspaceId]: state } },
 		),
+	setVisualization: (workspaceId, tabKey, visualization) =>
+		set((s) => ({
+			visualizationsByTerminal: {
+				...s.visualizationsByTerminal,
+				[workspaceId]: { ...s.visualizationsByTerminal[workspaceId], [tabKey]: visualization },
+			},
+		})),
+	applyVisualization: (push) => {
+		const state = get();
+		if (state.removedWorkspaceIds[push.workspaceId]) return;
+		const first = state.visualizationsByTerminal[push.workspaceId]?.[push.tabKey] === undefined;
+		state.setVisualization(push.workspaceId, push.tabKey, push.visualization);
+		if (!first) return;
+		get().enqueueLayoutIntent({
+			kind: "open",
+			workspaceId: push.workspaceId,
+			tab: {
+				kind: "visualization",
+				id: visualizationTabId(push.tabKey),
+				workspaceId: push.workspaceId,
+				name: push.visualization.title,
+				terminalTabKey: push.tabKey,
+			},
+			intent: "keep",
+			activate: true,
+		});
+	},
 	applyDiscordStatus: (status) => set({ discordStatus: status }),
 	pushToast: (toast) => {
 		const twin = get().toasts.find(

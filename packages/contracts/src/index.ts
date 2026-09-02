@@ -50,4 +50,5 @@ export {
 export type * from "./ideBridge";
 export type * from "./piProtocol";
 export { isTranscriptMessageRole } from "./piProtocol";
+export type * from "./visualization";
 export * from "./wsProtocol";
