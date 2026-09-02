@@ -71,9 +71,14 @@ test("a terminal's MCP address serves the spec tools, scoped to its own worktree
 			".result.content[0].text",
 		),
 	);
-	await expect(terminal).toContainText('Rendered "Wired graph" in ThinkRail (revision 1)');
-	const pane = page.getByTestId("visualization-pane");
+	// Not a tab: the drawing is an embedded pane inside the terminal's own body. (The tool's own
+	// "Rendered …" reply lands in the shell, but the split just resized xterm and rewrapped it —
+	// the pane itself is the assertion that matters.)
+	const pane = page.getByTestId("embedded-pane");
 	await expect(pane).toBeVisible();
+	// The pane must not have cost the terminal its life: same tabs, same PTY.
+	await expect(page.getByTestId("terminal-tab")).toHaveCount(2);
+	await expect(page.getByTestId("embedded-pane-title")).toHaveText("Wired graph");
 	await expect(pane.getByTestId("mermaid-svg").locator("svg").first()).toBeVisible({
 		timeout: 20_000,
 	});
@@ -87,8 +92,17 @@ test("a terminal's MCP address serves the spec tools, scoped to its own worktree
 			".result.content[0].text",
 		),
 	);
-	await expect(terminal).toContainText("revision 2");
 	await expect(pane).toContainText("OptA");
+	await expect(page.getByTestId("terminal-tab")).toHaveCount(2);
+
+	// Closing folds it back into a chip on the terminal; the chip reopens it.
+	await page.getByTestId("embedded-pane-close").click();
+	await expect(page.getByTestId("embedded-pane")).toHaveCount(0);
+	await expect(page.getByTestId("terminal-tab")).toHaveCount(2);
+	const chip = page.getByTestId("terminal-embedded-chip");
+	await expect(chip).toHaveAttribute("data-kind", "visualization");
+	await chip.click();
+	await expect(page.getByTestId("embedded-pane")).toBeVisible();
 
 	// The blueprint check reads the file in this terminal's own worktree and reports what the panel
 	// made of it — the feedback an author writing with ordinary file tools otherwise never gets.

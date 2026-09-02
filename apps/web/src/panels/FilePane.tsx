@@ -2,6 +2,7 @@ import { RiFileTransferLine as FileSymlink, RiLayoutLeftLine as PanelLeft } from
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { IconTooltip } from "@/components/ui/tooltip";
 import { abbreviateHomePath, isMarkdownPath, isPdfPath } from "@/lib/utils";
+import { EmbeddedSplit } from "../components/EmbeddedSplit";
 import { LoadingRegion } from "../components/Skeleton";
 import type { ExternalFileTab, FileTab } from "../store";
 import { useAppStore } from "../store";
@@ -202,6 +203,23 @@ function FilePaneBody({ tab }: { tab: FileTab | ExternalFileTab }) {
 	}
 
 	const view = tab.view ?? "rendered";
+	const paneDirection = useAppStore((s) => s.localLayoutPreferences.defaultPaneDirection);
+	const preview = (
+		<Suspense fallback={loading}>
+			<div className="h-full motion-safe:animate-reveal">
+				<MarkdownPreview
+					content={buffer}
+					onContentEdit={(next) =>
+						useAppStore.getState().setFileTabDraft(tab.workspaceId, tab.id, next)
+					}
+					workspaceId={tab.workspaceId}
+					path={tab.path}
+					review={review}
+					outlineOpen={tab.outlineOpen ?? false}
+				/>
+			</div>
+		</Suspense>
+	);
 	return (
 		<div className="flex h-full min-h-0 flex-col">
 			<div
@@ -210,7 +228,7 @@ function FilePaneBody({ tab }: { tab: FileTab | ExternalFileTab }) {
 				aria-label="Markdown view mode"
 				className="flex h-32 shrink-0 items-center justify-end gap-4 border-border-default border-b bg-container-header-bg px-12"
 			>
-				{view === "rendered" ? (
+				{view !== "source" ? (
 					<OutlineToggle
 						active={tab.outlineOpen ?? false}
 						onClick={() => setFileTabOutline(tab.id, !(tab.outlineOpen ?? false))}
@@ -229,24 +247,28 @@ function FilePaneBody({ tab }: { tab: FileTab | ExternalFileTab }) {
 					active={view === "source"}
 					onClick={() => setFileTabView(tab.id, "source")}
 				/>
+				<ToggleSegment
+					testid="md-toggle-split"
+					label="Split"
+					active={view === "split"}
+					onClick={() => setFileTabView(tab.id, "split")}
+				/>
 			</div>
 			{diskBar}
 			<div className="min-h-0 flex-1">
-				{view === "rendered" ? (
-					<Suspense fallback={loading}>
-						<div className="h-full motion-safe:animate-reveal">
-							<MarkdownPreview
-								content={buffer}
-								onContentEdit={(next) =>
-									useAppStore.getState().setFileTabDraft(tab.workspaceId, tab.id, next)
-								}
-								workspaceId={tab.workspaceId}
-								path={tab.path}
-								review={review}
-								outlineOpen={tab.outlineOpen ?? false}
-							/>
-						</div>
-					</Suspense>
+				{view === "split" ? (
+					<EmbeddedSplit
+						direction={paneDirection}
+						companion={{
+							title: "Preview",
+							content: preview,
+							onClose: () => setFileTabView(tab.id, "source"),
+						}}
+					>
+						{editor}
+					</EmbeddedSplit>
+				) : view === "rendered" ? (
+					preview
 				) : (
 					editor
 				)}

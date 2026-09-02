@@ -40,6 +40,7 @@ import {
 import { tupleKey } from "@/lib/utils";
 import {
 	type ClaudeCodeSessionState,
+	embeddedHostKey,
 	selectClaudeCodeStatus,
 	selectWorkspaceById,
 	useAppStore,
@@ -620,6 +621,26 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 			),
 		[drivePicker],
 	);
+
+	const hostKey = embeddedHostKey("terminal", tabKey);
+	const visualization = useAppStore((s) => s.visualizationsByTerminal[workspaceId]?.[tabKey]);
+
+	useEffect(() => {
+		if (visualization) return;
+		let stale = false;
+		getTransport()
+			.request("visualization.get", { workspaceId, tabKey })
+			.then((fetched) => {
+				if (stale || !fetched) return;
+				const store = useAppStore.getState();
+				store.setVisualization(workspaceId, tabKey, fetched);
+				store.focusEmbeddedPane(workspaceId, hostKey, "visualization");
+			})
+			.catch(() => {});
+		return () => {
+			stale = true;
+		};
+	}, [visualization, workspaceId, tabKey, hostKey]);
 
 	return (
 		<div

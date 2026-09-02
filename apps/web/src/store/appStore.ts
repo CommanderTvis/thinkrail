@@ -114,7 +114,7 @@ export interface FileTab {
 	draft?: string;
 	/** Disk content seen changing under an unsaved buffer; `content` stays the merge base. */
 	external?: { content: string; hash: string };
-	view?: "rendered" | "source";
+	view?: "rendered" | "source" | "split";
 	outlineOpen?: boolean;
 	loadedTick?: number;
 }
@@ -132,7 +132,7 @@ export interface ExternalFileTab {
 	draft?: string;
 	/** Disk content seen changing under an unsaved buffer; `content` stays the merge base. */
 	external?: { content: string; hash: string };
-	view?: "rendered" | "source";
+	view?: "rendered" | "source" | "split";
 	outlineOpen?: boolean;
 	loadedTick?: number;
 }
@@ -175,36 +175,16 @@ export interface PlanTab {
 	name: string;
 	sessionId: string;
 }
-export interface BlueprintTab {
-	kind: "blueprint";
-	id: string;
-	name: string;
-	workspaceId: string;
-}
-export interface VisualizationTab {
-	kind: "visualization";
-	id: string;
-	workspaceId: string;
-	name: string;
-	terminalTabKey: string;
+export type EditorTab = FileTab | ExternalFileTab | ChatTab | DocTab | DiffTab | PlanTab;
+
+export type EmbeddedPaneKind = "blueprint" | "visualization";
+export interface EmbeddedPaneEntry {
+	hidden?: Partial<Record<EmbeddedPaneKind, boolean>>;
+	focus?: EmbeddedPaneKind;
 }
 
-export type EditorTab =
-	| FileTab
-	| ExternalFileTab
-	| ChatTab
-	| DocTab
-	| DiffTab
-	| PlanTab
-	| BlueprintTab
-	| VisualizationTab;
-
-export function blueprintTabId(workspaceId: string): string {
-	return tupleKey("blueprint", workspaceId);
-}
-
-export function visualizationTabId(terminalTabKey: string): string {
-	return tupleKey("visualization", terminalTabKey);
+export function embeddedHostKey(kind: "terminal" | "chat", id: string): string {
+	return tupleKey("embedded-host", kind, id);
 }
 
 export function chatTabId(workspaceId: string, sessionId: string): string {
@@ -880,6 +860,8 @@ interface AppState {
 	reviewsByWorkspace: Record<string, ReviewSnapshot>;
 	blueprintByWorkspace: Record<string, BlueprintState>;
 	visualizationsByTerminal: Record<string, Record<string, TerminalVisualization>>;
+	/** Per host resource (terminal tab / chat session): which companions the user closed, and which leads. */
+	embeddedPanes: Record<string, Record<string, EmbeddedPaneEntry>>;
 	terminalInputByWorkspace: Record<string, string>;
 	reviewFocusRequest: { workspaceId: string; commentId: string } | null;
 	fileFocusRequest: { workspaceId: string; path: string; keyPath: readonly string[] } | null;
@@ -971,7 +953,7 @@ interface AppState {
 		preferredGroupId?: string,
 	) => CenterNavigationStamp | null;
 	noteNavigation: (workspaceId: string) => void;
-	setFileTabView: (id: string, view: "rendered" | "source") => void;
+	setFileTabView: (id: string, view: "rendered" | "source" | "split") => void;
 	setFileTabOutline: (id: string, open: boolean) => void;
 	setDiffTabView: (id: string, view: DiffTabView) => void;
 	setDiffTabRendered: (id: string, rendered: boolean) => void;
@@ -1146,8 +1128,16 @@ interface AppState {
 		tabKey: string,
 		visualization: TerminalVisualization,
 	) => void;
-	/** A live push: state, plus the tab the first revision opens beside its terminal. */
+	/** A live push: state, plus leading its terminal's embedded pane. */
 	applyVisualization: (push: VisualizationPush) => void;
+	setEmbeddedPaneHidden: (
+		workspaceId: string,
+		hostKey: string,
+		kind: EmbeddedPaneKind,
+		hidden: boolean,
+	) => void;
+	/** New content arrived for this host: unhide the kind and let it lead. */
+	focusEmbeddedPane: (workspaceId: string, hostKey: string, kind: EmbeddedPaneKind) => void;
 	applyDiscordStatus: (status: DiscordStatus) => void;
 	pushToast: (toast: Omit<Toast, "id">) => string;
 	dismissToast: (id: string) => void;
@@ -1796,6 +1786,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	reviewsByWorkspace: {},
 	blueprintByWorkspace: {},
 	visualizationsByTerminal: {},
+	embeddedPanes: {},
 	terminalInputByWorkspace: {},
 	reviewFocusRequest: null,
 	fileFocusRequest: null,
@@ -1942,6 +1933,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 				reviewsByWorkspace: omitKey(state.reviewsByWorkspace, workspaceId),
 				blueprintByWorkspace: omitKey(state.blueprintByWorkspace, workspaceId),
 				visualizationsByTerminal: omitKey(state.visualizationsByTerminal, workspaceId),
+				embeddedPanes: omitKey(state.embeddedPanes, workspaceId),
 				changesRequest:
 					state.changesRequest?.workspaceId === workspaceId ? null : state.changesRequest,
 				specRequest: state.specRequest?.workspaceId === workspaceId ? null : state.specRequest,
@@ -3520,23 +3512,41 @@ export const useAppStore = create<AppState>((set, get) => ({
 	applyVisualization: (push) => {
 		const state = get();
 		if (state.removedWorkspaceIds[push.workspaceId]) return;
-		const first = state.visualizationsByTerminal[push.workspaceId]?.[push.tabKey] === undefined;
 		state.setVisualization(push.workspaceId, push.tabKey, push.visualization);
-		if (!first) return;
-		get().enqueueLayoutIntent({
-			kind: "open",
-			workspaceId: push.workspaceId,
-			tab: {
-				kind: "visualization",
-				id: visualizationTabId(push.tabKey),
-				workspaceId: push.workspaceId,
-				name: push.visualization.title,
-				terminalTabKey: push.tabKey,
-			},
-			intent: "keep",
-			activate: true,
-		});
+		state.focusEmbeddedPane(
+			push.workspaceId,
+			embeddedHostKey("terminal", push.tabKey),
+			"visualization",
+		);
 	},
+	setEmbeddedPaneHidden: (workspaceId, hostKey, kind, hidden) =>
+		set((s) => {
+			const entry = s.embeddedPanes[workspaceId]?.[hostKey] ?? {};
+			const next: EmbeddedPaneEntry = {
+				hidden: { ...entry.hidden, [kind]: hidden },
+				...(entry.focus === kind && hidden ? {} : entry.focus ? { focus: entry.focus } : {}),
+			};
+			return {
+				embeddedPanes: {
+					...s.embeddedPanes,
+					[workspaceId]: { ...s.embeddedPanes[workspaceId], [hostKey]: next },
+				},
+			};
+		}),
+	focusEmbeddedPane: (workspaceId, hostKey, kind) =>
+		set((s) => {
+			if (s.removedWorkspaceIds[workspaceId]) return {};
+			const entry = s.embeddedPanes[workspaceId]?.[hostKey] ?? {};
+			return {
+				embeddedPanes: {
+					...s.embeddedPanes,
+					[workspaceId]: {
+						...s.embeddedPanes[workspaceId],
+						[hostKey]: { hidden: { ...entry.hidden, [kind]: false }, focus: kind },
+					},
+				},
+			};
+		}),
 	applyDiscordStatus: (status) => set({ discordStatus: status }),
 	pushToast: (toast) => {
 		const twin = get().toasts.find(

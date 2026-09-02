@@ -444,10 +444,6 @@ function tabSearchKeywords(tab: LayoutTab): string[] {
 			return [name, tab.kind, tab.sessionId];
 		case "document":
 			return [name, tab.kind, tab.sourceId, tab.docPath];
-		case "blueprint":
-			return [name, tab.kind];
-		case "visualization":
-			return [name, tab.kind];
 		case "terminal":
 			return [name, tab.kind, tab.tabKey];
 		case "tool":

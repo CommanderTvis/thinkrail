@@ -246,3 +246,24 @@ test("word wrap is a setting, and the editor follows it live", async ({ page }) 
 	await expect(page.getByTestId("editor-word-wrap")).not.toBeChecked();
 	await page.keyboard.press("Escape");
 });
+
+test("the markdown Split view edits and previews at once, and closes back to Source", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	await createWorkspaceViaDialog(page);
+	await page.getByTestId("tab-files").click();
+	await page.getByTestId("file-node").filter({ hasText: "README.md" }).dblclick();
+	await expect(page.getByTestId("markdown-preview")).toContainText("sample-project");
+
+	await page.getByTestId("md-toggle-split").click();
+	await expect(page.getByTestId("md-toggle-split")).toHaveAttribute("data-active", "true");
+	await expect(page.getByTestId("embedded-pane-title")).toHaveText("Preview");
+	await expect(page.getByTestId("markdown-preview")).toContainText("sample-project");
+	await expect(page.getByTestId("editor-pane")).toContainText("# sample-project");
+
+	// Closing the preview half is a deliberate return to plain Source, not a hidden mode.
+	await page.getByTestId("embedded-pane-close").click();
+	await expect(page.getByTestId("md-toggle-source")).toHaveAttribute("data-active", "true");
+	await expect(page.getByTestId("markdown-preview")).toHaveCount(0);
+});

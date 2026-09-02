@@ -169,10 +169,14 @@ treatment.
   `outlineTree.buildOutlineTree`) + `DiffPane` (+ its lazy
   `MonacoDiff`), plus lazy `TerminalInstance`. The Monaco plumbing both editors share —
   worker wiring, the local loader, the token-driven `thinkrail` theme + the `[data-theme]` re-theme
-  observer — lives once in `monacoSetup.ts`; the slim header view-toggle segment (`Preview|Source`,
+  observer — lives once in `monacoSetup.ts`; the slim header view-toggle segment (`Preview|Source|Split`,
   `Split|Inline`, `List|Tree`) is the shared `ToggleSegment` — whose active segment reuses the tab
   grammar's `control-bg-selected` (below), never a container surface, so the selected fill survives the
   high-contrast themes where `container-elevated-bg` collapses onto the toolbar surface.
+  **A markdown tab has three views, not two**: Preview, Source, and **Split** — the buffer and its
+  preview at once, the preview riding the shared embedded-pane primitive
+  (`shell/layout/SPEC.md`) rather than a second tab. Closing the preview half returns the tab to plain
+  Source, so a fold is a mode change the toggle agrees with rather than a hidden fourth state.
   The `ChangesPanel` secondary toolbar paints **no surface of its own**: like the right-panel tab strip
   it shows the panel's `container-sidebar-bg`, so the two chrome rows read as one continuous surface. The **file-style tree row** (chevron/spacer
   lead, folder/file icon, truncated label, trailing slot; `min-w-0` so a row can shrink when it shares a
@@ -1062,15 +1066,17 @@ effort on the next turn.
 - **The row itself appears with the first report**, not with the first *fact*: a session that has said
   only `session_start` still gets the row, because the row also carries the attach chip, which is useful
   before any model is known.
-- **`VisualizationPane`** renders a terminal agent's live drawing — the MCP `visualize` tool's view
-  (server's visualize/SPEC.md). One tab per terminal (`LayoutVisualizationTab`, identity
-  `visualization/<terminalTabKey>`), opened by the first push, updated in place by every rewrite: the
+- **`VisualizationPane`** and the blueprint both arrive as **embedded panes** on their host — a terminal
+  or a chat — rather than tabs of their own (`shell/layout/SPEC.md`, Embedded panes;
+  `useEmbeddedCompanion` composes a terminal's, `shell/ChatHost` a chat's, since `chat` may not import
+  `panels`). `VisualizationPane` renders a terminal agent's live drawing — the MCP `visualize` tool's view
+  (server's visualize/SPEC.md). One pane per terminal, opened by the first push and updated in place by every rewrite: the
   pane reads `visualizationsByTerminal` and re-renders on the `terminal.visualization` WS push, so many
-  Claude terminals each hold an independent, live view. It reuses the chat's `VisualizationCard`
+  Claude terminals each hold an independent, live view beside the terminal that drew it. It reuses the chat's `VisualizationCard`
   verbatim — pi's visualize tool and the MCP one draw with the same schema and the same renderer. A
   pane whose store slot is empty (reload, host restart) hydrates once through `visualization.get` and
   otherwise shows the loading region until the agent draws again. The tab takes the first push's title;
-  it is a live surface, not a document — nothing persists but the frontend-local tab itself.
+  it is a live surface, not a document — nothing persists but which companion the host was showing.
 - **Claude's own plan lives under Claude's terminal.** `TodoWrite` rewrites the whole plan, so the
   plugin relays the whole plan on that one tool's `tool_complete` (`todos` on the report —
   `contracts/agentStatus.ts`'s `AgentTodoItem`), and it rides the per-terminal state like the other

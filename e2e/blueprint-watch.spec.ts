@@ -58,6 +58,10 @@ test("a terminal author's write reaches the pane through the watcher alone", asy
 		source: { kind: "idea", brief: "probe brief" },
 		agentId: "claude",
 	});
+	await requestOverWire(page, "blueprint.setAuthor", {
+		workspaceId: workspace.id,
+		author: { kind: "terminal", tabKey: "blueprint-author" },
+	});
 	writeFileSync(join(workspace.worktreePath, "BLUEPRINT.md"), DOC);
 
 	await page.getByTestId("tab-files").click();
