@@ -2,7 +2,7 @@
 id: submodule-spec-graph-tools
 type: submodule-design
 status: active
-title: Spec-graph tools (pi wrappers)
+title: Spec-graph tools (agent-free definitions + pi wrappers)
 parent: module-spec-graph
 depends-on: [submodule-spec-graph-core]
 tags: [spec-graph, pi-extension, v1]
@@ -10,17 +10,24 @@ tags: [spec-graph, pi-extension, v1]
 
 ## Responsibility
 
-The seven `pi` custom tools that expose the spec model to the agent — `spec_grep`, `spec_get`,
-`spec_graph`, `spec_create`, `spec_update`, `spec_delete`, `spec_validate`. Each is a **thin wrapper** over
-`core/`: parse the typebox params, call a `core/` function, format a text result + structured `details`.
-None edit prose.
+The seven tools that expose the spec model to an agent — `spec_grep`, `spec_get`, `spec_graph`,
+`spec_create`, `spec_update`, `spec_delete`, `spec_validate`. Each is an **agent-free definition**
+(`SpecToolDef`: name/description/typebox `parameters`/`run(params, cwd)`) that is a thin wrapper over
+`core/`: call a `core/` function, format a text result + structured `details`. None edit prose. The pi
+registration (`registerSpecTools`) and ThinkRail's MCP server (`@thinkrail/server`'s `mcp` module) are
+both ~20-line adapters over the same `SPEC_TOOLS` table — a capability is written once and reaches every
+agent.
 
 ## Boundary
 
-- **Owns:** tool registration, param schemas, and result formatting; the per-root `SpecIndex` cache and the
-  `spec_create` scaffold headings (`shared.ts`).
-- **Public surface:** the `index.ts` **barrel** exporting `registerSpecTools(pi)`; the extension entry
-  (`../index.ts`) is the only caller.
+- **Owns:** the tool definitions (`SpecToolDef` in `shared.ts`), param schemas, and result formatting;
+  the per-root `SpecIndex` cache and the `spec_create` scaffold headings (`shared.ts`); the pi
+  registration adapter.
+- **Public surface:** the `index.ts` **barrel** exporting `registerSpecTools(pi)` (the extension entry,
+  `../index.ts`, is its only caller) and **`SPEC_TOOLS`** — the ordered agent-free definitions, exported
+  as `pi-spec-graph/tools` for non-pi adapters (today: the host's MCP server). The typebox `parameters`
+  object is served verbatim as each tool's MCP `inputSchema`, so the published schema and the enforced
+  one cannot drift.
 - **Allowed deps:** `core/` (via its barrel), `@earendil-works/pi-coding-agent` (types + `registerTool`),
   `@earendil-works/pi-ai/compat` (`StringEnum`), `typebox`, Node built-ins (`node:fs`/`node:path`, write
   tools only).

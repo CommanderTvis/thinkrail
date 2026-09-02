@@ -55,6 +55,7 @@ import {
 	BLUEPRINT_CHECK_DESCRIPTION,
 	BLUEPRINT_FILE,
 	blueprintBrief,
+	blueprintCheckMcpTool,
 	checkBlueprint,
 	noteBlueprintAuthorSession,
 	noteBlueprintFileChanged,
@@ -70,6 +71,7 @@ import {
 	stopIdeBridge,
 } from "../ideBridge";
 import { logger } from "../log";
+import { serveMcp } from "../mcp";
 import { loadWorkspaces } from "../persistence";
 import {
 	getProjects,
@@ -81,6 +83,7 @@ import {
 import { reanchorWorkspace, resolveCommentFromAgent, setReviewPublisher } from "../reviews";
 import { getConfig, setSettingsPublisher } from "../settings";
 import {
+	agentTokenOwner,
 	closeAllTerminals,
 	persistTerminalSessions,
 	readAgentStatusRequest,
@@ -229,6 +232,28 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 			}
 			if (url.pathname === "/health") {
 				return new Response("ok");
+			}
+			// An agent in one of our terminals calling ThinkRail's own tools. Same per-terminal token as
+			// the status route, so a call identifies its workspace without carrying one; see mcp/SPEC.md.
+			if (url.pathname.startsWith("/mcp/")) {
+				if (req.method !== "POST") return new Response("method not allowed", { status: 405 });
+				const owner = agentTokenOwner(url.pathname.slice("/mcp/".length));
+				if (owner === null) return new Response("unknown terminal", { status: 404 });
+				// A token can outlive its workspace (removed while an agent was still running).
+				let worktreePath: string;
+				try {
+					worktreePath = getWorkspace(owner.workspaceId).worktreePath;
+				} catch {
+					return new Response("unknown workspace", { status: 404 });
+				}
+				const body: unknown = await req.json().catch(() => null);
+				const reply = await serveMcp(body, {
+					cwd: worktreePath,
+					extraTools: [blueprintCheckMcpTool(worktreePath)],
+				});
+				return reply.body === null
+					? new Response(null, { status: reply.status })
+					: Response.json(reply.body, { status: reply.status });
 			}
 			// An agent in one of our terminals reporting what it is doing. The token in the path is what
 			// says which tab; see terminal/SPEC.md.

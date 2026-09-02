@@ -187,6 +187,7 @@ import {
 	templateDirs,
 } from "../templates";
 import {
+	agentMcpUrl,
 	agentSessionExists,
 	attachTerminal,
 	closeTerminalTab,
@@ -247,6 +248,9 @@ import {
 } from "./todoReview";
 
 const log = logger("host");
+
+// Not a UUID, so it can never be a real tab's key — see claudeConfig/SPEC.md.
+const MCP_LIST_PROBE_TAB_KEY = "claude-config-mcp-probe";
 
 export interface RequestContext {
 	clientKey: string;
@@ -558,7 +562,11 @@ const handlers: Record<string, Handler> = {
 				.capabilities.filter((item) => item.kind === "mcp")
 				.map((item) => item.name),
 		);
-		const entries = await listClaudeMcpServers(getConfig().claudeCommand, root);
+		const probeUrl = agentMcpUrl(p.workspaceId, MCP_LIST_PROBE_TAB_KEY);
+		const entries = await listClaudeMcpServers(getConfig().claudeCommand, root, {
+			...process.env,
+			...(probeUrl === null ? {} : { THINKRAIL_MCP_URL: probeUrl }),
+		});
 		return { capabilities: mcpListCapabilities(entries, declared, root) };
 	},
 	"claudeConfig.marketplaceRun": (params) => {

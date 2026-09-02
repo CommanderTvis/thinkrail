@@ -68,6 +68,15 @@ explains itself rather than rendering a pane the host would refuse anyway.
   `disabledBy` pointing at `projects[<root>].disabledMcpServers` in `~/.claude.json`, the list `/mcp`
   writes. It is a separate wire method (`claudeConfig.mcpList`), not part of the snapshot: the CLI
   health-checks every server, which takes seconds, and the pane must not wait on that to show the files.
+- **The probe is handed a terminal's identity, or it reports ThinkRail's own server as broken.**
+  `claude mcp list` health-checks every server it lists, including the ThinkRail plugin's, whose
+  `.mcp.json` dials `${THINKRAIL_MCP_URL}` (claude-plugin/SPEC.md). That variable exists only in the PTYs
+  the terminal stamps, and this probe is a plain subprocess of the host — so it used to report
+  `✘ Failed to connect — Missing environment variables: THINKRAIL_MCP_URL` for the one server the pane's
+  own workspace definitely has. The handler therefore mints the workspace an MCP URL (`agentMcpUrl`) under
+  a reserved, non-UUID tab key that no real tab can hold, and passes it in the probe's environment: the
+  row then says what a `claude` in this workspace's terminal actually sees. The token is the terminal
+  protocol's, not a second one — it lives only in the environment of a subprocess that exits.
 - **Marketplaces are first-class rows, and their verbs are Claude's own subcommands**
   (`marketplace.ts`): the resolver reports each `extraKnownMarketplaces` entry as a `marketplace`
   capability (name, source repo/url/path as detail, the declaring settings file as origin), and
