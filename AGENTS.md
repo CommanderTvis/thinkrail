@@ -203,7 +203,15 @@ Fast gates (also the husky pre-commit): `bun run check:deps` (dependency pins) +
 `bun run check:boundaries` (workspace dependency/import edges) + `bun run check:seams`
 (the pi binary-seam canary — fails when a pi bump adds a bundler-opaque dynamic import that
 `registerBundledRuntime` doesn't statically register) + `bun run lint` (biome) + `bun run typecheck`. Unit tests:
-`bun run test` (bun test, per package). One-time setup for a fresh machine: `bunx playwright install chromium`.
+`bun run test` (the repo-root `scripts/` tests, then bun test per workspace via turbo — root scripts live
+outside every workspace, so turbo cannot see them). One-time setup for a fresh machine: `bunx playwright install chromium`.
+
+`bun run check:spec-surface` holds specs tagged `public-surface-checked` to their barrels: the public-surface
+bullet must remain a bare list of backticked identifiers, and the TypeScript compiler's effective export
+names must match it exactly across type-only, default/CommonJS-assignment, named, namespace, and transitive re-exports. A tagged
+missing/prose surface, missing barrel, or unresolved re-export fails rather than becoming a skip. Untagged
+specs remain descriptive; `--list-skipped` names them and why. The contract lives in `module-repo-scripts`.
+The check runs in CI, not in the pre-commit hook.
 
 ## Handoff hygiene (before any commit, PR, or "done" summary)
 

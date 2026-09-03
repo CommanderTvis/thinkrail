@@ -5,7 +5,7 @@ status: active
 title: watch — worktree change notifier
 parent: module-server
 depends-on: [module-contracts]
-tags: [v1, live-refresh]
+tags: [v1, live-refresh, public-surface-checked]
 ---
 
 ## Responsibility
