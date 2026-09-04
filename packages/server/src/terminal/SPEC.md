@@ -21,18 +21,72 @@ identities. A tab's shell outlives every client that looks at it; each frontend 
   `(workspaceId, tabKey)`; batched output on `terminal.data` plus `terminal.exit` / `terminal.detached`
   (addressed) and `terminal.tabs` (broadcast), via injected publishers; the bounded per-terminal output
   recorder replayed on attach.
-- **Public surface (barrel):** `reserveTerminal`, `attachTerminal`, `listTerminals`, `writeTerminal`,
-  `resizeTerminal`, `closeTerminalTab`, `resumeClientTerminals`, `closeWorkspaceTerminals`,
-  `persistTerminalSessions`, `reviveTerminalSessions`, `closeAllTerminals`, `resetTerminalState` (test seam),
-  `setTerminalPublisher`,
-  `setTerminalTabsPublisher`;
-  the `TerminalDeliveryResult` type shared with the host publisher adapter.
-- **Allowed deps:** `persistence`, `contracts` (`WS_CHANNELS`, `TerminalWindowsShell`), `bun-pty`,
-  `Bun.which`, `process.env`.
-- **Forbidden:** `host`; sibling features. No WebSocket type crosses this boundary — clients are opaque keys.
+- **Public surface (barrel):** `reserveTerminal`, `attachTerminal`, `listTerminals`, `terminalRefs`,
+  `writeTerminal`, `writeTerminalFromHost`, `resizeTerminal`, `renameTerminal`, `closeTerminalTab`,
+  `resumeClientTerminals`, `closeWorkspaceTerminals`, `persistTerminalSessions`, `reviveTerminalSessions`,
+  `closeAllTerminals`, `resetTerminalState` (test seam), `workspaceForProcess`, `agentRecordOf`,
+  `setAgentRecord`, `setTerminalPublisher`, `setTerminalTabsPublisher`, `setTerminalObserver`,
+  `setTerminalEnvContributors`, `setRevivePrefillHook`; the token primitives (generic, H6): `terminalToken`,
+  `terminalForToken`, `forgetTerminalTokens`, `setTerminalTokenEndpoint`, `terminalMcpUrl`,
+  `resetTerminalTokens` (test seam) — every pre-plugin-API alias is retired
+  (`agentTokenOwner`/`forgetAgentStatusTokens`/`setAgentStatusEndpoint`/`agentMcpUrl`/
+  `resetAgentStatusTokens`) and the Claude-specific report reader (`agentStatusReport.ts`,
+  `rememberAgentSession`, `agentSessionOf`) along with them: the report route, its parsing, and the session
+  lookup it fed are now the Claude Code plugin's own (`packages/plugin-claude-code/host/statusReport.ts` +
+  `statusStore.ts`, `PluginHostContext`'s `agentRecord`/`setAgentRecord`), and `host/server.ts`'s
+  `setAgentSessionLookup` reads `agentRecordOf(ref)?.sessionId` directly instead of a dedicated function;
+  `resumeCommand`/`agentSessionExists` (agentResume.ts) stay, generic-shaped but still Claude's own text —
+  the plugin's `revivePrefillFor` composition is the only caller now, through `setRevivePrefillHook`;
+  the `TerminalDeliveryResult` type shared with the host publisher adapter; `captureProcessSnapshot`
+  (processTree.ts) for `workspaceForProcess`'s own ancestor walk — duplicated, not shared, with the Claude
+  Code plugin's identical copy that its `ps`-poll needs (see "Agent detection" below).
+- **Allowed deps:** `persistence`, `contracts` (`WS_CHANNELS`, `TerminalWindowsShell`, `TerminalAgentRecord`),
+  `@thinkrail/plugin-api` root types (`TerminalRef`) and `/host` types (`TerminalEvent`, `RevivePrefill`),
+  `bun-pty`, `Bun.which`, `process.env`.
+- **Forbidden:** `host`; sibling features; `packages/server/src/plugins`. No WebSocket type crosses this
+  boundary — clients are opaque keys.
 
 ## Decisions
 
+- **Plugin seams (H5–H10) are single composed slots, not subscriber lists**: `setTerminalEnvContributors`
+  installs one function the host builds by composing every active plugin's own per-terminal env
+  contributor — there is no resident default beneath it; a terminal's env is purely whatever
+  the active plugins contribute (the Claude Code plugin's own `ctx.terminalEnv` stamps
+  `THINKRAIL_AGENT_STATUS_URL`/`CLAUDE_CODE_SSE_PORT` only while it is active) — and `stop()` resets it;
+  `setTerminalObserver` installs one `(event: TerminalEvent) => void` the host fans out to
+  every plugin (`spawned`/`exited`/`closed`/`agentChanged`, fired from `spawnForTab`, `pty.onExit`,
+  `closeTerminalTab`/`closeWorkspaceTerminals`, and the agent-record accessors below); `setRevivePrefillHook`
+  installs one `(terminal, record) => RevivePrefill | null` the host builds from every plugin's own
+  composition — this module carries no default of its own either (the Claude-CLI
+  `resumeCommand`/`continueCommand` composition moved to the plugin's `revivePrefillFor`, keyed on
+  `record.kind === "claude"`); `revivePrefillFor` simply returns whatever the installed hook offers, or
+  `null` with none installed. `writeTerminalFromHost` bypasses the client-attachment gate (H10) for a
+  plugin delivering its own text. `agentRecordOf`/`setAgentRecord` (H7) are the typed, persisted, broadcast
+  per-terminal agent record, and they are the *only* source of a tab's agent — no poll
+  fallback lives here any more: `setAgentRecord` also carries the effects that used to be interleaved with
+  detection (title adoption via `adoptedTitle`, which strips a leading status-glyph run from any title
+  regardless of which agent's record is involved; the mouse-mode guard's reset when a record is cleared),
+  so any plugin's detection gets both for free, not just Claude's.
+  `terminalRefs()` (H8's `terminals()`) is the live pid set a plugin needs to map a process back to a
+  workspace — named apart from `listTerminals`, which stays the `workspaceId`-scoped wire-facing catalog
+  `terminal.list` already used.
+- **The revive-prefill decision is made once, at boot, inside `reviveTerminalSessions()`, not consulted
+  again at attach-time.** A plugin that owns a tab's author (Blueprint's terminal-author case, the Claude
+  Code plugin's own resume/continue offer) names itself through `setRevivePrefillHook`'s own `submit` —
+  there is no separate seam for "run this tab's offer", only the one revive hook whichever plugin installs.
+  `pendingPrefill` stores `{ text, submit }`, and `attachTerminal` only reads it back.
+- **Token minting is fully generic; every Claude-shaped alias is gone.** `terminalTokens.ts`
+  mints/resolves/forgets tokens and mints MCP addresses (H6) under its own names only —
+  `agentTokenOwner`/`setAgentStatusEndpoint`/`forgetAgentStatusTokens`/`agentMcpUrl`/`resetAgentStatusTokens`
+  are gone, and `host/server.ts`/`host/handlers.ts` call `terminalForToken`/`setTerminalTokenEndpoint`/
+  `terminalMcpUrl` directly. The Claude-specific report route, its body parsing, and the per-tab status
+  cache it used to populate here are the Claude Code plugin's own now (`ctx.route`, `statusReport.ts`,
+  `statusStore.ts`) — this module knows nothing about what a token's owner posts back, only how to mint and
+  resolve the token itself. A token identifies its terminal generically to whatever addresses one from
+  outside the process it runs in (an agent status report, an MCP call): a caller is handed a token minted
+  for its own tab, so it never needs to know the tab's workspace or key, and a process that was never
+  given a token cannot pretend to own one. Tokens live only in this process's memory and in the
+  environment of the PTY they were minted for.
 - **Shell selection is terminal-local**, and Windows' choice is additionally user-configurable
   (`AppConfig.terminalWindowsShell`, `apps/web/src/panels/TerminalSettings.tsx`'s Windows-only picker;
   [[task-windows-default-terminal-shell]]). Precedence, highest first: an explicit `SHELL` env var always
@@ -78,6 +132,12 @@ identities. A tab's shell outlives every client that looks at it; each frontend 
 - **macOS PTYs start the user's shell in login mode (`-l`)** to match Terminal.app and the platform's
   terminal convention; other platforms keep a plain interactive shell. The PTY itself supplies
   interactivity, so no explicit `-i` is needed.
+- **`USER`/`LOGNAME` are stamped from the uid (`os.userInfo()`), never trusted to the inherited env.**
+  These PTYs register no utmpx session, so a login shell that finds no `LOGNAME` in its environment asks
+  `getlogin()` — which reads whatever stale utmpx record the reused pty device carries, and has answered
+  `root` for a uid-501 user on a real machine (observed breaking ansible, which picks its connection user
+  from `getpass.getuser()` → `$LOGNAME`). zsh keeps an env-provided `LOGNAME`, so stamping the true name
+  at spawn closes the hole deterministically.
 - **A shell is keyed by `(workspaceId, tabKey)`**, never by a socket, a client, or a component. `tabKey` is
   durable and client-supplied; PTY ids are per-run and **never persisted** (attaching to an id that outlived
   its process is Theia's `Couldn't attach - can't find terminal with id`).
@@ -119,6 +179,26 @@ identities. A tab's shell outlives every client that looks at it; each frontend 
   during the delay would otherwise be undone by the restore, leaving the PTY at the old size while the
   tracked grid says otherwise — and the change-only rule then makes retrying the new size a no-op. This is the same "redraw after the attach snapshot" class of race the bullet above already
   accepts, deliberately triggered every reattach instead of only incidentally.
+- **Agent detection is polled, host-owned by whichever plugin wants it — not by this module.** This
+  module used to run its own `ps`-poll (`agentWatch.ts` + `processTree.ts`) unconditionally; the
+  Claude Code plugin now runs its own instance of the same engine (`packages/plugin-claude-code/host/
+  agentWatch.ts`, moved verbatim except narrowing `DETECTED_AGENTS` to `["claude"]` — nothing else in the
+  codebase consumed the old `"pi"` detection, confirmed by grep before the move), sourced from
+  `ctx.terminals()` and poked on `ctx.onTerminal`'s `"spawned"` event, writing through `ctx.setAgentRecord`.
+  The poll runs only while that plugin is active — "off means no `ps` sweep at all"
+  (`plugin-adoption.md`, S1) is now literally true, not merely a UI toggle over an always-running poll.
+  What stays here, generic and used by any such plugin: `TerminalTabInfo.agent` as where a detected kind is
+  folded in (clients already subscribe to `terminal.tabs`, so detection needs no wire surface of its own)
+  broadcast via the existing `agentChanged` → `setAgentRecord` path, and `processTree.ts`'s `ps
+  -Ao pid=,ppid=,comm=` snapshot + descendant search — kept here too (duplicated, not shared) because
+  `workspaceForProcess` needs the identical primitive for an unrelated purpose (mapping a live pid from the
+  IDE bridge back to a workspace) and has since before the plugin existed.
+- **A plugin's own poll decides its own poke/debounce discipline; this module no longer arms one.** The
+  `if (loadConfig().claudeCodeEnabled) agentWatch.poke()` call `attachTerminal` used to make is gone with
+  the poll itself — a synchronous `ps` on that path blocking long enough for a login shell to fork its
+  profile (which `closeTerminalTab` would then read as a busy shell) is a lesson the Claude Code plugin's
+  own `createAgentWatch` still carries (`poke()` arms a timer and never sweeps inline), just no longer this
+  module's problem to enforce.
 - **Ownership is the host's owner, not the browser page.** Any client may attach; consistent with `history`,
   `todos` and `templates`, which already assume a single-owner host. Consequence: shells survive a reload, a
   closed browser and a different browser.
@@ -149,6 +229,93 @@ identities. A tab's shell outlives every client that looks at it; each frontend 
 - **Not tmux.** Would buy restart survival at the cost of a dep we can't assume on Windows, a competing tab
   model, env-propagation breakage, and `capture-pane` polling. We already accept no crash isolation.
 
+## Tab titles
+
+A tab adopts the title the program inside it sets for itself (OSC 0/2) — how a terminal has always
+reported what it is running, and how Claude Code names a session, so a tab says what it is doing instead
+of "Terminal 3". `renameTerminal` strips null bytes and bounds the length, because this is arbitrary
+output from whatever happens to be running; an empty title means "no opinion" and restores the tab's own
+name rather than blanking it. `adoptedTitle` (`terminalTitle.ts`, unit-tested) takes no agent kind at
+all — it drops one leading run of non-letter/non-digit/non-space characters plus the whitespace after it,
+unconditionally, so it needs no per-agent case and no core change when a new agent plugin wants the same
+treatment. This is what strips Claude's own glyph — the `✳` at rest, a spinner frame while it works —
+because the tab already wears the Claude mark and its own activity spinner, and "✳ ◑ Open WebUI…" was the
+mark twice; any other agent's leading status glyph is stripped the same way, for free. A title with no
+such leading run (`~` and `$` opening a real shell title, an ordinary word or number) passes through
+unchanged. `adoptedTitle` runs both from `renameTerminal` (every OSC-driven rename) and from
+`setAgentRecord` itself, whenever a tab's record changes. Whichever plugin's poll recognises the agent runs a tick
+behind its first title (set the instant it starts), so the same rule is re-applied to every tab of the
+workspace whenever `setAgentRecord` fires — the title adopted before the agent was known loses its glyph
+the moment the agent is. Warp resolves this the same way and adds one rule worth keeping in mind before a
+manual rename lands: a **custom title always wins over OSC**
+(`app/src/terminal/model/terminal_model.rs`), otherwise the next prompt would overwrite the name the
+user chose.
+
+## Resuming an agent session
+
+A terminal that had Claude running when the host went down comes back with the invocation to resume it
+**typed at the prompt but not run**. Restoring a session spends tokens and re-reads context, so the
+decision stays the user's; the tab is otherwise an ordinary shell.
+
+- **Unless a plugin promised otherwise.** `setRevivePrefillHook`'s `submit` is the seam by which a plugin
+  that owns a terminal — the Blueprint plugin's author, which promises the pair comes back together — says
+  "this one is mine, run it". Attach then returns `prefillSubmit`, and the client sends the offer with a
+  trailing `\r` instead of leaving it at the prompt. This module knows nothing about blueprints: the host
+  composes every plugin's hook into the one it installs, the same way it composes every other cross-feature
+  edge. Without it the author terminal came back with `claude --resume <id>` sitting unsubmitted, which
+  reads as "revive is broken" rather than "here is an offer" — the tab was restored by the layout, so the
+  plugin's own restore saw it as already present and issued nothing.
+
+- **Two halves, two sources.** The *command* comes from the process table — `captureProcessCommand` reads
+  the agent's argv once, when the Claude Code plugin's poll first sees it, so the flags the user chose
+  (`--chrome`, a model) survive. The poll itself stays name-only: `args=` is unbounded and would be carried
+  for every process on the machine every tick, to be discarded. The *session id* exists only inside the
+  agent, and reaches us as a field on the plugin's own status report — so the plugin's route handler calls
+  `ctx.setAgentRecord` with it directly, this module's only way to learn one arrived at all. **Either half
+  is written the moment it lands**: the report reaches the host within milliseconds of the agent starting
+  while the poll can be a tick behind, and persistence runs on membership changes, of which an agent
+  appearing is deliberately not one — so both the detection and the report persist on their own. **Without
+  a report there is no id, and the offer becomes `--continue`**: Claude's own "latest conversation in this
+  directory", which is the session that just died in that worktree, rather than a guessed id (a guess at
+  *which* session is worse than none, and this is not one). The same fallback covers an id whose
+  conversation is not on disk. A host that crashed under a running session therefore always comes back
+  with a revive to press Enter on, plugin or no plugin.
+- **Only a session that was still running.** Persistence records the pair only while some plugin's poll
+  keeps reporting a live agent for that tab (`setAgentRecord` with a non-null record), and clears both the
+  moment that plugin clears it. A conversation the user finished before closing is not something to
+  resurrect. The judgement is the poll's, not the shell's: when the app quits, every pty dies *before* the
+  shutdown persist runs, and the exit handler destroys the tab's entry — so a record still set at pty exit
+  means the shell died out from under a live agent, and `onExit` moves it into `carriedAgent` the same way
+  it carries the final screen into the replay. Without that carry the shutdown persist found no entry and
+  wrote `agent: null` for every tab whose shell had already died — which was most of them, every quit — and
+  the session id at the moment of closing was lost. A conversation the user actually ended is still not
+  carried: the poll cleared the record when the agent exited, so there is nothing left at pty exit to
+  carry.
+- **The prefill is consumed by the first revived shell**, like the replay, rather than held for every
+  later reattach — the offer belongs to the interrupted session, and typing into a shell already in use
+  would be an intrusion. **Handed over is not the same as answered**, though: a line typed at a prompt and
+  never run is gone with the shell, so an offer the user did not act on is *carried* (`carriedAgent`) and
+  persisted again, and the next start makes it once more. It stops being made when something actually runs
+  in that tab — the poll seeing an agent there retires it, whether that is the resumed session or anything
+  else — or when the tab is closed. This is deliberately the opposite of the first rule here, which
+  dropped the offer the moment a shell was handed it: that made "not now" indistinguishable from "no", and
+  a user who reopened the app twice lost the session for good.
+- **The offer is verified against disk.** Claude writes a conversation only when
+  the session has something to save, so one started and killed before its first prompt leaves an id that
+  resolves to nothing and produces `No conversation found with session ID`. `agentSessionExists` checks
+  for `~/.claude/projects/<cwd with / and . as ->/<id>.jsonl` before offering, which is also what keeps a
+  carried offer from outliving the conversation it names.
+- `resumeCommand` rebuilds rather than appends: an existing `--resume` (from a previous restore) or a
+  `--continue` is dropped, since `--resume a --resume b` is not a command anyone meant to run. The id is
+  required to be a UUID, so nothing from the process table can be pasted into a shell as anything else.
+  **Only the invocation survives — the executable and its flags.** The process table reports argv
+  unquoted, so `claude 'solve issue 130'` arrives as `claude solve issue 130`, and a rebuild that kept
+  every word would hand the resumed session its opening prompt again as a new message. Positional words
+  are dropped; a word after a flag is kept as that flag's value unless the flag is one the `claude` CLI
+  takes no value for (`BOOLEAN_FLAGS`). An unlisted boolean flag followed by a prompt is the accepted
+  ceiling: its first prompt word rides along as a value. `continueCommand` is the same rebuild ending in
+  `--continue`.
+
 ## Restrictions
 
 - **`attachTerminal` and its handler must stay synchronous.** Lookup and insert in one tick is what makes
@@ -166,12 +333,71 @@ identities. A tab's shell outlives every client that looks at it; each frontend 
   into the body, where it stops being a re-derivable summary and becomes literal bytes that every later
   snapshot replays and re-persists: one bad mode then outlives the run that observed it, across restarts.
 - Attach hands back the recording and then **discards** held batcher output — the replay already contains it.
+- **`mouseModeGuard.ts` fixes the *live* half of the same class of bug the recorder rule above fixes for
+  restore:** a TUI that leaves SGR mouse tracking (1000/1002/1003/1006) enabled without a matching `DECRST`
+  leaves xterm.js honoring it forever, so every mouse move over what's now a bare shell prompt gets encoded
+  as a report and echoed back as garbage. Two independent triggers, since neither alone covers every real
+  TUI observed in practice:
+  - `transform()` taps the live PTY byte stream (`terminalManager.ts`'s `pty.onData`, upstream of both the
+    recorder and the batcher) and injects a reset immediately after an alt-screen exit whenever mouse
+    tracking was left on — covers a TUI that pairs mouse mode with the alt screen (vim, htop, …) but
+    crashes or is killed before its own cleanup runs.
+  - `resetIfEnabled()` is a fallback `setAgentRecord` calls itself, generically, whenever a tab's record is
+    cleared: **Claude Code's own CLI runs inline, never touching the alt screen**, so `transform()` has no
+    signal to key off for it — process-tree polling noticing the `claude` process is gone (now the Claude
+    Code plugin's own poll, calling `ctx.setAgentRecord(ref, null)`) is the only trigger available, and
+    `setAgentRecord` pushes the reset through the same `recorder`/`output` pair `pty.onData` uses. Coarser
+    (bounded by whatever interval the detecting plugin polls at) and reactive rather than synchronous, but
+    the only option short of shell integration (OSC 133) telling us a foreground process just returned
+    control.
+  Either path is a one-shot reset per left-on episode, never a fresh timer or poll of its own.
+- **A spawned PTY carries `CLAUDE_CODE_SSE_PORT` when the IDE bridge is up.** A `claude` started in this
+  terminal then connects to ThinkRail's editor bridge from its own environment instead of scanning
+  `~/.claude/ide/*.lock` and matching cwds — the same handoff the official VS Code extension performs.
+  `ptyEnv` reads the live port per spawn (absent when the bridge is off, which is the default), so a
+  terminal opened before the setting was turned on simply lacks the variable rather than carrying a stale
+  one. See [[submodule-server-ide-bridge]].
+- **A spawned PTY is stamped `THINKRAIL_TERMINAL=1` and `THINKRAIL_AGENT_STATUS_URL`, and the URL is how
+  an agent in it reports what it is doing.** The address is loopback, carries a token minted for that tab
+  (`agentStatus.ts`), and is what the Claude Code plugin POSTs to; the host resolves the token to a
+  workspace and tab and pushes the report to clients. The token is the identity: a report never claims a
+  tab, and a process that was never handed one cannot report as any. A closed tab's token is forgotten
+  with it. **`THINKRAIL_MCP_URL` is stamped beside it, carrying the same token on the host's `/mcp/`
+  route** (`agentMcpUrl` / `agentTokenOwner`): one identity per terminal, two things it can say — what
+  it is doing, and a call into ThinkRail's own tools (see mcp/SPEC.md). The session id a report carries is
+  remembered per tab (`agentSessionOf`), which is what lets a resumed conversation reclaim the drawings it
+  made in another terminal (plugin-visualize/SPEC.md, over `ctx.agentRecord`). **One caller mints a token for something that is not a
+  tab:** the Claude Code pane's `claude mcp list` probe, under a reserved non-UUID tab key, so its health
+  check of ThinkRail's own MCP server answers as the workspace instead of failing on an unset variable
+  (claudeConfig/SPEC.md). `agentMcpUrl` is exported for it; `agentStatusUrl` stays internal.
+  **This replaced an escape sequence, and the reason is the whole point.** Status used to travel as OSC
+  777 written into the PTY, whose original meaning is "show a desktop notification". Every terminal that
+  implements it renders whatever arrives and none filter on a target string, so the plugin — installed
+  globally in `~/.claude` — turned every hook event in every other terminal into a toast carrying our raw
+  JSON. The guard was the emitter checking `THINKRAIL_TERMINAL`, a convention rather than a boundary,
+  and it silently failed for weeks. A POST cannot leak: no terminal is involved, and outside our PTYs
+  there is no address to send to.
+- **OSC 777 is never recorded, same reasoning as never recording a mode sequence: it is a one-shot event,
+  not terminal content.** ThinkRail's own agent reports no longer travel that way, but any other tool's
+  still can, and a stale `notify` sequence sitting in the recorded buffer would re-fire on every reattach
+  (tab remount, page reload, host revive) — asking for a notification about something that finished hours
+  or days earlier. `outputRecorder.consume()` strips a complete `ESC ] 777 ; … (BEL|ST)` sequence before it ever
+  reaches `append()`, covering a split across two `push()` reads at any byte offset in the escape prefix —
+  the same rigor `PARTIAL_MODE_RE` already gives CSI mode sequences. Because `restore()` runs through
+  `consume()` too, a snapshot persisted by a pre-fix host is scrubbed the same way the mouse-tracking one
+  is. Title (OSC 0/2) is untouched — it's genuinely persistent display state, and the existing
+  `reportedTitle` de-dup already makes a replayed title idempotent.
 
 ## Validation
 
 - `outputRecorder.test.ts` — bounds, line/escape-safe trimming, alt-screen exclusion (incl. a switch split
-  across reads and enter+exit in one read), mode restoration, mouse tracking never restored, and `restore()`
-  keeping mode sequences out of the body (incl. a recording persisted by a host that still replayed them).
+  across reads and enter+exit in one read), mode restoration, mouse tracking never restored, `restore()`
+  keeping mode sequences out of the body (incl. a recording persisted by a host that still replayed them),
+  and OSC 777 exclusion (incl. a split at any offset in the escape prefix, the ST terminator form, an
+  unrelated OSC left untouched, and scrubbing a notify sequence out of a pre-fix persisted recording).
+- `mouseModeGuard.test.ts` — passthrough of clean output, well-behaved apps left untouched, forced reset on
+  a dirty alt-screen exit, `resetIfEnabled()` for the inline-TUI fallback, no reset when mouse tracking was
+  never on, fires only once per left-on episode, a mode sequence split across chunks.
 - `outputBatcher.test.ts` — batching, backpressure, truncation, `reset`.
 - `shellBusy.test.ts` — child detection, including that an unanswerable platform reports *not* busy.
 - `shellArgs.test.ts` — shell executable precedence across Unix and Windows plus platform-specific
@@ -182,5 +408,15 @@ identities. A tab's shell outlives every client that looks at it; each frontend 
   revive. Replay-persistence and natural-exit cases use bounded publisher-observed data/exit conditions as
   readiness edges, never elapsed time; their expected output marker never appears contiguously in the command
   input, so terminal echo cannot impersonate command execution.
+- `terminalManager.test.ts` — an unclaimed offer is typed and never run, a claimed one carries
+  `prefillSubmit`, and the claim is per tab and per workspace.
+- `processTree.test.ts` — `ps` row parsing (spaces in names, `.exe` stripping, header junk), descendant
+  search across generations, depth cap, and cycle termination. Moving agent detection out to the Claude
+  Code plugin left this module's own copy behind (`workspaceForProcess` needs it too) — the Claude Code plugin's identical file carries its
+  own copy of this same test.
+- `terminalTokens.test.ts` — the generic token primitives alone: a tab's address is stable
+  across reattach, the MCP and status addresses share one token, a forgotten token is refused, and a
+  workspace close forgets only its own tabs. `agentResume.test.ts`/`agentWatch.test.ts`/
+  `agentStatusReport.test.ts` moved with their modules to `packages/plugin-claude-code/host/`.
 - `e2e/terminals.spec.ts` — the rapid re-entry regression, reload survival, second-client takeover,
   cross-client tab convergence.
