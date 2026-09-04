@@ -1,17 +1,14 @@
-import { rmSync } from "node:fs";
-import { basename, join } from "node:path";
+import { basename } from "node:path";
 import { expect, test } from "@playwright/test";
 import {
 	createWorkspaceViaDialog,
 	openAppFresh,
 	openFixtureProject,
+	requestOverWire,
 	stagePlainFolder,
 	worktreeRows,
 } from "./fixtures/app";
-import { git } from "./fixtures/git";
-import { E2E_FIXTURE_REPO, E2E_PLAIN_DIR } from "./fixtures/paths";
-
-const FIXTURE_SPECS = ["SPEC.md", join("module-a", "SPEC.md")];
+import { E2E_PLAIN_DIR } from "./fixtures/paths";
 
 test("opens a clean ThinkRail with no projects imported", async ({ page }) => {
 	await openAppFresh(page);
@@ -23,7 +20,8 @@ test("opens a clean ThinkRail with no projects imported", async ({ page }) => {
 
 	await expect(page.getByTestId("welcome-title")).toHaveText("ThinkRail");
 	await expect(page.getByTestId("welcome-cta")).toContainText("Open project");
-	await expect(page.getByTestId("welcome-action")).toHaveCount(0);
+	await expect(page.getByTestId("welcome-action")).toHaveCount(1);
+	await expect(page.getByTestId("welcome-action").filter({ hasText: "New project" })).toBeVisible();
 
 	await page.getByTestId("welcome-cta").click();
 	await expect(page.getByTestId("menu-open-project")).toBeVisible();
@@ -34,8 +32,16 @@ test("the Welcome provider warning only shows when no provider is connected, and
 }) => {
 	await openAppFresh(page);
 
+	// The banner renders nothing until `provider.status` answers, so asking the host first is what makes
+	// this deterministic: `isVisible()` reads a screen the answer has not reached yet.
+	const { providers } = await requestOverWire<{ providers: { configured: boolean }[] }>(
+		page,
+		"provider.status",
+		{},
+	);
 	const banner = page.getByTestId("welcome-provider-warning");
-	if (await banner.isVisible()) {
+	if (!providers.some((provider) => provider.configured)) {
+		await expect(banner).toBeVisible();
 		await expect(banner).toContainText("No model provider connected");
 		await page.getByTestId("welcome-connect-provider").click();
 		await expect(page.getByTestId("settings-dialog")).toBeVisible();
@@ -137,7 +143,7 @@ test("Settings → Providers offers JetBrains AI with host-authoritative Central
 	}
 });
 
-test("a project with specs offers Start building over Set up, beside the project-folder fork", async ({
+test("Welcome offers Start building beside the project-folder fork, and creates a workspace", async ({
 	page,
 }) => {
 	await openFixtureProject(page);
@@ -151,59 +157,35 @@ test("a project with specs offers Start building over Set up, beside the project
 	await expect(
 		page.getByTestId("welcome-action").filter({ hasText: "Work in project folder" }),
 	).toBeVisible();
-	await expect(page.getByText("Set up project")).toHaveCount(0);
 	await expect(page.getByTestId("welcome").getByText("Open project")).toHaveCount(0);
+
+	await page.getByTestId("welcome-cta").click();
+	const dialog = page.getByTestId("new-workspace-dialog");
+	await expect(dialog).toBeVisible();
+	await expect(dialog.getByTestId("ws-target-worktree")).toHaveAttribute("data-active", "true");
+	await expect(dialog.getByRole("heading", { name: "Start work" })).toBeVisible();
+	await expect(dialog.getByTestId("ws-branch-picker")).toBeVisible();
+
+	await dialog.getByTestId("ws-target-default").click();
+	await expect(dialog).toContainText("No isolation");
+	await expect(dialog.getByTestId("ws-branch-picker")).toHaveCount(0);
+
+	await dialog.getByTestId("ws-prompt").fill("");
+	await expect(page.getByTestId("create-workspace")).toHaveText(/Start/);
+	await page.getByTestId("create-workspace").click();
+	await expect(dialog).toBeHidden();
+	await expect(page.getByTestId("welcome")).toHaveCount(0);
+	await expect(page.getByTestId("center-tabs")).toBeVisible();
+	await expect(page.getByTestId("right-panel")).toBeVisible();
+	await expect(page.getByTestId("terminal-panel")).toBeVisible();
+	await expect(page.locator('[data-testid="workspace-item"][data-kind="default"]')).toHaveAttribute(
+		"data-active",
+		"true",
+	);
+	await expect(worktreeRows(page)).toHaveCount(0);
 });
 
-test("a project without specs suggests setting it up", async ({ page }) => {
-	for (const spec of FIXTURE_SPECS) rmSync(join(E2E_FIXTURE_REPO, spec), { force: true });
-	try {
-		await openFixtureProject(page);
-		await expect(page.getByTestId("welcome-title")).toHaveText("sample-project");
-		await expect(page.getByTestId("welcome-cta")).toContainText("Set up project");
-		await expect(page.getByTestId("welcome-action")).toHaveCount(2);
-		await expect(
-			page.getByTestId("welcome-action").filter({ hasText: "Start building" }),
-		).toBeVisible();
-		await expect(
-			page.getByTestId("welcome-action").filter({ hasText: "Work in project folder" }),
-		).toBeVisible();
-
-		await page.getByTestId("welcome-cta").click();
-		const dialog = page.getByTestId("new-workspace-dialog");
-		await expect(dialog).toBeVisible();
-		await expect(dialog.getByTestId("ws-prompt")).toHaveValue("/skill:setting-up-a-project ");
-		await expect(dialog.getByTestId("slash-menu")).toHaveCount(0);
-		await expect(dialog.getByTestId("ws-target-worktree")).toHaveAttribute("data-active", "true");
-		await expect(dialog.getByRole("heading", { name: "Create workspace" })).toBeVisible();
-		await expect(dialog.getByTestId("ws-branch-picker")).toBeVisible();
-		await expect(dialog.getByTestId("ws-prompt-note")).toContainText("setting-up-a-project skill");
-
-		await dialog.getByTestId("ws-target-default").click();
-		await expect(dialog.getByRole("heading", { name: "Work in project folder" })).toBeVisible();
-		await expect(dialog).toContainText("no isolation");
-		await expect(dialog.getByTestId("ws-branch-picker")).toHaveCount(0);
-
-		await dialog.getByTestId("ws-prompt").fill("");
-		await expect(page.getByTestId("create-workspace")).toHaveText(/Start/);
-		await page.getByTestId("create-workspace").click();
-		await expect(dialog).toBeHidden();
-		await expect(page.getByTestId("welcome")).toHaveCount(0);
-		await expect(page.getByTestId("center-tabs")).toBeVisible();
-		await expect(page.getByTestId("right-panel")).toBeVisible();
-		await expect(page.getByTestId("terminal-panel")).toBeVisible();
-		await expect(
-			page.locator('[data-testid="workspace-item"][data-kind="default"]'),
-		).toHaveAttribute("data-active", "true");
-		await expect(worktreeRows(page)).toHaveCount(0);
-	} finally {
-		git(E2E_FIXTURE_REPO, "checkout", "--", ...FIXTURE_SPECS);
-	}
-});
-
-test("opening a non-git folder from the Welcome screen offers to initialise a repo", async ({
-	page,
-}) => {
+test("opening a non-git folder from the Welcome screen just opens it", async ({ page }) => {
 	stagePlainFolder();
 	await page.goto("/");
 	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
@@ -212,17 +194,14 @@ test("opening a non-git folder from the Welcome screen offers to initialise a re
 	await page.getByTestId("welcome-cta").click();
 	await page.getByTestId("menu-open-project").click();
 
-	const confirmInit = page.getByTestId("confirm-init-repo");
-	await expect(confirmInit).toBeVisible();
-	await confirmInit.click();
-
+	await expect(page.getByTestId("confirm-init-repo")).toHaveCount(0);
 	await expect(
 		page.getByTestId("project-item").filter({ hasText: basename(E2E_PLAIN_DIR) }),
 	).toBeVisible();
 	await expect(page.getByTestId("welcome")).toBeVisible();
 	await expect(page.getByTestId("center-tabs")).toHaveCount(0);
 	await expect(page.getByTestId("welcome-title")).toHaveText(basename(E2E_PLAIN_DIR));
-	await expect(page.getByTestId("welcome-cta")).toContainText("Set up project");
+	await expect(page.getByTestId("welcome-cta")).toContainText("Start building");
 	await expect(
 		page.getByTestId("welcome-action").filter({ hasText: "Work in project folder" }),
 	).toBeVisible();
