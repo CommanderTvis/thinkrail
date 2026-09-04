@@ -1,13 +1,15 @@
 export { type ActivityInputs, deriveActivityStatus } from "./activity";
 export * from "./agentSessionManager";
 export * from "./askUserQuestion";
-export { readChildTranscript } from "./delegation";
+export { readChildTranscript, resetDelegationServices } from "./delegation";
 export {
 	type BundledExtensionFactory,
 	type BundledExtensions,
 	listProjectAliasSkillNames,
 	listSkillCatalog,
 	listSkillCommands,
+	PI_EXTENSION_PACKAGES,
+	type PiExtensionPackage,
 	registerBundledRuntime,
 } from "./extensions";
 export * from "./oneshot";
@@ -38,4 +40,5 @@ export {
 export * from "./sessionRepair";
 export type { SkillAdmissionContext, SkillDecision, SkillFacts } from "./skillAdmission";
 export { isProjectSkillPath } from "./skillSources";
+export { trashFile } from "./trash";
 export * from "./webUiContext";

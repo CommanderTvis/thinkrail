@@ -15,6 +15,32 @@ Git plumbing: the low-level `git` runner (sync + async) plus a worktree's change
 branch pickers, the workspace branch's own commit list, and a background prefetch that warms a remote base
 ref off the workspace-create critical path.
 
+- **`branchDetails(projectId)` says what is living on each branch, and `deleteBranch` enforces it.** The
+  list is every local branch plus the checkout occupying it, read from `git worktree list --porcelain`
+  and matched back to this host's workspaces. **Paths are compared after `realpath`**: macOS hands out
+  `/var/...` for a `/private/var/...` worktree, so a plain `resolve` silently matched nothing and every
+  branch looked free. A branch a ThinkRail workspace is living on is refused **by the host**, not only by
+  the UI that draws the button disabled — the host is the one that knows, and the answer must not depend
+  on which client asked. So is the branch that is currently checked out. Deletion is `branch -D` on a ref
+  that has already passed `assertSafeRef`.
+- **Fetch is every remote, and nothing else.** The branch list's Fetch runs `git fetch --all`, which is
+  what the action means to anyone who has used an IDE's: refs come up to date and nothing local moves. It
+  does **not** prune — a remote branch that vanished upstream is news, not garbage to collect behind
+  someone's back — and a repository with no remote configured is a no-op rather than an error.
+- **A worktree this host did not make does not get to veto a deletion.** Git refuses `branch -D` for any
+  branch a worktree holds, and people arrive at ThinkRail with worktrees made by other agents and tools —
+  leaving them a branch list they could look at and not act on. So a checkout that is *not* a ThinkRail
+  workspace is removed first, with a plain `worktree remove`: one holding uncommitted work refuses, and
+  that refusal is passed on in git's own words rather than forced past. A registration whose directory is
+  already gone is pruned instead. A ThinkRail workspace is still refused outright, because the app has its
+  own way to remove one and its own state to keep in step.
+- **A worktree this host did not make does not get to veto a deletion.** Git refuses `branch -D` for any
+  branch a worktree holds, and people arrive at ThinkRail with worktrees made by other agents and tools —
+  which left them with a branch list they could look at and not act on. So a checkout that is *not* a
+  ThinkRail workspace is removed first, with a plain `worktree remove`: one holding uncommitted work
+  refuses, and that refusal is passed on with git's own words rather than forced. A registration whose
+  directory is already gone is pruned instead. A ThinkRail workspace is still refused outright, because
+  the app has its own way to remove one and its own state to keep in step.
 ## Boundary
 
 - **Owns:** `git(cwd, args)` (spawn git *sync*, capture trimmed stdout/stderr + ok; `opts.raw` keeps
@@ -68,8 +94,16 @@ ref off the workspace-create critical path.
   is literal — no caller re-spells the `rev-parse` by hand;
   **`nonInteractiveGitEnv()`** — the default environment both runners spawn under (`git`'s only option is
   `raw`; `gitAsync` alone accepts an `opts.env` override, e.g. `pr`'s non-interactive push, which layers its
-  own SSH batch-mode settings): `process.env` plus `GIT_TERMINAL_PROMPT=0`, and **nothing else** by default.
-  It reads no config and rewrites none of the user's ssh setup on its own;
+  own SSH batch-mode settings): `process.env` plus `GIT_TERMINAL_PROMPT=0` and `GIT_OPTIONAL_LOCKS=0`, and
+  **nothing else** by default. It reads no config and rewrites none of the user's ssh setup on its own.
+  `GIT_OPTIONAL_LOCKS=0` is what keeps the host's own reads from looking like repository changes to the
+  host: `git status` and `git diff` otherwise refresh and rewrite `.git/index` opportunistically, the
+  git-dir watcher (`watch`) counts any write there as a metadata change, and its nudge republishes a
+  pathless `fsChanged` that makes every client run `status`/`diff` again — a cycle that, while an agent
+  keeps the index racy, spawned ~45 git processes a second until the desktop's bundled Bun crashed
+  (JetBrains/thinkrail#438). With optional locks off, a read never takes the index lock and never
+  rewrites the file, so the cycle has no first step. Writes are unaffected: a commit or checkout takes
+  the locks it needs regardless of the setting;
   **Request-path reads run through `gitAsync`** — `resolveDiffRange`,
   `gitStatus`, `gitDiffFile`, `listCommits`, `listBranches` and the workspace badge fan-out are async, so a
   multi-spawn read can never freeze the host's single cooperative event loop (profiled at 119–246ms of
@@ -160,9 +194,10 @@ ref off the workspace-create critical path.
   it) so the plan page can flag commits the PR doesn't have yet — the `origin/` here is the second
   deliberate survivor of the all-remotes sweep, because it asks where *this* workspace's own branch was
   pushed, not which remote a base was branched from; `listBranches(projectId)` → `{ local, remote,
-  remoteGroups?, defaultBranch }` (local `refs/heads`; canonical `remote` = every direct full ref under
+  remoteGroups?, defaultBranch, current }` (local `refs/heads`; canonical `remote` = every direct full ref under
   `refs/remotes` with symbolic aliases omitted; additive `remoteGroups` = host-owned remote/branch metadata
-  for presentation; default = origin's `HEAD`→another remote's `HEAD`→`origin/main`→repo `HEAD`; any ref-list
+  for presentation; `current` = the repo's checked-out branch, so a caller that offers no base — the New
+  Workspace dialog in folder mode — can still name where the work will land; default = origin's `HEAD`→another remote's `HEAD`→`origin/main`→repo `HEAD`; any ref-list
   or ownership-list failure throws, never a successful partial catalog),
   **`resolveDefaultBranch(repoPath)`** — that default-branch
   resolution factored out (named once), shared by `listBranches` and the `workspaces` module's
@@ -232,7 +267,7 @@ ref off the workspace-create critical path.
   `readBlobAt`, `readCommitSubject`,
   `gitCommitPaths`, `gitHeadSha`, `listCommits`,
   `resolveDiffRange`, `changedFileArgs`, `diffBaseRef`, `resolveCommitOid`, `DiffRange`, `isSafeRef`,
-  `assertSafeRef`, `listBranches`, `resolveDefaultBranch`, `tryCurrentBranch`, `currentBranch`,
+  `assertSafeRef`, `listBranches`, `branchDetails`, `deleteBranch`, `fetchRemotes`, `resolveDefaultBranch`, `tryCurrentBranch`, `currentBranch`,
   `canonicalPath`, `resolveListedCommit`, `prefetchBranch`, `countUnpushedCommits`, `listRemotes`, `remoteNameOf`.
 - **Allowed deps:** `persistence` (workspace + project lookup), `log`; `contracts` (`Git*`/`BranchList` types);
   `subprocess` (`runBounded`, the bounded child behind `gitAsync`);

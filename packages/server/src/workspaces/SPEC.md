@@ -14,6 +14,9 @@ A workspace is a `git worktree` on its own branch under the data dir — the anc
 chats. Its **display `name` is decoupled from its git `branch`**: `name` is a human-readable label
 (Title Case, spaces) and `branch` is a kebab slug derived from it — they were once held equal, and still
 coincide for the auto `workspace-N` placeholder, but a named workspace carries both distinctly.
+**`suggestWorkspaceName`** exposes that placeholder before creation (the same `workspace-N` scan the
+create path runs) so a client can show the name it is about to get; it reserves nothing, and the
+creating call still resolves the name itself.
 
 Two kinds are **user-owned** — ThinkRail uses their cwd but never renames or reclaims them. Every project
 carries **exactly one built-in Default workspace** (`kind: "default"`) whose `worktreePath` is the project
@@ -80,7 +83,15 @@ place as `kind: "external"` — outside the data dir, never created or mutated h
   `true` and sets `renamed: true`, marking the choice deliberate so auto-naming never touches it again.
   **`opts.renameBranch` defaults `true`** for the existing provisional + agentic auto-rename callers: the
   branch is derived via `toBranch`, uniqued against refs + worktree dirs, and moved with `git branch -m` while
-  the **worktree dir never moves** (pi keys sessions and terminals/tabs by that exact cwd). The branch-moving
+  the **worktree dir never moves** (pi keys sessions and terminals/tabs by that exact cwd).
+  **A published branch is never moved, whatever `renameBranch` says**: if any remote-tracking ref carries
+  the branch's name (`branchIsPublished`, a `refs/remotes/*/<branch>` glob rather than a
+  `branch.<name>.remote` lookup, since `git push origin HEAD` writes the tracking ref but no config) the
+  rename degrades to the label and the record's `branch` stands. `git branch -m` moves the branch's config
+  section but keeps the old `merge` refspec, so the next push refuses with "The upstream branch of your
+  current branch does not match the name of your current branch" and the PR is left pointing at a branch no
+  local ref is named any more — an auto-name firing on a settled turn is not something a reviewed branch
+  should feel (JetBrains/thinkrail#457). The branch-moving
   path re-points sibling records whose `baseBranch` or `diffBase` named the old branch, re-loads the registry
   after the Git subprocess so a concurrent removal is not resurrected, saves once, and emits `updated` for
   every changed record. The host's provisional naive pass combines `lock: false` with this default so the
@@ -105,6 +116,9 @@ place as `kind: "external"` — outside the data dir, never created or mutated h
   Diff stats default **on** for compatibility, while `includeDiffStats: false` skips the per-workspace
   fan-out for cold navigation — an automatic reload on a shared host must not diff every worktree),
   `listWorkspaceRecords`
+  A row whose diff could not be read carries **`vcs`** (`"none"` / `"unborn"`) saying whether git is absent
+  or merely has no commits yet; it is computed only on that failure path, so an ordinary workspace pays
+  nothing for it, and it is never persisted — a first commit clears it on the next read.
   (raw registry records without Default ensure, folder-truth reconciliation, or per-workspace git diffStats —
   for internal read-only paths like history scope mapping that must not block on git spawns) and its
   project-free sibling `listAllWorkspaceRecords` (every record, for host reads that must span workspaces
@@ -160,12 +174,21 @@ place as `kind: "external"` — outside the data dir, never created or mutated h
   folder's current HEAD (`symbolic-ref --short`, unborn-safe; detached → literal `HEAD`), `baseBranch`
   = the repo's default branch via `git`'s `resolveDefaultBranch` (unborn-safe — its last fallback is
   `currentBranch`, so the literal `"HEAD"` never persists) — so Default's Changes measure like
-  any workspace, degenerating to uncommitted work when the folder sits on the default branch itself.
-  Drift is **not** only a list-time discovery: `refreshUserOwnedWorkspace(workspaceId)` is the same
-  re-sync **without** the diff-stat listing (an external workspace re-syncs only its `branch`, and an
-  unreadable checkout is never persisted as a fake detached `HEAD`; unknown id / a managed workspace /
-  no drift → no save, no emit), which the host wires to `watch`'s **repo-metadata nudge** (host-mediated,
-  `watch` has no `workspaces` edge — see [[submodule-server-watch]]). So a `git switch` in the Default
+  any workspace, degenerating to uncommitted work when the folder sits on the default branch itself. The
+  same unborn-safe fallback is what makes a **plain, non-git project's** Default workspace come up as
+  `{branch: "HEAD", baseBranch: "HEAD"}` instead of throwing: `currentBranch`'s underlying `git rev-parse
+  --show-toplevel` simply fails for a folder with no `.git`, same as an unborn repo, and this path already
+  treated that as "not an error" — `projects/SPEC.md`'s `Project.hasGit` addition needed no change here.
+  Drift is **not** only a list-time discovery: `refreshWorkspaceBranch(workspaceId)` is the same
+  re-sync **without** the diff-stat listing, and it covers **every** workspace: Default re-syncs
+  `branch` + `baseBranch` from folder truth, while an external *or* app-created worktree re-syncs only
+  its `branch` — a worktree's base is the recorded intent its Changes measure against, and a
+  `git checkout` inside it must not silently redefine that. A managed worktree is only branch-*named* at
+  creation; nothing stops a terminal from checking out another branch there, and the rail said the
+  branch it was born on until the next reload. An unreadable checkout is never persisted as a fake
+  detached `HEAD`; unknown id / no drift → no save, no emit. The host wires this to `watch`'s
+  **repo-metadata nudge** (host-mediated,
+  `watch` has no `workspaces` edge — see [[submodule-server-watch]]). So a `git switch` in any
   workspace's terminal converges the rail, the top bar and the empty receipt live, instead of leaving
   them on the old branch until a manual project reload — including a switch that leaves the working tree
   byte-identical (`git switch -c`), which writes nothing outside `.git` (`gitStatus` reads its header branch live for
@@ -177,6 +200,13 @@ place as `kind: "external"` — outside the data dir, never created or mutated h
   `kind: "default"` — forget would hand the archive teardown's `rm -rf` fallback the project folder,
   rename would `git branch -m` the user's real branch; the record carries `renamed: true` so both
   auto-rename passes stay away as belt-and-suspenders.
+- **An unborn HEAD is refused by name, before git is asked to do the impossible.** `createWorkspace`
+  verifies `HEAD` resolves and otherwise throws "This repository has no commits yet…". A worktree needs a
+  commit to branch from, and without this check the sequence is doubly obscure: `rev-parse --abbrev-ref
+  HEAD` *fails* on an unborn HEAD, so `baseBranch` falls through to the literal string `"HEAD"`, and the
+  user is shown `git worktree add failed: fatal: invalid reference: HEAD`. [[submodule-server-projects]]'s
+  `initProject` now makes a root commit precisely so this is not the everyday path, but the check stays:
+  that commit is best-effort, and a user can always open a repository they initialized themselves.
 - **Initial-terminal provisioning is a durable host handshake.** Every workspace record first persisted by
   `createWorkspace`, `openExistingWorktree`, or Default ensure carries optional literal
   `initialTerminalPending: true`. `host` idempotently reserves the deterministic process-free terminal tab,
@@ -208,10 +238,10 @@ place as `kind: "external"` — outside the data dir, never created or mutated h
 - **Public surface (barrel):** `createWorkspace`, `listExistingWorktrees`, `openExistingWorktree`,
   `listWorkspaces`, `listWorkspaceRecords`, `listAllWorkspaceRecords`, `forgetWorkspace`,
   `reclaimWorktree`, `removeWorkspace`,
-  `workspaceDiffStats`, `workspaceDiffKey`, `getWorkspace`, `renameWorkspace`, `refreshUserOwnedWorkspace`,
+  `workspaceDiffStats`, `workspaceDiffKey`, `getWorkspace`, `renameWorkspace`, `refreshWorkspaceBranch`,
   `completeInitialTerminalReservation`, `ensureWorkspaceScratchDir`, `setWorkspacePublisher`,
   `WorkspaceLifecycleEvent`, `setWorkspaceDiffBase`, `setWorkspaceSkillOverride`,
-  `setWorkspaceSubagentsOverride`.
+  `setWorkspaceSubagentsOverride`, `suggestWorkspaceName`.
 - **Allowed deps:** `projects` (repo lookup), `git` (the runner), `persistence`, `log`; `contracts`;
   `@thinkrail/shared/paths` (the scratch-dir path convention); Node.
 - **Forbidden:** `host`; reaching into another feature's internals (use its barrel).

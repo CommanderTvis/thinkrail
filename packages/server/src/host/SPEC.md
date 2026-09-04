@@ -20,8 +20,10 @@ channel fan-out, and the process-boot wrapper both launchers share.
   `Bun.serve` with `/health`, `/ws` upgrade, a
   **`GET /files/<workspaceId>/<relpath>`** route streaming a worktree file's raw bytes (via `fs`'s
   `resolveWorktreeFile` — path-contained; bad id/escape/miss → 404; Bun infers the content-type) so the
-  markdown viewer's relative `<img>`s resolve, static serving with
-  `index.html` fallback, the `server.welcome` push, the **`?client=` page identity** read off the socket URL at
+  markdown viewer's relative `<img>`s resolve, static serving whose
+  `index.html` fallback is **for routes only** — a miss whose path carries a file extension is a plain 404,
+  because answering a stale code-split chunk with HTML surfaces as `'text/html' is not a valid JavaScript
+  MIME type` inside a lazy panel's error boundary rather than as the missing file it is, the `server.welcome` push, the **`?client=` page identity** read off the socket URL at
   upgrade (threaded to every handler as `RequestContext`; it addresses terminal output but no longer *owns*
   PTYs — see [[submodule-server-terminal]]) plus the `clientKey → socket` registry and the **replay-namespace
   retention timer** that outlives a reconnect (terminals are deliberately untouched by it); the
@@ -62,7 +64,7 @@ channel fan-out, and the process-boot wrapper both launchers share.
   conservative fallback; its optional `prewarm` flag is forwarded into `watch`'s bounded prewarm-only tier,
   so pre-selection warm-ups never grow the watcher registry unboundedly); plus the **repo-metadata** callback (`setRepoMetaPublisher`) fanned out to **two**
   convergences for a git-metadata write in a watched worktree:
-  `refreshUserOwnedWorkspace` (**re-sync a user-owned workspace's folder-truth branch** — host-mediated,
+  `refreshWorkspaceBranch` (**re-sync the workspace's folder-truth branch** — host-mediated,
   since `watch` has no `workspaces` edge, and self-publishing through the workspace-lifecycle tee) **and** a
   pathless, skill-neutral `fsChanged` frame (`paths: []`, `truncated: false`, `skillChange: "none"`) so the
   clients' `HEAD`-relative reads
@@ -293,7 +295,7 @@ channel fan-out, and the process-boot wrapper both launchers share.
   here the same way: `createServer` wires `setSubagentsEnabledResolver` to map an explicit
   `Workspace.subagentsOverride` when present and otherwise use `AppConfig.subagentsEnabled` (unknown
   workspace fails closed), the settings
-  publisher asks `refreshSubagentTools()` to reevaluate all live sessions after any global update, and
+  publisher asks `refreshDynamicTools()` to reevaluate all live sessions after any global update, and
   `workspace.setSubagentsOverride` persists through `workspaces` then refreshes only that workspace. The
   two authoritative publishers remain the clients' convergence path; the host-to-agent refresh changes
   runtime capability, not frontend state;
@@ -343,6 +345,14 @@ channel fan-out, and the process-boot wrapper both launchers share.
     (a broken rename path must stay distinguishable from "assist had nothing"). Its own per-workspace
     **in-flight set** (independent of the naive one — the two passes can overlap on a short turn) dedupes
     concurrent turns/sessions.
+  - **A Claude Code terminal is a second source of the same two passes.** The status plugin's
+    `prompt_submit` carries the prompt (`query`, first 200 chars) and its `stop` carries the turn's
+    last prompt and reply (`query` / `response`), so the `/agent-status/` route feeds
+    `maybeNaiveNameWorkspaceFromPrompt` and `maybeAutoRenameWorkspaceFromTurn` — the transcript-free
+    halves of the same functions, sharing the pristine / `renamed` / in-flight gates — and a workspace
+    driven from Claude names itself exactly as one driven from the chat. Both passes also skip a
+    `default` or `external` workspace up front: `renameWorkspace` refuses those by contract, and asking
+    the model for a name that cannot land wasted a one-shot per turn.
   - The **workspace-archive teardown** — the other composition of `agent` + `terminal` + `workspaces` only
     the host may make. `workspace.remove` **rejects a `kind: "default"` workspace loudly, before any
     side-effect** (the record's `worktreePath` is the project folder — the reclaim's `rm -rf` fallback
@@ -362,6 +372,38 @@ channel fan-out, and the process-boot wrapper both launchers share.
     a failed background teardown is warn-logged, never thrown into the void (nothing awaits it), like
     the auto-rename tee. **Archive keeps the branch but not the chat:** the git branch stays (code is
     recoverable), yet chat history is purged with the worktree — a deliberate scope choice, not a leak.
+- **The plugin runtime is installed once every other seam is ready.** `createServer` calls
+  `installPlugins(seams)` (`plugins/SPEC.md`) after the publisher-seam block and before
+  `reviveTerminalSessions()` — a plugin's revive hook must already be live for the boot-time revive
+  pass to reach it — then wires the four seams a plugin can install on top of a core one:
+  `setTerminalEnvContributors(plugins.terminalEnv)`, `setTerminalObserver(plugins.onTerminalEvent)`,
+  `setRevivePrefillHook(plugins.revivePrefill)`, `setPluginResourcesProvider(plugins.piResources)`,
+  `setPluginNamespaceValidator(plugins.validateSettings)`. A `let plugins: PluginRuntime | undefined`
+  closes over every route, channel, and handler that can reach it before `installPlugins` resolves —
+  the same async-boot tolerance every other seam here already has (`?.`/`?? []` instead of guaranteed
+  ordering): a `/plugin/<id>/…` request in that window 404s instead of reaching `plugins.serveRoute`,
+  a socket opened in that window subscribes no plugin channels and its welcome frame's `plugins` field
+  is empty, and `/mcp/`'s tool table — `plugins.mcpTools(owner, worktreePath)` — is empty (`spec_*`,
+  `blueprint_check`, and `visualize` among the tools it would otherwise carry).
+  A socket subscribes to a plugin's channels once, in the `open` handler, against the roster as it stood
+  at connect time — a plugin enabled afterward (the generic Settings toggle, `enabledByDefault: false`)
+  would otherwise publish to a topic nobody already connected ever subscribed to, so every activation and
+  deactivation re-syncs every live socket's plugin-channel subscriptions instead.
+  Installed, the workspace-lifecycle publisher and `publishFsChanged` also fan their event to
+  `plugins.workspaceEvent`/`plugins.fsChanged`; `stop()` calls `plugins.dispose()` first, synchronously,
+  before the rest of teardown, and clears the runtime pointer `handlers.ts` dispatches through.
+  `settings.update` (`handlers.ts`) runs a `plugins` update through
+  `cascadeDisable(update, plugins.roster())` before `updateConfig` — disabling an id disables its
+  transitive dependents in the same write — then calls `plugins.settingsChanged(updated)` to schedule a
+  reconcile; `plugins.list` / `plugins.rescan` / `plugins.retry` are the WS methods over
+  `roster()`/`rescan()`/`retry(id)`. `handleRequest` falls through to `plugins.handleRequest` for any
+  `plugin.<id>.<name>` method once a runtime is installed — a well-formed call to an id/name its
+  contract intake never declared answers `plugins.handleRequest`'s own bare `Unknown method`; with no
+  runtime installed at all it falls to the generic `Unknown method: <method>` every other unrouted
+  method gets. `requestMethodDiagnostic` recognizes the `plugin.<id>.<name>` shape either way, so a
+  plugin call's debug log line names the method instead of falling to `unknown method`. The
+  runtime reaches `handlers.ts` through its own module-level `setPluginRuntime()` setter rather than a
+  `server.ts` import, so `handlers.ts`'s import surface stays sibling-only.
 - **Review state is host-composed and serialized per workspace** (`reviewLock.ts`): `review.send*` is
   `reviews` (drafts + package) plus `agent` (session) plus `reviews` again (mark sent + link) — a
   check-then-mark straddling an `await createSession(…)`, the review layer's only non-atomic gap.
@@ -483,7 +525,39 @@ channel fan-out, and the process-boot wrapper both launchers share.
   `open` handler — a publish on an unsubscribed topic reaches nobody, silently. Four channels are deliberately
   **not** subscribed and not broadcast: `feedback.interview`, `terminal.data`, `terminal.exit`, and
   `terminal.detached` are sent with `ws.send` to one addressed client. Adding an addressed channel means
-  wiring a publisher, not a subscription.
+  wiring a publisher, not a subscription. **`plugins.changed` (the roster push) was missing from this list
+  for a full stage of the plugin-api migration** — `publishRoster` published it correctly and
+  `settings.update` computed the reconciled roster correctly, but no client ever received it, so a plugin
+  toggled on through the generic Settings › Plugins switch never actually came alive in that browser tab
+  (the toggle itself silently stayed off) until a full reload re-read the roster from `server.welcome`.
+  Every other push channel this bullet lists was subscribed; this one specifically was not, and nothing
+  caught it because every builtin plugin exercised before the Claude Code plugin landed
+  (`plugin-blueprint`, `plugin-spec-dialect`) ships `enabledByDefault: true` — the live toggle path this channel serves was never actually driven
+  end-to-end until the Claude Code plugin's `enabledByDefault: false` made it necessary. Fixed by adding
+  `ws.subscribe(WS_CHANNELS.pluginsChanged)` alongside the others; `boot.test.ts`'s "a connected client is
+  subscribed to the plugin roster push" pins it against a real socket and a real builtin plugin.
+- **A plugin's own channels have the identical gap, one level deeper, and it is not the same fix.**
+  `plugins?.channelNames() ?? []` is `ws.subscribe`d in the `open` handler too (line above the four
+  addressed exceptions), but only against the roster *as it stood when that socket connected* — a plugin
+  enabled afterward publishes to a topic that socket never subscribed to, silently, the same failure mode
+  as the bullet above but for `plugin.<id>.<channel>` topics instead of core ones. A page that connected
+  before enabling Claude Code kept receiving nothing on `plugin.claude-code.status` after enabling it —
+  the first status report reached it only through the channel's own snapshot-on-subscribe fetch (an
+  incidental, one-time path), and every report after that was lost, silently, forever, for that
+  connection's lifetime. `publishRoster` — called on every reconcile, which is exactly when a plugin's
+  channel set can change — now re-`ws.subscribe`s **every connected socket** to the current
+  `channelNames()` alongside publishing the roster itself, so activation and channel delivery share one
+  moment. Covered end-to-end by `e2e/plugins/claude-code/claude-terminal-facts.spec.ts`'s multi-report
+  tests (a mid-chat model switch, a TodoWrite rewrite) rather than a second unit test — the fix and the
+  regression are both about a channel actually delivering more than once to a socket that predates the
+  plugin's activation, which a real client/socket/plugin round trip is what actually exercises.
+- **Terminal backpressure never trusts the `drain` event alone.** A backpressured `ws.send` latches the
+  client in `terminalBackpressured` and blocks its batchers, and the batcher deliberately retries only on
+  `resume()` — so the latch's lift must be guaranteed. Bun's `drain` is the fast path, but a drain lost
+  across a system sleep (observed after a macOS hibernate) left the latch set forever: the tab frozen,
+  the pty alive, the recorder still current. A 1s reconciler asks the socket itself —
+  `getBufferedAmount() === 0` with the flag set means the drain the OS never delivered, and fires it.
+  Reloading the client always recovered (open clears the flag and resumes), which is why this hid so long.
 - The host is the single place features are wired together — features never reach back into it.
 - Separate host processes do not coordinate mutable state or events. They may use the same data directory,
   but each owns independent in-memory sessions, terminals, watchers, and connected clients; persistence

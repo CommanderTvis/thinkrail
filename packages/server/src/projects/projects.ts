@@ -1,10 +1,10 @@
 import { randomUUID } from "node:crypto";
-import { rmSync, statSync } from "node:fs";
+import { existsSync, mkdirSync, rmdirSync, rmSync, statSync } from "node:fs";
 import { homedir } from "node:os";
-import { basename, isAbsolute, join, resolve } from "node:path";
+import { basename, isAbsolute, join, resolve, sep } from "node:path";
 import type { Project, ProjectPathStatus } from "@thinkrail/contracts";
-import { canonicalPath, git } from "../git";
-import { loadProjects, loadWorkspaces, saveProjects } from "../persistence";
+import { canonicalPath, git, gitAsync } from "../git";
+import { dataDir, loadProjects, loadWorkspaces, saveProjects } from "../persistence";
 
 type ProjectPublisher = (project: Project) => void;
 
@@ -68,23 +68,54 @@ export function getProjects(): Project[] {
 	return projects;
 }
 
+function stampGit(project: Project, hasGit: boolean): void {
+	if (hasGit) delete project.hasGit;
+	else project.hasGit = false;
+}
+
+/**
+ * A worktree needs a real repo; a plain folder does not — ThinkRail opens either directly rather than
+ * offering to `git init` an existing one, so `root` is the git toplevel when there is one and the folder
+ * itself otherwise. See projects/SPEC.md.
+ */
 export function openProject(inputPath: string): Project {
 	const path = resolveProjectPath(inputPath);
-	const root = gitToplevel(path);
-	if (!root) throw new Error(`Not a git repository: ${path}`);
+	let stat: ReturnType<typeof statSync>;
+	try {
+		stat = statSync(path);
+	} catch {
+		throw new Error(`No such folder: ${path}`);
+	}
+	if (!stat.isDirectory()) throw new Error(`Not a folder: ${path}`);
+
+	const gitRoot = gitToplevel(path);
+	const hasGit = gitRoot !== null;
+	const root = gitRoot ?? canonicalPath(path);
 
 	const projects = getProjects();
 	const existing = projects.find((p) => p.path === root);
 	if (existing) {
 		delete existing.closed;
 		existing.lastOpened = Date.now();
+		stampGit(existing, hasGit);
 		saveProjects(projects);
 		emit(existing);
 		return existing;
 	}
 
 	const wanted = canonicalPath(root);
-	if (loadWorkspaces().some((ws) => canonicalPath(ws.worktreePath) === wanted))
+	// A workspace row speaks for the folder while its project exists; orphaned by the project's removal
+	// it is leftover state, not a claim. A ThinkRail-managed worktree dir stays refused either way — that
+	// path belongs to this app's own plumbing whether or not a record still points at it.
+	const projectIds = new Set(projects.map((p) => p.id));
+	if (
+		loadWorkspaces().some(
+			(ws) =>
+				canonicalPath(ws.worktreePath) === wanted &&
+				(projectIds.has(ws.projectId) ||
+					wanted.startsWith(canonicalPath(join(dataDir(), "worktrees")) + sep)),
+		)
+	)
 		throw new Error(`This folder is already open in ThinkRail as a workspace: ${root}`);
 
 	const taken = new Set(projects.map((p) => p.slug));
@@ -95,10 +126,66 @@ export function openProject(inputPath: string): Project {
 		slug: uniqueSlug(slugify(basename(root)), taken),
 		lastOpened: Date.now(),
 	};
+	stampGit(project, hasGit);
 	projects.push(project);
 	saveProjects(projects);
 	emit(project);
 	return project;
+}
+
+const REJECTED_NAME = /[/\\]|^\.\.?$|^\s*$|\0/;
+const CLONE_TIMEOUT_MS = 10 * 60_000;
+
+function newFolderTarget(parentPath: string, name: string): string {
+	const trimmed = name.trim();
+	if (REJECTED_NAME.test(trimmed)) throw new Error(`Not a usable folder name: ${name}`);
+
+	let parent: ReturnType<typeof statSync>;
+	try {
+		parent = statSync(parentPath);
+	} catch {
+		throw new Error(`No such folder: ${parentPath}`);
+	}
+	if (!parent.isDirectory()) throw new Error(`Not a folder: ${parentPath}`);
+
+	const target = join(parentPath, trimmed);
+	if (existsSync(target)) throw new Error(`Already exists: ${target}`);
+	return target;
+}
+
+export function createProject(parentPath: string, name: string): Project {
+	const target = newFolderTarget(parentPath, name);
+	mkdirSync(target);
+	try {
+		return initProject(target);
+	} catch (error) {
+		rmdirSync(target);
+		throw error;
+	}
+}
+
+export async function cloneProject(
+	url: string,
+	parentPath: string,
+	name: string,
+	depth?: number,
+): Promise<Project> {
+	const source = url.trim();
+	if (!source || source.startsWith("-")) throw new Error(`Not a repository URL: ${url}`);
+	if (depth !== undefined && (!Number.isInteger(depth) || depth < 1)) {
+		throw new Error(`Clone depth must be a whole number of commits, at least 1: ${depth}`);
+	}
+	const target = newFolderTarget(parentPath, name);
+	const shallow = depth === undefined ? [] : ["--depth", String(depth)];
+	const clone = await gitAsync(parentPath, ["clone", ...shallow, "--", source, target], {
+		network: true,
+		timeoutMs: CLONE_TIMEOUT_MS,
+	});
+	if (!clone.ok) {
+		rmSync(target, { recursive: true, force: true });
+		throw new Error(clone.err || `git clone failed: ${source}`);
+	}
+	return openProject(target);
 }
 
 function newestFirst(projects: Project[]): Project[] {
@@ -174,7 +261,9 @@ export function isProjectTrusted(id: string): boolean {
 	return getProjects().find((p) => p.id === id)?.trusted === true;
 }
 
-function inspectResolvedProjectPath(path: string): ProjectPathStatus {
+/** Diagnoses why `openProject` failed — there is no longer a `git`-related outcome to report here. */
+export function inspectProjectPath(inputPath: string): ProjectPathStatus {
+	const path = resolveProjectPath(inputPath);
 	let stat: ReturnType<typeof statSync>;
 	try {
 		stat = statSync(path);
@@ -185,13 +274,8 @@ function inspectResolvedProjectPath(path: string): ProjectPathStatus {
 	return { kind: gitToplevel(path) ? "repo" : "initable" };
 }
 
-export function inspectProjectPath(inputPath: string): ProjectPathStatus {
-	return inspectResolvedProjectPath(resolveProjectPath(inputPath));
-}
-
-export function initProject(inputPath: string): Project {
-	const path = resolveProjectPath(inputPath);
-	const status = inspectResolvedProjectPath(path);
+export function initProject(path: string): Project {
+	const status = inspectProjectPath(path);
 	if (status.kind === "missing") throw new Error(`No such folder: ${path}`);
 	if (status.kind === "notDirectory") throw new Error(`Not a folder: ${path}`);
 	if (status.kind === "repo") return openProject(path);

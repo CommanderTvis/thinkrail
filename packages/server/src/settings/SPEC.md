@@ -30,10 +30,11 @@ interval (`1–3600`, default 30), because those values govern host process cade
 
 ## Boundary
 
-- **Owns:** cached current `AppConfig`; `getConfig()`; `updateConfig(partial)` (merge → validate known fields → persist → broadcast); line-width and resource-free custom-preset validation/normalization; custom-preset safety caps; `setSettingsPublisher`; and `resetConfigCache` for tests.
-- **Public surface (barrel):** `getConfig`, `updateConfig`, `setSettingsPublisher`, `resetConfigCache`, plus pure custom-preset normalization used by host startup after persistence load.
+- **Owns:** cached current `AppConfig`; `getConfig()`; `updateConfig(partial)` (merge → validate known fields → persist → broadcast); line-width and resource-free custom-preset validation/normalization; custom-preset safety caps; per-namespace `plugins` merge and whole-replace `pluginPaths` validation (below); `setSettingsPublisher`; and `resetConfigCache` for tests.
+- **Public surface (barrel):** `getConfig`, `updateConfig`, `setSettingsPublisher`, `setPluginNamespaceValidator`, `resetConfigCache`, plus pure custom-preset normalization used by host startup after persistence load.
 - **Allowed deps:** `persistence` (`loadConfig`/`saveConfig`); `contracts` (`AppConfig`, `LayoutPreset`,
-  `isTerminalWindowsShell`).
+  `isTerminalWindowsShell`, `PluginSettingsNamespace`, `LEGACY_LAYOUT_TOOL_IDS`); `plugin-api`
+  (`parsePluginToolId`); Node `path` (`isAbsolute`).
 - **Forbidden:** host or another feature sibling; current-layout document/snapshot types; workspace ids/resources; current frame validation; owning WS channels; or importing web preset definitions.
 
 ## Get right
@@ -55,4 +56,14 @@ interval (`1–3600`, default 30), because those values govern host process cade
   Confirmation without a preference rejects the update; re-enabling after a decision requires both fields.
   Preference-only writes never infer expanded consent.
   The two-tier contract belongs to [[submodule-server-analytics]].
+- A custom preset's tool ids are accepted by shape (a fixed builtin id, or `parsePluginToolId(id) !== null`), not against a live plugin roster, so a preset naming a plugin tool this process has not loaded still validates. `normalizeStoredCustomLayoutPresets` rewrites `LEGACY_LAYOUT_TOOL_IDS`' entries (`specs`, `claude`) to their plugin tool ids before validating a stored preset, so a preset saved before the plugin split reads back already speaking the plugin ids.
 - `null` clears optional `reviewModel`/`reviewEffort` overrides; it is a wire-only sentinel and never persists.
+- **`plugins` is a keyed merge, not a top-level replace.** An update touches only the namespace ids it
+  names; a namespace's `null` resets it to `{}`, and an object patches it (`{ ...current[id], ...patch }`)
+  — every other plugin's namespace is untouched. This is deliberate: `updateConfig`'s `...rest` spread
+  would otherwise replace the whole `plugins` object on any update naming it, wiping every other plugin's
+  settings and resetting their enablement to manifest defaults. The merge itself runs through
+  `setPluginNamespaceValidator` (default: the merge described above) — the plugin loader installs its own
+  validator so each touched namespace is checked against that plugin's own settings schema before persist.
+  `pluginPaths` is a complete top-level replacement like `customLayoutPresets`, and every entry must be an
+  absolute path; a relative entry rejects the whole update before cache, persistence, or broadcast changes.

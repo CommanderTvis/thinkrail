@@ -54,15 +54,30 @@ export async function registerBundledRuntime(extensions: BundledExtensions): Pro
 	setBedrockProviderModule(bedrockProviderModule);
 }
 
+export const PI_EXTENSION_PACKAGES = [
+	"pi-web-access",
+	"pi-visualize",
+	"pi-spec-graph",
+	"pi-thinkrail-workflow",
+	"pi-todos",
+] as const;
+
+export type PiExtensionPackage = (typeof PI_EXTENSION_PACKAGES)[number];
+
+function piExtensionResolver(): (name: PiExtensionPackage) => string {
+	const require = createRequire(import.meta.url);
+	return (name) => require.resolve(`${name}/index.ts`);
+}
+
 let devPaths: { extensionPaths: string[]; skillPaths: string[] } | undefined;
 function resolveDevPaths(): { extensionPaths: string[]; skillPaths: string[] } {
 	if (devPaths) return devPaths;
-	const require = createRequire(import.meta.url);
-	const webAccessPath = require.resolve("pi-web-access/index.ts");
-	const visualizePath = require.resolve("pi-visualize/index.ts");
-	const specGraphPath = require.resolve("pi-spec-graph/index.ts");
-	const workflowPath = require.resolve("pi-thinkrail-workflow/index.ts");
-	const todosPath = require.resolve("pi-todos/index.ts");
+	const resolveEntry = piExtensionResolver();
+	const webAccessPath = resolveEntry("pi-web-access");
+	const visualizePath = resolveEntry("pi-visualize");
+	const specGraphPath = resolveEntry("pi-spec-graph");
+	const workflowPath = resolveEntry("pi-thinkrail-workflow");
+	const todosPath = resolveEntry("pi-todos");
 	devPaths = {
 		extensionPaths: [webAccessPath, visualizePath, specGraphPath, workflowPath, todosPath],
 		skillPaths: [
@@ -209,6 +224,7 @@ export async function buildResourceLoader(
 		agentDir,
 		settingsManager,
 		...skillInputs,
+		additionalSkillPaths: skillInputs.additionalSkillPaths,
 	};
 
 	const excluded = new Set(excludedExtensionPaths.map((path) => resolve(path)));

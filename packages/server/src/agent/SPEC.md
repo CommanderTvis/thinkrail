@@ -542,14 +542,24 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     `setSubagentsEnabledResolver` maps that
     workspace id to its current effective policy without creating an `agent` → settings/workspaces edge.
     The predicate reaches the extension's launch-time guard and initial/reload activation. For live
-    policy changes, `refreshSubagentTools(workspaceId?)` removes/adds `Agent` +
-    `get_subagent_result` through pi's active-tool API: idle sessions update synchronously, streaming
-    sessions retain only a pending reevaluation applied at `agent_settled`, and repeated changes resolve
-    the latest policy then. Session registration re-resolves once after async extension binding and before
-    creation is published, so a policy mutation cannot fall into the bind-before-registry gap. The extension
-    instance is never replaced, so already-running detached children
+    policy changes, `refreshDynamicTools(workspaceId?)` (in `agentSessionManager`) removes/adds
+    `Agent` + `get_subagent_result` through pi's active-tool API: idle sessions update synchronously,
+    streaming sessions retain only a pending reevaluation applied at `agent_settled`, and repeated changes
+    resolve the latest policy then. Session registration re-resolves once after async extension binding and
+    before creation is published, so a policy mutation cannot fall into the bind-before-registry gap. The
+    extension instance is never replaced, so already-running detached children
     finish and retain completion delivery; a disabled launch is still rejected immediately by the live
     predicate even before a streaming parent's tool set can be refreshed.
+    **The name is already generalized (H16/S12's "plugin `agent` tools" was meant to fold in here) but the
+    behaviour is not yet**: a plugin's own tool is registered by an extension factory at session build
+    time, and pi's active-tool API can only toggle a tool already registered — picking one up on an
+    already-running session needs a full `session.reload()`, which was tried and reverted here because it
+    is asynchronous and every existing caller (the subagent toggle tests, and plausibly a future plugin
+    Settings toggle) reads the new tool state on the very next prompt. `refreshDynamicTools` therefore still
+    only covers the subagent case; a plugin's tool reaches an already-running session only when that
+    session is next recreated, and closing this gap (a synchronous pi API for adding a registered-but-not-
+    yet-active tool, if one exists, or an explicit accepted-latency reload path) is left to whoever adds the
+    first plugin that needs it live.
     Cascades: `removeSession`/`disposeAllSessions` fire
     `disposeSessionChildren` — `removeSession` returns that cascade, the **delete transaction
     awaits it before `publishDeleted`/resolving** (safe: the cascade carries its own swallow, so a
@@ -584,10 +594,20 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     Children opting into extensions
     (`extensions: true` in their definition) get the **curated child set**
     (`childExtensionFactories` in `extensions`): the headless-search policy + `pi-web-access` +
-    `pi-spec-graph` — deliberately not the parent's full set (rationale + the listed-children
+    `pi-spec-graph` + every active plugin's own `childFactories` (`PluginPiResources`, below) —
+    deliberately not the parent's full set (rationale + the listed-children
     carve-out: core decision #25). Web-access reaches the child set via a **named bundled-seam
     field** (`BundledExtensions.webAccessFactory`) in the binary and a Bun `require` in dev — its
     raw third-party `.ts` must stay out of the strict tsc graph.
+  - `resetDelegationServices(workspaceId?)` drops a workspace's cached `DelegationService` (or every one,
+    with no argument) so the next `delegationServiceFor` call rebuilds it against the current
+    `childExtensionFactories()` — needed because that list is captured once, at first use, and a plugin's
+    sub-agent opt-in toggling afterward would otherwise never reach an already-created service. Dropping
+    it while a run is in progress would hand an in-flight child's own cleanup path (`disposeSessionChildren`,
+    above) a service the workspace no longer owns, so a streaming workspace is only marked pending
+    (`isWorkspaceStreaming`, exported for this) and the drop happens at that workspace's next
+    `agent_settled` (`applyPendingDelegationReset`, called from the same event handler
+    `refreshDynamicTools`'s deferred path uses). An idle workspace drops immediately.
   - `extensions` — Pi resource wiring. Candidate generation loads the reviewed external Central path once
     through a headless `DefaultResourceLoader` to apply provider registrations, without inspecting it.
     `buildResourceLoader(cwd, settingsManager, getAdmission, excludedPaths, extraFactories?)` then resolves
@@ -601,7 +621,16 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     automatic **portable cross-agent skill aliases**, then loads the five bundled extensions — **`pi-web-access`**
     (`web_search` + `fetch_content`), **`pi-visualize`** (`visualize`), **`pi-spec-graph`** (the `spec_*`
     tools + its `before_agent_start` rule), **`pi-thinkrail-workflow`** (the workflow-router rule +
-    workflow skills), and **`pi-todos`** (the `todo_*` tools + its skill). Existing personal aliases are Claude
+    workflow skills), and **`pi-todos`** (the `todo_*` tools + its skill), then every active plugin's own
+    contribution (`PluginPiResources`, installed by the plugin loader via `setPluginResourcesProvider`;
+    default: everything empty and a no-op tools extension): `factories` and `toolsExtension` join
+    `sharedFactories` (so they reach both the bundled-binary and the dev-mode `extensionFactories` branch
+    below through the one shared array, rather than duplicating the bundled/dev split for a second time),
+    `extensionPaths` joins `additionalExtensionPaths`, and `skillPaths` joins `additionalSkillPaths`.
+    `registerBundledRuntime`'s `BundledExtensions.plugins` (a builtin plugin id → its staged
+    `{ factories, skillsDir, assetsDir }`, default `{}`) is how a builtin plugin's own runtime reaches the
+    compiled binary/desktop without a value import here; `bundledPluginRuntime(id)` reads it (or the empty
+    triple in dev). Existing personal aliases are Claude
     (`${CLAUDE_CONFIG_DIR:-~/.claude}/skills`), Codex (`${CODEX_HOME:-~/.codex}/skills`), Copilot
     (`~/.copilot/skills`), and Gemini (`${GEMINI_CLI_HOME:-~}/.gemini/skills`), **plus each installed Claude
     plugin's `skills/` dir** (read from `~/.claude/plugins/installed_plugins.json` — the resolved `installPath`,
@@ -682,7 +711,10 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     `extensionFactories`: a **headless-search policy** (a `tool_call` hook defaulting
     `web_search`'s `workflow` to `"none"`, since pi-web-access would otherwise open a browser curator our
     `rpc` host can't render), `askUserQuestionExtension` (registers the `ask_user_question` tool),
-    `oversizedImageGuard` (the context-level image-size guard, see the `imageGuard` bullet), **and the
+    `oversizedImageGuard` (the context-level image-size guard, see the `imageGuard` bullet) — the
+    read-only `blueprint_check` report this list used to carry directly is now the `@thinkrail/plugin-blueprint`
+    plugin's own `ctx.tool(...)` registration, reaching this loader through the active
+    plugin resource provider's `toolsExtension` and `factories` (`PluginPiResources`, above), **and the
     caller's `extraFactories`** — per-session host bindings (the workspace-bound subagents extension),
     value-imported so dev and the compiled binary take the same path.
     Both session paths pass it as `resourceLoader`. `buildResourceLoader` stays internal; the seam +
@@ -697,17 +729,22 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
   helpers (`validateQuestionnaire`/`buildQuestionnaireResponse`/`assessAnswerability`/
   `buildAnswersMessage`/`awaitingQuestionToolCallId`); the activity layer
   (`deriveActivityStatus`/`ActivityInputs` + `listSessionActivity`/`syncSessionActivity`/
-  `setSessionActivityPublisher`/`setActivityProjectResolver`); `repairDanglingToolCalls`; `liveParentContext` + `readChildTranscript`
+  `setSessionActivityPublisher`/`setActivityProjectResolver`); `repairDanglingToolCalls`; `trashFile` (the
+  one OS-trash move, shared with the host's `fs.trashPath` so a deleted workspace file is as recoverable
+  as a deleted transcript); `liveParentContext` + `readChildTranscript`
   (the delegation embedding); the skill catalog helpers
   `listSkillCommands(cwd, admission)` (filtered, pre-session autocomplete) / `listSkillCatalog(cwd, admission)`
   (unfiltered, the manager's `skills.state`) / `listProjectAliasSkillNames(cwd)` (present-alias count) /
   `isProjectSkillPath(relativePath)` (watch-classification predicate);
   `reloadSessionResources(sessionId)` (active-chat reload); the **`setSkillAdmissionResolver`** seam (host
   wires `workspaceId` → the admission context); the subagent-policy seams
-  **`setSubagentsEnabledResolver`** + **`refreshSubagentTools`** (host resolves the effective global default
-  plus workspace override; manager owns live-session activation timing);
+  **`setSubagentsEnabledResolver`** + **`refreshDynamicTools`** (host resolves the effective global default
+  plus workspace override; manager owns live-session activation timing); `isWorkspaceStreaming`
+  (delegation's reset-on-idle check); `resetDelegationServices` (drop a workspace's cached
+  `DelegationService` after a plugin's sub-agent opt-in changes);
   the bundled-artifact seam (`registerBundledRuntime` +
-  `BundledExtensions`/`BundledExtensionFactory`).
+  `BundledExtensions`/`BundledExtensionFactory`/`BundledPluginRuntime`/`bundledPluginRuntime`); the plugin
+  resource seam (`PluginPiResources`/`setPluginResourcesProvider`).
 - **Allowed deps:** `@earendil-works/pi-coding-agent` (runtime); `@earendil-works/pi-ai` (types + test
   fixtures + **pure catalog helpers value-imported from the package root** — today exactly
   `getSupportedThinkingLevels` + `clampThinkingLevel`, data-only projections over `Model`; *dispatch*
