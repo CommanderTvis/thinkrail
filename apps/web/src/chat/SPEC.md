@@ -451,6 +451,8 @@ because the alternative is an attachment the user cannot see, which is worse tha
   in every connected client), and a
   **zoomed-stage preview pane** + **scope picker** — see the next bullet),
   `ModelSelector` + `ThinkingSelector` (also shared with `NewWorkspaceDialog`;
+  each trigger names what it sets with an eyebrow — **Model** / **Effort** — which `showLabel={false}`
+  drops in the composer, the one place where the row competes with the prompt for width;
   optional `container` prop portals their popovers into a host Dialog; optional
   `defaultOption`/`onSelectDefault` render an explicit use-the-default row above the provider groups
   (checked when `current` is null) for callers whose selection is an *override* — `ReviewSettings` —
