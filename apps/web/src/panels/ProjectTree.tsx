@@ -45,6 +45,7 @@ import {
 	DropdownMenuSubTrigger,
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { IconTooltip } from "@/components/ui/tooltip";
 import { copyText } from "@/lib";
 import { LoadingRegion } from "../components/Skeleton";
 import {
@@ -422,16 +423,18 @@ function ProjectRow({
 					{workspaceCount}
 				</span>
 			)}
-			<Button
-				variant="ghost"
-				size="icon"
-				className="shrink-0"
-				data-testid="add-workspace"
-				aria-label="Create workspace"
-				onClick={onAddWorkspace}
-			>
-				<Plus className="size-14" />
-			</Button>
+			<IconTooltip label="Start work">
+				<Button
+					variant="ghost"
+					size="icon"
+					className="shrink-0"
+					data-testid="add-workspace"
+					aria-label="Start work"
+					onClick={onAddWorkspace}
+				>
+					<Plus className="size-14" />
+				</Button>
+			</IconTooltip>
 		</div>
 	);
 	return (
