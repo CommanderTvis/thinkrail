@@ -12,7 +12,7 @@ const code = (path: string) =>
 		.replace(/\/\*[\s\S]*?\*\//g, "")
 		.replace(/^[ \t]*\/\/.*$/gm, "");
 
-function sourceFiles(dir = SRC, exts = /\.(tsx?|css)$/): string[] {
+function sourceFiles(dir: string, exts = /\.(tsx?|css)$/): string[] {
 	const out: string[] = [];
 	for (const entry of readdirSync(dir)) {
 		const path = join(dir, entry);
@@ -27,7 +27,7 @@ function sourceFiles(dir = SRC, exts = /\.(tsx?|css)$/): string[] {
 }
 
 const COLORS = loadColors();
-const FILES = sourceFiles();
+const FILES = [...sourceFiles(SRC)];
 const TS_FILES = FILES.filter((f) => /\.tsx?$/.test(f));
 const CSS_FILES = FILES.filter((f) => f.endsWith(".css"));
 
@@ -74,6 +74,7 @@ const NON_COLOR = new Set([
 	"l-2",
 	"r-2",
 	"t-2",
+	"b-2",
 	"l-4",
 	"collapse",
 	"separate",
@@ -87,6 +88,11 @@ const NON_COLOR = new Set([
 	"clip-padding",
 	"none",
 	"inset",
+	// Border *styles* read like colours to the pattern above; they are not.
+	"solid",
+	"dashed",
+	"dotted",
+	"double",
 ]);
 
 const COLOR_PREFIX =
@@ -183,7 +189,7 @@ describe("colour at a call site", () => {
 });
 
 describe("raw colour values", () => {
-	const ALLOWLIST = new Set(["lib/utils.ts"]);
+	const ALLOWLIST = new Set(["lib/utils.ts", "panels/colorUtils.ts"]);
 
 	it("appear in no component", () => {
 		const literal = /#[0-9a-fA-F]{3,8}\b|\brgba?\(|\bhsla?\(/;

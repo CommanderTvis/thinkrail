@@ -6,6 +6,10 @@ const ESC = "\u001b";
 const ALT_ON = `${ESC}[?1049h`;
 const ALT_OFF = `${ESC}[?1049l`;
 
+function osc777(payload: string, terminator: "bel" | "st" = "bel"): string {
+	return `${ESC}]777;${payload}${terminator === "bel" ? "\x07" : `${ESC}\\`}`;
+}
+
 function body(snapshot: string): string {
 	const lastEscape = snapshot.lastIndexOf(`${ESC}[?`);
 	if (lastEscape === -1) return snapshot.replace(`${ESC}[0m`, "");
@@ -243,6 +247,71 @@ describe("outputRecorder", () => {
 		recorder.dispose();
 		recorder.push("more\r\n");
 		expect(recorder.snapshot()).toBe("");
+	});
+});
+
+describe("cli-agent notify (OSC 777)", () => {
+	test("never re-emits, so a restored terminal cannot re-fire a stale notification", () => {
+		const recorder = createOutputRecorder();
+		recorder.push(`prompt$ ${osc777('notify;thinkrail://cli-agent;{"event":"stop"}')} \r\n`);
+		expect(body(recorder.snapshot())).not.toContain("777");
+		expect(body(recorder.snapshot())).not.toContain("cli-agent");
+	});
+
+	test("the ST terminator form is recognized too, not just BEL", () => {
+		const recorder = createOutputRecorder();
+		recorder.push(osc777('notify;thinkrail://cli-agent;{"event":"stop"}', "st"));
+		recorder.push("after\r\n");
+		expect(body(recorder.snapshot())).not.toContain("777");
+		expect(body(recorder.snapshot())).toContain("after");
+	});
+
+	test("surrounding output survives — only the sequence itself is dropped", () => {
+		const recorder = createOutputRecorder();
+		recorder.push(`before ${osc777('notify;thinkrail://cli-agent;{"event":"stop"}')} after\r\n`);
+		const text = body(recorder.snapshot());
+		expect(text).toContain("before");
+		expect(text).toContain("after");
+	});
+
+	test("a sequence split across two reads is still recognized and dropped", () => {
+		const recorder = createOutputRecorder();
+		const full = osc777('notify;thinkrail://cli-agent;{"event":"stop"}');
+		recorder.push(`before ${full.slice(0, 10)}`);
+		recorder.push(full.slice(10));
+		recorder.push("after\r\n");
+		const text = body(recorder.snapshot());
+		expect(text).not.toContain("777");
+		expect(text).toContain("before");
+		expect(text).toContain("after");
+	});
+
+	test("a split landing between ESC and ] is still recognized", () => {
+		const recorder = createOutputRecorder();
+		const full = osc777('notify;thinkrail://cli-agent;{"event":"stop"}');
+		recorder.push(`before ${full.slice(0, 1)}`);
+		recorder.push(full.slice(1));
+		recorder.push("after\r\n");
+		const text = body(recorder.snapshot());
+		expect(text).not.toContain("777");
+		expect(text).toContain("before");
+		expect(text).toContain("after");
+	});
+
+	test("an unrelated OSC sequence (title) is untouched", () => {
+		const recorder = createOutputRecorder();
+		recorder.push(`${ESC}]0;my title\x07after\r\n`);
+		const text = body(recorder.snapshot());
+		expect(text).toContain("my title");
+		expect(text).toContain("after");
+	});
+
+	test("a recording persisted by an older host that still replayed a notify is scrubbed on restore", () => {
+		const recorder = createOutputRecorder();
+		recorder.restore(`old prompt ${osc777('notify;thinkrail://cli-agent;{"event":"stop"}')} $ `);
+		const text = body(recorder.snapshot());
+		expect(text).not.toContain("777");
+		expect(text).toContain("old prompt");
 	});
 });
 

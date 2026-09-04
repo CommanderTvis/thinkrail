@@ -51,6 +51,7 @@ function attachProcessSignals(server: RunningServer): RunningServer {
 			return server.port;
 		},
 		startAttributionClaim: () => server.startAttributionClaim(),
+		waitForClient: (timeoutMs) => server.waitForClient(timeoutMs),
 		stop,
 		shutdown,
 	};

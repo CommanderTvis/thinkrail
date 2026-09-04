@@ -51,7 +51,7 @@ import {
 	promptSession,
 	refreshAgentReviewTool,
 	refreshAvailableModels,
-	refreshSubagentTools,
+	refreshDynamicTools,
 	reloadSessionResources,
 	removeQueuedSession,
 	removeSession,
@@ -597,7 +597,7 @@ test("session registration reconciles a policy change that lands after extension
 		});
 		await bound;
 		enabled = true;
-		refreshSubagentTools(workspaceId);
+		refreshDynamicTools(workspaceId);
 		releaseRegistration();
 		const session = await creating;
 		sessionId = session.sessionId;
@@ -628,14 +628,14 @@ test("an idle chat adopts subagent policy changes, survives resource reload, and
 		sessionId = session.sessionId;
 
 		enabled = false;
-		refreshSubagentTools(workspaceId);
+		refreshDynamicTools(workspaceId);
 		await reloadSessionResources(sessionId);
 		fauxA.setResponses([(context) => fauxAssistantMessage(subagentToolState(context))]);
 		await promptSession(sessionId, "Check disabled tools.");
 		expect(seen(sessionId)).toContain("SUBAGENTS_OFF");
 
 		enabled = true;
-		refreshSubagentTools(workspaceId);
+		refreshDynamicTools(workspaceId);
 		fauxA.setResponses([(context) => fauxAssistantMessage(subagentToolState(context))]);
 		await promptSession(sessionId, "Check enabled tools.");
 		expect(seen(sessionId)).toContain("SUBAGENTS_ON");
@@ -730,7 +730,7 @@ test("a streaming chat defers its tool-set change until agent_settled", async ()
 		await requestStarted;
 
 		enabled = false;
-		refreshSubagentTools(workspaceId);
+		refreshDynamicTools(workspaceId);
 		expect(firstState).toBe("SUBAGENTS_ON");
 		release();
 		await firstTurn;
@@ -790,9 +790,9 @@ test("repeated streaming policy changes resolve only the latest value at settlem
 		await requestStarted;
 
 		enabled = false;
-		refreshSubagentTools(workspaceId);
+		refreshDynamicTools(workspaceId);
 		enabled = true;
-		refreshSubagentTools(workspaceId);
+		refreshDynamicTools(workspaceId);
 		expect(resolvedValues).toEqual([]);
 		release();
 		await turn;
@@ -853,7 +853,7 @@ test("disabling an idle parent lets its running background child finish and deli
 		await Promise.all([promptSession(sessionId, "Start background work."), childStarted]);
 
 		enabled = false;
-		refreshSubagentTools(workspaceId);
+		refreshDynamicTools(workspaceId);
 		releaseChild();
 		const deadline = Date.now() + 5000;
 		while (!seen(sessionId).includes("SUBAGENTS_OFF_AT_COMPLETION")) {
