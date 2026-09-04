@@ -149,10 +149,39 @@ test("the markdown outline lists the document's headings and scrolls to one", as
 	expect(id).toBeTruthy();
 	await expect(page.locator(`#${id}`)).toHaveCount(1);
 
+	// The outline survives every view — in Source it drives the editor jump alone.
 	await page.getByTestId("md-toggle-source").click();
-	await expect(page.getByTestId("md-toggle-outline")).toHaveCount(0);
+	await expect(page.getByTestId("markdown-outline")).toBeVisible();
 	await page.getByTestId("md-toggle-preview").click();
 	await expect(page.getByTestId("markdown-outline")).toBeVisible();
+});
+
+test("an outline click reveals the heading's line in the source editor", async ({ page }) => {
+	writeFileSync(
+		join(E2E_FIXTURE_REPO, "toc.md"),
+		[
+			"# Top",
+			"",
+			...Array.from({ length: 300 }, (_, at) => `filler ${at}`),
+			"",
+			"## Deep section",
+			"",
+			"body",
+			"",
+		].join("\n"),
+	);
+	await openFixtureProject(page);
+	await enterDefaultWorkspace(page);
+	await page.getByTestId("tab-files").click();
+	await page.getByTestId("file-node").filter({ hasText: "toc.md" }).dblclick();
+	await page.getByTestId("md-toggle-source").click();
+	await page.getByTestId("md-toggle-outline").click();
+
+	// Monaco renders only the viewport, so the heading's text appearing is the reveal itself.
+	const editorLines = page.getByTestId("editor-pane").locator(".view-lines");
+	await expect(editorLines).not.toContainText("Deep section");
+	await page.getByTestId("markdown-outline-entry").filter({ hasText: "Deep section" }).click();
+	await expect(editorLines).toContainText("## Deep section");
 });
 
 test("a wide markdown document stays inside its pane instead of being clipped", async ({

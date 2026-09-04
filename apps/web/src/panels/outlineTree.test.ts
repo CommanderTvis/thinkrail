@@ -1,8 +1,28 @@
 import { expect, test } from "bun:test";
-import { buildOutlineTree, type HeadingEntry } from "./outlineTree";
+import { buildOutlineTree, type HeadingEntry, sourceHeadings } from "./outlineTree";
+
+test("source headings carry raw lines, dedupe ids, and skip fenced code", () => {
+	const doc = [
+		"---",
+		"title: x",
+		"---",
+		"# Top",
+		"```",
+		"# not a heading",
+		"```",
+		"## `Setup`",
+		"## Setup",
+		"",
+	].join("\n");
+	expect(sourceHeadings(doc)).toEqual([
+		{ level: 1, text: "Top", id: "top", line: 4 },
+		{ level: 2, text: "Setup", id: "setup", line: 8 },
+		{ level: 2, text: "Setup", id: "setup-1", line: 9 },
+	]);
+});
 
 function heading(level: number, text: string): HeadingEntry {
-	return { level, text, id: text.toLowerCase().replace(/\s+/g, "-") };
+	return { level, text, id: text.toLowerCase().replace(/\s+/g, "-"), line: 1 };
 }
 
 test("flat headings at one level nest as siblings", () => {

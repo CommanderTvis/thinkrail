@@ -1,6 +1,5 @@
-import { RiFileTransferLine as FileSymlink, RiLayoutLeftLine as PanelLeft } from "@remixicon/react";
+import { RiFileTransferLine as FileSymlink } from "@remixicon/react";
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
-import { IconTooltip } from "@/components/ui/tooltip";
 import { abbreviateHomePath, isMarkdownPath, isPdfPath } from "@/lib/utils";
 import { EmbeddedSplit } from "../components/EmbeddedSplit";
 import { LoadingRegion } from "../components/Skeleton";
@@ -9,32 +8,13 @@ import { useAppStore } from "../store";
 import { getTransport } from "../transport";
 import { isFileTabDirty, mergeDiskIntoDraft, saveFileTab } from "./fileSave";
 import { jsonKeyLine } from "./jsonKeyLine";
+import { OutlineColumn, OutlineToggle, scrollToHeading } from "./Outline";
+import { type HeadingEntry, sourceHeadings } from "./outlineTree";
 import { reviewFlagFor } from "./reviewModel";
 import { SendReviewButton } from "./SendReviewButton";
 import { ToggleSegment } from "./ToggleSegment";
 import { useLiveTabContent } from "./useLiveTabContent";
 import { useFileReview } from "./useReviewCommenting";
-
-function OutlineToggle({ active, onClick }: { active: boolean; onClick: () => void }) {
-	return (
-		<IconTooltip label={active ? "Hide outline" : "Show outline"}>
-			<button
-				type="button"
-				data-testid="md-toggle-outline"
-				aria-pressed={active}
-				aria-label={active ? "Hide outline" : "Show outline"}
-				onClick={onClick}
-				className={`flex size-24 items-center justify-center rounded-[var(--radius-sm)] outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary ${
-					active
-						? "bg-container-elevated-bg text-text-default"
-						: "text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
-				}`}
-			>
-				<PanelLeft className="size-14" />
-			</button>
-		</IconTooltip>
-	);
-}
 
 const MonacoEditor = lazy(() => import("./MonacoEditor"));
 const MarkdownPreview = lazy(() => import("./MarkdownPreview"));
@@ -64,6 +44,7 @@ function FilePaneBody({ tab }: { tab: FileTab | ExternalFileTab }) {
 		() => (focusKeyPath ? (jsonKeyLine(tab.content, focusKeyPath) ?? undefined) : undefined),
 		[focusKeyPath, tab.content],
 	);
+	const [outlineLine, setOutlineLine] = useState<number | undefined>(undefined);
 
 	// A PDF is re-fetched by this counter, and only a change that names *this file* advances it: the
 	// workspace tick moves for every write anywhere, and a compile writes a dozen of them. See SPEC.md.
@@ -109,8 +90,11 @@ function FilePaneBody({ tab }: { tab: FileTab | ExternalFileTab }) {
 				onChange={(next) => useAppStore.getState().setFileTabDraft(tab.workspaceId, tab.id, next)}
 				onSave={save}
 				review={review}
-				focusLine={focusLine}
-				onFocusHandled={clearFocus}
+				focusLine={focusLine ?? outlineLine}
+				onFocusHandled={() => {
+					clearFocus();
+					setOutlineLine(undefined);
+				}}
 				workspaceId={tab.workspaceId}
 			/>
 		</Suspense>
@@ -204,6 +188,17 @@ function FilePaneBody({ tab }: { tab: FileTab | ExternalFileTab }) {
 
 	const view = tab.view ?? "rendered";
 	const paneDirection = useAppStore((s) => s.localLayoutPreferences.defaultPaneDirection);
+	const headings = sourceHeadings(buffer);
+	// Overleaf-style: one click lands both sides. The preview scrolls to the heading's rendered element
+	// (by slug id, or by line stamp in the review path's segmented render); the editor reveals the line.
+	const jumpToHeading = (entry: HeadingEntry) => {
+		scrollToHeading(entry);
+		setOutlineLine(entry.line);
+	};
+	const outline =
+		(tab.outlineOpen ?? false) ? (
+			<OutlineColumn headings={headings} onSelect={jumpToHeading} />
+		) : null;
 	const preview = (
 		<Suspense fallback={loading}>
 			<div className="h-full motion-safe:animate-reveal">
@@ -215,7 +210,6 @@ function FilePaneBody({ tab }: { tab: FileTab | ExternalFileTab }) {
 					workspaceId={tab.workspaceId}
 					path={tab.path}
 					review={review}
-					outlineOpen={tab.outlineOpen ?? false}
 				/>
 			</div>
 		</Suspense>
@@ -228,12 +222,10 @@ function FilePaneBody({ tab }: { tab: FileTab | ExternalFileTab }) {
 				aria-label="Markdown view mode"
 				className="flex h-32 shrink-0 items-center justify-end gap-4 border-border-default border-b bg-container-header-bg px-12"
 			>
-				{view !== "source" ? (
-					<OutlineToggle
-						active={tab.outlineOpen ?? false}
-						onClick={() => setFileTabOutline(tab.id, !(tab.outlineOpen ?? false))}
-					/>
-				) : null}
+				<OutlineToggle
+					active={tab.outlineOpen ?? false}
+					onClick={() => setFileTabOutline(tab.id, !(tab.outlineOpen ?? false))}
+				/>
 				<SendReviewButton workspaceId={tab.workspaceId} path={tab.path} />
 				<ToggleSegment
 					testid="md-toggle-preview"
@@ -255,23 +247,28 @@ function FilePaneBody({ tab }: { tab: FileTab | ExternalFileTab }) {
 				/>
 			</div>
 			{diskBar}
-			<div className="min-h-0 flex-1">
-				{view === "split" ? (
-					<EmbeddedSplit
-						direction={paneDirection}
-						companion={{
-							title: "Preview",
-							content: preview,
-							onClose: () => setFileTabView(tab.id, "source"),
-						}}
-					>
-						{editor}
-					</EmbeddedSplit>
-				) : view === "rendered" ? (
-					preview
-				) : (
-					editor
-				)}
+			<div className="flex min-h-0 flex-1">
+				{outline}
+				{/* `min-w-0` is load-bearing: a flex item defaults to `min-width:auto` and so refuses to shrink
+				    below its content, which makes the scroller grow instead of scrolling a wide table sideways. */}
+				<div className="min-h-0 min-w-0 flex-1">
+					{view === "split" ? (
+						<EmbeddedSplit
+							direction={paneDirection}
+							companion={{
+								title: "Preview",
+								content: preview,
+								onClose: () => setFileTabView(tab.id, "source"),
+							}}
+						>
+							{editor}
+						</EmbeddedSplit>
+					) : view === "rendered" ? (
+						preview
+					) : (
+						editor
+					)}
+				</div>
 			</div>
 		</div>
 	);
