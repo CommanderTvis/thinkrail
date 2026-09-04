@@ -196,12 +196,11 @@ test("a project without specs offers the blueprint as its spec-first entry", asy
 		const dialog = page.getByTestId("new-workspace-dialog");
 		await expect(dialog).toBeVisible();
 		await expect(dialog.getByTestId("ws-target-worktree")).toHaveAttribute("data-active", "true");
-		await expect(dialog.getByRole("heading", { name: "Create workspace" })).toBeVisible();
+		await expect(dialog.getByRole("heading", { name: "Start work" })).toBeVisible();
 		await expect(dialog.getByTestId("ws-branch-picker")).toBeVisible();
 
 		await dialog.getByTestId("ws-target-default").click();
-		await expect(dialog.getByRole("heading", { name: "Work in project folder" })).toBeVisible();
-		await expect(dialog).toContainText("no isolation");
+		await expect(dialog).toContainText("No isolation");
 		await expect(dialog.getByTestId("ws-branch-picker")).toHaveCount(0);
 
 		await dialog.getByTestId("ws-prompt").fill("");

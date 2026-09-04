@@ -46,6 +46,10 @@ test("project template previews advance the additive wire shape to v63", () => {
 });
 
 test("host update advisories advance the protocol with an immutable notice channel", () => {
-	expect(PROTOCOL_VERSION).toBe(64);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(64);
 	expect(WS_CHANNELS.hostUpdateAvailable).toBe("host.updateAvailable");
+});
+
+test("this fork's own additive methods sit above every version upstream has taken", () => {
+	expect(PROTOCOL_VERSION).toBe(65);
 });
