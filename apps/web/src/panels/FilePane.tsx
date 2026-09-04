@@ -1,12 +1,13 @@
 import { RiFileTransferLine as FileSymlink } from "@remixicon/react";
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
-import { abbreviateHomePath, isMarkdownPath, isPdfPath } from "@/lib/utils";
+import { abbreviateHomePath, isImagePath, isMarkdownPath, isPdfPath } from "@/lib/utils";
 import { EmbeddedSplit } from "../components/EmbeddedSplit";
 import { LoadingRegion } from "../components/Skeleton";
 import type { ExternalFileTab, FileTab } from "../store";
 import { useAppStore } from "../store";
 import { getTransport } from "../transport";
 import { isFileTabDirty, mergeDiskIntoDraft, saveFileTab } from "./fileSave";
+import { ImagePreview } from "./ImagePreview";
 import { jsonKeyLine } from "./jsonKeyLine";
 import { OutlineColumn, OutlineToggle, scrollToHeading } from "./Outline";
 import { type HeadingEntry, sourceHeadings } from "./outlineTree";
@@ -34,6 +35,7 @@ function FilePaneBody({ tab }: { tab: FileTab | ExternalFileTab }) {
 
 	const external = tab.kind === "external-file";
 	const pdf = !external && isPdfPath(tab.path);
+	const image = !external && isImagePath(tab.path);
 	const clearFocus = useCallback(() => useAppStore.getState().clearFileFocus(tab.path), [tab.path]);
 
 	// Resolved against the text the editor holds, never sent as a line by the host — see panels/SPEC.md.
@@ -46,21 +48,22 @@ function FilePaneBody({ tab }: { tab: FileTab | ExternalFileTab }) {
 	);
 	const [outlineLine, setOutlineLine] = useState<number | undefined>(undefined);
 
-	// A PDF is re-fetched by this counter, and only a change that names *this file* advances it: the
-	// workspace tick moves for every write anywhere, and a compile writes a dozen of them. See SPEC.md.
-	const [pdfRevision, setPdfRevision] = useState(0);
+	// A PDF or image is re-fetched by this counter, and only a change that names *this file* advances it:
+	// the workspace tick moves for every write anywhere, and a compile writes a dozen of them. See SPEC.md.
+	const bytes = pdf || image;
+	const [byteRevision, setByteRevision] = useState(0);
 	const fsChange = useAppStore((s) => s.fsChangesByWorkspace[tab.workspaceId]);
 	useEffect(() => {
-		if (!pdf || !fsChange) return;
+		if (!bytes || !fsChange) return;
 		if (!fsChange.truncated && !fsChange.paths.includes(tab.path)) return;
-		setPdfRevision((current) => current + 1);
-	}, [pdf, fsChange, tab.path]);
+		setByteRevision((current) => current + 1);
+	}, [bytes, fsChange, tab.path]);
 
 	useLiveTabContent(tab, {
-		// A PDF is rendered from its own bytes over its own route, never from tab.content — see PdfPreview.tsx.
+		// A PDF or image is rendered from its own bytes over its own route, never from tab.content.
 		// An external tab's path is outside the worktree, so the worktree-scoped read cannot refresh it.
 		read: () =>
-			pdf
+			bytes
 				? Promise.resolve({ content: "", hash: "" })
 				: getTransport().request(external ? "claudeConfig.readFile" : "fs.readFile", {
 						workspaceId: tab.workspaceId,
@@ -86,7 +89,7 @@ function FilePaneBody({ tab }: { tab: FileTab | ExternalFileTab }) {
 			<MonacoEditor
 				path={tab.path}
 				content={buffer}
-				editable={!pdf}
+				editable={!pdf && !image}
 				onChange={(next) => useAppStore.getState().setFileTabDraft(tab.workspaceId, tab.id, next)}
 				onSave={save}
 				review={review}
@@ -161,9 +164,13 @@ function FilePaneBody({ tab }: { tab: FileTab | ExternalFileTab }) {
 	if (pdf) {
 		return (
 			<Suspense fallback={loading}>
-				<PdfPreview workspaceId={tab.workspaceId} path={tab.path} cacheBust={pdfRevision} />
+				<PdfPreview workspaceId={tab.workspaceId} path={tab.path} cacheBust={byteRevision} />
 			</Suspense>
 		);
+	}
+
+	if (image) {
+		return <ImagePreview workspaceId={tab.workspaceId} path={tab.path} cacheBust={byteRevision} />;
 	}
 
 	if (!isMarkdownPath(tab.path)) {
