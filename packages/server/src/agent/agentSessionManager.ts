@@ -54,6 +54,7 @@ import {
 } from "./activity";
 import { ANSWERABILITY_ERRORS, assessAnswerability, buildAnswersMessage } from "./askUserQuestion";
 import {
+	applyPendingDelegationReset,
 	disposeSessionChildren,
 	removeWorkspaceDelegation,
 	subagentsExtensionFor,
@@ -97,7 +98,7 @@ interface Entry {
 	manualCompactionInProgress: boolean;
 	piCompactionInProgress: boolean;
 	registered: boolean;
-	subagentToolsRefreshPending: boolean;
+	dynamicToolsRefreshPending: boolean;
 	publishedActivity: ActivityStatus | null;
 	rawActivity: ActivityStatus | null;
 	lastActivityMs: number;
@@ -381,14 +382,25 @@ function applySubagentTools(entry: Entry): void {
 			? [...withoutSubagents, ...RECURSION_GUARD_TOOLS]
 			: withoutSubagents,
 	);
-	entry.subagentToolsRefreshPending = false;
+	entry.dynamicToolsRefreshPending = false;
 }
 
-export function refreshSubagentTools(workspaceId?: string): void {
+function applyDynamicTools(entry: Entry): void {
+	applySubagentTools(entry);
+}
+
+export function isWorkspaceStreaming(workspaceId: string): boolean {
+	for (const entry of sessions.values()) {
+		if (entry.workspaceId === workspaceId && entry.session.isStreaming) return true;
+	}
+	return false;
+}
+
+export function refreshDynamicTools(workspaceId?: string): void {
 	for (const entry of sessions.values()) {
 		if (workspaceId !== undefined && entry.workspaceId !== workspaceId) continue;
-		if (entry.session.isStreaming) entry.subagentToolsRefreshPending = true;
-		else applySubagentTools(entry);
+		if (entry.session.isStreaming) entry.dynamicToolsRefreshPending = true;
+		else applyDynamicTools(entry);
 	}
 }
 
@@ -510,7 +522,7 @@ async function prepareSessionEntry(
 		manualCompactionInProgress: false,
 		piCompactionInProgress: false,
 		registered: false,
-		subagentToolsRefreshPending: false,
+		dynamicToolsRefreshPending: false,
 		publishedActivity: null,
 		rawActivity: null,
 		lastActivityMs: Date.now(),
@@ -562,7 +574,8 @@ async function prepareSessionEntry(
 				: baseEvent;
 		if (event.type === "agent_settled") {
 			entry.lastSettlement = terminal;
-			if (entry.subagentToolsRefreshPending) applySubagentTools(entry);
+			if (entry.dynamicToolsRefreshPending) applyDynamicTools(entry);
+			applyPendingDelegationReset(entry.workspaceId);
 		}
 		if (sessions.get(sessionId) === entry) publish({ sessionId, event: projected });
 		if (event.type === "agent_settled") terminal = null;

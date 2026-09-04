@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { join, normalize } from "node:path";
+import { extname, join, normalize } from "node:path";
 import type {
 	HostPlatform,
 	HostUpdateNotice,
@@ -20,7 +20,7 @@ import {
 	disposeAllSessions,
 	getSessionWorkspaceId,
 	isProjectSkillPath,
-	refreshSubagentTools,
+	refreshDynamicTools,
 	setActivityProjectResolver,
 	setExtUiPendingObserver,
 	setExtUiPublisher,
@@ -52,6 +52,7 @@ import {
 import { redeliverInterview, releaseInterview, setFeedbackPublisher } from "../feedback";
 import { resolveWorktreeFile } from "../fs";
 import { logger } from "../log";
+import { mcpToolsFor, serveMcp } from "../mcp";
 import { loadWorkspaces } from "../persistence";
 import {
 	getProjects,
@@ -69,6 +70,8 @@ import {
 	reviveTerminalSessions,
 	setTerminalPublisher,
 	setTerminalTabsPublisher,
+	setTerminalTokenEndpoint,
+	terminalForToken,
 } from "../terminal";
 import { isTodoToolEnd, maybeAttachChangeArtifacts } from "../todos";
 import {
@@ -77,7 +80,7 @@ import {
 	setWatchPublisher,
 	stopAllWatches,
 } from "../watch";
-import { getWorkspace, refreshUserOwnedWorkspace, setWorkspacePublisher } from "../workspaces";
+import { getWorkspace, refreshWorkspaceBranch, setWorkspacePublisher } from "../workspaces";
 import {
 	isPromptCommitted,
 	isSettledTurn,
@@ -126,6 +129,8 @@ export interface CreateServerOptions {
 
 export interface RunningServer {
 	readonly port: number;
+	/** Resolves true as soon as a client holds a socket, false once the wait runs out. */
+	waitForClient: (timeoutMs: number) => Promise<boolean>;
 	stop: () => void;
 	shutdown: () => Promise<void>;
 }
@@ -172,6 +177,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	} = options;
 
 	const sockets = new Map<string, Bun.ServerWebSocket<SocketData>>();
+	const clientWaiters = new Set<() => void>();
 	const reapTimers = new Map<string, ReturnType<typeof setTimeout>>();
 	const requestReplays = new RequestReplayCache<string>();
 	const terminalBackpressured = new Set<string>();
@@ -179,6 +185,16 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	let hostUpdateTimer: ReturnType<typeof setInterval> | undefined;
 	let hostUpdateActive = hostUpdate !== undefined;
 	let hostUpdateChecking = false;
+	// A drain event lost across a system sleep leaves the latch set forever — the tab frozen while its
+	// pty lives. The socket's own buffer is the truth, so this fires the drain the OS never delivered.
+	const backpressureReconciler = setInterval(() => {
+		for (const clientKey of [...terminalBackpressured]) {
+			const ws = sockets.get(clientKey);
+			if (ws !== undefined && ws.getBufferedAmount() > 0) continue;
+			terminalBackpressured.delete(clientKey);
+			if (ws !== undefined) resumeClientTerminals(clientKey);
+		}
+	}, 1000);
 	let stopping = false;
 	let shutdownPromise: Promise<void> | undefined;
 
@@ -212,6 +228,26 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 			if (url.pathname === "/health") {
 				return new Response("ok");
 			}
+			if (url.pathname.startsWith("/mcp/")) {
+				if (req.method !== "POST") return new Response("method not allowed", { status: 405 });
+				const owner = terminalForToken(url.pathname.slice("/mcp/".length));
+				if (owner === null) return new Response("unknown terminal", { status: 404 });
+				// A token can outlive its workspace (removed while an agent was still running).
+				let worktreePath: string;
+				try {
+					worktreePath = getWorkspace(owner.workspaceId).worktreePath;
+				} catch {
+					return new Response("unknown workspace", { status: 404 });
+				}
+				const body: unknown = await req.json().catch(() => null);
+				const reply = await serveMcp(body, {
+					cwd: worktreePath,
+					tools: mcpToolsFor(worktreePath),
+				});
+				return reply.body === null
+					? new Response(null, { status: reply.status })
+					: Response.json(reply.body, { status: reply.status });
+			}
 			if (url.pathname.startsWith("/files/")) {
 				return serveWorktreeFile(url.pathname);
 			}
@@ -224,6 +260,8 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 			open(ws) {
 				const replaced = sockets.get(ws.data.clientKey);
 				sockets.set(ws.data.clientKey, ws);
+				for (const arrived of clientWaiters) arrived();
+				clientWaiters.clear();
 				if (replaced && replaced !== ws) replaced.close();
 				terminalBackpressured.delete(ws.data.clientKey);
 				const pendingReap = reapTimers.get(ws.data.clientKey);
@@ -391,6 +429,10 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		if (hostUpdateTimer !== undefined) clearInterval(hostUpdateTimer);
 		hostUpdateTimer = undefined;
 	};
+	// The address a terminal on this machine can actually dial: the interface the server bound, unless
+	// that is a wildcard, which nothing can connect to. Only set once the port is real.
+	const statusHost = host === "0.0.0.0" || host === "::" ? "localhost" : host;
+	setTerminalTokenEndpoint(`http://${statusHost}:${server.port ?? port}`);
 
 	setTerminalPublisher((clientKey, channel, data) => {
 		if (terminalBackpressured.has(clientKey)) return "unavailable";
@@ -497,7 +539,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	setFsNudgePublisher(publishFsChanged);
 
 	setRepoMetaPublisher((workspaceId) => {
-		refreshUserOwnedWorkspace(workspaceId);
+		refreshWorkspaceBranch(workspaceId);
 		publishFsChanged({ workspaceId, paths: [], truncated: false, skillChange: "none" });
 	});
 
@@ -529,7 +571,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 			taskObservation.clear();
 			void observeCurrentSetup();
 		}
-		refreshSubagentTools();
+		refreshDynamicTools();
 	});
 
 	setSessionCreatedPublisher((payload: SessionCreatedPayload) => {
@@ -633,6 +675,21 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 
 	void observeCurrentSetup();
 
+	const waitForClient = (timeoutMs: number): Promise<boolean> => {
+		if (sockets.size > 0) return Promise.resolve(true);
+		return new Promise((resolve) => {
+			const arrived = (): void => {
+				clearTimeout(timer);
+				resolve(true);
+			};
+			const timer = setTimeout(() => {
+				clientWaiters.delete(arrived);
+				resolve(false);
+			}, timeoutMs);
+			clientWaiters.add(arrived);
+		});
+	};
+
 	const stop = (): void => {
 		if (stopping) return;
 		stopping = true;
@@ -648,6 +705,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		for (const timer of reapTimers.values()) clearTimeout(timer);
 		reapTimers.clear();
 		sockets.clear();
+		clearInterval(backpressureReconciler);
 		terminalBackpressured.clear();
 		requestReplays.clear();
 		persistTerminalSessions();
@@ -676,6 +734,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		get port() {
 			return server.port ?? port;
 		},
+		waitForClient,
 		stop,
 		shutdown,
 	};
@@ -701,6 +760,7 @@ async function serveStatic(pathname: string, staticDir: string): Promise<Respons
 	const requested = safe === "/" || safe === "" ? "index.html" : safe;
 	const file = Bun.file(join(staticDir, requested));
 	if (await file.exists()) return new Response(file);
+	if (extname(requested)) return new Response("not found", { status: 404 });
 	const index = Bun.file(join(staticDir, "index.html"));
 	if (await index.exists()) return new Response(index);
 	return new Response("not found", { status: 404 });

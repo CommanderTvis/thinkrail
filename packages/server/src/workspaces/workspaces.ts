@@ -67,6 +67,11 @@ function branchExists(repoPath: string, branch: string): boolean {
 	return git(repoPath, ["show-ref", "--verify", "--quiet", `refs/heads/${branch}`]).ok;
 }
 
+function branchIsPublished(repoPath: string, branch: string): boolean {
+	const refs = git(repoPath, ["for-each-ref", "--format=%(refname)", `refs/remotes/*/${branch}`]);
+	return refs.ok && refs.out.trim().length > 0;
+}
+
 function nameTaken(project: Project, candidate: string): boolean {
 	return (
 		branchExists(project.path, candidate) ||
@@ -218,6 +223,10 @@ async function diffStats(ws: Workspace): Promise<DiffStats | undefined> {
 	}
 }
 
+export function suggestWorkspaceName(projectId: string): string {
+	return nextAutoBranch(openProjectById(projectId));
+}
+
 export async function createWorkspace(
 	projectId: string,
 	name?: string,
@@ -230,6 +239,11 @@ export async function createWorkspace(
 		? uniqueBranch(project, toBranch(displayName))
 		: nextAutoBranch(project);
 	const wsName = displayName ?? branch;
+
+	if (!git(project.path, ["rev-parse", "--verify", "HEAD"]).ok)
+		throw new Error(
+			"This repository has no commits yet, so there is nothing to branch a workspace from. Make the first commit, then try again.",
+		);
 
 	const base = baseRef?.trim();
 	let baseBranch: string;
@@ -356,21 +370,21 @@ export function completeInitialTerminalReservation(workspaceId: string): Workspa
 	return workspace;
 }
 
-export function refreshUserOwnedWorkspace(workspaceId: string): void {
+export function refreshWorkspaceBranch(workspaceId: string): void {
 	const peek = loadWorkspaces().find((workspace) => workspace.id === workspaceId);
-	if (peek?.kind !== "default" && peek?.kind !== "external") return;
+	if (!peek) return;
 	const truth =
 		peek.kind === "default"
 			? { kind: "default" as const, ...folderTruth(peek.worktreePath) }
 			: (() => {
 					const branch = tryCurrentBranch(peek.worktreePath);
-					return branch === null ? null : { kind: "external" as const, branch };
+					return branch === null ? null : { kind: peek.kind, branch };
 				})();
 	if (!truth) return;
 
 	const all = loadWorkspaces();
 	const workspace = all.find((candidate) => candidate.id === workspaceId);
-	if (workspace?.kind !== truth.kind) return;
+	if (!workspace || workspace.kind !== truth.kind) return;
 	if (truth.kind === "default") {
 		if (!applyFolderTruth(workspace, truth)) return;
 	} else {
@@ -398,7 +412,8 @@ export function renameWorkspace(
 		throw new Error("An existing worktree cannot be renamed by ThinkRail");
 	const displayName = toDisplayName(requestedName);
 	if (!displayName) throw new Error(`Invalid workspace name: ${requestedName}`);
-	const wanted = renameBranch ? toBranch(displayName) : ws.branch;
+	const movable = renameBranch && !branchIsPublished(project.path, ws.branch);
+	const wanted = movable ? toBranch(displayName) : ws.branch;
 	const branch = wanted === ws.branch ? ws.branch : uniqueBranch(project, wanted);
 	const branchChanged = branch !== ws.branch;
 	if (branchChanged) {
@@ -479,6 +494,15 @@ export function setWorkspaceDiffBase(id: string, ref: string | null): Workspace 
 	return ws;
 }
 
+/**
+ * Only asked once a diff has already failed, so the ordinary workspace pays nothing for it.
+ */
+function vcsGap(ws: Workspace): Workspace["vcs"] {
+	if (!git(ws.worktreePath, ["rev-parse", "--git-dir"]).ok) return "none";
+	if (!git(ws.worktreePath, ["rev-parse", "--verify", "HEAD"]).ok) return "unborn";
+	return undefined;
+}
+
 export async function listWorkspaces(
 	projectId: string,
 	opts: { includeDiffStats?: boolean } = {},
@@ -486,8 +510,8 @@ export async function listWorkspaces(
 	const project = getProjects().find((p) => p.id === projectId);
 	if (project) ensureDefaultWorkspace(project);
 	for (const workspace of loadWorkspaces()) {
-		if (workspace.projectId === projectId && workspace.kind === "external") {
-			refreshUserOwnedWorkspace(workspace.id);
+		if (workspace.projectId === projectId && workspace.kind !== "default") {
+			refreshWorkspaceBranch(workspace.id);
 		}
 	}
 	const rows = projectRows(projectId);
@@ -497,7 +521,9 @@ export async function listWorkspaces(
 	);
 	return projectRows(projectId).map((w) => {
 		const stats = statsByKey.get(workspaceDiffKey(w));
-		return stats ? { ...w, diffStats: stats } : w;
+		if (stats) return { ...w, diffStats: stats };
+		const vcs = vcsGap(w);
+		return vcs ? { ...w, vcs } : w;
 	});
 }
 
