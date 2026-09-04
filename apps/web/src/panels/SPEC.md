@@ -1749,7 +1749,7 @@ tab — `external-file` when the path escaped the worktree, which is most of Cla
   Bun's inferred content-type. `openFileInTab`/`useLiveTabContent` skip the `fs.readFile` round trip for a
   PDF path entirely rather than decoding binary as UTF-8 for a `tab.content` nothing reads — that read
   would be lossy, wasteful for a large file, and pointless since the viewer never looks at `tab.content`.
-  A `?t={pdfRevision}.{reloads}` query param is what makes it track the file: the revision advances when
+  A `?t={byteRevision}.{reloads}` query param is what makes it track the file: the revision advances when
   `useLiveTabContent` decides a change could be *this* file — a PDF's "read" is empty, since the bytes
   come over the route, and only the decision matters — so a recompile lands in the open tab rather than
   waiting for it to be reopened. It is deliberately **not** the workspace's `loadedTick`, which advances
@@ -1759,6 +1759,15 @@ tab — `external-file` when the path escaped the worktree, which is most of Cla
   report. The `reloads` half is the toolbar's **Reload from disk**, which asks again for bytes no watch
   reported — and the same button is what the error state offers, so a read that caught the file
   mid-rewrite is recoverable without closing the tab.
+- **Image tabs are the same shape as PDF tabs, minus the rasterizer.** `FilePane` gates on
+  `lib.isImagePath` (png/jpe?g/gif/webp/svg/bmp/ico/avif, `kind === "file"` only) and renders
+  `ImagePreview`: one `<img>` on `worktreeFileUrl` with the shared byte-revision cache-buster, the
+  natural dimensions in a toolbar that carries the PDF viewer's zoom vocabulary (±/reset buttons, pinch
+  and ⌘/Ctrl+wheel via `lib/zoomGesture`, a percent readout) and its reload-from-disk button. Zoom
+  multiplies a fit width measured once per load (100% = natural size capped to the pane — CSS `zoom`
+  was tried and cancels against `max-width: 100%`); the fit is not re-measured on pane resize. No lazy
+  import (there is no library) and no transparency checkerboard. The tab's `fs.readFile` round trip is
+  skipped exactly as for a PDF.
 - **We render the PDF ourselves (`pdfjs-dist`) rather than handing it to an `<iframe>`.** The first
   version did use a native `<iframe>` viewer, for a real reason — zero dependency, zero code. It was
   replaced because that choice cannot support the macOS pinch gesture *at all*: events inside the

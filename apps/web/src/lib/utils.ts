@@ -97,6 +97,10 @@ export function isPdfPath(path: string): boolean {
 	return /\.pdf$/i.test(path);
 }
 
+export function isImagePath(path: string): boolean {
+	return /\.(png|jpe?g|gif|webp|svg|bmp|ico|avif)$/i.test(path);
+}
+
 export function normalizePath(path: string): string {
 	return path.replaceAll("\\", "/").replace(/^\.\/+/, "");
 }

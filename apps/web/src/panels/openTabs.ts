@@ -3,6 +3,7 @@ import type { LayoutOpenOptions } from "@/store";
 import {
 	DOUBLE_CLICK_SETTLE_MS,
 	isAbsolutePath,
+	isImagePath,
 	isPdfPath,
 	layoutResourceIdentity,
 	projectRelativePath,
@@ -170,7 +171,7 @@ export function openFileInTab(
 	const id = tupleKey(kind, workspaceId, path);
 	// A PDF is rendered by pointing an <iframe> at the worktree file route directly (see PdfPreview.tsx) —
 	// reading it here would decode binary bytes as UTF-8 text for content nothing uses.
-	const binary = !external && isPdfPath(path);
+	const binary = !external && (isPdfPath(path) || isImagePath(path));
 	return openReadTab(
 		workspaceId,
 		id,

@@ -126,6 +126,61 @@ test("a PDF renders through pdf.js, and zooming re-rasterizes it larger", async 
 	await expect(page.getByTestId("pdf-toolbar")).toBeVisible();
 });
 
+test("an image opens as a rendered preview, not a Monaco buffer of bytes", async ({ page }) => {
+	await openFixtureProject(page);
+	await createWorkspaceViaDialog(page);
+	await page.getByTestId("tab-files").click();
+	await page.getByTestId("file-node").filter({ hasText: "logo.png" }).dblclick();
+
+	await expect(page.getByTestId("editor-tab").filter({ hasText: "logo.png" })).toBeVisible();
+	const img = page.getByTestId("image-preview-img");
+	await expect(img).toBeVisible();
+	// Proves the bytes actually decoded over the /files route — a broken img element is still "visible".
+	await expect.poll(() => img.evaluate((el) => (el as HTMLImageElement).naturalWidth)).toBe(1);
+	await expect(page.getByTestId("image-preview-size")).toHaveText("1 × 1");
+
+	// The PDF viewer's zoom vocabulary, same gestures, same buttons.
+	await expect(page.getByTestId("image-zoom-level")).toHaveText("100%");
+	await page.getByTestId("image-zoom-in").click();
+	await expect(page.getByTestId("image-zoom-level")).toHaveText("115%");
+	await page.getByTestId("image-zoom-reset").click();
+	await expect(page.getByTestId("image-zoom-level")).toHaveText("100%");
+
+	// A picture is not text: no markdown chrome, no editor.
+	await expect(page.getByTestId("markdown-view-toggle")).toHaveCount(0);
+	await expect(page.getByTestId("markdown-preview")).toHaveCount(0);
+});
+
+test("a rewritten image shows its new pixels without reopening the tab", async ({ page }) => {
+	await openFixtureProject(page);
+	const workspace = await createWorkspaceViaDialog(page);
+	await page.getByTestId("tab-files").click();
+	await page.getByTestId("file-node").filter({ hasText: "logo.png" }).dblclick();
+	await expect(page.getByTestId("image-preview-size")).toHaveText("1 × 1");
+
+	// A 2×1 replacement: the dimensions caption changing is the reload, observed end to end.
+	const twoByOne = Buffer.from(
+		"iVBORw0KGgoAAAANSUhEUgAAAAIAAAABCAIAAAB7QOjdAAAADUlEQVR4nGP4z8AARAAI/gH/xp559wAAAABJRU5ErkJggg==",
+		"base64",
+	);
+	const target = join(workspace.worktreePath, "logo.png");
+	writeFileSync(target, twoByOne);
+	await expect(page.getByTestId("image-preview-size")).toHaveText("2 × 1", { timeout: 10_000 });
+
+	// The way an exporter does it: the file goes away and comes back under a rename.
+	const temp = `${target}.tmp`;
+	rmSync(target);
+	writeFileSync(
+		temp,
+		Buffer.from(
+			"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M8AAAMCAoGB9x0AAAAASUVORK5CYII=",
+			"base64",
+		),
+	);
+	renameSync(temp, target);
+	await expect(page.getByTestId("image-preview-size")).toHaveText("1 × 1", { timeout: 10_000 });
+});
+
 test("the markdown outline lists the document's headings and scrolls to one", async ({ page }) => {
 	await openFixtureProject(page);
 	await createWorkspaceViaDialog(page);
