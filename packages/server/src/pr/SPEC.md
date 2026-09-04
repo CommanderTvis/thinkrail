@@ -43,7 +43,7 @@ the base clamped to a fixed line budget, the session plan's rendered body when p
 template's text.
 
 `pushBranch({ workspaceId, branch, confirmBase? })` → `{ dirtyFiles }` (`workspace.push`): the safe-ref guard
-and `refreshUserOwnedWorkspace` revalidation before and after the dirty read — each time the live branch must
+and `refreshWorkspaceBranch` revalidation before and after the dirty read — each time the live branch must
 still be the `branch` the request names (the one the user saw and confirmed), so a terminal switch in between
 pushes nothing instead of another branch — then the same `--set-upstream origin <branch>` push, env, and
 `PUSH_AUTH_FAILED` classification as step 2 below — one implementation that `openPr` also calls. A branch
@@ -72,8 +72,8 @@ before the origin check or any push): the Default workspace's cwd is the project
 workspace can equally sit on its base — without this guard, Open PR would `git push origin
 <default-branch>` straight to the shared branch on an unprotected remote, publishing the commits before
 any PR could offer its review boundary. The client mirrors the ordinary local/`origin` same-branch case;
-the host remains authoritative for unsupported remote bases. **`refreshUserOwnedWorkspace(workspaceId)` resolves the LIVE branch for
-Default/external workspaces** (`workspaces`' same sync used by the fs-watcher tee) and persists it — a
+the host remains authoritative for unsupported remote bases. **`refreshWorkspaceBranch(workspaceId)` resolves the LIVE branch for
+every worktree** (`workspaces`' same sync used by the fs-watcher tee) and persists it — a
 no-op for created workspaces, whose branch only ThinkRail ever moves. Open PR validates once before its
 async dirty-file read (preserving the safe base-branch fast failure), then refreshes, reloads, and
 revalidates immediately after that await. Without both, a branch switched in a terminal while the Git
@@ -194,7 +194,7 @@ an update, a create, or an ambiguous create result.
   `readyPr`, `mergePr`, `reopenPr`, `deleteRemoteBranch`.
 - `onBaseBranch` is the one "the branch is its own base" check, shared with `host`'s
   `workspace.branchStatus`.
-- **Allowed deps:** `workspaces` (workspace record, `refreshUserOwnedWorkspace`), `git` (exec + status), `todos` (`listTodos` for
+- **Allowed deps:** `workspaces` (workspace record, `refreshWorkspaceBranch`), `git` (exec + status), `todos` (`listTodos` for
   the body), `branch-review` (provider detection, `githubSlug`, existing-PR lookup, the fresh open-review
   check before a remote deletion, the shared command runner, `forgetOpenBranchReview`),
   `github` (`ghSetupProblem` — the named compare-fallback reason); `contracts` types;

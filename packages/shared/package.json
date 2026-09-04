@@ -14,6 +14,8 @@
 		"./codedError": "./src/codedError.ts",
 		"./removeTree": "./src/removeTree.ts",
 		"./spawn": "./src/spawn.ts",
+		"./runBounded": "./src/runBounded.ts",
+		"./textFile": "./src/textFile.ts",
 		"./toolHomes": "./src/toolHomes.ts"
 	},
 	"scripts": {
