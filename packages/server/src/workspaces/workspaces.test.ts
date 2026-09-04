@@ -22,12 +22,13 @@ import {
 	listWorkspaces,
 	openExistingWorktree,
 	reclaimWorktree,
-	refreshUserOwnedWorkspace,
+	refreshWorkspaceBranch,
 	removeWorkspace,
 	renameWorkspace,
 	setWorkspaceDiffBase,
 	setWorkspacePublisher,
 	setWorkspaceSubagentsOverride,
+	suggestWorkspaceName,
 	type WorkspaceLifecycleEvent,
 } from "./workspaces";
 
@@ -314,7 +315,7 @@ test("external workspace branch metadata converges on refresh and list", async (
 	setWorkspacePublisher((event) => events.push(event));
 
 	git(external, "switch", "-c", "feature/live");
-	refreshUserOwnedWorkspace(workspace.id);
+	refreshWorkspaceBranch(workspace.id);
 	expect(events).toEqual([
 		{
 			kind: "updated",
@@ -332,7 +333,7 @@ test("external workspace branch metadata converges on refresh and list", async (
 
 	events.length = 0;
 	rmSync(external, { recursive: true, force: true });
-	refreshUserOwnedWorkspace(workspace.id);
+	refreshWorkspaceBranch(workspace.id);
 	expect(events).toHaveLength(0);
 	expect(
 		listWorkspaceRecords("p1").find((candidate) => candidate.id === workspace.id)?.branch,
@@ -378,6 +379,16 @@ test("createWorkspace marks a user-named workspace renamed; an auto-named one st
 	expect(named.name).toBe("My Feature");
 	expect(named.branch).toBe("my-feature");
 	expect(named.renamed).toBe(true);
+});
+
+test("suggestWorkspaceName names the slot the next auto-named create would take", async () => {
+	expect(suggestWorkspaceName("p1")).toBe("workspace-1");
+
+	await createWorkspace("p1");
+	expect(suggestWorkspaceName("p1")).toBe("workspace-2");
+
+	await createWorkspace("p1", "My Feature");
+	expect(suggestWorkspaceName("p1")).toBe("workspace-2");
 });
 
 test("renameWorkspace moves the branch in place: record + git follow, the worktree dir does not", async () => {
@@ -426,6 +437,23 @@ test("renameWorkspace with renameBranch:false changes only the display name", as
 	const listed = await worktrees();
 	expect(listed.find((workspace) => workspace.id === ws.id)).toMatchObject(renamed);
 	expect(listed.find((workspace) => workspace.id === sibling.id)?.baseBranch).toBe(ws.branch);
+});
+
+test("renameWorkspace leaves a published branch alone and renames the label only", async () => {
+	const ws = await createWorkspace("p1");
+	const dependent = await createWorkspace("p1", "on top", ws.branch);
+	git(repo, "update-ref", `refs/remotes/origin/${ws.branch}`, "HEAD");
+
+	const renamed = renameWorkspace(ws.id, "add login flow");
+
+	expect(renamed.name).toBe("add login flow");
+	expect(renamed.branch).toBe(ws.branch);
+	expect(renamed.renamed).toBe(true);
+	expect(gitOut(ws.worktreePath, "rev-parse", "--abbrev-ref", "HEAD")).toBe(ws.branch);
+	expect(gitOut(repo, "for-each-ref", "--format=%(refname:short)", "refs/heads")).toContain(
+		ws.branch,
+	);
+	expect((await worktrees()).find((w) => w.id === dependent.id)?.baseBranch).toBe(ws.branch);
 });
 
 test("renameWorkspace with lock:false renames name + branch but leaves renamed unset (provisional)", async () => {
@@ -722,7 +750,7 @@ test("the Default workspace's branch and base refresh from the folder on each li
 	expect((await listWorkspaces("p1"))[0]?.diffStats).toEqual({ added: 2, removed: 0 });
 });
 
-test("refreshUserOwnedWorkspace re-syncs and publishes Default drift off the list path", async () => {
+test("refreshWorkspaceBranch re-syncs and publishes Default drift off the list path", async () => {
 	await listWorkspaces("p1");
 	const def = listWorkspaceRecords("p1").find((w) => w.kind === "default");
 	if (!def) throw new Error("expected the ensured Default workspace");
@@ -731,19 +759,31 @@ test("refreshUserOwnedWorkspace re-syncs and publishes Default drift off the lis
 	const events: WorkspaceLifecycleEvent[] = [];
 	setWorkspacePublisher((e) => events.push(e));
 
-	refreshUserOwnedWorkspace(def.id);
+	refreshWorkspaceBranch(def.id);
 	expect(events).toHaveLength(0);
 
 	git(repo, "switch", "-c", "feature/live");
-	refreshUserOwnedWorkspace(def.id);
+	refreshWorkspaceBranch(def.id);
 	expect(events).toEqual([
 		{ kind: "updated", workspace: { ...def, branch: "feature/live", baseBranch: "feature/live" } },
 	]);
 	expect(listWorkspaceRecords("p1").find((w) => w.id === def.id)?.branch).toBe("feature/live");
 
-	refreshUserOwnedWorkspace(worktree.id);
-	refreshUserOwnedWorkspace("nope");
+	refreshWorkspaceBranch(worktree.id);
+	refreshWorkspaceBranch("nope");
 	expect(events).toHaveLength(1);
+
+	git(worktree.worktreePath, "switch", "-c", "live-iso");
+	refreshWorkspaceBranch(worktree.id);
+	expect(events).toHaveLength(2);
+	expect(events[1]).toMatchObject({
+		kind: "updated",
+		workspace: { id: worktree.id, branch: "live-iso" },
+	});
+	expect(listWorkspaceRecords("p1").find((w) => w.id === worktree.id)?.branch).toBe("live-iso");
+	expect(listWorkspaceRecords("p1").find((w) => w.id === worktree.id)?.baseBranch).toBe(
+		worktree.baseBranch,
+	);
 });
 
 test("the Default workspace is non-removable and non-renamable — loud server-side guards", async () => {
@@ -897,4 +937,25 @@ test("includeDiffStats: false keeps membership/order/Default ensure while skippi
 		expect(full.map((w) => w.id)).toEqual(light.map((w) => w.id));
 		expect(full.find((w) => w.id === ws.id)?.diffStats).toEqual({ added: 2, removed: 0 });
 	}
+});
+
+test("a workspace git cannot answer for says why: no repository, or no commits yet", async () => {
+	const plain = join(dataDir, "plain");
+	const unborn = join(dataDir, "unborn");
+	mkdirSync(plain);
+	mkdirSync(unborn);
+	git(unborn, "init", "-b", "main");
+	writeFileSync(
+		join(dataDir, "projects.json"),
+		JSON.stringify([
+			{ id: "p1", name: "repo", path: repo, slug: "repo", lastOpened: 1 },
+			{ id: "p2", name: "plain", path: plain, slug: "plain", lastOpened: 2, hasGit: false },
+			{ id: "p3", name: "unborn", path: unborn, slug: "unborn", lastOpened: 3 },
+		]),
+	);
+
+	expect((await listWorkspaces("p2"))[0]?.vcs).toBe("none");
+	expect((await listWorkspaces("p3"))[0]?.vcs).toBe("unborn");
+	// The ordinary case says nothing, and never pays for the extra look.
+	expect((await listWorkspaces("p1"))[0]).not.toHaveProperty("vcs");
 });

@@ -48,7 +48,7 @@ import {
 	promptSession,
 	readChildTranscript,
 	refreshAvailableModels,
-	refreshSubagentTools,
+	refreshDynamicTools,
 	reloadSessionResources,
 	removeQueuedSession,
 	removeSession,
@@ -57,6 +57,7 @@ import {
 	setSessionModel,
 	setSessionThinkingLevel,
 	steerSession,
+	trashFile,
 } from "../agent";
 import { bucketProviderModel, type SendMode, track } from "../analytics";
 import {
@@ -73,12 +74,20 @@ import {
 	updateJbcentral,
 } from "../auth";
 import { findOpenBranchReview } from "../branch-review";
-import { selectDirectory } from "../dialog";
-import { listAvailableEditors, openEditor, revealInFileManager } from "../editors";
-import { recordAcceptedMessage, respondToInterview } from "../feedback";
-import { readDir, readFile } from "../fs";
+import { selectDirectory, selectFile } from "../dialog";
 import {
+	listAvailableEditors,
+	openEditor,
+	revealInFileManager,
+	revealPathInFileManager,
+} from "../editors";
+import { recordAcceptedMessage, respondToInterview } from "../feedback";
+import { readDir, readFile, resolveWorktreeFile, searchWorktree, writeFile } from "../fs";
+import {
+	branchDetails,
 	countUnpushedCommits,
+	deleteBranch,
+	fetchRemotes,
 	gitDiffFile,
 	gitStatus,
 	listBranches,
@@ -91,7 +100,9 @@ import { logger } from "../log";
 import { openPr, previewPr } from "../pr";
 import {
 	acknowledgeProjectSkills,
+	cloneProject,
 	closeProject,
+	createProject,
 	initProject,
 	inspectProjectPath,
 	listProjects,
@@ -130,6 +141,7 @@ import {
 	closeTerminalTab,
 	closeWorkspaceTerminals,
 	listTerminals,
+	renameTerminal,
 	reserveTerminal,
 	resizeTerminal,
 	writeTerminal,
@@ -163,6 +175,7 @@ import {
 	setWorkspaceDiffBase,
 	setWorkspaceSkillOverride,
 	setWorkspaceSubagentsOverride,
+	suggestWorkspaceName,
 	workspaceDiffStats,
 } from "../workspaces";
 import { ackSend } from "./ackSend";
@@ -309,6 +322,14 @@ const handlers: Record<string, Handler> = {
 	"project.open": (params) => openProject((params as { path: string }).path),
 	"project.inspect": (params) => inspectProjectPath((params as { path: string }).path),
 	"project.init": (params) => initProject((params as { path: string }).path),
+	"project.create": (params) => {
+		const p = params as { parentPath: string; name: string };
+		return createProject(p.parentPath, p.name);
+	},
+	"project.clone": (params) => {
+		const p = params as { url: string; parentPath: string; name: string; depth?: number };
+		return cloneProject(p.url, p.parentPath, p.name, p.depth);
+	},
 	"project.list": () => listProjects(),
 	"project.hasSpecs": (params) => {
 		const { projectId } = params as { projectId: string };
@@ -330,6 +351,9 @@ const handlers: Record<string, Handler> = {
 		const p = params as { projectId: string; name?: string; baseRef?: string };
 		return provisionInitialTerminal(await createWorkspace(p.projectId, p.name, p.baseRef));
 	},
+	"workspace.suggestName": (params) => ({
+		name: suggestWorkspaceName((params as { projectId: string }).projectId),
+	}),
 	"workspace.listExisting": (params) =>
 		listExistingWorktrees((params as { projectId: string }).projectId),
 	"workspace.openExisting": async (params) => {
@@ -404,15 +428,40 @@ const handlers: Record<string, Handler> = {
 			},
 		),
 	"dialog.selectDirectory": () => selectDirectory(),
+	"dialog.selectFile": () => selectFile(),
 	"fs.readDir": (params) => {
 		const p = params as { workspaceId: string; path: string };
 		void ensureWatch(p.workspaceId);
 		return readDir(p.workspaceId, p.path);
 	},
+	"fs.search": (params) => {
+		const p = params as { workspaceId: string; query: string };
+		return searchWorktree(p.workspaceId, p.query);
+	},
+	"fs.revealPath": (params) => {
+		const p = params as { workspaceId: string; path: string };
+		// Resolved through the worktree gate, so a path cannot walk out of the workspace it claims.
+		revealPathInFileManager(resolveWorktreeFile(p.workspaceId, p.path));
+		return {};
+	},
+	"fs.trashPath": async (params) => {
+		const p = params as { workspaceId: string; path: string };
+		const abs = resolveWorktreeFile(p.workspaceId, p.path);
+		if (abs === resolveWorktreeFile(p.workspaceId, ".")) {
+			throw new Error("The workspace folder itself cannot be deleted from here");
+		}
+		await trashFile(abs);
+		return {};
+	},
 	"fs.readFile": (params) => {
 		const p = params as { workspaceId: string; path: string };
 		void ensureWatch(p.workspaceId);
 		return readFile(p.workspaceId, p.path);
+	},
+	"fs.writeFile": (params) => {
+		const p = params as { workspaceId: string; path: string; content: string; baseHash: string };
+		void ensureWatch(p.workspaceId);
+		return writeFile(p.workspaceId, p.path, p.content, p.baseHash);
 	},
 	"spec.graph": (params) => {
 		const p = params as { workspaceId: string };
@@ -498,6 +547,16 @@ const handlers: Record<string, Handler> = {
 		void ensureWatch(p.workspaceId);
 		return gitDiffFile(p.workspaceId, p.path, p.scope);
 	},
+	"git.branchDetails": (params) => branchDetails((params as { projectId: string }).projectId),
+	"git.deleteBranch": async (params) => {
+		const p = params as { projectId: string; branch: string };
+		await deleteBranch(p.projectId, p.branch);
+		return {};
+	},
+	"git.fetchRemotes": async (params) => {
+		await fetchRemotes((params as { projectId: string }).projectId);
+		return {};
+	},
 	"git.listCommits": (params) => listCommits((params as { workspaceId: string }).workspaceId),
 	"terminal.reserve": (params) => {
 		const p = params as { workspaceId: string; tabKey: string; title: string };
@@ -513,6 +572,11 @@ const handlers: Record<string, Handler> = {
 			rows?: number;
 		};
 		return attachTerminal(p.workspaceId, p.tabKey, ctx.clientKey, p);
+	},
+	"terminal.rename": (params) => {
+		const p = params as { workspaceId: string; tabKey: string; title: string };
+		renameTerminal(p.workspaceId, p.tabKey, p.title);
+		return {};
 	},
 	"terminal.list": (params) => ({
 		tabs: listTerminals((params as { workspaceId: string }).workspaceId),
@@ -592,7 +656,7 @@ const handlers: Record<string, Handler> = {
 	"workspace.setSubagentsOverride": (params) => {
 		const p = params as { id: string; override: SubagentOverride | null };
 		const workspace = setWorkspaceSubagentsOverride(p.id, p.override);
-		refreshSubagentTools(p.id);
+		refreshDynamicTools(p.id);
 		return workspace;
 	},
 	"workspace.setDiffBase": (params) => {
@@ -781,8 +845,7 @@ const handlers: Record<string, Handler> = {
 		});
 	},
 	"settings.update": (params) => {
-		const config = (params as { config: AppConfigUpdate }).config;
-		return updateConfig(config);
+		return updateConfig((params as { config: AppConfigUpdate }).config);
 	},
 	"feedback.respond": (params) => {
 		respondToInterview((params as { action: InterviewResponse }).action);
@@ -907,7 +970,8 @@ const handlers: Record<string, Handler> = {
 };
 
 export function requestMethodDiagnostic(method: string): string {
-	return Object.hasOwn(handlers, method) ? method : "unknown method";
+	if (Object.hasOwn(handlers, method)) return method;
+	return "unknown method";
 }
 
 export function shouldRefreshOpenReview(allowCached: boolean | undefined): boolean {
@@ -920,6 +984,6 @@ export async function handleRequest(
 	ctx: RequestContext,
 ): Promise<unknown> {
 	const handler = Object.hasOwn(handlers, method) ? handlers[method] : undefined;
-	if (!handler) throw new Error(`Unknown method: ${method}`);
-	return handler(params, ctx);
+	if (handler) return handler(params, ctx);
+	throw new Error(`Unknown method: ${method}`);
 }

@@ -206,11 +206,12 @@ test("listBranches surfaces origin branches and the origin default", async () =>
 	git(repo, "push", "origin", "main");
 	git(repo, "remote", "set-head", "origin", "main");
 
-	const { remote, defaultBranch } = await listBranches("p1");
+	const { remote, defaultBranch, current } = await listBranches("p1");
 	expect(remote).toContain("origin/main");
 	expect(remote).not.toContain("origin/HEAD");
 	expect(remote).not.toContain("origin");
 	expect(defaultBranch).toBe("origin/main");
+	expect(current).toBe("main");
 });
 
 test("the origin/main default survives a local branch with the same shorthand", async () => {
@@ -747,6 +748,17 @@ test("scope resolution never turns a git launch failure into a semantic outcome"
 		/Could not resolve the diff range/,
 	);
 	await expect(resolveDiffRange(workspace)).rejects.toThrow(/Could not resolve the diff range/);
+});
+
+test("a repository with no commits is named as such, not reported as a bad revision", () => {
+	const fresh = join(dataDir, "unborn-repo");
+	rmSync(fresh, { recursive: true, force: true });
+	mkdirSync(fresh, { recursive: true });
+	Bun.spawnSync(["git", "-C", fresh, "init", "-b", "main"], { stdout: "ignore", stderr: "ignore" });
+	writeFileSync(join(fresh, "untracked.txt"), "hello\n");
+	seedWorkspace({ worktreePath: fresh });
+
+	expect(() => gitStatus("w1")).toThrow(/no commits yet/);
 });
 
 function stagedPaths(): string[] {

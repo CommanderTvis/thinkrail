@@ -1,6 +1,7 @@
 import {
 	type AppConfig,
 	type AppConfigUpdate,
+	isCodeFontFamily,
 	isJbcentralQuotaRefreshSeconds,
 	isLineWidth,
 	isSystemThemePair,
@@ -77,6 +78,24 @@ export function updateConfig(partial: AppConfigUpdate): AppConfig {
 		throw new Error("jbcentralQuotaEnabled must be a boolean");
 	}
 	if (
+		runtimeUpdate.editorGpuRendering !== undefined &&
+		typeof runtimeUpdate.editorGpuRendering !== "boolean"
+	) {
+		throw new Error("editorGpuRendering must be a boolean");
+	}
+	if (
+		runtimeUpdate.codeFontFamily !== undefined &&
+		!isCodeFontFamily(runtimeUpdate.codeFontFamily)
+	) {
+		throw new Error("codeFontFamily must be a font family name, at most 120 characters");
+	}
+	if (
+		runtimeUpdate.codeFontLigatures !== undefined &&
+		typeof runtimeUpdate.codeFontLigatures !== "boolean"
+	) {
+		throw new Error("codeFontLigatures must be a boolean");
+	}
+	if (
 		runtimeUpdate.terminalWindowsShell !== undefined &&
 		!isTerminalWindowsShell(runtimeUpdate.terminalWindowsShell)
 	) {
@@ -103,7 +122,7 @@ export function updateConfig(partial: AppConfigUpdate): AppConfig {
 	if (nextThemeMode === "system" && !nextSystemThemePair) {
 		throw new Error("system theme mode requires a complete pair");
 	}
-	const next: AppConfig = {
+	const merged: AppConfig = {
 		...current,
 		...rest,
 		...(theme === undefined ? {} : { theme }),
@@ -112,6 +131,9 @@ export function updateConfig(partial: AppConfigUpdate): AppConfig {
 		...(subagentsEnabled === undefined ? {} : { subagentsEnabled }),
 		...(jbcentralQuotaEnabled === undefined ? {} : { jbcentralQuotaEnabled }),
 		...(jbcentralQuotaRefreshSeconds === undefined ? {} : { jbcentralQuotaRefreshSeconds }),
+	};
+	const next: AppConfig = {
+		...merged,
 		...(customLayoutPresets === undefined
 			? {}
 			: { customLayoutPresets: validateCustomLayoutPresets(customLayoutPresets) }),

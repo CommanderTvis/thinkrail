@@ -50,6 +50,7 @@ function attachProcessSignals(server: RunningServer): RunningServer {
 		get port() {
 			return server.port;
 		},
+		waitForClient: (timeoutMs) => server.waitForClient(timeoutMs),
 		stop,
 		shutdown,
 	};
