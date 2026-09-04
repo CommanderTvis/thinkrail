@@ -207,6 +207,16 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	let hostUpdateTimer: ReturnType<typeof setInterval> | undefined;
 	let hostUpdateActive = hostUpdate !== undefined;
 	let hostUpdateChecking = false;
+	// A drain event lost across a system sleep leaves the latch set forever — the tab frozen while its
+	// pty lives. The socket's own buffer is the truth, so this fires the drain the OS never delivered.
+	const backpressureReconciler = setInterval(() => {
+		for (const clientKey of [...terminalBackpressured]) {
+			const ws = sockets.get(clientKey);
+			if (ws !== undefined && ws.getBufferedAmount() > 0) continue;
+			terminalBackpressured.delete(clientKey);
+			if (ws !== undefined) resumeClientTerminals(clientKey);
+		}
+	}, 1000);
 	let stopping = false;
 	let shutdownPromise: Promise<void> | undefined;
 
@@ -787,6 +797,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		for (const timer of reapTimers.values()) clearTimeout(timer);
 		reapTimers.clear();
 		sockets.clear();
+		clearInterval(backpressureReconciler);
 		terminalBackpressured.clear();
 		requestReplays.clear();
 		persistTerminalSessions();
