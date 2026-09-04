@@ -301,6 +301,7 @@ export interface BranchList {
 	remote: string[];
 	remoteGroups?: RemoteBranchGroup[];
 	defaultBranch: string;
+	current: string;
 }
 
 export type ProviderAuthKind = "oauth" | "api-key" | "env" | "other";
