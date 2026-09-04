@@ -78,8 +78,8 @@ truth) and visible-panel polling (laggy, wasteful over Tailscale).
     dir's top level holds the refs that move (`HEAD`, `index`, `ORIG_HEAD`) while `objects/`/`logs/` are
     pure storms; a missing/unreadable git dir (non-git folder) or a failed start degrades silently.
 
-  `host` fans the nudge out to two convergences: `refreshUserOwnedWorkspace` (a user-owned workspace's
-  folder-truth branch labels) **and** a pathless, skill-neutral `fsChanged` frame (`paths: []`,
+  `host` fans the nudge out to two convergences: `refreshWorkspaceBranch` (the workspace's
+  folder-truth branch label, and the cached PR/MR lookup that goes stale with it) **and** a pathless, skill-neutral `fsChanged` frame (`paths: []`,
   `truncated: false`, `skillChange: "none"`) so the clients' git-derived reads re-read — `git.status` and an
   open `uncommitted`-scope diff tab are relative to `HEAD`, and would otherwise keep reporting a committed
   change as uncommitted until the next file edit.

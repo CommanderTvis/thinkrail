@@ -1,5 +1,7 @@
 import { readFileSync, statSync } from "node:fs";
 
+export type PickKind = "directory" | "file";
+
 interface PickerExecution {
 	stdout: string;
 	stderr: string;
@@ -14,7 +16,7 @@ export interface Picker {
 
 type PickerRunner = (cmd: string[], env: NodeJS.ProcessEnv) => Promise<PickerExecution>;
 
-interface SelectDirectoryOptions {
+interface SelectPickerOptions {
 	platform?: NodeJS.Platform;
 	env?: NodeJS.ProcessEnv;
 	runPicker?: PickerRunner;
@@ -30,42 +32,69 @@ const linuxCancellation = ({ code, stderr }: PickerExecution): boolean =>
 	code === 1 && stderr.trim() === "";
 const noNonZeroCancellation = (): boolean => false;
 
-const WINDOWS_PICKER = [
-	"$ErrorActionPreference = 'Stop'",
-	"Add-Type -AssemblyName System.Windows.Forms",
-	"$owner = New-Object System.Windows.Forms.Form",
-	"$owner.TopMost = $true",
-	"$owner.ShowInTaskbar = $false",
-	"$owner.Opacity = 0",
-	"$owner.Show()",
-	"try {",
-	"  Add-Type -Namespace ThinkRail -Name Fg -MemberDefinition '",
-	'    [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();',
-	'    [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr w, IntPtr p);',
-	'    [DllImport("user32.dll")] public static extern bool AttachThreadInput(uint a, uint b, bool join);',
-	'    [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr w);',
-	'    [DllImport("kernel32.dll")] public static extern uint GetCurrentThreadId();\'',
-	"  $fg = [ThinkRail.Fg]::GetWindowThreadProcessId([ThinkRail.Fg]::GetForegroundWindow(), [IntPtr]::Zero)",
-	"  $me = [ThinkRail.Fg]::GetCurrentThreadId()",
-	"  [void][ThinkRail.Fg]::AttachThreadInput($me, $fg, $true)",
-	"  [void][ThinkRail.Fg]::SetForegroundWindow($owner.Handle)",
-	"  [void][ThinkRail.Fg]::AttachThreadInput($me, $fg, $false)",
-	"} catch { }",
-	"$d = New-Object System.Windows.Forms.FolderBrowserDialog",
-	"$d.Description = 'Open project'",
-	"$ok = $d.ShowDialog($owner) -eq [System.Windows.Forms.DialogResult]::OK",
-	"$owner.Close()",
-	"if ($ok) { Write-Output $d.SelectedPath }",
-].join("\n");
+const PROMPT: Record<PickKind, string> = {
+	directory: "Open project",
+	file: "Choose a file",
+};
 
-const ENCODED_WINDOWS_PICKER = Buffer.from(WINDOWS_PICKER, "utf16le").toString("base64");
+function windowsPicker(kind: PickKind): string {
+	const dialog =
+		kind === "directory"
+			? [
+					"$d = New-Object System.Windows.Forms.FolderBrowserDialog",
+					`$d.Description = '${PROMPT.directory}'`,
+				]
+			: [
+					"$d = New-Object System.Windows.Forms.OpenFileDialog",
+					`$d.Title = '${PROMPT.file}'`,
+					"$d.Filter = 'All files (*.*)|*.*'",
+				];
+	const selected = kind === "directory" ? "$d.SelectedPath" : "$d.FileName";
+	return [
+		"$ErrorActionPreference = 'Stop'",
+		"Add-Type -AssemblyName System.Windows.Forms",
+		"$owner = New-Object System.Windows.Forms.Form",
+		"$owner.TopMost = $true",
+		"$owner.ShowInTaskbar = $false",
+		"$owner.Opacity = 0",
+		"$owner.Show()",
+		"try {",
+		"  Add-Type -Namespace ThinkRail -Name Fg -MemberDefinition '",
+		'    [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();',
+		'    [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr w, IntPtr p);',
+		'    [DllImport("user32.dll")] public static extern bool AttachThreadInput(uint a, uint b, bool join);',
+		'    [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr w);',
+		'    [DllImport("kernel32.dll")] public static extern uint GetCurrentThreadId();\'',
+		"  $fg = [ThinkRail.Fg]::GetWindowThreadProcessId([ThinkRail.Fg]::GetForegroundWindow(), [IntPtr]::Zero)",
+		"  $me = [ThinkRail.Fg]::GetCurrentThreadId()",
+		"  [void][ThinkRail.Fg]::AttachThreadInput($me, $fg, $true)",
+		"  [void][ThinkRail.Fg]::SetForegroundWindow($owner.Handle)",
+		"  [void][ThinkRail.Fg]::AttachThreadInput($me, $fg, $false)",
+		"} catch { }",
+		...dialog,
+		"$ok = $d.ShowDialog($owner) -eq [System.Windows.Forms.DialogResult]::OK",
+		"$owner.Close()",
+		`if ($ok) { Write-Output ${selected} }`,
+	].join("\n");
+}
 
-export function pickersFor(platform: NodeJS.Platform): Picker[] {
+function encodedWindowsPicker(kind: PickKind): string {
+	return Buffer.from(windowsPicker(kind), "utf16le").toString("base64");
+}
+
+export function pickersFor(platform: NodeJS.Platform, kind: PickKind): Picker[] {
+	const prompt = PROMPT[kind];
 	switch (platform) {
 		case "darwin":
 			return [
 				{
-					cmd: ["osascript", "-e", 'POSIX path of (choose folder with prompt "Open project")'],
+					cmd: [
+						"osascript",
+						"-e",
+						kind === "directory"
+							? `POSIX path of (choose folder with prompt "${prompt}")`
+							: `POSIX path of (choose file with prompt "${prompt}" invisibles true)`,
+					],
 					parse: toPath,
 					isCancellation: appleScriptCancellation,
 				},
@@ -73,19 +102,30 @@ export function pickersFor(platform: NodeJS.Platform): Picker[] {
 		case "linux":
 			return [
 				{
-					cmd: ["zenity", "--file-selection", "--directory", "--title=Open project"],
+					cmd: [
+						"zenity",
+						"--file-selection",
+						...(kind === "directory" ? ["--directory"] : []),
+						`--title=${prompt}`,
+					],
 					parse: toPath,
 					isCancellation: linuxCancellation,
 				},
 				{
-					cmd: ["kdialog", "--getexistingdirectory", ".", "--title", "Open project"],
+					cmd: [
+						"kdialog",
+						kind === "directory" ? "--getexistingdirectory" : "--getopenfilename",
+						".",
+						"--title",
+						prompt,
+					],
 					parse: toPath,
 					isCancellation: linuxCancellation,
 				},
 			];
 		case "win32":
 			return ["powershell.exe", "pwsh.exe"].map((shell) => ({
-				cmd: [shell, "-NoProfile", "-Sta", "-EncodedCommand", ENCODED_WINDOWS_PICKER],
+				cmd: [shell, "-NoProfile", "-Sta", "-EncodedCommand", encodedWindowsPicker(kind)],
 				parse: toPath,
 				isCancellation: noNonZeroCancellation,
 			}));
@@ -105,8 +145,13 @@ function pickerOverrideFromFile(value: string): PickerOverride | null {
 	};
 }
 
-function resolveOverride(env: NodeJS.ProcessEnv): PickerOverride | null {
-	const value = env.THINKRAIL_PICK_DIR;
+const OVERRIDE_ENV: Record<PickKind, string> = {
+	directory: "THINKRAIL_PICK_DIR",
+	file: "THINKRAIL_PICK_FILE",
+};
+
+function resolveOverride(kind: PickKind, env: NodeJS.ProcessEnv): PickerOverride | null {
+	const value = env[OVERRIDE_ENV[kind]];
 	if (!value) return null;
 	try {
 		if (statSync(value).isFile()) return pickerOverrideFromFile(value);
@@ -114,15 +159,17 @@ function resolveOverride(env: NodeJS.ProcessEnv): PickerOverride | null {
 	return { kind: "path", path: value };
 }
 
-export function pickerFailure(stderr: string, code: number): string {
+const NOUN: Record<PickKind, string> = { directory: "folder", file: "file" };
+
+export function pickerFailure(kind: PickKind, stderr: string, code: number): string {
 	const firstLine = stderr.replaceAll("\r", "").trim().split("\n")[0];
-	return `The folder picker failed: ${firstLine || `exit ${code}`}`;
+	return `The ${NOUN[kind]} picker failed: ${firstLine || `exit ${code}`}`;
 }
 
-export function noPickerMessage(platform: NodeJS.Platform): string {
+export function noPickerMessage(platform: NodeJS.Platform, kind: PickKind): string {
 	return platform === "linux"
-		? "No folder picker on this host — install zenity or kdialog."
-		: `No native folder picker is available on this host (${platform}).`;
+		? `No ${NOUN[kind]} picker on this host — install zenity or kdialog.`
+		: `No native ${NOUN[kind]} picker is available on this host (${platform}).`;
 }
 
 const defaultRunPicker: PickerRunner = async (cmd, env) => {
@@ -135,21 +182,26 @@ const defaultRunPicker: PickerRunner = async (cmd, env) => {
 	return { stdout, stderr, code };
 };
 
-export async function selectDirectory({
-	platform = process.platform,
-	env = process.env,
-	runPicker = defaultRunPicker,
-}: SelectDirectoryOptions = {}): Promise<{ path: string | null }> {
-	const override = resolveOverride(env);
+async function select(
+	kind: PickKind,
+	{
+		platform = process.platform,
+		env = process.env,
+		runPicker = defaultRunPicker,
+	}: SelectPickerOptions = {},
+): Promise<{ path: string | null }> {
+	const override = resolveOverride(kind, env);
 	if (override?.kind === "error") throw new Error(override.message);
 	if (override?.kind === "path") return { path: override.path };
 	if (platform === "linux" && !env.DISPLAY && !env.WAYLAND_DISPLAY) {
-		throw new Error("No graphical session is available for the folder picker on this Linux host.");
+		throw new Error(
+			`No graphical session is available for the ${NOUN[kind]} picker on this Linux host.`,
+		);
 	}
 
 	let firstFailure: string | null = null;
 	let diagnosticFailure: string | null = null;
-	for (const picker of pickersFor(platform)) {
+	for (const picker of pickersFor(platform, kind)) {
 		let execution: PickerExecution;
 		try {
 			execution = await runPicker(picker.cmd, env);
@@ -158,9 +210,19 @@ export async function selectDirectory({
 		}
 		if (execution.code === 0) return { path: picker.parse(execution.stdout) };
 		if (picker.isCancellation(execution)) return { path: null };
-		const failure = pickerFailure(execution.stderr, execution.code);
+		const failure = pickerFailure(kind, execution.stderr, execution.code);
 		firstFailure ??= failure;
 		if (execution.stderr.trim()) diagnosticFailure ??= failure;
 	}
-	throw new Error(diagnosticFailure ?? firstFailure ?? noPickerMessage(platform));
+	throw new Error(diagnosticFailure ?? firstFailure ?? noPickerMessage(platform, kind));
+}
+
+export function selectDirectory(options: SelectPickerOptions = {}): Promise<{
+	path: string | null;
+}> {
+	return select("directory", options);
+}
+
+export function selectFile(options: SelectPickerOptions = {}): Promise<{ path: string | null }> {
+	return select("file", options);
 }

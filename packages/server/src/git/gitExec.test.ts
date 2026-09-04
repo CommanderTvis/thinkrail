@@ -53,6 +53,7 @@ test("nonInteractiveGitEnv layers over process.env and leaves the user's ssh cli
 	const env = nonInteractiveGitEnv();
 
 	expect(env.GIT_TERMINAL_PROMPT).toBe("0");
+	expect(env.GIT_OPTIONAL_LOCKS).toBe("0");
 	expect(env.PATH).toBe(process.env.PATH);
 	expect(env.GIT_SSH_COMMAND).toBe("ssh -i /keys/sentinel");
 });
