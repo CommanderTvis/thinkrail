@@ -2,16 +2,17 @@
 id: submodule-server-fs
 type: submodule-design
 status: active
-title: fs — worktree file reads
+title: fs — worktree file reads and writes
 parent: module-server
-depends-on: [module-contracts]
+depends-on: [module-contracts, module-shared]
 tags: [public-surface-checked]
 ---
 
 ## Responsibility
 
-Read directories and files inside a workspace's worktree, path-contained, and decide **what a resource's
-bytes are** — the one byte-level classification every content read in the host shares.
+Read and write directories and files inside a workspace's worktree, path-contained, sweep them for a
+substring, and decide **what a resource's bytes are** — the one byte-level classification every content
+read in the host shares.
 
 ## Boundary
 
@@ -47,10 +48,36 @@ bytes are** — the one byte-level classification every content read in the host
   fallback and treating
   `null` bytes as absence (`hash`/`byteLength` null, `text: true` — nothing to decode, and the empty
   string it pairs with is valid text).
-- **Public surface (barrel):** `readDir`, `readFile`, `resolveWorktreeFile`, `classifyBytes`,
+- **An ignored entry is marked, not hidden.** `readDir` asks `git check-ignore` which of the listed
+  entries git would ignore and sets `FileNode.gitignored` on them — asking git, not parsing patterns, is
+  what makes every rule count: `.gitignore` at any level, `.git/info/exclude`, the global excludes file.
+  One `-z --stdin` batch per listing; exit 1 is git's "none", anything higher (a plain folder, no git) marks
+  nothing. Build output and scratch dirs stay openable, the tree just says they are not the repo's.
+- **A write is a compare-and-swap, never a plain write.** `writeFile(workspaceId, path, content, baseHash)`
+  reads what is on disk first and refuses when its hash is not the one the editor last read, handing that
+  content back instead (`FileWriteResult`). The client merges from there — the host never merges, never
+  decides whose text wins, and never writes something the user has not seen. The base is a **content
+  hash**, not an mtime or size: a file rewritten to the same bytes is not a conflict, and two writes
+  inside one filesystem timestamp tick are. `contentHash` is the one definition of that hash — the same
+  sha-256 hex `hashBytes` gives the file's bytes, so the `ResourceMeta.hash` a read handed out is the base a
+  write compares — and
+  `claudeConfig`'s consented-edit flow uses it too, so a hash handed out by one read is comparable by any
+  write. A path with nothing on disk hashes as empty, which is what lets a first write create the file.
+  `contentHash`/`readFileAt`/`writeFileAt` themselves live in `@thinkrail/shared/textFile` (path-agnostic:
+  no worktree containment) — this module re-exports them and owns `resolveInWorktree`, the containment
+  every path here goes through before reaching them.
+- **`searchWorktree(workspaceId, query)` is a plain substring sweep, deliberately.** It walks the
+  worktree from the root, reuses the same `git check-ignore` batch per directory that `readDir` uses (so a
+  project with no git simply has nothing ignored and everything is walked), skips `.git`, skips a file over
+  512 KB or containing a NUL byte, and matches case-insensitively. It stops at 200 hits and says so
+  (`truncated`), which is what keeps a sweep of a large tree bounded without a query language, an index, or
+  a ripgrep the user may not have installed. Line text is capped at 400 characters per hit — a minified
+  bundle must not travel over the wire as one match.
+- **Public surface (barrel):** `readDir`, `readFile`, `readFileAt`, `writeFile`, `writeFileAt`,
+  `contentHash`, `resolveWorktreeFile`, `searchWorktree`, `classifyBytes`,
   `CONTENT_SNIFF_BYTES`, `mimeFromPath`, `hashBytes`, `decodeText`, `resourceMeta`.
-- **Allowed deps:** `persistence` (workspace lookup); `contracts` (`FileNode`, `ResourceMeta`); Node
-  `fs`/`path`/`crypto`.
+- **Allowed deps:** `persistence` (workspace lookup); `contracts` (`FileNode`, `FileWriteResult`, `ResourceMeta`);
+  `@thinkrail/shared/textFile`; Node `fs`/`path`/`crypto`.
 - **Forbidden:** `host`; sibling features.
 
 ## Get right

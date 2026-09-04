@@ -39,7 +39,8 @@ interval (`1–3600`, default 30), because those values govern host process cade
 - **Owns:** cached current `AppConfig`; `getConfig()`; `updateConfig(partial)` (merge → validate known fields → persist → publish the merged `AppConfig` and successful applied `AppConfigUpdate`); line-width and resource-free custom-preset validation/normalization; custom-preset safety caps; `setSettingsPublisher`; and `resetConfigCache` for tests.
 - **Public surface (barrel):** `getConfig`, `updateConfig`, `noteRecentModel`, `setSettingsPublisher`, `SettingsPublisher`, `resetConfigCache`, plus pure custom-preset normalization used by host startup after persistence load.
 - **Allowed deps:** `persistence` (`loadConfig`/`saveConfig`); `contracts` (`AppConfig`, `LayoutPreset`,
-  `isTerminalWindowsShell`).
+  `isTerminalWindowsShell`, `PluginSettingsNamespace`, `LEGACY_LAYOUT_TOOL_IDS`); `plugin-api`
+  (`parsePluginToolId`); Node `path` (`isAbsolute`).
 - **Forbidden:** host or another feature sibling; current-layout document/snapshot types; workspace ids/resources; current frame validation; owning WS channels; or importing web preset definitions.
 
 ## Get right
@@ -61,5 +62,6 @@ interval (`1–3600`, default 30), because those values govern host process cade
   default-on preference alone; a preference-only write never infers completion. Confirmation without a
   preference is rejected, and changing a confirmed decision writes both fields. The delivery gate belongs to
   [[submodule-server-analytics]]; the dialog lifecycle belongs to [[submodule-web-panels]].
+- A custom preset's tool ids are accepted by shape (a fixed builtin id, or `parsePluginToolId(id) !== null`), not against a live plugin roster, so a preset naming a plugin tool this process has not loaded still validates. `normalizeStoredCustomLayoutPresets` rewrites `LEGACY_LAYOUT_TOOL_IDS`' entries (`specs`, `claude`) to their plugin tool ids before validating a stored preset, so a preset saved before the plugin split reads back already speaking the plugin ids.
 - `null` clears optional `defaultModel`/`defaultEffort` and `reviewModel`/`reviewEffort` overrides; it is a wire-only sentinel and never persists.
 - Stored `favoriteModels` / `recentModels` that are not arrays fall back to `[]` on load without discarding valid siblings; a wire `favoriteModels` with any non-model member rejects the whole update.

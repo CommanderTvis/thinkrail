@@ -8,13 +8,20 @@ export {
 	stopBackgroundCommand,
 	stopSubagent,
 } from "./chatResources";
-export { type ReviewSubagentRun, readChildTranscript, runReviewSubagent } from "./delegation";
+export {
+	type ReviewSubagentRun,
+	readChildTranscript,
+	resetDelegationServices,
+	runReviewSubagent,
+} from "./delegation";
 export {
 	type BundledExtensionFactory,
 	type BundledExtensions,
 	listProjectAliasSkillNames,
 	listSkillCatalog,
 	listSkillCommands,
+	PI_EXTENSION_PACKAGES,
+	type PiExtensionPackage,
 	registerBundledRuntime,
 } from "./extensions";
 export {
@@ -60,4 +67,5 @@ export {
 	setTitleToolHost,
 	type TitleToolHost,
 } from "./titleTool";
+export { trashFile } from "./trash";
 export * from "./webUiContext";

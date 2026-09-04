@@ -15,7 +15,6 @@ import {
 	type Skill,
 } from "@earendil-works/pi-coding-agent";
 import type { SkillCatalogEntry, SlashCommandInfo } from "@thinkrail/contracts";
-import specGraphExtension from "pi-spec-graph";
 import {
 	registryInlineExtensions,
 	resolveExtensionSkillRoots,
@@ -40,14 +39,60 @@ import { setTitleExtension } from "./titleTool";
 
 export type BundledExtensionFactory = ExtensionFactory;
 
+export interface BundledPluginRuntime {
+	factories: ExtensionFactory[];
+	skillsDir: string | null;
+	assetsDir: string | null;
+}
+
 export interface BundledExtensions {
 	factories: BundledExtensionFactory[];
 	skillsDir: string;
 	trashHelpers: BundledTrashHelpers;
 	webAccessFactory: BundledExtensionFactory;
+	plugins?: Record<string, BundledPluginRuntime>;
 }
 
 let bundled: BundledExtensions | undefined;
+
+const EMPTY_BUNDLED_PLUGIN_RUNTIME: BundledPluginRuntime = {
+	factories: [],
+	skillsDir: null,
+	assetsDir: null,
+};
+
+/** A builtin plugin's staged runtime in the compiled binary/desktop, or the empty runtime in dev. */
+export function bundledPluginRuntime(id: string): BundledPluginRuntime {
+	return bundled?.plugins?.[id] ?? EMPTY_BUNDLED_PLUGIN_RUNTIME;
+}
+
+/** What the plugin loader contributes to every session's resources. */
+export interface PluginPiResources {
+	factories: ExtensionFactory[];
+	extensionPaths: string[];
+	skillPaths: string[];
+	childFactories: ExtensionFactory[];
+	toolsExtension: ExtensionFactory;
+}
+
+const noopToolsExtension: ExtensionFactory = () => {};
+
+function defaultPluginResources(): PluginPiResources {
+	return {
+		factories: [],
+		extensionPaths: [],
+		skillPaths: [],
+		childFactories: [],
+		toolsExtension: noopToolsExtension,
+	};
+}
+
+let pluginResourcesProvider: () => PluginPiResources = defaultPluginResources;
+
+/** Installed by the plugin loader: what every session's resource loader should add for active plugins. */
+export function setPluginResourcesProvider(fn: (() => PluginPiResources) | null): void {
+	pluginResourcesProvider = fn ?? defaultPluginResources;
+}
 
 export async function registerBundledRuntime(extensions: BundledExtensions): Promise<void> {
 	bundled = extensions;
@@ -62,18 +107,29 @@ export async function registerBundledRuntime(extensions: BundledExtensions): Pro
 	setBedrockProviderModule(bedrockProviderModule);
 }
 
+export const PI_EXTENSION_PACKAGES = [
+	"pi-web-access",
+	"pi-thinkrail-workflow",
+	"pi-todos",
+] as const;
+
+export type PiExtensionPackage = (typeof PI_EXTENSION_PACKAGES)[number];
+
+function piExtensionResolver(): (name: PiExtensionPackage) => string {
+	const require = createRequire(import.meta.url);
+	return (name) => require.resolve(`${name}/index.ts`);
+}
+
 let devPaths: { extensionPaths: string[]; skillPaths: string[] } | undefined;
 function resolveDevPaths(): { extensionPaths: string[]; skillPaths: string[] } {
 	if (devPaths) return devPaths;
-	const require = createRequire(import.meta.url);
-	const webAccessPath = require.resolve("pi-web-access/index.ts");
-	const specGraphPath = require.resolve("pi-spec-graph/index.ts");
-	const workflowPath = require.resolve("pi-thinkrail-workflow/index.ts");
-	const todosPath = require.resolve("pi-todos/index.ts");
+	const resolveEntry = piExtensionResolver();
+	const webAccessPath = resolveEntry("pi-web-access");
+	const workflowPath = resolveEntry("pi-thinkrail-workflow");
+	const todosPath = resolveEntry("pi-todos");
 	devPaths = {
-		extensionPaths: [webAccessPath, specGraphPath, workflowPath, todosPath],
+		extensionPaths: [webAccessPath, workflowPath, todosPath],
 		skillPaths: [
-			join(dirname(specGraphPath), "skills"),
 			join(dirname(workflowPath), "skills"),
 			join(dirname(todosPath), "skills"),
 			...serverExtensions.flatMap(resolveExtensionSkillRoots),
@@ -199,8 +255,8 @@ export function childExtensionFactories(): InlineExtension[] {
 	return [
 		headlessSearchPolicy,
 		webAccessFactory(),
-		specGraphExtension,
 		...registryInlineExtensions("childExtensions"),
+		...pluginResourcesProvider().childFactories,
 	];
 }
 
@@ -212,6 +268,7 @@ export async function buildResourceLoader(
 	extraFactories: ExtensionFactory[] = [],
 	askUserQuestionWaiters: AskUserQuestionWaiters = createAskUserQuestionWaiters(),
 ): Promise<ResourceLoader> {
+	const pluginResources = pluginResourcesProvider();
 	const sharedFactories: InlineExtension[] = [
 		...registryInlineExtensions("extensions"),
 		headlessSearchPolicy,
@@ -220,6 +277,8 @@ export async function buildResourceLoader(
 		requestReviewExtension,
 		setTitleExtension,
 		oversizedImageGuard,
+		pluginResources.toolsExtension,
+		...pluginResources.factories,
 		...extraFactories,
 	];
 	const skillInputs = resolveSkillInputs(cwd, getAdmission);
@@ -229,6 +288,7 @@ export async function buildResourceLoader(
 		agentDir,
 		settingsManager,
 		...skillInputs,
+		additionalSkillPaths: [...skillInputs.additionalSkillPaths, ...pluginResources.skillPaths],
 	};
 
 	const excluded = new Set(excludedExtensionPaths.map((path) => resolve(path)));
@@ -251,6 +311,7 @@ export async function buildResourceLoader(
 	const additionalExtensionPaths = [
 		...(bundled ? [] : resolveDevPaths().extensionPaths),
 		...discoveredExtensionPaths,
+		...pluginResources.extensionPaths,
 	];
 	const loader = new DefaultResourceLoader(
 		bundled

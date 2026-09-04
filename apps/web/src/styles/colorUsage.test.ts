@@ -60,9 +60,12 @@ const NON_COLOR = new Set([
 	"y",
 	"t-0",
 	"b-0",
+	"l-0",
+	"r-0",
 	"l-2",
 	"r-2",
 	"t-2",
+	"b-2",
 	"l-4",
 	"collapse",
 	"separate",
@@ -76,6 +79,11 @@ const NON_COLOR = new Set([
 	"clip-padding",
 	"none",
 	"inset",
+	// Border *styles* read like colours to the pattern above; they are not.
+	"solid",
+	"dashed",
+	"dotted",
+	"double",
 ]);
 
 const COLOR_PREFIX =
@@ -172,7 +180,7 @@ describe("colour at a call site", () => {
 });
 
 describe("raw colour values", () => {
-	const ALLOWLIST = new Set(["lib/utils.ts"]);
+	const ALLOWLIST = new Set(["lib/utils.ts", "packages/ui/editor/colorUtils.ts"]);
 
 	it("appear in no component", () => {
 		const literal = /#[0-9a-fA-F]{3,8}\b|\brgba?\(|\bhsla?\(/;

@@ -19,6 +19,7 @@ import { dataDir } from "../persistence";
 import {
 	buildSessionSettings,
 	canUseSessionResources,
+	isWorkspaceStreaming,
 	liveParentContext,
 } from "./agentSessionManager";
 import { publishSessionResourcesChanged } from "./chatResources";
@@ -80,6 +81,25 @@ export async function disposeSessionChildren(
 export function removeWorkspaceDelegation(workspaceId: string): void {
 	services.delete(workspaceId);
 	rmSync(join(delegationRootDir(), workspaceId), { recursive: true, force: true });
+}
+
+const pendingReset = new Set<string>();
+
+export function resetDelegationServices(workspaceId?: string): void {
+	const targets = workspaceId !== undefined ? [workspaceId] : [...services.keys()];
+	for (const id of targets) {
+		if (isWorkspaceStreaming(id)) {
+			pendingReset.add(id);
+			continue;
+		}
+		services.delete(id);
+		pendingReset.delete(id);
+	}
+}
+
+export function applyPendingDelegationReset(workspaceId: string): void {
+	if (!pendingReset.delete(workspaceId)) return;
+	services.delete(workspaceId);
 }
 
 function assertWorkspaceStorageId(value: string): void {

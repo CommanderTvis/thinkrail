@@ -41,8 +41,10 @@ channel fan-out, and the process-boot wrapper both launchers share.
   send `X-Content-Type-Options: nosniff`; active same-origin types (`text/html`,
   `application/xhtml+xml`, `image/svg+xml`) additionally receive
   `Content-Security-Policy: sandbox; default-src 'none'`, so direct navigation cannot execute repository
-  script, static serving with
-  `index.html` fallback, the `server.welcome` push, the **`?client=` page identity** read off the socket URL at
+  script, static serving whose
+  `index.html` fallback is **for routes only** — a miss whose path carries a file extension is a plain 404,
+  because answering a stale code-split chunk with HTML surfaces as `'text/html' is not a valid JavaScript
+  MIME type` inside a lazy panel's error boundary rather than as the missing file it is, the `server.welcome` push, the **`?client=` page identity** read off the socket URL at
   upgrade (threaded to every handler as `RequestContext`; it addresses terminal output but no longer *owns*
   PTYs — see [[submodule-server-terminal]]) plus the `clientKey → socket` registry and the **replay-namespace
   retention timer** that outlives a reconnect (terminals are deliberately untouched by it); the
@@ -83,7 +85,7 @@ channel fan-out, and the process-boot wrapper both launchers share.
   conservative fallback; its optional `prewarm` flag is forwarded into `watch`'s bounded prewarm-only tier,
   so pre-selection warm-ups never grow the watcher registry unboundedly); plus the **repo-metadata** callback (`setRepoMetaPublisher`) fanned out to **two**
   convergences for a git-metadata write in a watched worktree:
-  `refreshUserOwnedWorkspace` (**re-sync a user-owned workspace's folder-truth branch** — host-mediated,
+  `refreshWorkspaceBranch` (**re-sync the workspace's folder-truth branch** — host-mediated,
   since `watch` has no `workspaces` edge, and self-publishing through the workspace-lifecycle tee) **and** a
   pathless, skill-neutral `fsChanged` frame (`paths: []`, `truncated: false`, `skillChange: "none"`) so the
   clients' `HEAD`-relative reads
@@ -385,6 +387,38 @@ channel fan-out, and the process-boot wrapper both launchers share.
   (`STALE_VIEW`/`SCOPE_IMMUTABLE`/`RANGE_INVALID`/`RECEIPT_UNKNOWN`/`UNSUPPORTED_CHANGE`) through the same `CodedError`
   mapping `UNKNOWN_COMMIT` uses — the dispatch names no codes of its own, so a code added in `contracts`
   and thrown by a feature reaches the client with no host-side allowlist to update.
+- **The plugin runtime is installed once every other seam is ready.** `createServer` calls
+  `installPlugins(seams)` (`plugins/SPEC.md`) after the publisher-seam block and before
+  `reviveTerminalSessions()` — a plugin's revive hook must already be live for the boot-time revive
+  pass to reach it — then wires the four seams a plugin can install on top of a core one:
+  `setTerminalEnvContributors(plugins.terminalEnv)`, `setTerminalObserver(plugins.onTerminalEvent)`,
+  `setRevivePrefillHook(plugins.revivePrefill)`, `setPluginResourcesProvider(plugins.piResources)`,
+  `setPluginNamespaceValidator(plugins.validateSettings)`. A `let plugins: PluginRuntime | undefined`
+  closes over every route, channel, and handler that can reach it before `installPlugins` resolves —
+  the same async-boot tolerance every other seam here already has (`?.`/`?? []` instead of guaranteed
+  ordering): a `/plugin/<id>/…` request in that window 404s instead of reaching `plugins.serveRoute`,
+  a socket opened in that window subscribes no plugin channels and its welcome frame's `plugins` field
+  is empty, and `/mcp/`'s tool table — `plugins.mcpTools(owner, worktreePath)` — is empty (`spec_*`,
+  `blueprint_check`, and `visualize` among the tools it would otherwise carry).
+  A socket subscribes to a plugin's channels once, in the `open` handler, against the roster as it stood
+  at connect time — a plugin enabled afterward (the generic Settings toggle, `enabledByDefault: false`)
+  would otherwise publish to a topic nobody already connected ever subscribed to, so every activation and
+  deactivation re-syncs every live socket's plugin-channel subscriptions instead.
+  Installed, the workspace-lifecycle publisher and `publishFsChanged` also fan their event to
+  `plugins.workspaceEvent`/`plugins.fsChanged`; `stop()` calls `plugins.dispose()` first, synchronously,
+  before the rest of teardown, and clears the runtime pointer `handlers.ts` dispatches through.
+  `settings.update` (`handlers.ts`) runs a `plugins` update through
+  `cascadeDisable(update, plugins.roster())` before `updateConfig` — disabling an id disables its
+  transitive dependents in the same write — then calls `plugins.settingsChanged(updated)` to schedule a
+  reconcile; `plugins.list` / `plugins.rescan` / `plugins.retry` are the WS methods over
+  `roster()`/`rescan()`/`retry(id)`. `handleRequest` falls through to `plugins.handleRequest` for any
+  `plugin.<id>.<name>` method once a runtime is installed — a well-formed call to an id/name its
+  contract intake never declared answers `plugins.handleRequest`'s own bare `Unknown method`; with no
+  runtime installed at all it falls to the generic `Unknown method: <method>` every other unrouted
+  method gets. `requestMethodDiagnostic` recognizes the `plugin.<id>.<name>` shape either way, so a
+  plugin call's debug log line names the method instead of falling to `unknown method`. The
+  runtime reaches `handlers.ts` through its own module-level `setPluginRuntime()` setter rather than a
+  `server.ts` import, so `handlers.ts`'s import surface stays sibling-only.
 - **Review state is host-composed and serialized per workspace** (`reviewLock.ts`): `review.send*` is
   `reviews` (drafts + package) plus `agent` (session) plus `reviews` again (mark sent + link) — a
   check-then-mark straddling an `await createSession(…)`, the review layer's only non-atomic gap.

@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { join, normalize } from "node:path";
+import { extname, join, normalize } from "node:path";
 import type {
 	HostPlatform,
 	HostUpdateNotice,
@@ -17,15 +17,18 @@ import {
 } from "@thinkrail/contracts";
 import { errorCodeOf } from "@thinkrail/shared/codedError";
 import {
+	bundledPluginRuntime,
 	disposeAllSessions,
 	getSessionWorkspaceId,
 	initializeSessionStates,
 	isProjectSkillPath,
-	refreshAgentReviewTool,
-	refreshSubagentTools,
+	promptSession,
+	refreshDynamicTools,
+	resetDelegationServices,
 	setAgentReviewEnabledResolver,
 	setExtUiPublisher,
 	setModelContextPublisher,
+	setPluginResourcesProvider,
 	setReviewCommentHandler,
 	setSessionCreatedPublisher,
 	setSessionDeletedPublisher,
@@ -55,8 +58,11 @@ import {
 } from "../auth";
 import { forgetOpenBranchReview } from "../branch-review";
 import { redeliverInterview, releaseInterview, setFeedbackPublisher } from "../feedback";
+import { gitAsync } from "../git";
 import { logger } from "../log";
-import { loadWorkspaces } from "../persistence";
+import { serveMcp } from "../mcp";
+import { dataDir, loadWorkspaces } from "../persistence";
+import { installPlugins, type PluginRuntime } from "../plugins";
 import {
 	getProjects,
 	listProjects,
@@ -65,26 +71,45 @@ import {
 	setProjectPublisher,
 } from "../projects";
 import { reanchorWorkspace, resolveCommentFromAgent, setReviewPublisher } from "../reviews";
-import { getConfig, setSettingsPublisher } from "../settings";
+import { getConfig, setPluginNamespaceValidator, setSettingsPublisher } from "../settings";
 import {
+	agentRecordOf,
 	closeAllTerminals,
 	persistTerminalSessions,
 	resumeClientTerminals,
 	reviveTerminalSessions,
+	setAgentRecord,
+	setRevivePrefillHook,
+	setTerminalEnvContributors,
+	setTerminalObserver,
 	setTerminalPublisher,
 	setTerminalTabsPublisher,
+	setTerminalTokenEndpoint,
+	terminalForToken,
+	terminalRefs,
+	terminalToken,
+	workspaceForProcess,
+	writeTerminalFromHost,
 } from "../terminal";
 import { isTodoToolEnd, maybeAttachChangeArtifacts } from "../todos";
 import {
+	ensureWatch,
 	setRepoMetaPublisher,
 	setSkillPathClassifier,
 	setWatchPublisher,
 	stopAllWatches,
 } from "../watch";
-import { getWorkspace, refreshUserOwnedWorkspace, setWorkspacePublisher } from "../workspaces";
+import {
+	adoptManagedWorktrees,
+	getWorkspace,
+	listAllWorkspaceRecords,
+	listWorkspaceRecords,
+	refreshWorkspaceBranch,
+	setWorkspacePublisher,
+} from "../workspaces";
 import { BLOB_PREFIX, FILES_PREFIX, serveBlob, serveWorktreeFile } from "./fileRoutes";
 import { setFsNudgePublisher } from "./fsNudge";
-import { handleRequest, requestMethodDiagnostic } from "./handlers";
+import { handleRequest, requestMethodDiagnostic, setPluginRuntime } from "./handlers";
 import { provisionInitialTerminal } from "./initialTerminal";
 import { trackLoginOutcome } from "./loginAnalytics";
 import {
@@ -101,6 +126,7 @@ import {
 	maybeAutoReReview,
 	setReviewFailedPublisher,
 } from "./requestReview";
+import { reviewMcpTools } from "./reviewMcp";
 import { runObservation } from "./runAnalytics";
 import { resolveSubagentsEnabled } from "./subagentPolicy";
 import { taskObservation } from "./taskAnalytics";
@@ -109,6 +135,7 @@ import {
 	drainedClientKeys,
 	terminalDeliveryForSendStatus,
 } from "./terminalSend";
+import { titleMcpTools } from "./titleMcp";
 import { titleToolHost } from "./titleTool";
 import { markClientStale, reconcilePendingReviewsOnBoot } from "./todoReview";
 
@@ -145,6 +172,8 @@ export interface CreateServerOptions {
 export interface RunningServer {
 	readonly port: number;
 	startAttributionClaim: () => void;
+	/** Resolves true as soon as a client holds a socket, false once the wait runs out. */
+	waitForClient: (timeoutMs: number) => Promise<boolean>;
 	stop: () => void;
 	shutdown: () => Promise<void>;
 }
@@ -206,6 +235,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	);
 
 	const sockets = new Map<string, Bun.ServerWebSocket<SocketData>>();
+	const clientWaiters = new Set<() => void>();
 	const reapTimers = new Map<string, ReturnType<typeof setTimeout>>();
 	const requestReplays = new RequestReplayCache<string>();
 	const terminalBackpressured = new Set<string>();
@@ -218,6 +248,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	};
 	let stopping = false;
 	let shutdownPromise: Promise<void> | undefined;
+	let plugins: PluginRuntime | undefined;
 
 	const armClientReap = (clientKey: string): void => {
 		reapTimers.set(
@@ -249,11 +280,35 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 			if (url.pathname === "/health") {
 				return new Response("ok");
 			}
+			if (url.pathname.startsWith("/mcp/")) {
+				if (req.method !== "POST") return new Response("method not allowed", { status: 405 });
+				const owner = terminalForToken(url.pathname.slice("/mcp/".length));
+				if (owner === null) return new Response("unknown terminal", { status: 404 });
+				// A token can outlive its workspace (removed while an agent was still running).
+				let worktreePath: string;
+				try {
+					worktreePath = getWorkspace(owner.workspaceId).worktreePath;
+				} catch {
+					return new Response("unknown workspace", { status: 404 });
+				}
+				const body: unknown = await req.json().catch(() => null);
+				const reply = await serveMcp(body, [
+					...reviewMcpTools(owner),
+					...titleMcpTools(owner.workspaceId),
+					...(plugins?.mcpTools(owner, worktreePath) ?? []),
+				]);
+				return reply.body === null
+					? new Response(null, { status: reply.status })
+					: Response.json(reply.body, { status: reply.status });
+			}
 			if (url.pathname.startsWith(FILES_PREFIX)) {
 				return serveWorktreeFile(url.pathname);
 			}
 			if (url.pathname.startsWith(BLOB_PREFIX)) {
 				return serveBlob(url.pathname, req.signal);
+			}
+			if (url.pathname.startsWith("/plugin/")) {
+				return plugins ? plugins.serveRoute(req, url) : new Response("not found", { status: 404 });
 			}
 			if (staticDir) {
 				return serveStatic(url.pathname, staticDir);
@@ -264,6 +319,8 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 			open(ws) {
 				const replaced = sockets.get(ws.data.clientKey);
 				sockets.set(ws.data.clientKey, ws);
+				for (const arrived of clientWaiters) arrived();
+				clientWaiters.clear();
 				if (replaced && replaced !== ws) replaced.close();
 				terminalBackpressured.delete(ws.data.clientKey);
 				const pendingReap = reapTimers.get(ws.data.clientKey);
@@ -288,7 +345,8 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 				ws.subscribe(WS_CHANNELS.settingsChanged);
 				if (hostUpdate) ws.subscribe(WS_CHANNELS.hostUpdateAvailable);
 				ws.subscribe(WS_CHANNELS.reviewChanged);
-				ws.subscribe(WS_CHANNELS.reviewFailed);
+				ws.subscribe(WS_CHANNELS.pluginsChanged);
+				for (const channel of plugins?.channelNames() ?? []) ws.subscribe(channel);
 				const hostPlatform: HostPlatform =
 					process.platform === "darwin" || process.platform === "win32"
 						? process.platform
@@ -300,6 +358,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 					projects: listProjects(),
 					recentProjects: listRecentProjects(),
 					config: getConfig(),
+					plugins: plugins?.roster() ?? [],
 					...(appVersion ? { appVersion } : {}),
 					...(hostUpdateNotice ? { hostUpdate: hostUpdateNotice } : {}),
 				};
@@ -480,6 +539,10 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		hostUpdateActive = false;
 		clearHostUpdateTimer();
 	};
+	// The address a terminal on this machine can actually dial: the interface the server bound, unless
+	// that is a wildcard, which nothing can connect to. Only set once the port is real.
+	const statusHost = host === "0.0.0.0" || host === "::" ? "localhost" : host;
+	setTerminalTokenEndpoint(`http://${statusHost}:${server.port ?? port}`);
 
 	setTerminalPublisher((clientKey, channel, data) => {
 		if (terminalBackpressured.has(clientKey)) return "unavailable";
@@ -566,6 +629,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		const data =
 			event.kind === "removed" ? { projectId: event.projectId, id: event.id } : event.workspace;
 		server.publish(channel, JSON.stringify({ channel, data }));
+		plugins?.workspaceEvent(event);
 	});
 
 	const publishFsChanged = (payload: WorkspaceFsChangedPayload) => {
@@ -574,15 +638,17 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 			JSON.stringify({ channel: WS_CHANNELS.workspaceFsChanged, data: payload }),
 		);
 		reanchorWorkspace(payload.workspaceId);
+		plugins?.fsChanged(payload);
 	};
 	setWatchPublisher(publishFsChanged);
 	setSkillPathClassifier(isProjectSkillPath);
 	setFsNudgePublisher(publishFsChanged);
 
 	setRepoMetaPublisher((workspaceId) => {
-		refreshUserOwnedWorkspace(workspaceId);
-		const workspace = loadWorkspaces().find((w) => w.id === workspaceId);
+		refreshWorkspaceBranch(workspaceId);
+		const workspace = listAllWorkspaceRecords().find((candidate) => candidate.id === workspaceId);
 		if (workspace) forgetOpenBranchReview(workspace.worktreePath);
+		if (workspace?.kind === "default") void adoptManagedWorktrees(workspace.projectId);
 		publishFsChanged({ workspaceId, paths: [], truncated: false, skillChange: "none" });
 	});
 
@@ -629,8 +695,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		) {
 			startAttributionClaim();
 		}
-		if (appliedUpdate.subagentsEnabled !== undefined) refreshSubagentTools();
-		if (appliedUpdate.agentReviewEnabled !== undefined) refreshAgentReviewTool();
+		refreshDynamicTools();
 	});
 
 	setSessionCreatedPublisher((payload: SessionCreatedPayload) => {
@@ -719,6 +784,74 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		...(analytics ?? {}),
 		additionalEnabled: initialAdditionalAnalyticsEnabled(initialConfig),
 	});
+
+	plugins = await installPlugins({
+		dataDir: dataDir(),
+		publish: (channel, payload, target) => {
+			const message = JSON.stringify({ channel, data: payload });
+			if (target === undefined) {
+				server.publish(channel, message);
+				return;
+			}
+			const ws = sockets.get(target.clientKey);
+			if (ws === undefined) return;
+			try {
+				ws.send(message);
+			} catch {
+				ws.close();
+			}
+		},
+		publishRoster: (roster) => {
+			server.publish(
+				WS_CHANNELS.pluginsChanged,
+				JSON.stringify({ channel: WS_CHANNELS.pluginsChanged, data: roster }),
+			);
+			for (const ws of sockets.values()) {
+				for (const channel of plugins?.channelNames() ?? []) ws.subscribe(channel);
+			}
+		},
+		publicBaseUrl: () => `http://${statusHost}:${server.port ?? port}`,
+		terminal: {
+			token: terminalToken,
+			forToken: terminalForToken,
+			agentRecord: agentRecordOf,
+			setAgentRecord,
+			write: (terminal, data) => writeTerminalFromHost(terminal.workspaceId, terminal.tabKey, data),
+			list: terminalRefs,
+			workspaceForProcess,
+		},
+		sessions: { send: promptSession },
+		workspaces: {
+			projects: getProjects,
+			list: (projectId) =>
+				projectId !== undefined ? listWorkspaceRecords(projectId) : listAllWorkspaceRecords(),
+			get: (id) => {
+				try {
+					return getWorkspace(id);
+				} catch {
+					return null;
+				}
+			},
+			watch: (id) => ensureWatch(id).then(() => undefined),
+		},
+		git: (cwd, args, options) => gitAsync(cwd, [...args], options),
+		config: getConfig,
+		resourcesChanged: () => {
+			refreshDynamicTools();
+			resetDelegationServices();
+		},
+		logger,
+		bundledPluginRuntime,
+	});
+	setPluginRuntime(plugins);
+	setTerminalEnvContributors(plugins.terminalEnv);
+	setTerminalObserver((event) => {
+		plugins?.onTerminalEvent(event);
+	});
+	setRevivePrefillHook(plugins.revivePrefill);
+	setPluginResourcesProvider(plugins.piResources);
+	setPluginNamespaceValidator(plugins.validateSettings);
+
 	reviveTerminalSessions();
 	for (const workspace of loadWorkspaces()) provisionInitialTerminal(workspace);
 
@@ -732,14 +865,33 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 
 	void observeCurrentSetup();
 
+	const waitForClient = (timeoutMs: number): Promise<boolean> => {
+		if (sockets.size > 0) return Promise.resolve(true);
+		return new Promise((resolve) => {
+			const arrived = (): void => {
+				clearTimeout(timer);
+				resolve(true);
+			};
+			const timer = setTimeout(() => {
+				clientWaiters.delete(arrived);
+				resolve(false);
+			}, timeoutMs);
+			clientWaiters.add(arrived);
+		});
+	};
+
 	const stop = (): void => {
 		if (stopping) return;
 		stopping = true;
 		setupObservation.clear();
 		runObservation.reset();
 		taskObservation.clear();
+		plugins?.dispose();
+		setPluginRuntime(null);
 		void shutdownAnalytics();
 		stopHostUpdateChecks();
+		setRevivePrefillHook(null);
+		setTerminalEnvContributors(null);
 		cancelAllLogins();
 		stopJbcentralRuntime();
 		stopAllWatches();
@@ -783,6 +935,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 			return server.port ?? port;
 		},
 		startAttributionClaim: startAttributionClaimWhenReady,
+		waitForClient,
 		stop,
 		shutdown,
 	};
@@ -793,6 +946,7 @@ async function serveStatic(pathname: string, staticDir: string): Promise<Respons
 	const requested = safe === "/" || safe === "" ? "index.html" : safe;
 	const file = Bun.file(join(staticDir, requested));
 	if (await file.exists()) return new Response(file);
+	if (extname(requested)) return new Response("not found", { status: 404 });
 	const index = Bun.file(join(staticDir, "index.html"));
 	if (await index.exists()) return new Response(index);
 	return new Response("not found", { status: 404 });

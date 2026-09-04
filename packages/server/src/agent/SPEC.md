@@ -532,13 +532,23 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     `setSubagentsEnabledResolver` maps that
     workspace id to its current effective policy without creating an `agent` → settings/workspaces edge.
     The predicate reaches the extension's launch-time guard and initial/reload activation. For live
-    policy changes, `refreshSubagentTools(workspaceId?)` removes/adds `Agent` +
+    policy changes, `refreshDynamicTools(workspaceId?)` (in `agentSessionManager`) removes/adds `Agent` +
     `get_subagent_result` through pi's active-tool API: idle sessions update synchronously, streaming
     sessions retain only a pending reevaluation applied at `agent_settled`, and repeated changes resolve
     the latest policy then. Session registration re-resolves once after async extension binding and before
     creation is published, so a policy mutation cannot fall into the bind-before-registry gap. Policy changes never replace the retained
     owner, so already-running detached children finish and retain completion delivery; a disabled launch is still rejected immediately by the live
     predicate even before a streaming parent's tool set can be refreshed.
+    **The name is already generalized (H16/S12's "plugin `agent` tools" was meant to fold in here) but the
+    behaviour is not yet**: a plugin's own tool is registered by an extension factory at session build
+    time, and pi's active-tool API can only toggle a tool already registered — picking one up on an
+    already-running session needs a full `session.reload()`, which was tried and reverted here because it
+    is asynchronous and every existing caller (the subagent toggle tests, and plausibly a future plugin
+    Settings toggle) reads the new tool state on the very next prompt. `refreshDynamicTools` therefore still
+    only covers the subagent case; a plugin's tool reaches an already-running session only when that
+    session is next recreated, and closing this gap (a synchronous pi API for adding a registered-but-not-
+    yet-active tool, if one exists, or an explicit accepted-latency reload path) is left to whoever adds the
+    first plugin that needs it live.
     The plan-review `request_review` tool follows the same live-toggle shape: it is always registered, but
     `setAgentReviewEnabledResolver` (host-injected, global — no `agent` → settings edge) decides whether it
     stays in a session's active set, and `refreshAgentReviewTool(workspaceId?)` applies a change idle-sync /
@@ -715,7 +725,10 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     `extensionFactories`: a **headless-search policy** (a `tool_call` hook defaulting
     `web_search`'s `workflow` to `"none"`, since pi-web-access would otherwise open a browser curator our
     `rpc` host can't render), `askUserQuestionExtension` (registers the `ask_user_question` tool),
-    `oversizedImageGuard` (the context-level image-size guard, see the `imageGuard` bullet), **and the
+    `oversizedImageGuard` (the context-level image-size guard, see the `imageGuard` bullet) — the
+    read-only `blueprint_check` report this list used to carry directly is now the `@thinkrail/plugin-blueprint`
+    plugin's own `ctx.tool(...)` registration, reaching this loader through the active
+    plugin resource provider's `toolsExtension` and `factories` (`PluginPiResources`, above), **and the
     caller's `extraFactories`** — per-session host bindings (the workspace-bound subagents extension),
     value-imported so dev and the compiled binary take the same path. pi's own built-in extensions
     (`llama.cpp`, `codemode`, `tool-search`, `mcp`) are loaded only by pi's CLI; an SDK host opts in per
@@ -735,18 +748,22 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
   helpers (`validateQuestionnaire`/`buildQuestionnaireResponse`/`assessAnswerability`/
   `buildAnswersMessage`/`awaitingQuestionToolCallId`); normalized-state operations
   (`listSessionStates`/`acknowledgeCompletion`/`nudgeSession` + publisher/project seams);
-  `repairDanglingToolCalls`; `liveParentContext` + `readChildTranscript`
+  `repairDanglingToolCalls`; `trashFile` (the one OS-trash move, shared with the host's `fs.trashPath` so a
+  deleted workspace file is as recoverable as a deleted transcript); `liveParentContext` + `readChildTranscript`
   (the delegation embedding); the skill catalog helpers
   `listSkillCommands(cwd, admission)` (filtered, pre-session autocomplete) / `listSkillCatalog(cwd, admission)`
   (unfiltered, the manager's `skills.state`) / `listProjectAliasSkillNames(cwd)` (present-alias count) /
   `isProjectSkillPath(relativePath)` (watch-classification predicate);
   `reloadSessionResources(sessionId)` (active-chat reload); the **`setSkillAdmissionResolver`** seam (host
   wires `workspaceId` → the admission context); the subagent-policy seams
-  **`setSubagentsEnabledResolver`** + **`refreshSubagentTools`** (host resolves the effective global default
-  plus workspace override; manager owns live-session activation timing);
+  **`setSubagentsEnabledResolver`** + **`refreshDynamicTools`** (host resolves the effective global default
+  plus workspace override; manager owns live-session activation timing); `isWorkspaceStreaming`
+  (delegation's reset-on-idle check); `resetDelegationServices` (drop a workspace's cached
+  `DelegationService` after a plugin's sub-agent opt-in changes);
   the `set_title` seam (`setTitleToolHost` + `TitleToolHost`/`SET_TITLE_TOOL_NAME`/`SetTitleParams`);
   the bundled-artifact seam (`registerBundledRuntime` +
-  `BundledExtensions`/`BundledExtensionFactory`).
+  `BundledExtensions`/`BundledExtensionFactory`/`BundledPluginRuntime`/`bundledPluginRuntime`); the plugin
+  resource seam (`PluginPiResources`/`setPluginResourcesProvider`).
 - **Allowed deps:** `@earendil-works/pi-coding-agent` (runtime); `@earendil-works/pi-ai` (types + test
   fixtures + **pure catalog helpers value-imported from the package root** — today exactly
   `getSupportedThinkingLevels` + `clampThinkingLevel`, data-only projections over `Model`; *dispatch*
