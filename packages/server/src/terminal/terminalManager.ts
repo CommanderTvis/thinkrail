@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { userInfo } from "node:os";
 import type {
 	TerminalDataPush,
 	TerminalDetachedPush,
@@ -143,6 +144,11 @@ function ptyEnv(workspaceId: string, tabKey: string): Record<string, string> {
 	env.TERM = "xterm-256color";
 	env.COLORTERM = "truecolor";
 	env.THINKRAIL_TERMINAL = "1";
+	// From the uid, never from utmpx: a login shell on a fresh pty otherwise asks getlogin(), which can
+	// answer with whatever stale record the reused pty device carries — root, on a real machine. See SPEC.md.
+	const username = userInfo().username;
+	env.USER = username;
+	env.LOGNAME = username;
 	// Where an agent in this terminal reports what it is doing. A URL rather than a flag, because the
 	// report goes straight to the host now — nothing is written into the terminal for some other
 	// terminal to render. See SPEC.md.

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { chmodSync, copyFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { tmpdir, userInfo } from "node:os";
 import { join } from "node:path";
 import { type Workspace, WS_CHANNELS } from "@thinkrail/contracts";
 import { loadConfig, saveConfig, saveTerminalSessions, saveWorkspaces } from "../persistence";
@@ -173,6 +173,24 @@ test("different tabs get different shells", () => {
 	expect(b.id).not.toBe(a.id);
 	expect(listTerminals(WS).map((t) => t.tabKey)).toEqual(["tab-a", "tab-b"]);
 });
+
+test(
+	"a shell sees the real user's LOGNAME even when the host env lacks one",
+	async () => {
+		const saved = process.env.LOGNAME;
+		delete process.env.LOGNAME;
+		try {
+			const attached = attachTerminal(WS, "tab-a", "client-1");
+			await waitForTerminalOutput(attached.id);
+			writeTerminal(attached.id, `printf 'TR_LOGNAME=%s\\n' "$LOGNAME"\r`, "client-1");
+			await waitForTerminalOutput(attached.id, `TR_LOGNAME=${userInfo().username}`);
+		} finally {
+			if (saved === undefined) delete process.env.LOGNAME;
+			else process.env.LOGNAME = saved;
+		}
+	},
+	TERMINAL_TEST_TIMEOUT_MS,
+);
 
 test("a second client takes the tab over and the first is told", () => {
 	attachTerminal(WS, "tab-a", "client-1");
