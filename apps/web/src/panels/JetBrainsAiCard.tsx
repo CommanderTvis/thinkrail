@@ -11,8 +11,12 @@ import {
 	RiToolsLine as Wrench,
 } from "@remixicon/react";
 import {
+	isJbcentralConnected,
 	isJbcentralQuotaRefreshSeconds,
 	JBCENTRAL_QUOTA_REFRESH_SECONDS,
+	type JbcentralAccessListResult,
+	type JbcentralAccessSourceWire,
+	type JbcentralAccessSwitchResult,
 	type JbcentralAction,
 	type JbcentralActionFailureReason,
 	type JbcentralActionResult,
@@ -21,7 +25,7 @@ import {
 } from "@thinkrail/contracts";
 import { Button } from "@thinkrail/ui/button";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { copyText } from "@/lib";
+import { copyText, hostWording } from "@/lib";
 import { getTransport } from "@/transport";
 import { SettingsSwitch } from "./SettingsSwitch";
 
@@ -136,16 +140,132 @@ function JbcentralQuotaSettings({
 	);
 }
 
+function JbcentralAccessSection({ enabled }: { enabled: boolean }) {
+	const [sources, setSources] = useState<JbcentralAccessSourceWire[] | null>(null);
+	const [switchingId, setSwitchingId] = useState<string | null>(null);
+	const [switchError, setSwitchError] = useState<string | null>(null);
+	const [proxyRestartWarning, setProxyRestartWarning] = useState(false);
+
+	const load = useCallback(async () => {
+		try {
+			const result: JbcentralAccessListResult = await getTransport().request(
+				"provider.jbcentralAccessList",
+				{},
+			);
+			setSources(result.outcome === "succeeded" ? result.sources : null);
+		} catch {
+			setSources(null);
+		}
+	}, []);
+
+	useEffect(() => {
+		if (enabled) void load();
+		else setSources(null);
+	}, [enabled, load]);
+
+	const switchTo = useCallback(
+		async (selectionId: string) => {
+			setSwitchingId(selectionId);
+			setSwitchError(null);
+			setProxyRestartWarning(false);
+			try {
+				const result: JbcentralAccessSwitchResult = await getTransport().request(
+					"provider.jbcentralAccessSwitch",
+					{ selectionId },
+				);
+				if (result.outcome === "succeeded") {
+					if (!result.proxyRestarted) setProxyRestartWarning(true);
+					await load();
+				} else {
+					setSwitchError("Couldn't switch the AI access source.");
+				}
+			} catch {
+				setSwitchError("ThinkRail couldn't reach the host to switch the AI access source.");
+			} finally {
+				setSwitchingId(null);
+			}
+		},
+		[load],
+	);
+
+	if (!enabled || !sources || sources.length < 2) return null;
+
+	return (
+		<div
+			data-testid="jbcentral-access-sources"
+			className="flex flex-col gap-8 border-border-muted border-t pt-12"
+		>
+			<p className="text-text-default tr-text-ui">AI access source</p>
+			<div className="flex flex-col gap-4">
+				{sources.map((source) => (
+					<div
+						key={source.selectionId ?? source.displayName}
+						className="flex items-center justify-between gap-8"
+						data-testid="jbcentral-access-source-row"
+						data-current={source.current}
+					>
+						<span className="min-w-0 truncate text-text-default tr-text-ui">
+							{source.displayName}
+							{source.current ? (
+								<span className="ml-4 text-text-muted tr-text-metadata">(current)</span>
+							) : null}
+						</span>
+						{source.current ? null : source.selectionId === null ? (
+							<span
+								className="shrink-0 text-text-subtle tr-text-metadata"
+								data-testid="jbcentral-access-switch-unavailable"
+								title="ThinkRail couldn't identify this source well enough to switch to it automatically. Run `central access` in a terminal on the host instead."
+							>
+								Switch in a terminal
+							</span>
+						) : (
+							<Button
+								variant="outline"
+								size="sm"
+								data-testid="jbcentral-access-switch"
+								disabled={switchingId !== null}
+								onClick={() => void switchTo(source.selectionId as string)}
+							>
+								{switchingId === source.selectionId ? (
+									<Loader2 className="size-14 animate-spin" />
+								) : null}
+								Switch
+							</Button>
+						)}
+					</div>
+				))}
+			</div>
+			{switchError ? (
+				<p className="text-feedback-error tr-text-metadata" data-testid="jbcentral-access-error">
+					{switchError}
+				</p>
+			) : null}
+			{proxyRestartWarning ? (
+				<p
+					className="text-feedback-warning tr-text-metadata"
+					data-testid="jbcentral-access-restart-warning"
+				>
+					Switched, but ThinkRail couldn't restart the proxy automatically. Run{" "}
+					<code className="tr-code-text">central proxy stop</code> then{" "}
+					<code className="tr-code-text">central proxy start</code> on the host.
+				</p>
+			) : null}
+		</div>
+	);
+}
+
 export function JetBrainsAiCard({
 	status,
 	install,
 	onChanged,
 	quotaSettings,
+	accessSourceSwitching = false,
 }: {
 	status: JbcentralStatus;
 	install: JbcentralInstall;
 	onChanged: () => void | Promise<void>;
 	quotaSettings?: JbcentralQuotaSettingsProps;
+	accessSourceSwitching?: boolean;
 }) {
 	const [busyAction, setBusyAction] = useState<JbcentralAction | null>(null);
 	const [notice, setNotice] = useState<Notice | null>(null);
@@ -285,7 +405,10 @@ export function JetBrainsAiCard({
 					<p className="text-feedback-error tr-text-metadata">
 						{notice.kind === "failed"
 							? failureText(notice.action, notice.reason)
-							: "ThinkRail couldn't reach the host. Recheck the connection and try again."}
+							: hostWording(
+									"ThinkRail couldn't reach the host. Recheck the connection and try again.",
+									"ThinkRail couldn't complete the check. Try again.",
+								)}
 					</p>
 					{!signedOut &&
 					notice.action === "connect" &&
@@ -309,6 +432,7 @@ export function JetBrainsAiCard({
 			) : null}
 
 			{quotaSettings ? <JbcentralQuotaSettings {...quotaSettings} /> : null}
+			<JbcentralAccessSection enabled={accessSourceSwitching && isJbcentralConnected(status)} />
 		</section>
 	);
 }
@@ -541,15 +665,21 @@ function actionProgress(action: JbcentralAction): string {
 function failureText(action: JbcentralAction, reason: JbcentralActionFailureReason): string {
 	switch (reason) {
 		case "not-installed":
-			return "Central isn't available on the host yet. Install it and Recheck.";
+			return hostWording(
+				"Central isn't available on the host yet. Install it and Recheck.",
+				"Central isn't installed yet. Install it and Recheck.",
+			);
 		case "unsupported-version":
 			return "This Central version isn't supported by ThinkRail. Follow the version guidance and retry.";
 		case "version-probe-failed":
-			return "ThinkRail couldn't verify Central safely. Check the host installation and Recheck.";
+			return hostWording(
+				"ThinkRail couldn't verify Central safely. Check the host installation and Recheck.",
+				"ThinkRail couldn't verify Central safely. Check the Central installation and Recheck.",
+			);
 		case "central-action-failed":
 			return action === "start-proxy"
-				? "Central couldn't start the proxy. Check Central on the host and try again."
-				: `Central couldn't ${action}. Check Central on the host and try again.`;
+				? `Central couldn't start the proxy. ${hostWording("Check Central on the host", "Check Central")} and try again.`
+				: `Central couldn't ${action}. ${hostWording("Check Central on the host", "Check Central")} and try again.`;
 		case "artifact-missing":
 		case "artifact-present":
 			return "Central finished, but ThinkRail couldn't confirm the configuration. Recheck and retry.";
