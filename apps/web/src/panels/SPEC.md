@@ -875,6 +875,10 @@ own section. The kebab menu (`plan-menu`, a
 
 ## File rows own their context menu
 
+A row git ignores (`FileNode.gitignored`, decided by the host with `git check-ignore`) is dimmed by the
+shared `TreeRow` (`data-muted`, `text-text-subtle` on the label) and titled "Ignored by git" — still
+openable, still a real file, just visibly not the repository's. Pinned by `files.spec.ts`.
+
 A right-click on an All-files row opens `file-node-actions` (Reveal in Finder, Copy path). The menu
 exists mostly so the *webview's* does not: with no handler, WebKit shows its own Look Up / Translate /
 Share / **Show in Finder** menu, whose reveal item is about downloaded files and does nothing for a

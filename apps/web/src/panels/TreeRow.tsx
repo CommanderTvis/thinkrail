@@ -18,6 +18,7 @@ export function TreeRow({
 	labelClassName,
 	trailing,
 	highlight = "self",
+	muted,
 	onClick,
 	onDoubleClick,
 	onContextMenu,
@@ -33,6 +34,7 @@ export function TreeRow({
 	labelClassName?: string;
 	trailing?: ReactNode;
 	highlight?: "self" | "wrapper";
+	muted?: string | undefined;
 	onClick?: (() => void) | undefined;
 	onDoubleClick?: (() => void) | undefined;
 	onContextMenu?: ((event: MouseEvent) => void) | undefined;
@@ -46,6 +48,8 @@ export function TreeRow({
 			data-kind={kind}
 			data-active={active ? true : undefined}
 			data-status={dataStatus}
+			data-muted={muted ? true : undefined}
+			title={muted}
 			onClick={onClick}
 			onDoubleClick={onDoubleClick}
 			onContextMenu={onContextMenu}
@@ -66,7 +70,11 @@ export function TreeRow({
 				) : (
 					<FileTypeIcon path={iconPath ?? label} className="size-14 text-text-muted" />
 				)}
-				<span className={`min-w-0 flex-1 truncate ${labelClassName ?? ""}`}>{label}</span>
+				<span
+					className={`min-w-0 flex-1 truncate ${muted ? "text-text-subtle" : ""} ${labelClassName ?? ""}`}
+				>
+					{label}
+				</span>
 			</span>
 			{trailing}
 		</button>
