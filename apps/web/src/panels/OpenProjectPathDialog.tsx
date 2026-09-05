@@ -9,6 +9,7 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from "@/components/ui/dialog";
+import { hostWording } from "@/lib/desktopShell";
 
 export function OpenProjectPathDialog({
 	open,
@@ -33,10 +34,16 @@ export function OpenProjectPathDialog({
 		<Dialog open={open} onOpenChange={setOpen}>
 			<DialogContent data-testid="open-project-path-dialog" className="max-w-[30rem] gap-12">
 				<DialogHeader>
-					<DialogTitle>Open project from host path</DialogTitle>
+					<DialogTitle>
+						{hostWording("Open project from host path", "Open project from a path")}
+					</DialogTitle>
 					<DialogDescription>
-						Enter a folder path on the computer running ThinkRail. Use{" "}
-						<code className="tr-code-text">~/</code> for the host account&apos;s home folder.
+						{hostWording(
+							"Enter a folder path on the computer running ThinkRail.",
+							"Enter a folder path.",
+						)}{" "}
+						Use <code className="tr-code-text">~/</code>{" "}
+						{hostWording("for the host account's home folder.", "for your home folder.")}
 					</DialogDescription>
 				</DialogHeader>
 

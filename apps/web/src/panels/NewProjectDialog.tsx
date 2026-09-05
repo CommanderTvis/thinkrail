@@ -9,6 +9,7 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from "@/components/ui/dialog";
+import { hostWording } from "@/lib/desktopShell";
 import { errorText, getTransport } from "@/transport";
 
 const PICK_TIMEOUT_MS = 30 * 60_000;
@@ -41,7 +42,15 @@ export function NewProjectDialog({
 			);
 			if (path) setParent(path);
 		} catch (err) {
-			setError(errorText(err, "Couldn't open the folder picker on the host."));
+			setError(
+				errorText(
+					err,
+					hostWording(
+						"Couldn't open the folder picker on the host.",
+						"Couldn't open the folder picker.",
+					),
+				),
+			);
 		}
 	};
 

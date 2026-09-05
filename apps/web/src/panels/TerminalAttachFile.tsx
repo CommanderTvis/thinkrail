@@ -1,6 +1,7 @@
 import { RiAttachment2, RiFolderLine } from "@remixicon/react";
 import type { FileNode } from "@thinkrail/contracts";
 import { useEffect, useState } from "react";
+import { hostWording } from "@/lib/desktopShell";
 import { FileTypeIcon } from "../components/FileTypeIcon";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../components/ui/dialog";
 import { toast } from "../store";
@@ -59,7 +60,10 @@ export function TerminalAttachFile({
 				if (path) attach(path);
 			})
 			.catch((cause: unknown) =>
-				toast.error(errorText(cause), "Couldn't open the file picker on the host"),
+				toast.error(
+					errorText(cause),
+					hostWording("Couldn't open the file picker on the host", "Couldn't open the file picker"),
+				),
 			);
 	};
 
