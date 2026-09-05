@@ -3,6 +3,7 @@ import type { GithubAuthStatus } from "@thinkrail/contracts";
 import { Button } from "@thinkrail/ui/button";
 import { cn } from "@thinkrail/ui/utils";
 import { useEffect, useState } from "react";
+import { hostWording } from "@/lib/desktopShell";
 import { getTransport } from "@/transport";
 import { SettingsGroup } from "./SettingsGroup";
 import { SettingsNotice } from "./SettingsNotice";
@@ -75,6 +76,12 @@ export function GithubSettings() {
 					)}
 				</div>
 			</SettingsGroup>
+			<p className="px-12 text-text-muted tr-text-metadata">
+				The GitHub CLI (<code className="tr-code-text">gh</code>) is read locally
+				{hostWording(" on the host.", ".")} Authenticate with{" "}
+				<code className="tr-code-text">gh auth login</code> to enable creating workspaces from
+				remote branches.
+			</p>
 		</div>
 	);
 }
