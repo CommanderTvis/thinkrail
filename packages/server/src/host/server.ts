@@ -104,7 +104,11 @@ import {
 import { runObservation } from "./runAnalytics";
 import { resolveSubagentsEnabled } from "./subagentPolicy";
 import { taskObservation } from "./taskAnalytics";
-import { terminalDeliveryForSendStatus } from "./terminalSend";
+import {
+	BACKPRESSURE_RECONCILE_MS,
+	drainedClientKeys,
+	terminalDeliveryForSendStatus,
+} from "./terminalSend";
 import { titleToolHost } from "./titleTool";
 import { markClientStale, reconcilePendingReviewsOnBoot } from "./todoReview";
 
@@ -212,6 +216,18 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	let requestHostUpdate = (): void => {
 		throw new Error("Host update is unavailable.");
 	};
+	const backpressureReconciler = setInterval(() => {
+		const drained = drainedClientKeys(terminalBackpressured, (clientKey) =>
+			sockets.get(clientKey)?.getBufferedAmount(),
+		);
+		for (const clientKey of drained) {
+			log.warn(
+				`terminal backpressure latch lifted by reconciler, drain never arrived (${clientKey})`,
+			);
+			terminalBackpressured.delete(clientKey);
+			resumeClientTerminals(clientKey);
+		}
+	}, BACKPRESSURE_RECONCILE_MS);
 	let stopping = false;
 	let shutdownPromise: Promise<void> | undefined;
 
@@ -730,6 +746,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		for (const timer of reapTimers.values()) clearTimeout(timer);
 		reapTimers.clear();
 		sockets.clear();
+		clearInterval(backpressureReconciler);
 		terminalBackpressured.clear();
 		requestReplays.clear();
 		persistTerminalSessions();
