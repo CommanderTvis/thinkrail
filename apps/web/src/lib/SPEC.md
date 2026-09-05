@@ -101,7 +101,8 @@ Tiny UI helpers shared across components.
   collapses in-root `.`/`..` aliases but preserves an attempted leading escape for host rejection; Windows
   drive-rooted containment compares path/root case-insensitively while preserving the candidate's casing),
   `shallowEqualArrays`, `userText`, `parseSkillInvocation`, `matchesSkillInvocationCommand`,
-  `claudeLaunchCommand`, `shellQuotePath`, `withLaunchEnv`, `CLAUDE_AGENT_VIEW_ENV`, `CLAUDE_LAUNCH_MENU`, `mergeText`, `hasConflictMarkers`,
+  `claudeLaunchCommand`, `shellQuotePath`, `withLaunchEnv`, `CLAUDE_AGENT_VIEW_ENV`, `CLAUDE_LAUNCH_MENU`, `FILE_DRAG_TYPE`, `startFileDrag`,
+  `carriesFileDrag`, `draggedFile`, the `DraggedFile` type, `mergeText`, `hasConflictMarkers`,
   `relativeTime`, `platformShortcutLabel`, `hasPlatformModifier`, `copyText`, `randomId`,
   `DOUBLE_CLICK_SETTLE_MS`, `tupleKey`, `parseTupleKey`, `layoutResourceIdentity`,
   `readLayoutSelection`, `readLayoutNavigationClock`, the `LayoutAttention` type, `parseCliAgentSequence`,

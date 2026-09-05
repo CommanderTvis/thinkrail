@@ -12,6 +12,7 @@ import {
 	ContextMenuItem,
 	ContextMenuTrigger,
 } from "@/components/ui/context-menu";
+import { startFileDrag } from "@/lib";
 import { copyText } from "@/lib/utils";
 import { LoadingRegion } from "../components/Skeleton";
 import type { TabIntent } from "../store";
@@ -135,6 +136,12 @@ function FileNodeRow({
 							expanded={expanded}
 							label={label}
 							muted={node.gitignored ? "Ignored by git" : undefined}
+							onDragStart={(event) =>
+								startFileDrag(event.dataTransfer, {
+									path: directory?.path ?? node.path,
+									kind: isDir ? "dir" : "file",
+								})
+							}
 							onClick={isDir ? toggleDirectory : () => open("preview")}
 							onDoubleClick={isDir ? undefined : () => open("keep")}
 						/>
