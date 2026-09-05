@@ -275,9 +275,15 @@ export interface GitCommit {
 	committedAt: string;
 }
 
+export interface RemoteBranchGroup {
+	remote: string | null;
+	branches: { ref: string; branch: string }[];
+}
+
 export interface BranchList {
 	local: string[];
 	remote: string[];
+	remoteGroups?: RemoteBranchGroup[];
 	defaultBranch: string;
 }
 
