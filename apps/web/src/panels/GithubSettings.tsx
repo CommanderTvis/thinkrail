@@ -3,6 +3,7 @@ import type { GithubAuthStatus } from "@thinkrail/contracts";
 import { T, useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
 import { useEffect, useState } from "react";
+import { hostWording } from "@/lib/desktopShell";
 import { getTransport } from "@/transport";
 import { SettingsGroup } from "./SettingsGroup";
 import { SettingsNotice } from "./SettingsNotice";
@@ -78,6 +79,15 @@ export function GithubSettings() {
 					)}
 				</div>
 			</SettingsGroup>
+			<p className="px-12 text-text-muted tr-text-metadata">
+				<T
+					i18nKey={hostWording("settings.github.cliNote", "settings.github.cliNoteDesktop")}
+					components={[
+						<code key="gh" className="tr-code-text" />,
+						<code key="login" className="tr-code-text" />,
+					]}
+				/>
+			</p>
 		</div>
 	);
 }

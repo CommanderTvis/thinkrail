@@ -10,8 +10,12 @@ import {
 	RiToolsLine as Wrench,
 } from "@remixicon/react";
 import {
+	isJbcentralConnected,
 	isJbcentralQuotaRefreshSeconds,
 	JBCENTRAL_QUOTA_REFRESH_SECONDS,
+	type JbcentralAccessListResult,
+	type JbcentralAccessSourceWire,
+	type JbcentralAccessSwitchResult,
 	type JbcentralAction,
 	type JbcentralActionFailureReason,
 	type JbcentralActionResult,
@@ -22,7 +26,7 @@ import type { MessageKey } from "@thinkrail/locales";
 import { useT } from "@thinkrail/locales/react";
 import { Button, IconButton, withIconClass } from "@thinkrail/ui/button";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { copyText } from "@/lib";
+import { copyText, hostWording } from "@/lib";
 import { getTransport } from "@/transport";
 import { SettingsSwitch } from "./SettingsSwitch";
 
@@ -147,16 +151,139 @@ function JbcentralQuotaSettings({
 	);
 }
 
+function JbcentralAccessSection({ enabled }: { enabled: boolean }) {
+	const t = useT();
+	const [sources, setSources] = useState<JbcentralAccessSourceWire[] | null>(null);
+	const [switchingId, setSwitchingId] = useState<string | null>(null);
+	const [switchError, setSwitchError] = useState<string | null>(null);
+	const [proxyRestartWarning, setProxyRestartWarning] = useState(false);
+
+	const load = useCallback(async () => {
+		try {
+			const result: JbcentralAccessListResult = await getTransport().request(
+				"provider.jbcentralAccessList",
+				{},
+			);
+			setSources(result.outcome === "succeeded" ? result.sources : null);
+		} catch {
+			setSources(null);
+		}
+	}, []);
+
+	useEffect(() => {
+		if (enabled) void load();
+		else setSources(null);
+	}, [enabled, load]);
+
+	const switchTo = useCallback(
+		async (selectionId: string) => {
+			setSwitchingId(selectionId);
+			setSwitchError(null);
+			setProxyRestartWarning(false);
+			try {
+				const result: JbcentralAccessSwitchResult = await getTransport().request(
+					"provider.jbcentralAccessSwitch",
+					{ selectionId },
+				);
+				if (result.outcome === "succeeded") {
+					if (!result.proxyRestarted) setProxyRestartWarning(true);
+					await load();
+				} else {
+					setSwitchError("Couldn't switch the AI access source.");
+				}
+			} catch {
+				setSwitchError("ThinkRail couldn't reach the host to switch the AI access source.");
+			} finally {
+				setSwitchingId(null);
+			}
+		},
+		[load],
+	);
+
+	if (!enabled || !sources || sources.length < 2) return null;
+
+	return (
+		<div
+			data-testid="jbcentral-access-sources"
+			className="flex flex-col gap-8 border-border-muted border-t pt-12"
+		>
+			<p className="text-text-default tr-text-ui">{t("settings.jbcentral.access.title")}</p>
+			<div className="flex flex-col gap-4">
+				{sources.map((source) => (
+					<div
+						key={source.selectionId ?? source.displayName}
+						className="flex items-center justify-between gap-8"
+						data-testid="jbcentral-access-source-row"
+						data-current={source.current}
+					>
+						<span className="min-w-0 truncate text-text-default tr-text-ui">
+							{source.displayName}
+							{source.current ? (
+								<span className="ml-4 text-text-muted tr-text-metadata">
+									{t("settings.jbcentral.access.current")}
+								</span>
+							) : null}
+						</span>
+						{source.current ? null : source.selectionId === null ? (
+							<span
+								className="shrink-0 text-text-subtle tr-text-metadata"
+								data-testid="jbcentral-access-switch-unavailable"
+								title={t("settings.jbcentral.access.switchUnavailableHint")}
+							>
+								{t("settings.jbcentral.access.switchInTerminal")}
+							</span>
+						) : (
+							<Button
+								variant="outline"
+								size="sm"
+								data-testid="jbcentral-access-switch"
+								disabled={switchingId !== null}
+								onClick={() => void switchTo(source.selectionId as string)}
+							>
+								{switchingId === source.selectionId ? (
+									<Loader2 className="size-14 animate-spin" />
+								) : null}
+								Switch
+							</Button>
+						)}
+					</div>
+				))}
+			</div>
+			{switchError ? (
+				<p className="text-feedback-error tr-text-metadata" data-testid="jbcentral-access-error">
+					{switchError}
+				</p>
+			) : null}
+			{proxyRestartWarning ? (
+				<p
+					className="text-feedback-warning tr-text-metadata"
+					data-testid="jbcentral-access-restart-warning"
+				>
+					<T
+						i18nKey="settings.jbcentral.access.restartWarning"
+						components={[
+							<code key="stop" className="tr-code-text" />,
+							<code key="start" className="tr-code-text" />,
+						]}
+					/>
+				</p>
+			) : null}
+		</div>
+	);
+}
+
 export function JetBrainsAiCard({
 	status,
 	install,
 	onChanged,
 	quotaSettings,
+	accessSourceSwitching = false,
 }: {
 	status: JbcentralStatus;
 	install: JbcentralInstall;
 	onChanged: () => void | Promise<void>;
 	quotaSettings?: JbcentralQuotaSettingsProps;
+	accessSourceSwitching?: boolean;
 }) {
 	const t = useT();
 	const [busyAction, setBusyAction] = useState<JbcentralAction | null>(null);
@@ -292,7 +419,12 @@ export function JetBrainsAiCard({
 					<p className="text-feedback-error tr-text-metadata">
 						{notice.kind === "failed"
 							? t(failureText(notice.action, notice.reason))
-							: t("settings.jbcentral.transportFailed")}
+							: t(
+									hostWording(
+										"settings.jbcentral.transportFailed",
+										"settings.jbcentral.transportFailedDesktop",
+									),
+								)}
 					</p>
 					{!signedOut &&
 					notice.action === "connect" &&
@@ -316,6 +448,7 @@ export function JetBrainsAiCard({
 			) : null}
 
 			{quotaSettings ? <JbcentralQuotaSettings {...quotaSettings} /> : null}
+			<JbcentralAccessSection enabled={accessSourceSwitching && isJbcentralConnected(status)} />
 		</section>
 	);
 }
@@ -520,6 +653,13 @@ const ACTION_LABEL = {
 	update: "settings.jbcentral.action.update",
 } satisfies Record<JbcentralAction, MessageKey>;
 
+const ACTION_FAILED_DESKTOP = {
+	connect: "settings.jbcentral.failure.connectDesktop",
+	disconnect: "settings.jbcentral.failure.disconnectDesktop",
+	"start-proxy": "settings.jbcentral.failure.startProxyDesktop",
+	update: "settings.jbcentral.failure.updateDesktop",
+} satisfies Record<JbcentralAction, MessageKey>;
+
 const ACTION_BUSY_LABEL = {
 	connect: "settings.jbcentral.busy.connect",
 	disconnect: "settings.jbcentral.busy.disconnect",
@@ -544,13 +684,19 @@ const ACTION_FAILED = {
 function failureText(action: JbcentralAction, reason: JbcentralActionFailureReason): MessageKey {
 	switch (reason) {
 		case "not-installed":
-			return "settings.jbcentral.failure.notInstalled";
+			return hostWording(
+				"settings.jbcentral.failure.notInstalled",
+				"settings.jbcentral.failure.notInstalledDesktop",
+			);
 		case "unsupported-version":
 			return "settings.jbcentral.failure.unsupportedVersion";
 		case "version-probe-failed":
-			return "settings.jbcentral.failure.versionProbeFailed";
+			return hostWording(
+				"settings.jbcentral.failure.versionProbeFailed",
+				"settings.jbcentral.failure.versionProbeFailedDesktop",
+			);
 		case "central-action-failed":
-			return ACTION_FAILED[action];
+			return hostWording(ACTION_FAILED[action], ACTION_FAILED_DESKTOP[action]);
 		case "artifact-missing":
 		case "artifact-present":
 			return "settings.jbcentral.failure.unconfirmed";

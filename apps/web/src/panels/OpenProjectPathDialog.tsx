@@ -10,6 +10,7 @@ import {
 	DialogTitle,
 } from "@thinkrail/ui/dialog";
 import { useState } from "react";
+import { hostWording } from "@/lib/desktopShell";
 
 export function OpenProjectPathDialog({
 	open,
@@ -35,10 +36,15 @@ export function OpenProjectPathDialog({
 		<Dialog open={open} onOpenChange={setOpen}>
 			<DialogContent data-testid="open-project-path-dialog" className="max-w-[30rem] gap-12">
 				<DialogHeader>
-					<DialogTitle>{t("panels.openProjectPath.title")}</DialogTitle>
+					<DialogTitle>
+						{t(hostWording("panels.openProjectPath.title", "panels.openProjectPath.titleDesktop"))}
+					</DialogTitle>
 					<DialogDescription>
 						<T
-							i18nKey="panels.openProjectPath.description"
+							i18nKey={hostWording(
+								"panels.openProjectPath.description",
+								"panels.openProjectPath.descriptionDesktop",
+							)}
 							components={[<code key="home" className="tr-code-text" />]}
 						/>
 					</DialogDescription>

@@ -16,6 +16,6 @@ export function isDesktopShell(): boolean {
  * Copy for a message that names the host. In a browser the host is a separate computer worth naming; on
  * the desktop it is this one, and "host" reads as a stranger's machine. See panels/SPEC.md.
  */
-export function hostWording(remote: string, desktop: string): string {
+export function hostWording<T extends string>(remote: T, desktop: T): T {
 	return isDesktopShell() ? desktop : remote;
 }
