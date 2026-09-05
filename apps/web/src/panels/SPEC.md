@@ -879,6 +879,17 @@ A row git ignores (`FileNode.gitignored`, decided by the host with `git check-ig
 shared `TreeRow` (`data-muted`, `text-text-subtle` on the label) and titled "Ignored by git" — still
 openable, still a real file, just visibly not the repository's. Pinned by `files.spec.ts`.
 
+**A Files-tree row is a drag source, and a terminal and the composer are where it lands.** Every row
+(`TreeRow` with `onDragStart`, native HTML5 drag — not the workbench's dnd-kit, which is for tabs)
+carries the entry it represents (a compacted chain drags as its deepest folder) as `lib.fileDrag`'s
+`application/x-thinkrail-file` payload plus the path as `text/plain`, so any plain text field takes the
+path too. Dropped on a terminal (`TerminalInstance` listens on its xterm host, natively — a drop has
+no keyboard path, the line itself is the accessible way in) it is handed to whatever runs there: an
+`@`-mention through the same `attach` an editor selection uses when Claude Code is running, otherwise
+the absolute path as one shell word (`shellQuotePath`), like Finder would drop it. Dropped on the chat
+composer it becomes an `@path` mention at the caret (`@dir/` for a folder), the same text `@`
+completion inserts. Pinned by `files.spec.ts`.
+
 A right-click on an All-files row opens `file-node-actions` (Reveal in Finder, Copy path). The menu
 exists mostly so the *webview's* does not: with no handler, WebKit shows its own Look Up / Translate /
 Share / **Show in Finder** menu, whose reveal item is about downloaded files and does nothing for a

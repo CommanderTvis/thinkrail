@@ -408,7 +408,9 @@ is not a place for it, so `/compact` and friends are handled before the prefix i
 because the alternative is an attachment the user cannot see, which is worse than no attachment at all.
 - **Composer & chrome** — `Composer` (prompt field + send/steer/followUp/abort, `@`-mentions, `/`
   commands + template **slot sessions** (Tab-through placeholders — see the Template slots bullet
-  below), image paste/drop — routed through **`imageAttachment.ts`**: `fileToAttachedImage` decodes in
+  below), a Files-tree row dropped on the field (`lib.draggedFile`) inserted as the `@path` mention
+  `@` completion would have produced (`@dir/` for a folder) at the caret — never as raw text — while
+  image paste/drop is routed through **`imageAttachment.ts`**: `fileToAttachedImage` decodes in
   the browser and downscales anything over a **1568px long edge** (`fitWithin`; Claude's standard-tier
   edge — an oversized image in history 400s every later turn once the provider's >20-image 2000px cap
   kicks in, and pi's own resizer is deliberately off server-side). An image passes through

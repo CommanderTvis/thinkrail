@@ -4,7 +4,7 @@ import {
 	RiFolderFill,
 	RiFolderLine,
 } from "@remixicon/react";
-import type { MouseEvent, ReactNode } from "react";
+import type { DragEvent, MouseEvent, ReactNode } from "react";
 import { FileTypeIcon } from "@/components/FileTypeIcon";
 
 export function TreeRow({
@@ -22,6 +22,7 @@ export function TreeRow({
 	onClick,
 	onDoubleClick,
 	onContextMenu,
+	onDragStart,
 }: {
 	testid: string;
 	kind: "dir" | "file";
@@ -38,6 +39,7 @@ export function TreeRow({
 	onClick?: (() => void) | undefined;
 	onDoubleClick?: (() => void) | undefined;
 	onContextMenu?: ((event: MouseEvent) => void) | undefined;
+	onDragStart?: ((event: DragEvent) => void) | undefined;
 }) {
 	const Chevron = expanded ? ChevronDown : ChevronRight;
 	const Folder = active ? RiFolderFill : RiFolderLine;
@@ -53,6 +55,8 @@ export function TreeRow({
 			onClick={onClick}
 			onDoubleClick={onDoubleClick}
 			onContextMenu={onContextMenu}
+			draggable={onDragStart ? true : undefined}
+			onDragStart={onDragStart}
 			className={`flex h-24 w-full min-w-0 items-center gap-4 rounded-[var(--radius-sm)] px-4 text-left tr-text-ui text-text-muted ${
 				highlight === "self"
 					? `hover:bg-control-bg-hovered ${active ? "bg-control-bg-selected" : ""}`

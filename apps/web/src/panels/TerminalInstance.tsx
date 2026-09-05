@@ -31,11 +31,14 @@ import {
 	CLAUDE_EFFORT_LEVELS,
 	CLAUDE_MODELS,
 	type ClaudeEffortLevel,
+	carriesFileDrag,
 	cssColorToHex,
+	draggedFile,
 	driveEffortPicker,
 	driveModelPicker,
 	type ModelPickerIo,
 	type ModelPickerOutcome,
+	shellQuotePath,
 } from "@/lib";
 import { tupleKey } from "@/lib/utils";
 import {
@@ -575,6 +578,39 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 		},
 		[cwd, worktreePath],
 	);
+	// Native listeners on purpose: a drop offers no keyboard path to make accessible. See panels/SPEC.md.
+	const dropFile = useRef<(file: { path: string }) => void>(() => {});
+	dropFile.current = (file) => {
+		const id = serverIdRef.current;
+		if (!id) return;
+		if (claudeHere) {
+			attach(file.path);
+			return;
+		}
+		const data = `${shellQuotePath(attachPath(file.path, worktreePath, cwd))} `;
+		sendTerminalWrite(getTransport().request("terminal.write", { id, data }));
+	};
+	useEffect(() => {
+		const host = hostRef.current;
+		if (!host) return;
+		const over = (event: DragEvent) => {
+			if (!event.dataTransfer || !carriesFileDrag(event.dataTransfer)) return;
+			event.preventDefault();
+			event.dataTransfer.dropEffect = "copy";
+		};
+		const drop = (event: DragEvent) => {
+			const file = event.dataTransfer ? draggedFile(event.dataTransfer) : null;
+			if (!file) return;
+			event.preventDefault();
+			dropFile.current(file);
+		};
+		host.addEventListener("dragover", over);
+		host.addEventListener("drop", drop);
+		return () => {
+			host.removeEventListener("dragover", over);
+			host.removeEventListener("drop", drop);
+		};
+	}, []);
 	const pushToast = useAppStore((state) => state.pushToast);
 	const driving = useRef(false);
 	const drivePicker = useCallback(
