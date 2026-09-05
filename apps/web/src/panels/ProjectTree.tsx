@@ -48,13 +48,17 @@ import {
 import { copyText } from "@/lib";
 import { LoadingRegion } from "../components/Skeleton";
 import {
+	type ActivityRollup,
 	isDefaultWorkspace,
 	isExternalWorkspace,
+	projectActivityRollup,
 	selectActiveWorkspaceProjectId,
 	toast,
 	useAppStore,
+	workspaceActivityRollup,
 } from "../store";
 import { errorText, getTransport, prewarmWorkspaceSkillLoad } from "../transport";
+import { ActivityGlyph } from "./ActivityGlyph";
 import { AddProjectMenu } from "./AddProjectMenu";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { ExistingWorktreeDialog } from "./ExistingWorktreeDialog";
@@ -71,6 +75,7 @@ export function ProjectTree() {
 	const workspaces = useAppStore((s) => s.workspaces);
 	const worktreeCreations = useAppStore((s) => s.worktreeCreationsByProject);
 	const activeWorkspaceId = useAppStore((s) => s.activeWorkspaceId);
+	const activityByWorkspace = useAppStore((s) => s.activityByWorkspace);
 	const protocolVersion = useAppStore((s) => s.protocolVersion);
 
 	const [editors, setEditors] = useState<EditorInfo[]>([]);
@@ -232,7 +237,7 @@ export function ProjectTree() {
 	};
 
 	return (
-		<nav className="flex flex-col gap-8">
+		<nav data-testid="project-tree" className="flex flex-col gap-8">
 			<header className="flex h-28 items-center justify-between pr-4 pl-8">
 				<span className="tr-text-eyebrow text-text-muted">Projects</span>
 				<AddProjectMenu
@@ -263,6 +268,9 @@ export function ProjectTree() {
 								project={project}
 								isSelected={selectedProjectId === project.id}
 								isExpanded={isExpanded}
+								activity={
+									isExpanded ? null : projectActivityRollup(activityByWorkspace, project.id)
+								}
 								workspaceCount={(list ?? []).filter((w) => !isDefaultWorkspace(w)).length}
 								onToggle={() => toggleExpand(project.id)}
 								onSelect={() => void selectProject(project.id)}
@@ -283,6 +291,7 @@ export function ProjectTree() {
 											key={ws.id}
 											workspace={ws}
 											isActive={activeWorkspaceId === ws.id}
+											activity={workspaceActivityRollup(activityByWorkspace, ws.id)}
 											canRename={canRenameWorkspace(protocolVersion, ws)}
 											editors={editors}
 											onSelect={() => selectWorkspace(ws)}
@@ -348,6 +357,7 @@ function ProjectRow({
 	project,
 	isSelected,
 	isExpanded,
+	activity,
 	workspaceCount,
 	onToggle,
 	onSelect,
@@ -361,6 +371,7 @@ function ProjectRow({
 	project: Project;
 	isSelected: boolean;
 	isExpanded: boolean;
+	activity: ActivityRollup | null;
 	workspaceCount: number;
 	onToggle: () => void;
 	onSelect: () => void;
@@ -386,6 +397,7 @@ function ProjectRow({
 		<div
 			data-testid="project-item"
 			data-menu-open={menuOpen}
+			{...(activity ? { "data-activity": activity.status } : {})}
 			className={`group flex h-28 items-center gap-4 rounded-[var(--radius-sm)] pr-4 pl-4 transition-colors ${
 				menuOpen ? "bg-control-bg-selected" : "hover:bg-control-bg-hovered"
 			}`}
@@ -414,6 +426,7 @@ function ProjectRow({
 					{project.name}
 				</span>
 			</button>
+			{activity && <ActivityGlyph status={activity.status} counts={activity.counts} />}
 			{!isExpanded && workspaceCount > 0 && (
 				<span
 					data-testid="project-workspace-count"
@@ -518,6 +531,7 @@ function ProjectRow({
 function WorkspaceRow({
 	workspace,
 	isActive,
+	activity,
 	canRename,
 	editors,
 	onSelect,
@@ -529,6 +543,7 @@ function WorkspaceRow({
 }: {
 	workspace: Workspace;
 	isActive: boolean;
+	activity: ActivityRollup | null;
 	canRename: boolean;
 	editors: EditorInfo[];
 	onSelect: () => void;
@@ -638,6 +653,7 @@ function WorkspaceRow({
 				data-testid="workspace-item"
 				data-active={isActive}
 				data-kind={workspace.kind ?? "worktree"}
+				{...(activity ? { "data-activity": activity.status } : {})}
 				onContextMenu={openMenuFromContext}
 				className={`group flex min-h-28 min-w-0 items-center gap-8 rounded-[var(--radius-sm)] border-0 py-4 pr-4 pl-24 transition-colors ${
 					isActive || menuOpen ? "bg-control-bg-selected" : "hover:bg-control-bg-hovered"
@@ -676,6 +692,7 @@ function WorkspaceRow({
 						</span>
 					</button>
 				)}
+				{activity && <ActivityGlyph status={activity.status} counts={activity.counts} />}
 				<DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
 					<DropdownMenuTrigger
 						data-testid="workspace-menu"
@@ -754,6 +771,7 @@ function WorkspaceRow({
 					</DropdownMenuContent>
 				</DropdownMenu>
 			</fieldset>
+
 			{!isDefault && (
 				<ConfirmDialog
 					open={confirmOpen}

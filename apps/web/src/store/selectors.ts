@@ -1,4 +1,5 @@
 import type {
+	ActivityStatus,
 	GitDiffScope,
 	Project,
 	SpecGraphNode,
@@ -24,6 +25,7 @@ import type {
 	RouteChatTarget,
 	SessionRuntime,
 	TerminalTab,
+	WorkspaceActivity,
 } from "./appStore";
 
 interface ConnectionGenerationState {
@@ -459,4 +461,41 @@ export function selectAgentReviewCommentCount(
 	return snapshot.comments.filter(
 		(c) => c.author === "agent" && c.status !== "resolved" && c.status !== "dismissed",
 	).length;
+}
+
+const ACTIVITY_ROLLUP_ORDER: readonly ActivityStatus[] = ["failed", "waiting", "running", "queued"];
+
+export type ActivityMap = Record<string, WorkspaceActivity>;
+
+export interface ActivityRollup {
+	status: ActivityStatus;
+	counts: Partial<Record<ActivityStatus, number>>;
+}
+
+function rollUp(records: Iterable<Record<string, ActivityStatus>>): ActivityRollup | null {
+	const counts: Partial<Record<ActivityStatus, number>> = {};
+	for (const record of records) {
+		for (const status of Object.values(record)) counts[status] = (counts[status] ?? 0) + 1;
+	}
+	const status = ACTIVITY_ROLLUP_ORDER.find((candidate) => (counts[candidate] ?? 0) > 0);
+	return status ? { status, counts } : null;
+}
+
+export function workspaceActivityRollup(
+	activityByWorkspace: ActivityMap,
+	workspaceId: string,
+): ActivityRollup | null {
+	const entry = activityByWorkspace[workspaceId];
+	return entry ? rollUp([entry.sessions]) : null;
+}
+
+export function projectActivityRollup(
+	activityByWorkspace: ActivityMap,
+	projectId: string,
+): ActivityRollup | null {
+	const records: Record<string, ActivityStatus>[] = [];
+	for (const entry of Object.values(activityByWorkspace)) {
+		if (entry.projectId === projectId) records.push(entry.sessions);
+	}
+	return rollUp(records);
 }

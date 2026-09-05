@@ -1,5 +1,5 @@
 import { createReadStream, existsSync, rmSync } from "node:fs";
-import { readdir } from "node:fs/promises";
+import { open, readdir } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { createInterface } from "node:readline";
 import { clampThinkingLevel, getSupportedThinkingLevels } from "@earendil-works/pi-ai";
@@ -13,6 +13,8 @@ import {
 	SettingsManager,
 } from "@earendil-works/pi-coding-agent";
 import type {
+	ActivityStatus,
+	AgentMessage,
 	AgentSettlement,
 	AskUserQuestionResult,
 	ImageContent,
@@ -21,6 +23,8 @@ import type {
 	QueueLane,
 	RefreshedModels,
 	RemovedQueuedMessage,
+	SessionActivity,
+	SessionActivityPayload,
 	SessionCreatedPayload,
 	SessionDeletedPayload,
 	SessionEventPayload,
@@ -37,6 +41,13 @@ import { isTranscriptMessageRole } from "@thinkrail/contracts";
 import type { ParentContext } from "pi-delegation";
 import { RECURSION_GUARD_TOOLS } from "pi-subagents";
 import { logger } from "../log";
+import {
+	deriveActivityStatus,
+	deriveDiskActivityStatus,
+	parseTranscriptTail,
+	TRANSCRIPT_TAIL_BYTES,
+	TRANSCRIPT_TAIL_MAX_BYTES,
+} from "./activity";
 import { ANSWERABILITY_ERRORS, assessAnswerability, buildAnswersMessage } from "./askUserQuestion";
 import {
 	disposeSessionChildren,
@@ -55,7 +66,12 @@ import { projectSessionEvent } from "./sessionEventProjection";
 import { repairDanglingToolCalls } from "./sessionRepair";
 import type { SkillAdmissionContext } from "./skillAdmission";
 import { trashFile } from "./trash";
-import { cancelExtUiForSession, createWebUiContext, notifyExtensionError } from "./webUiContext";
+import {
+	cancelExtUiForSession,
+	createWebUiContext,
+	hasPendingExtUiDialog,
+	notifyExtensionError,
+} from "./webUiContext";
 
 const log = logger("agent");
 
@@ -77,6 +93,7 @@ interface Entry {
 	piCompactionInProgress: boolean;
 	registered: boolean;
 	subagentToolsRefreshPending: boolean;
+	publishedActivity: ActivityStatus | null;
 }
 
 const sessions = new Map<string, Entry>();
@@ -116,6 +133,124 @@ export function setSessionDeletedPublisher(fn: (payload: SessionDeletedPayload) 
 	publishDeleted = fn;
 }
 
+let publishActivity: (payload: SessionActivityPayload) => void = () => {};
+export function setSessionActivityPublisher(fn: (payload: SessionActivityPayload) => void): void {
+	publishActivity = fn;
+}
+
+function activityOf(entry: Entry): ActivityStatus | null {
+	return deriveActivityStatus({
+		isStreaming: entry.session.isStreaming,
+		pendingMessageCount: entry.session.pendingMessageCount,
+		messages: entry.session.messages,
+		lastSettlement: entry.lastSettlement,
+		hasPendingDialog: hasPendingExtUiDialog(entry.session.sessionId),
+	});
+}
+
+export function syncSessionActivity(sessionId: string): void {
+	const entry = sessions.get(sessionId);
+	if (!entry) return;
+	const status = isSessionDeleted(sessionId, entry.workspaceId) ? null : activityOf(entry);
+	if (status === entry.publishedActivity) return;
+	const projectId = activityProjectId(entry.workspaceId);
+	if (projectId === null) return;
+	entry.publishedActivity = status;
+	publishActivity({ sessionId, workspaceId: entry.workspaceId, projectId, status });
+}
+
+function retractActivity(sessionId: string, workspaceId: string): void {
+	const projectId = activityProjectId(workspaceId);
+	if (projectId === null) return;
+	publishActivity({ sessionId, workspaceId, projectId, status: null });
+}
+
+interface DiskActivityMemo {
+	modifiedMs: number;
+	messageCount: number;
+	status: ActivityStatus | null;
+}
+const diskActivityMemo = new Map<string, DiskActivityMemo>();
+
+const NEWLINE = 0x0a;
+
+async function readTranscriptTail(path: string): Promise<AgentMessage[]> {
+	const handle = await open(path, "r");
+	try {
+		const { size } = await handle.stat();
+		let length = Math.min(size, TRANSCRIPT_TAIL_BYTES);
+		for (;;) {
+			const start = size - length;
+			const probe = start > 0 ? 1 : 0;
+			const buffer = Buffer.allocUnsafe(length + probe);
+			await handle.read(buffer, 0, length + probe, start - probe);
+			if (probe === 0) return parseTranscriptTail(buffer.toString("utf8"), false);
+			if (buffer[0] === NEWLINE) {
+				return parseTranscriptTail(buffer.subarray(1).toString("utf8"), false);
+			}
+			if (length >= TRANSCRIPT_TAIL_MAX_BYTES) {
+				return parseTranscriptTail(buffer.toString("utf8"), true);
+			}
+			length = Math.min(size, length * 8);
+		}
+	} finally {
+		await handle.close();
+	}
+}
+
+async function diskActivityStatus(info: SessionInfo): Promise<ActivityStatus | null> {
+	const modifiedMs = info.modified.getTime();
+	const cached = diskActivityMemo.get(info.path);
+	if (cached && cached.modifiedMs === modifiedMs && cached.messageCount === info.messageCount) {
+		return cached.status;
+	}
+	const status = deriveDiskActivityStatus(await readTranscriptTail(info.path));
+	diskActivityMemo.set(info.path, { modifiedMs, messageCount: info.messageCount, status });
+	return status;
+}
+
+async function diskActivityRows(workspaceId: string, cwd: string): Promise<SessionActivity[]> {
+	const liveFiles = new Set<string>();
+	for (const entry of sessions.values()) {
+		if (entry.workspaceId !== workspaceId) continue;
+		const file = entry.session.sessionManager.getSessionFile();
+		if (file) liveFiles.add(resolve(file));
+	}
+	const projectId = activityProjectId(workspaceId);
+	if (projectId === null) return [];
+	const infos = await listSessionInfosStrict(cwd, liveFiles);
+	const rows: SessionActivity[] = [];
+	for (const info of infos) {
+		if (info.cwd !== cwd) continue;
+		if (sessions.has(info.id) || isSessionDeleted(info.id, workspaceId)) continue;
+		const status = await diskActivityStatus(info);
+		if (status) rows.push({ sessionId: info.id, workspaceId, projectId, status });
+	}
+	return rows;
+}
+
+export async function listSessionActivity(
+	workspaces: readonly { id: string; cwd: string }[] = [],
+): Promise<SessionActivity[]> {
+	const rows: SessionActivity[] = [];
+	for (const [sessionId, entry] of sessions) {
+		if (isSessionDeleted(sessionId, entry.workspaceId)) continue;
+		const status = activityOf(entry);
+		if (!status) continue;
+		const projectId = activityProjectId(entry.workspaceId);
+		if (projectId === null) continue;
+		rows.push({ sessionId, workspaceId: entry.workspaceId, projectId, status });
+	}
+	for (const workspace of workspaces) {
+		try {
+			rows.push(...(await diskActivityRows(workspace.id, workspace.cwd)));
+		} catch (error) {
+			log.warn(`activity snapshot skipped workspace ${workspace.id}`, error as Error);
+		}
+	}
+	return rows;
+}
+
 let sessionManagerFactory: (cwd: string) => SessionManager = (cwd) => SessionManager.create(cwd);
 export function setSessionManagerFactory(factory: (cwd: string) => SessionManager): void {
 	sessionManagerFactory = factory;
@@ -132,6 +267,19 @@ export function setSkillAdmissionResolver(
 	resolver: (workspaceId: string) => SkillAdmissionContext,
 ): void {
 	skillAdmissionResolver = resolver;
+}
+
+let activityProjectResolver: (workspaceId: string) => string | null = () => null;
+export function setActivityProjectResolver(resolver: (workspaceId: string) => string | null): void {
+	activityProjectResolver = resolver;
+}
+
+function activityProjectId(workspaceId: string): string | null {
+	try {
+		return activityProjectResolver(workspaceId);
+	} catch {
+		return null;
+	}
 }
 
 let subagentsEnabledResolver: (workspaceId: string) => boolean = () => true;
@@ -271,6 +419,7 @@ async function prepareSessionEntry(
 		piCompactionInProgress: false,
 		registered: false,
 		subagentToolsRefreshPending: false,
+		publishedActivity: null,
 	};
 	entry.unsubscribe = session.subscribe((event) => {
 		if (event.type === "queue_update") {
@@ -306,6 +455,7 @@ async function prepareSessionEntry(
 		}
 		if (sessions.get(sessionId) === entry) publish({ sessionId, event: projected });
 		if (event.type === "agent_settled") terminal = null;
+		if (sessions.get(sessionId) === entry) syncSessionActivity(sessionId);
 	});
 
 	const reportExtensionError = (failure: ExtensionError): void => {
@@ -357,6 +507,7 @@ async function registerSession(
 	applySubagentTools(prepared.entry);
 	log.debug(`session ${session.sessionId} attached (workspace ${workspaceId})`);
 	if (announceCreation) publishCreated(summaryOf(session.sessionId, prepared.entry));
+	syncSessionActivity(session.sessionId);
 	return prepared.result;
 }
 
@@ -675,6 +826,7 @@ export async function answerQuestion(
 	await session.sendCustomMessage(buildAnswersMessage(toolCallId, verdict.args, result), {
 		triggerTurn: true,
 	});
+	syncSessionActivity(sessionId);
 }
 
 function synchronizeQueuedLane(entry: Entry, kind: QueueLane, texts: readonly string[]): void {
@@ -817,6 +969,7 @@ export function clearQueueSession(sessionId: string, requireTextOnly = false): S
 		throw new Error("Cannot restore queued image messages as text");
 	}
 	entry.session.clearQueue();
+	syncSessionActivity(sessionId);
 	return content;
 }
 
@@ -851,6 +1004,7 @@ export async function removeQueuedSession(
 			);
 		}
 	}
+	syncSessionActivity(sessionId);
 	return { removed, queue: queueStateOf(entry) };
 }
 
@@ -1000,6 +1154,7 @@ function disposeSession(sessionId: string): Promise<void> {
 	entry.unsubscribe();
 	entry.session.dispose();
 	sessions.delete(sessionId);
+	if (entry.publishedActivity !== null) retractActivity(sessionId, entry.workspaceId);
 	log.debug(`session ${sessionId} disposed`);
 	return cascade;
 }
@@ -1130,7 +1285,10 @@ async function runDeleteTransaction(
 		}
 		if (path && existsSync(path)) await trashFile(path);
 	} catch (error) {
-		if (installedTombstone) deletedSessions.delete(sessionId);
+		if (installedTombstone) {
+			deletedSessions.delete(sessionId);
+			syncSessionActivity(sessionId);
+		}
 		throw error;
 	}
 	if (liveEntry && sessions.get(sessionId) === liveEntry) await disposeSession(sessionId);
