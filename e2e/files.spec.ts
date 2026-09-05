@@ -6,6 +6,9 @@ import {
 	createWorkspaceViaDialog,
 	enterDefaultWorkspace,
 	openFixtureProject,
+	openTerminal,
+	visibleTerminal,
+	visibleTerminalScreen,
 	worktreeRows,
 } from "./fixtures/app";
 
@@ -54,6 +57,27 @@ test("an entry git ignores is dimmed, whichever rule ignores it", async ({ page 
 	await expect(rows.filter({ hasText: /^listed\.log$/ })).toHaveAttribute("data-muted", "true");
 	await expect(rows.filter({ hasText: /^excluded\.log$/ })).toHaveAttribute("data-muted", "true");
 	await expect(rows.filter({ hasText: /^kept\.log$/ })).not.toHaveAttribute("data-muted", "true");
+});
+
+test("a file row drags into the composer as a mention and into a terminal as a path", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	const workspace = await createWorkspaceViaDialog(page);
+	await page.getByTestId("tab-files").click();
+	const readme = page
+		.locator('[data-testid="file-node"][data-kind="file"]')
+		.filter({ hasText: /^README\.md$/ });
+	await expect(readme).toBeVisible();
+
+	await readme.dragTo(page.getByTestId("chat-input"));
+	await expect(page.getByTestId("chat-input")).toHaveValue("@README.md ");
+
+	await openTerminal(page);
+	await readme.dragTo(visibleTerminal(page));
+	await expect(visibleTerminalScreen(page)).toContainText(
+		join(workspace.worktreePath, "README.md"),
+	);
 });
 
 test("a file row has our own context menu, not the webview's", async ({ page }) => {

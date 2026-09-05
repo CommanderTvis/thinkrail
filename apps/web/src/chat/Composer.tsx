@@ -27,7 +27,7 @@ import {
 } from "react";
 import { FileTypeIcon } from "@/components/FileTypeIcon";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { cn } from "@/lib";
+import { cn, draggedFile } from "@/lib";
 import {
 	applyTemplateSlotEdit,
 	beginTemplateSlotSession,
@@ -529,6 +529,14 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 	};
 
 	const onDrop = (e: DragEvent<HTMLTextAreaElement>) => {
+		const file = draggedFile(e.dataTransfer);
+		if (file) {
+			e.preventDefault();
+			const insert = file.kind === "dir" ? `@${file.path}/` : `@${file.path} `;
+			const before = value.slice(0, caret);
+			replaceDraft(`${before}${insert}${value.slice(caret)}`, before.length + insert.length);
+			return;
+		}
 		if (e.dataTransfer.files.length > 0) {
 			e.preventDefault();
 			void addFiles([...e.dataTransfer.files]);

@@ -3,6 +3,7 @@ export * from "./claudeLaunch";
 export * from "./claudeModelPicker";
 export * from "./desktopShell";
 export * from "./editorSelection";
+export * from "./fileDrag";
 export * from "./layoutAttention";
 export * from "./mergeText";
 export * from "./skillInvocation";
