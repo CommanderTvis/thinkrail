@@ -1,19 +1,38 @@
-import { type TerminalDataPush, type TerminalDetachedPush, type TerminalExitPush, WS_CHANNELS } from "@thinkrail/contracts";
+import type {
+	TerminalDataPush,
+	TerminalDetachedPush,
+	TerminalExitPush,
+} from "@thinkrail/contracts";
+import { WS_CHANNELS } from "@thinkrail/contracts";
 import { ClipboardAddon } from "@xterm/addon-clipboard";
 import { FitAddon } from "@xterm/addon-fit";
 import { Unicode11Addon } from "@xterm/addon-unicode11";
 import { WebFontsAddon } from "@xterm/addon-web-fonts";
-import { type ITheme, Terminal as XTerm } from "@xterm/xterm";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { WebLinksAddon } from "@xterm/addon-web-links";
+import { type IBufferCell, type IBufferLine, type ITheme, Terminal as XTerm } from "@xterm/xterm";
+import {
+	type ForwardedRef,
+	forwardRef,
+	useCallback,
+	useEffect,
+	useImperativeHandle,
+	useRef,
+	useState,
+} from "react";
 import "@xterm/xterm/css/xterm.css";
+import type { TerminalAccessoryApi } from "@thinkrail/plugin-api/web";
 import { Button } from "@thinkrail/ui/button";
 import { onThemeSwap } from "@thinkrail/ui/theme";
 import { type QuietScrollEdges, QuietScrollFrame } from "@/components/QuietScrollArea";
-import { cssColorToHex } from "@/lib";
-import { SettingsSection, useAppStore } from "../store";
+import { carriesFileDrag, cssColorToHex, draggedFile, shellQuotePath } from "@/lib";
+import { tupleKey } from "@/lib/utils";
+import { SettingsSection, selectWorkspaceById, useAppStore } from "../store";
 import { errorText, getTransport } from "../transport";
+import { createExtendedKeyState } from "./extendedKeys";
 import { createPtySizeSync, runAfterTerminalRelayout } from "./ptySizeSync";
 import { stripAnsiDim, terminalContrastFloor } from "./terminalContrast";
+import { attachPath } from "./terminalCwd";
+import { installTerminalImagePaste } from "./terminalImagePaste";
 import { createTerminalPrebindBuffer } from "./terminalPrebindBuffer";
 
 const RESIZE_DEBOUNCE_MS = 60;
@@ -22,6 +41,34 @@ const RELAYOUT_TIMEOUT_MS = 4000;
 
 function sendTerminalWrite(send: Promise<unknown>): void {
 	void send.catch(() => {});
+}
+
+const PICKER_TAIL_LINES = 48;
+
+function withoutFaint(line: IBufferLine, cell: IBufferCell): string {
+	let text = "";
+	for (let x = 0; x < line.length; x++) {
+		line.getCell(x, cell);
+		if (cell.getWidth() === 0) continue;
+		text += cell.isDim() ? " " : cell.getChars() || " ";
+	}
+	return text.trimEnd();
+}
+
+function terminalTail(
+	term: XTerm,
+	tailLines: number = PICKER_TAIL_LINES,
+	omitFaint = false,
+): string[] {
+	const buffer = term.buffer.active;
+	const start = Math.max(0, buffer.length - tailLines);
+	const cell = buffer.getNullCell();
+	const lines: string[] = [];
+	for (let i = start; i < buffer.length; i++) {
+		const line = buffer.getLine(i);
+		lines.push(!line ? "" : omitFaint ? withoutFaint(line, cell) : line.translateToString(true));
+	}
+	return lines;
 }
 
 const IME_SENTINEL_KEYCODE = 229;
@@ -101,14 +148,54 @@ interface Props {
 	initialCommand?: string;
 }
 
-export default function TerminalInstance({ tabKey, workspaceId, initialCommand }: Props) {
+export type TerminalInstanceHandle = Pick<
+	TerminalAccessoryApi,
+	"write" | "bufferTail" | "setKeyEncoding"
+>;
+
+function TerminalInstance(
+	{ tabKey, workspaceId, initialCommand }: Props,
+	ref: ForwardedRef<TerminalInstanceHandle>,
+) {
 	const rootRef = useRef<HTMLDivElement>(null);
 	const hostRef = useRef<HTMLDivElement>(null);
 	const termRef = useRef<XTerm | null>(null);
 	const serverIdRef = useRef<string | null>(null);
+	const imagePasteRef = useRef<ReturnType<typeof installTerminalImagePaste> | null>(null);
 	const fitFnRef = useRef<(() => void) | null>(null);
 	const reattachRef = useRef<(() => void) | null>(null);
 	const initialCommandRef = useRef(initialCommand);
+	const keyEncodingRef = useRef<"default" | "agent-newline">("default");
+
+	useImperativeHandle(
+		ref,
+		() => ({
+			write(data) {
+				imagePasteRef.current?.write(data);
+			},
+			bufferTail(lines, options) {
+				const term = termRef.current;
+				return term ? terminalTail(term, lines, options?.omitFaint) : [];
+			},
+			setKeyEncoding(mode) {
+				keyEncodingRef.current = mode;
+			},
+		}),
+		[],
+	);
+	const queuedInput = useAppStore(
+		(state) => state.terminalInputByWorkspace[tupleKey(workspaceId, tabKey)],
+	);
+
+	// ThinkRail speaks to an agent running in this terminal — a spec reconcile, say — and only the
+	// component holding the attachment knows the server id to write to. See panels/SPEC.md.
+	useEffect(() => {
+		const id = serverIdRef.current;
+		if (!queuedInput || !id) return;
+		const text = useAppStore.getState().consumeTerminalInput(workspaceId, tabKey);
+		if (text) imagePasteRef.current?.write(`${text}\r`);
+	}, [queuedInput, tabKey, workspaceId]);
+	const [pasteError, setPasteError] = useState<string | null>(null);
 	const [ready, setReady] = useState(false);
 	const [exited, setExited] = useState(false);
 	const [failureMessage, setFailureMessage] = useState<string | null>(null);
@@ -129,7 +216,11 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 		const focusedTab =
 			initialFocusTarget instanceof Element ? initialFocusTarget.closest('[role="tab"]') : null;
 		const initialFocusRequestsTerminal = focusedTab?.parentElement?.dataset.kind === "terminal";
+		const openLink = (_event: MouseEvent, url: string): void => {
+			window.open(url, "_blank", "noopener,noreferrer");
+		};
 		const term = new XTerm({
+			linkHandler: { activate: openLink },
 			allowProposedApi: true,
 			cursorBlink: true,
 			fontSize: Number.parseFloat(cssVar("--tr-font-size-s13") ?? "") || 13,
@@ -140,6 +231,7 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 		});
 		const fit = new FitAddon();
 		term.loadAddon(fit);
+		term.loadAddon(new WebLinksAddon(openLink));
 		tryLoad(() => {
 			term.loadAddon(new Unicode11Addon());
 			term.unicode.activeVersion = "11";
@@ -149,6 +241,16 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 		tryLoad(() => term.loadAddon(webFonts));
 		termRef.current = term;
 		term.open(host);
+		const imagePaste = installTerminalImagePaste(host, {
+			id: () => serverIdRef.current,
+			bracketed: () => term.modes.bracketedPasteMode,
+			save: (id, data, mimeType) =>
+				getTransport().request("terminal.saveImage", { id, data, mimeType }),
+			write: (id, data) =>
+				sendTerminalWrite(getTransport().request("terminal.write", { id, data })),
+			error: setPasteError,
+		});
+		imagePasteRef.current = imagePaste;
 		const updateScrollEdges = () => {
 			const buffer = term.buffer.active;
 			const next = {
@@ -166,14 +268,59 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 		const onTerminalResize = term.onResize(updateScrollEdges);
 		updateScrollEdges();
 
+		// Extended keys, negotiated rather than assumed: xterm.js implements neither the kitty keyboard
+		// protocol nor modifyOtherKeys, so a program that asks to tell Shift+Enter from Enter is answered
+		// here — and nothing unusual is sent to a program that never asked. See panels/SPEC.md.
+		const extendedKeys = createExtendedKeyState();
+		const kittyPush = term.parser.registerCsiHandler({ prefix: ">", final: "u" }, (params) => {
+			extendedKeys.pushKitty(typeof params[0] === "number" ? params[0] : 1);
+			return true;
+		});
+		const kittyPop = term.parser.registerCsiHandler({ prefix: "<", final: "u" }, () => {
+			extendedKeys.popKitty();
+			return true;
+		});
+		const modifyOtherKeys = term.parser.registerCsiHandler(
+			{ prefix: ">", final: "m" },
+			(params) => {
+				if (params[0] !== 4) return false;
+				extendedKeys.setModifyOtherKeys(typeof params[1] === "number" ? params[1] : 0);
+				return true;
+			},
+		);
+
 		term.attachCustomKeyEventHandler((event) => {
+			if (event.type === "keydown" && !event.isComposing) {
+				const bytes = extendedKeys.encode(event, {
+					agentNewline: keyEncodingRef.current === "agent-newline",
+				});
+				if (bytes !== null) {
+					// Returning false tells xterm not to process the key — which also skips the
+					// preventDefault it would have done, so the browser was still moving focus on Tab.
+					// Anything handled here is handled entirely here.
+					event.preventDefault();
+					event.stopPropagation();
+					imagePaste.write(bytes);
+					return false;
+				}
+			}
 			if (event.type !== "keydown" || event.keyCode !== IME_SENTINEL_KEYCODE) return true;
 			if (event.isComposing) return true;
 			const bytes = imeControlBytes(event);
 			if (bytes === null) return true;
-			const id = serverIdRef.current;
-			if (id) sendTerminalWrite(getTransport().request("terminal.write", { id, data: bytes }));
+			imagePaste.write(bytes);
 			return false;
+		});
+
+		// OSC 0/2: the program in the tab naming itself. Claude Code sets it to the session's task, which
+		// is what makes a terminal tab say what it is doing rather than "Terminal 3". See panels/SPEC.md.
+		let reportedTitle: string | null = null;
+		const onTitle = term.onTitleChange((title) => {
+			if (title === reportedTitle) return;
+			reportedTitle = title;
+			void getTransport()
+				.request("terminal.rename", { workspaceId, tabKey, title })
+				.catch(() => {});
 		});
 
 		const sizeSync = createPtySizeSync(({ cols, rows }) => {
@@ -211,15 +358,13 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 			if (prebind.acceptData(ev)) return;
 			if (ev.id === serverIdRef.current) writeFrame(ev);
 		});
-		const onData = term.onData((data) => {
-			const id = serverIdRef.current;
-			if (id) sendTerminalWrite(getTransport().request("terminal.write", { id, data }));
-		});
+		const onData = term.onData((data) => imagePaste.write(data));
 
 		let attachGeneration = 0;
 
 		const handleExit = (ev: TerminalExitPush): void => {
 			if (ev.id !== serverIdRef.current) return;
+			imagePaste.cancel();
 			serverIdRef.current = null;
 			term.write(`\r\n[process exited${ev.exitCode === 0 ? "" : ` with code ${ev.exitCode}`}]\r\n`);
 			setExited(true);
@@ -234,6 +379,7 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 			(payload) => {
 				const ev = payload as TerminalDetachedPush;
 				if (ev.workspaceId !== workspaceId || ev.tabKey !== tabKey) return;
+				imagePaste.cancel();
 				serverIdRef.current = null;
 				attachGeneration += 1;
 				setReady(false);
@@ -256,7 +402,7 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 			prebind = attemptPrebind;
 			void getTransport()
 				.request("terminal.attach", { workspaceId, tabKey, ...spawnedAt })
-				.then(({ id, created, replay }) => {
+				.then(({ id, created, replay, prefill, prefillSubmit }) => {
 					if (disposed) return;
 					if (attachGeneration !== startedAt || prebind !== attemptPrebind) {
 						attemptPrebind.stop();
@@ -299,13 +445,13 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 						}
 						if (buffered.exit) handleExit(buffered.exit);
 						applyFit();
+						// Typed, never submitted: the user decides whether to spend a resume — unless the
+						// surface that owns this terminal promised to bring its agent back. See SPEC.md.
+						if (prefill && serverIdRef.current === id) {
+							imagePaste.write(prefillSubmit ? `${prefill}\r` : prefill);
+						}
 						if (created && serverIdRef.current === id && initialCommandRef.current) {
-							sendTerminalWrite(
-								getTransport().request("terminal.write", {
-									id,
-									data: `${initialCommandRef.current}\r`,
-								}),
-							);
+							imagePaste.write(`${initialCommandRef.current}\r`);
 							initialCommandRef.current = undefined;
 							useAppStore.getState().consumeTerminalInitialCommand(workspaceId, tabKey);
 						}
@@ -354,10 +500,16 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 			clearTimeout(fitTimer);
 			resizeObserver.disconnect();
 			stopThemeWatch();
+			imagePaste.dispose();
+			imagePasteRef.current = null;
 			onData.dispose();
 			onViewportScroll.dispose();
 			onBufferWrite.dispose();
 			onTerminalResize.dispose();
+			onTitle.dispose();
+			kittyPush.dispose();
+			kittyPop.dispose();
+			modifyOtherKeys.dispose();
 			unsubscribe();
 			unsubscribeExit();
 			unsubscribeDetached();
@@ -379,6 +531,38 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 		() => useAppStore.getState().openSettings(SettingsSection.Terminal),
 		[],
 	);
+	const worktreePath = useAppStore(
+		(state) => selectWorkspaceById(state, workspaceId)?.worktreePath,
+	);
+	// Native listeners on purpose: a drop offers no keyboard path to make accessible. See panels/SPEC.md.
+	const dropFile = useRef<(file: { path: string }) => void>(() => {});
+	dropFile.current = (file) => {
+		const id = serverIdRef.current;
+		if (!id) return;
+		const data = `${shellQuotePath(attachPath(file.path, worktreePath, undefined))} `;
+		imagePasteRef.current?.write(data);
+	};
+	useEffect(() => {
+		const host = hostRef.current;
+		if (!host) return;
+		const over = (event: DragEvent) => {
+			if (!event.dataTransfer || !carriesFileDrag(event.dataTransfer)) return;
+			event.preventDefault();
+			event.dataTransfer.dropEffect = "copy";
+		};
+		const drop = (event: DragEvent) => {
+			const file = event.dataTransfer ? draggedFile(event.dataTransfer) : null;
+			if (!file) return;
+			event.preventDefault();
+			dropFile.current(file);
+		};
+		host.addEventListener("dragover", over);
+		host.addEventListener("drop", drop);
+		return () => {
+			host.removeEventListener("dragover", over);
+			host.removeEventListener("drop", drop);
+		};
+	}, []);
 
 	return (
 		<div
@@ -390,14 +574,23 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 			data-failed={failureMessage !== null}
 			data-detached={detached}
 			data-visible="true"
-			className="absolute inset-0 z-0"
+			className="absolute inset-0 z-0 flex flex-col"
 		>
+			{pasteError ? (
+				<div
+					role="alert"
+					data-testid="terminal-paste-error"
+					className="px-12 py-4 tr-text-metadata text-feedback-error"
+				>
+					{pasteError}
+				</div>
+			) : null}
 			<QuietScrollFrame
 				viewportSelector=".xterm-scrollable-element"
 				surface="terminal"
 				edges={scrollEdges}
 				inert={failureMessage !== null && !ready}
-				className="absolute inset-12"
+				className="mx-12 mt-12 mb-12 min-h-0 flex-1"
 			>
 				<div ref={hostRef} className="absolute inset-0" />
 			</QuietScrollFrame>
@@ -453,3 +646,5 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 		</div>
 	);
 }
+
+export default forwardRef(TerminalInstance);
