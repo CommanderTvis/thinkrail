@@ -21,7 +21,7 @@ import {
 } from "@thinkrail/contracts";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { copyText } from "@/lib";
+import { copyText, hostWording } from "@/lib";
 import { getTransport } from "@/transport";
 import { SettingsSwitch } from "./SettingsSwitch";
 
@@ -285,7 +285,10 @@ export function JetBrainsAiCard({
 					<p className="text-feedback-error tr-text-metadata">
 						{notice.kind === "failed"
 							? failureText(notice.action, notice.reason)
-							: "ThinkRail couldn't reach the host. Recheck the connection and try again."}
+							: hostWording(
+									"ThinkRail couldn't reach the host. Recheck the connection and try again.",
+									"ThinkRail couldn't complete the check. Try again.",
+								)}
 					</p>
 					{!signedOut &&
 					notice.action === "connect" &&
@@ -541,15 +544,21 @@ function actionProgress(action: JbcentralAction): string {
 function failureText(action: JbcentralAction, reason: JbcentralActionFailureReason): string {
 	switch (reason) {
 		case "not-installed":
-			return "Central isn't available on the host yet. Install it and Recheck.";
+			return hostWording(
+				"Central isn't available on the host yet. Install it and Recheck.",
+				"Central isn't installed yet. Install it and Recheck.",
+			);
 		case "unsupported-version":
 			return "This Central version isn't supported by ThinkRail. Follow the version guidance and retry.";
 		case "version-probe-failed":
-			return "ThinkRail couldn't verify Central safely. Check the host installation and Recheck.";
+			return hostWording(
+				"ThinkRail couldn't verify Central safely. Check the host installation and Recheck.",
+				"ThinkRail couldn't verify Central safely. Check the Central installation and Recheck.",
+			);
 		case "central-action-failed":
 			return action === "start-proxy"
-				? "Central couldn't start the proxy. Check Central on the host and try again."
-				: `Central couldn't ${action}. Check Central on the host and try again.`;
+				? `Central couldn't start the proxy. ${hostWording("Check Central on the host", "Check Central")} and try again.`
+				: `Central couldn't ${action}. ${hostWording("Check Central on the host", "Check Central")} and try again.`;
 		case "artifact-missing":
 		case "artifact-present":
 			return "Central finished, but ThinkRail couldn't confirm the configuration. Recheck and retry.";

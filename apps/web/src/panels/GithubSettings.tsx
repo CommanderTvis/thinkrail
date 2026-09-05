@@ -6,6 +6,7 @@ import {
 import type { GithubAuthStatus } from "@thinkrail/contracts";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { hostWording } from "@/lib/desktopShell";
 import { getTransport } from "@/transport";
 
 export function GithubSettings() {
@@ -71,7 +72,8 @@ export function GithubSettings() {
 				</Button>
 			</div>
 			<p className="text-text-muted tr-text-metadata">
-				The GitHub CLI (<code className="tr-code-text">gh</code>) is read locally on the host.
+				The GitHub CLI (<code className="tr-code-text">gh</code>) is read{" "}
+				{hostWording("locally on the host.", "locally.")}
 				Authenticate with <code className="tr-code-text">gh auth login</code> to enable creating
 				workspaces from remote branches.
 			</p>
