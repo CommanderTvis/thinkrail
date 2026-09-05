@@ -15,10 +15,26 @@ function resolveInWorktree(workspaceId: string, path: string): { root: string; a
 	return { root, abs };
 }
 
+function ignoredPaths(root: string, paths: readonly string[]): Set<string> {
+	if (paths.length === 0) return new Set();
+	const result = Bun.spawnSync(["git", "-C", root, "check-ignore", "-z", "--stdin"], {
+		stdin: Buffer.from(`${paths.join("\0")}\0`),
+		stdout: "pipe",
+		stderr: "ignore",
+	});
+	if (result.exitCode > 1) return new Set();
+	return new Set(
+		new TextDecoder()
+			.decode(result.stdout)
+			.split("\0")
+			.filter((entry) => entry !== ""),
+	);
+}
+
 export function readDir(workspaceId: string, path: string): FileNode[] {
 	const { root, abs } = resolveInWorktree(workspaceId, path);
 
-	return readdirSync(abs, { withFileTypes: true })
+	const nodes = readdirSync(abs, { withFileTypes: true })
 		.filter((entry) => entry.name !== ".git")
 		.map(
 			(entry): FileNode => ({
@@ -28,6 +44,11 @@ export function readDir(workspaceId: string, path: string): FileNode[] {
 			}),
 		)
 		.sort((a, b) => (a.kind === b.kind ? a.name.localeCompare(b.name) : a.kind === "dir" ? -1 : 1));
+	const ignored = ignoredPaths(
+		root,
+		nodes.map((node) => node.path),
+	);
+	return nodes.map((node) => (ignored.has(node.path) ? { ...node, gitignored: true } : node));
 }
 
 export function contentHash(content: string): string {

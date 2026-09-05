@@ -21,6 +21,11 @@ Read and write directories and UTF-8 files inside a workspace's worktree, path-c
   contained absolute path (same escape guard) for the host to stream a file's raw bytes over HTTP (the
   `/files/…` route serving relative images in the markdown viewer) — this module owns the path safety;
   the host owns the streaming.
+- **An ignored entry is marked, not hidden.** `readDir` asks `git check-ignore` which of the listed
+  entries git would ignore and sets `FileNode.gitignored` on them — asking git, not parsing patterns, is
+  what makes every rule count: `.gitignore` at any level, `.git/info/exclude`, the global excludes file.
+  One `-z --stdin` batch per listing; exit 1 is git's "none", anything higher (a plain folder, no git) marks
+  nothing. Build output and scratch dirs stay openable, the tree just says they are not the repo's.
 - **A write is a compare-and-swap, never a plain write.** `writeFile(workspaceId, path, content, baseHash)`
   reads what is on disk first and refuses when its hash is not the one the editor last read, handing that
   content back instead (`FileWriteResult`). The client merges from there — the host never merges, never

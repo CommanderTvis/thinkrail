@@ -1,5 +1,6 @@
+import { execFileSync } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { expect, test } from "@playwright/test";
 import {
 	createWorkspaceViaDialog,
@@ -32,6 +33,27 @@ test("shows files and compacts single-directory runs in the Files tree", async (
 	await expect(folderRows.filter({ hasText: /^compact\/only$/ })).toBeVisible({ timeout: 10_000 });
 	await expect(folderRows.filter({ hasText: /^here$/ })).toBeVisible();
 	await expect(leaf).toBeVisible();
+});
+
+test("an entry git ignores is dimmed, whichever rule ignores it", async ({ page }) => {
+	await openFixtureProject(page);
+	const workspace = await createWorkspaceViaDialog(page);
+	writeFileSync(join(workspace.worktreePath, ".gitignore"), "listed.log\n");
+	const exclude = execFileSync("git", ["rev-parse", "--git-path", "info/exclude"], {
+		cwd: workspace.worktreePath,
+		encoding: "utf8",
+	}).trim();
+	mkdirSync(dirname(resolve(workspace.worktreePath, exclude)), { recursive: true });
+	writeFileSync(resolve(workspace.worktreePath, exclude), "excluded.log\n");
+	writeFileSync(join(workspace.worktreePath, "listed.log"), "");
+	writeFileSync(join(workspace.worktreePath, "excluded.log"), "");
+	writeFileSync(join(workspace.worktreePath, "kept.log"), "");
+
+	await page.getByTestId("tab-files").click();
+	const rows = page.locator('[data-testid="file-node"][data-kind="file"]');
+	await expect(rows.filter({ hasText: /^listed\.log$/ })).toHaveAttribute("data-muted", "true");
+	await expect(rows.filter({ hasText: /^excluded\.log$/ })).toHaveAttribute("data-muted", "true");
+	await expect(rows.filter({ hasText: /^kept\.log$/ })).not.toHaveAttribute("data-muted", "true");
 });
 
 test("a file row has our own context menu, not the webview's", async ({ page }) => {
