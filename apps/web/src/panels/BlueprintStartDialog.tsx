@@ -10,6 +10,7 @@ import {
 	DialogTitle,
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
+import { hostWording } from "@/lib/desktopShell";
 import { cn } from "@/lib/utils";
 import { BUILTIN_LAYOUT_PRESETS, collectWorkbenchCenterGroups } from "@/shell/layout";
 import { applyLayoutPresetLocally } from "@/shell/layoutState";
@@ -83,7 +84,13 @@ export function BlueprintStartDialog({
 			// isolate, and a branch named after a paragraph helps nobody. See panels/SPEC.md.
 			const workspaces = await transport.request("workspace.list", { projectId });
 			const workspace = workspaces.find(isDefaultWorkspace);
-			if (!workspace) throw new Error("This host has no Default workspace for this project.");
+			if (!workspace)
+				throw new Error(
+					hostWording(
+						"This host has no Default workspace for this project.",
+						"This project has no Default workspace.",
+					),
+				);
 
 			// One project folder, one spec. A second idea wants its own project, or its own worktree.
 			const existing = await transport

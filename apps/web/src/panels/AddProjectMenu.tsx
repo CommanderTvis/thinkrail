@@ -15,6 +15,7 @@ import {
 	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { hostWording } from "@/lib/desktopShell";
 
 export function AddProjectMenu({
 	recentProjects,
@@ -43,7 +44,7 @@ export function AddProjectMenu({
 				</DropdownMenuItem>
 				<DropdownMenuItem data-testid="menu-enter-host-path" onSelect={() => onEnterHostPath()}>
 					<Edit />
-					<span>Enter host path…</span>
+					<span>{hostWording("Enter host path…", "Enter a path…")}</span>
 				</DropdownMenuItem>
 				<DropdownMenuItem data-testid="menu-new-project" onSelect={() => onNew()}>
 					<FolderPlus />
