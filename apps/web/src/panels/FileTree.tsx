@@ -134,6 +134,7 @@ function FileNodeRow({
 							kind={isDir ? "dir" : "file"}
 							expanded={expanded}
 							label={label}
+							muted={node.gitignored ? "Ignored by git" : undefined}
 							onClick={isDir ? toggleDirectory : () => open("preview")}
 							onDoubleClick={isDir ? undefined : () => open("keep")}
 						/>
