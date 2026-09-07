@@ -49,7 +49,9 @@ function fixture(): string {
 			"pi-background-commands": "workspace:*",
 			"pi-subagents": "workspace:*",
 		},
-		"apps/web": { "@thinkrail/contracts": "workspace:*" },
+		"apps/web": {
+			"@thinkrail/contracts": "workspace:*",
+		},
 		"apps/cli": {
 			"@thinkrail/server": "workspace:*",
 			"@thinkrail/shared": "workspace:*",
@@ -69,7 +71,7 @@ function fixture(): string {
 	return root;
 }
 
-test("accepts the declared package rings and thin launcher edges", () => {
+test("accepts the declared package rings and thin launcher edges", async () => {
 	const root = fixture();
 	write(
 		root,
@@ -95,17 +97,17 @@ test("accepts the declared package rings and thin launcher edges", () => {
 		'const host = import("@thinkrail/server/build-support");',
 	);
 
-	expect(moduleBoundaryViolations(root)).toEqual([]);
+	expect(await moduleBoundaryViolations(root)).toEqual([]);
 });
 
-test("keeps DAG orchestration portable and out of delegation and the unbundled host", () => {
+test("keeps DAG orchestration portable and out of delegation and the unbundled host", async () => {
 	const root = fixture();
 	write(root, "packages/pi-dag/index.ts", 'export * from "pi-delegation";');
-	expect(moduleBoundaryViolations(root)).toEqual([]);
+	expect(await moduleBoundaryViolations(root)).toEqual([]);
 	write(root, "packages/pi-dag/leak.ts", 'import "@thinkrail/server"; import "pi-subagents";');
 	write(root, "packages/pi-delegation/leak.ts", 'import "pi-dag";');
 	write(root, "packages/server/dag.ts", 'import "pi-dag";');
-	expect(moduleBoundaryViolations(root)).toEqual([
+	expect(await moduleBoundaryViolations(root)).toEqual([
 		'packages/pi-dag/leak.ts: import "@thinkrail/server" creates forbidden packages/pi-dag -> packages/server edge',
 		'packages/pi-dag/leak.ts: import "pi-subagents" creates forbidden packages/pi-dag -> packages/pi-subagents edge',
 		'packages/pi-delegation/leak.ts: import "pi-dag" creates forbidden packages/pi-delegation -> packages/pi-dag edge',
@@ -113,7 +115,7 @@ test("keeps DAG orchestration portable and out of delegation and the unbundled h
 	]);
 });
 
-test("keeps background commands portable and out of browser imports", () => {
+test("keeps background commands portable and out of browser imports", async () => {
 	const root = fixture();
 	write(root, "packages/pi-background-commands/src/leak.ts", 'import "@thinkrail/server";');
 	write(root, "packages/pi-background-commands/src/delegation.ts", 'import "pi-delegation";');
@@ -122,37 +124,37 @@ test("keeps background commands portable and out of browser imports", () => {
 		"apps/web/src/commandLeak.ts",
 		'import type { Command } from "pi-background-commands";',
 	);
-	expect(moduleBoundaryViolations(root)).toEqual([
+	expect(await moduleBoundaryViolations(root)).toEqual([
 		'apps/web/src/commandLeak.ts: import "pi-background-commands" creates forbidden apps/web -> packages/pi-background-commands edge',
 		'packages/pi-background-commands/src/delegation.ts: import "pi-delegation" creates forbidden packages/pi-background-commands -> packages/pi-delegation edge',
 		'packages/pi-background-commands/src/leak.ts: import "@thinkrail/server" creates forbidden packages/pi-background-commands -> packages/server edge',
 	]);
 });
 
-test("keeps artifact test infrastructure out of product code", () => {
+test("keeps artifact test infrastructure out of product code", async () => {
 	const root = fixture();
 	write(root, "apps/desktop/src/testLeak.ts", 'import "@thinkrail/artifact-tests";');
 	write(root, "packages/server/src/testLeak.ts", 'import "@thinkrail/artifact-tests";');
 	write(root, "packages/artifact-tests/src/webLeak.ts", 'import "@thinkrail/web";');
-	expect(moduleBoundaryViolations(root)).toEqual([
+	expect(await moduleBoundaryViolations(root)).toEqual([
 		'apps/desktop/src/testLeak.ts: import "@thinkrail/artifact-tests" creates forbidden apps/desktop -> packages/artifact-tests edge',
 		'packages/artifact-tests/src/webLeak.ts: import "@thinkrail/web" creates forbidden packages/artifact-tests -> apps/web edge',
 		'packages/server/src/testLeak.ts: import "@thinkrail/artifact-tests" creates forbidden packages/server -> packages/artifact-tests edge',
 	]);
 });
 
-test("ignores generated framework files without excluding desktop source", () => {
+test("ignores generated framework files without excluding desktop source", async () => {
 	const root = fixture();
 	write(root, "apps/desktop/.hutch/devkit/api/example.ts", 'import "@thinkrail/web";');
 	write(root, "apps/desktop/.cottontail-tmp/loader.mjs", 'import "@thinkrail/web";');
 	write(root, "apps/desktop/src/example.ts", 'import "@thinkrail/web";');
 
-	expect(moduleBoundaryViolations(root)).toEqual([
+	expect(await moduleBoundaryViolations(root)).toEqual([
 		'apps/desktop/src/example.ts: import "@thinkrail/web" creates forbidden apps/desktop -> apps/web edge',
 	]);
 });
 
-test("rejects manifest, type-only, dynamic, CommonJS, and relative cross-boundary edges", () => {
+test("rejects manifest, type-only, dynamic, CommonJS, and relative cross-boundary edges", async () => {
 	const root = fixture();
 	write(
 		root,
@@ -176,7 +178,7 @@ test("rejects manifest, type-only, dynamic, CommonJS, and relative cross-boundar
 	write(root, "packages/shared/src/relativeLeak.ts", 'export * from "../../server/src/index";');
 	write(root, "packages/pi-delegation/src/leak.ts", 'import "pi-subagents";');
 
-	expect(moduleBoundaryViolations(root)).toEqual([
+	expect(await moduleBoundaryViolations(root)).toEqual([
 		'apps/cli/src/dynamicLeak.ts: import "@thinkrail/web" creates forbidden apps/cli -> apps/web edge',
 		"apps/desktop/package.json: dependencies.@thinkrail/web creates forbidden apps/desktop -> apps/web edge",
 		'apps/web/src/commonJsLeak.cjs: import "@thinkrail/server" creates forbidden apps/web -> packages/server edge',

@@ -1,8 +1,16 @@
 #!/usr/bin/env bun
 
 import { readdirSync, readFileSync, statSync } from "node:fs";
-import { join, resolve, sep } from "node:path";
-import ts from "typescript";
+import { join, relative, resolve, sep } from "node:path";
+import {
+	isCallExpression,
+	isNoSubstitutionTemplateLiteral,
+	isStringLiteral,
+	type Node,
+	type SourceFile,
+	SyntaxKind,
+} from "typescript/unstable/ast";
+import { parseFiles } from "./tsProjects";
 
 const ALLOWLIST: Record<string, { reason: string; imports: string[] }> = {
 	"pi-ai/dist/auth/oauth/load.js": {
@@ -34,6 +42,44 @@ const SKIPPED_DIST_DIRS: Record<string, string> = {
 		"(content-hashed chunk duplicates of the allowlisted modular seams) never run in the compiled binary",
 };
 
+const SOURCE_ALLOWLIST: Record<string, { reason: string; imports: string[] }> = {};
+
+const SOURCE_EXCLUDED_DIRS = new Set(["node_modules", "dist", "build", ".git"]);
+
+function listSourceFiles(dir: string): string[] {
+	const out: string[] = [];
+	const visit = (path: string): void => {
+		for (const entry of readdirSync(path, { withFileTypes: true })) {
+			if (entry.isDirectory()) {
+				if (!SOURCE_EXCLUDED_DIRS.has(entry.name)) visit(join(path, entry.name));
+			} else if (/\.tsx?$/.test(entry.name)) {
+				out.push(join(path, entry.name));
+			}
+		}
+	};
+	visit(dir);
+	return out;
+}
+
+function reconcileOpaqueImports(
+	found: ReadonlyMap<string, string[]>,
+	allowlist: Record<string, { reason: string; imports: string[] }>,
+): { unexpected: string[]; stale: string[] } {
+	const unexpected: string[] = [];
+	const stale: string[] = [];
+	for (const id of new Set([...found.keys(), ...Object.keys(allowlist)])) {
+		const actual = [...(found.get(id) ?? [])];
+		const expected = [...(allowlist[id]?.imports ?? [])].sort();
+		for (const imp of expected) {
+			const at = actual.indexOf(imp);
+			if (at >= 0) actual.splice(at, 1);
+			else stale.push(`${id}: import(${imp})  (${allowlist[id]?.reason})`);
+		}
+		unexpected.push(...actual.map((imp) => `${id}: import(${imp})`));
+	}
+	return { unexpected, stale };
+}
+
 function packageRoot(name: string, entry: string): string {
 	const marker = `${sep}@earendil-works${sep}${name}${sep}`;
 	const at = entry.lastIndexOf(marker);
@@ -51,28 +97,21 @@ function listJsFiles(dir: string): string[] {
 	return out;
 }
 
-function opaqueImportsIn(fileName: string, source: string): string[] {
-	const sourceFile = ts.createSourceFile(
-		fileName,
-		source,
-		ts.ScriptTarget.Latest,
-		false,
-		ts.ScriptKind.JS,
-	);
+function opaqueImportsIn(sourceFile: SourceFile): string[] {
 	const found: string[] = [];
-	const visit = (node: ts.Node): void => {
-		if (ts.isCallExpression(node) && node.expression.kind === ts.SyntaxKind.ImportKeyword) {
+	const visit = (node: Node): void => {
+		if (isCallExpression(node) && node.expression.kind === SyntaxKind.ImportKeyword) {
 			const specifier = node.arguments[0];
 			const isConstant =
 				specifier !== undefined &&
-				(ts.isStringLiteral(specifier) || ts.isNoSubstitutionTemplateLiteral(specifier));
+				(isStringLiteral(specifier) || isNoSubstitutionTemplateLiteral(specifier));
 			if (!isConstant) {
 				found.push(
 					specifier ? specifier.getText(sourceFile).replace(/\s+/g, " ").trim() : "<no argument>",
 				);
 			}
 		}
-		ts.forEachChild(node, visit);
+		node.forEachChild(visit);
 	};
 	visit(sourceFile);
 	return found.sort();
@@ -98,7 +137,7 @@ for (let next = queue.shift(); next !== undefined; next = queue.shift()) {
 	}
 }
 
-const found = new Map<string, string[]>();
+const candidates: { id: string; file: string }[] = [];
 const usedSkips = new Set<string>();
 for (const [name, root] of roots) {
 	for (const file of listJsFiles(join(root, "dist"))) {
@@ -111,45 +150,74 @@ for (const [name, root] of roots) {
 			usedSkips.add(skipped);
 			continue;
 		}
-		const source = readFileSync(file, "utf8");
-		if (!/\bimport\s*\(/.test(source)) continue;
-		const imports = opaqueImportsIn(file, source);
-		if (imports.length === 0) continue;
-		found.set(id, imports);
+		if (!/\bimport\s*\(/.test(readFileSync(file, "utf8"))) continue;
+		candidates.push({ id, file });
 	}
 }
 
-const unexpected: string[] = [];
-const stale: string[] = [];
-for (const id of new Set([...found.keys(), ...Object.keys(ALLOWLIST)])) {
-	const actual = [...(found.get(id) ?? [])];
-	const expected = [...(ALLOWLIST[id]?.imports ?? [])].sort();
-	for (const imp of expected) {
-		const at = actual.indexOf(imp);
-		if (at >= 0) actual.splice(at, 1);
-		else stale.push(`${id}: import(${imp})  (${ALLOWLIST[id]?.reason})`);
-	}
-	unexpected.push(...actual.map((imp) => `${id}: import(${imp})`));
-}
+const found = new Map<string, string[]>();
+await parseFiles(
+	repoRoot,
+	candidates.map((candidate) => candidate.file),
+	async (parsed) => {
+		for (const { id, file } of candidates) {
+			const imports = opaqueImportsIn(await parsed(file));
+			if (imports.length > 0) found.set(id, imports);
+		}
+	},
+);
+
+const { unexpected: piUnexpected, stale: piStale } = reconcileOpaqueImports(found, ALLOWLIST);
 for (const [dir, reason] of Object.entries(SKIPPED_DIST_DIRS)) {
-	if (!usedSkips.has(dir)) stale.push(`${dir}: skipped dist dir no longer present  (${reason})`);
+	if (!usedSkips.has(dir)) piStale.push(`${dir}: skipped dist dir no longer present  (${reason})`);
 }
+
+const sourceCandidates: { id: string; file: string }[] = [];
+for (const dir of []) {
+	for (const file of listSourceFiles(dir)) {
+		if (!/\bimport\s*\(/.test(readFileSync(file, "utf8"))) continue;
+		sourceCandidates.push({ id: relative(repoRoot, file).split(sep).join("/"), file });
+	}
+}
+
+const sourceFound = new Map<string, string[]>();
+await parseFiles(
+	repoRoot,
+	sourceCandidates.map((candidate) => candidate.file),
+	async (parsed) => {
+		for (const { id, file } of sourceCandidates) {
+			const imports = opaqueImportsIn(await parsed(file));
+			if (imports.length > 0) sourceFound.set(id, imports);
+		}
+	},
+);
+const { unexpected: sourceUnexpected, stale: sourceStale } = reconcileOpaqueImports(
+	sourceFound,
+	SOURCE_ALLOWLIST,
+);
+
+const unexpected = [...piUnexpected, ...sourceUnexpected];
+const stale = [...piStale, ...sourceStale];
 
 if (unexpected.length > 0) {
 	console.error(
-		"check-binary-seams: NEW bundler-opaque dynamic import(s) in pi — the compiled binary cannot resolve these at runtime:",
+		"check-binary-seams: NEW bundler-opaque dynamic import(s) — the compiled binary cannot resolve these at runtime:",
 	);
 	for (const line of unexpected.sort()) console.error(`  - ${line}`);
 	console.error(
-		"\nVerify each one: register a static seam in registerBundledRuntime (packages/server/src/agent/extensions.ts),",
+		"\nFor a pi import: register a static seam in registerBundledRuntime (packages/server/src/agent/extensions.ts),",
 	);
 	console.error(
-		"or confirm it only receives node: builtins — then allowlist the occurrence in scripts/check-binary-seams.ts with that justification.",
+		"or confirm it only receives node: builtins. For a source import: it almost certainly reaches outside the",
 	);
+	console.error(
+		"static builtin-plugin array — see plugin-adoption.md S11. Either way, allowlist a deliberate occurrence in",
+	);
+	console.error("scripts/check-binary-seams.ts with that justification.");
 }
 if (stale.length > 0) {
 	console.error(
-		"check-binary-seams: stale allowlist occurrence(s) — pi moved, removed, or reshaped these imports:",
+		"check-binary-seams: stale allowlist occurrence(s) — the source moved, was removed, or was reshaped:",
 	);
 	for (const line of stale.sort()) console.error(`  - ${line}`);
 	console.error(
@@ -159,6 +227,8 @@ if (stale.length > 0) {
 if (unexpected.length > 0 || stale.length > 0) process.exit(1);
 
 const occurrences = [...found.values()].reduce((n, imports) => n + imports.length, 0);
+const sourceOccurrences = [...sourceFound.values()].reduce((n, imports) => n + imports.length, 0);
 console.log(
-	`check-binary-seams: OK (${occurrences} known opaque import occurrences in ${found.size} files across ${roots.size} pi packages, all handled or safe)`,
+	`check-binary-seams: OK (${occurrences} known opaque import occurrences in ${found.size} files across ${roots.size} pi packages; ` +
+		`${sourceOccurrences} in ${sourceFound.size} source file(s), all handled or safe)`,
 );
