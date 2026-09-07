@@ -65,7 +65,7 @@ function fixture(): string {
 	return root;
 }
 
-test("accepts the declared package rings and thin launcher edges", () => {
+test("accepts the declared package rings and thin launcher edges", async () => {
 	const root = fixture();
 	write(
 		root,
@@ -91,33 +91,33 @@ test("accepts the declared package rings and thin launcher edges", () => {
 		'const host = import("@thinkrail/server/build-support");',
 	);
 
-	expect(moduleBoundaryViolations(root)).toEqual([]);
+	expect(await moduleBoundaryViolations(root)).toEqual([]);
 });
 
-test("keeps artifact test infrastructure out of product code", () => {
+test("keeps artifact test infrastructure out of product code", async () => {
 	const root = fixture();
 	write(root, "apps/desktop/src/testLeak.ts", 'import "@thinkrail/artifact-tests";');
 	write(root, "packages/server/src/testLeak.ts", 'import "@thinkrail/artifact-tests";');
 	write(root, "packages/artifact-tests/src/webLeak.ts", 'import "@thinkrail/web";');
-	expect(moduleBoundaryViolations(root)).toEqual([
+	expect(await moduleBoundaryViolations(root)).toEqual([
 		'apps/desktop/src/testLeak.ts: import "@thinkrail/artifact-tests" creates forbidden apps/desktop -> packages/artifact-tests edge',
 		'packages/artifact-tests/src/webLeak.ts: import "@thinkrail/web" creates forbidden packages/artifact-tests -> apps/web edge',
 		'packages/server/src/testLeak.ts: import "@thinkrail/artifact-tests" creates forbidden packages/server -> packages/artifact-tests edge',
 	]);
 });
 
-test("ignores generated framework files without excluding desktop source", () => {
+test("ignores generated framework files without excluding desktop source", async () => {
 	const root = fixture();
 	write(root, "apps/desktop/.hutch/devkit/api/example.ts", 'import "@thinkrail/web";');
 	write(root, "apps/desktop/.cottontail-tmp/loader.mjs", 'import "@thinkrail/web";');
 	write(root, "apps/desktop/src/example.ts", 'import "@thinkrail/web";');
 
-	expect(moduleBoundaryViolations(root)).toEqual([
+	expect(await moduleBoundaryViolations(root)).toEqual([
 		'apps/desktop/src/example.ts: import "@thinkrail/web" creates forbidden apps/desktop -> apps/web edge',
 	]);
 });
 
-test("rejects manifest, type-only, dynamic, CommonJS, and relative cross-boundary edges", () => {
+test("rejects manifest, type-only, dynamic, CommonJS, and relative cross-boundary edges", async () => {
 	const root = fixture();
 	write(
 		root,
@@ -141,7 +141,7 @@ test("rejects manifest, type-only, dynamic, CommonJS, and relative cross-boundar
 	write(root, "packages/shared/src/relativeLeak.ts", 'export * from "../../server/src/index";');
 	write(root, "packages/pi-delegation/src/leak.ts", 'import "pi-subagents";');
 
-	expect(moduleBoundaryViolations(root)).toEqual([
+	expect(await moduleBoundaryViolations(root)).toEqual([
 		'apps/cli/src/dynamicLeak.ts: import "@thinkrail/web" creates forbidden apps/cli -> apps/web edge',
 		"apps/desktop/package.json: dependencies.@thinkrail/web creates forbidden apps/desktop -> apps/web edge",
 		'apps/web/src/commonJsLeak.cjs: import "@thinkrail/server" creates forbidden apps/web -> packages/server edge',

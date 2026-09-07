@@ -2,7 +2,21 @@
 
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, join, relative, resolve, sep } from "node:path";
-import ts from "typescript";
+import {
+	isCallExpression,
+	isExportDeclaration,
+	isExternalModuleReference,
+	isIdentifier,
+	isImportDeclaration,
+	isImportEqualsDeclaration,
+	isImportTypeNode,
+	isLiteralTypeNode,
+	isStringLiteralLikeNode,
+	type Node,
+	type SourceFile,
+	SyntaxKind,
+} from "typescript/unstable/ast";
+import { parseFiles } from "./tsProjects";
 
 interface Manifest {
 	name?: string;
@@ -101,37 +115,27 @@ function sourceFiles(root: string): string[] {
 	return files;
 }
 
-function importSpecifiers(path: string): string[] {
-	const source = ts.createSourceFile(
-		path,
-		readFileSync(path, "utf8"),
-		ts.ScriptTarget.Latest,
-		false,
-		path.endsWith("x") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
-	);
+function importSpecifiers(source: SourceFile): string[] {
 	const specifiers: string[] = [];
-	const add = (node: ts.Expression | undefined): void => {
-		if (node && ts.isStringLiteralLike(node)) specifiers.push(node.text);
+	const add = (node: Node | undefined): void => {
+		if (node !== undefined && isStringLiteralLikeNode(node)) specifiers.push(node.text);
 	};
-	const visit = (node: ts.Node): void => {
-		if (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) {
+	const visit = (node: Node): void => {
+		if (isImportDeclaration(node) || isExportDeclaration(node)) {
 			add(node.moduleSpecifier);
-		} else if (
-			ts.isImportEqualsDeclaration(node) &&
-			ts.isExternalModuleReference(node.moduleReference)
-		) {
+		} else if (isImportEqualsDeclaration(node) && isExternalModuleReference(node.moduleReference)) {
 			add(node.moduleReference.expression);
-		} else if (ts.isCallExpression(node)) {
+		} else if (isCallExpression(node)) {
 			if (
-				node.expression.kind === ts.SyntaxKind.ImportKeyword ||
-				(ts.isIdentifier(node.expression) && node.expression.text === "require")
+				node.expression.kind === SyntaxKind.ImportKeyword ||
+				(isIdentifier(node.expression) && node.expression.text === "require")
 			) {
 				add(node.arguments[0]);
 			}
-		} else if (ts.isImportTypeNode(node) && ts.isLiteralTypeNode(node.argument)) {
+		} else if (isImportTypeNode(node) && isLiteralTypeNode(node.argument)) {
 			add(node.argument.literal);
 		}
-		ts.forEachChild(node, visit);
+		node.forEachChild(visit);
 	};
 	visit(source);
 	return specifiers;
@@ -161,10 +165,11 @@ function allowedEdge(rule: ModuleRule, target: string): boolean {
 	return target === rule.root || rule.allowed.includes(target);
 }
 
-export function moduleBoundaryViolations(root: string): string[] {
+export async function moduleBoundaryViolations(root: string): Promise<string[]> {
 	const absoluteRoot = resolve(root);
 	const packages = workspacePackages(absoluteRoot);
 	const violations: string[] = [];
+	const scans: { rule: ModuleRule; files: string[] }[] = [];
 	for (const rule of MODULE_RULES) {
 		const modulePath = join(absoluteRoot, rule.root);
 		const manifestPath = join(modulePath, "package.json");
@@ -183,23 +188,32 @@ export function moduleBoundaryViolations(root: string): string[] {
 				}
 			}
 		}
-		for (const path of sourceFiles(modulePath)) {
-			for (const specifier of importSpecifiers(path)) {
-				const target = workspaceTarget(specifier, path, absoluteRoot, packages);
-				if (target && !allowedEdge(rule, target)) {
-					violations.push(
-						`${normalized(relative(absoluteRoot, path))}: import ${JSON.stringify(specifier)} creates forbidden ${rule.root} -> ${target} edge`,
-					);
+		scans.push({ rule, files: sourceFiles(modulePath) });
+	}
+	await parseFiles(
+		absoluteRoot,
+		scans.flatMap((scan) => scan.files),
+		async (parsed) => {
+			for (const { rule, files } of scans) {
+				for (const path of files) {
+					for (const specifier of importSpecifiers(await parsed(path))) {
+						const target = workspaceTarget(specifier, path, absoluteRoot, packages);
+						if (target && !allowedEdge(rule, target)) {
+							violations.push(
+								`${normalized(relative(absoluteRoot, path))}: import ${JSON.stringify(specifier)} creates forbidden ${rule.root} -> ${target} edge`,
+							);
+						}
+					}
 				}
 			}
-		}
-	}
+		},
+	);
 	return violations.sort();
 }
 
 if (import.meta.main) {
 	const root = join(import.meta.dir, "..");
-	const violations = moduleBoundaryViolations(root);
+	const violations = await moduleBoundaryViolations(root);
 	if (violations.length > 0) {
 		console.error("Module boundary violations:");
 		for (const violation of violations) console.error(`  - ${violation}`);
