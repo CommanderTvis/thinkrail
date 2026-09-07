@@ -207,10 +207,12 @@ packages/pi-thinkrail-workflow pi extension: the workflow skill system + its alw
     or canonical-data-directory ownership policy. Each host binds its own loopback port; when multiple hosts
     point at the same mutable data directory, cross-process consistency is intentionally not guaranteed.
     Desktop artifacts are additive; native WebKitGTK on Ubuntu 24.04+/glibc 2.38 is
-    the supported Linux floor. Releases are **staged as drafts here and signed elsewhere**: the
-    JetBrains signing runners are unavailable to public repositories, so `JetBrains/thinkrail-signing`
-    (private) signs the staged assets and publishes the draft. Windows artifacts carry an EV
-    Authenticode signature; the macOS CLI binary carries a Developer ID signature that Gatekeeper
+    the supported Linux floor. Release build workflows run in `JetBrains/thinkrail-signing` (private),
+    checking out an explicit public source commit and invoking the unchanged public build/version
+    recipes. They create the same tags and draft releases in this public repository; the existing
+    private signing workflow still discovers, signs, and publishes those drafts. Product source and
+    ordinary CI remain public. This is a workflow relocation, not a signing or handoff redesign.
+    Windows artifacts carry an EV Authenticode signature; the macOS CLI binary carries a Developer ID signature that Gatekeeper
     still rejects without notarization, and the macOS `.dmg` stays unsigned because Electrobun's
     payload self-extracts after download.
 

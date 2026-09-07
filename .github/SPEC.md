@@ -9,15 +9,16 @@ depends-on: [module-cli, module-desktop, module-shared, module-repo-scripts]
 
 ## Responsibility
 
-The repo's automation: PR **gates** and the multi-platform **release** pipeline. The shippable artifact
-is two additive artifact families: the single-file `thinkrail` CLI binary and the Electrobun desktop
-installer. This module builds and native-smokes both on every selected platform, stamps one shared release
-identity into them, and **stages them in one draft GitHub release**. It owns no product code — only
-workflows and composite actions.
+The repo's automation: PR **gates** and reusable multi-platform **release build recipes**. The shippable
+artifact is two additive families: the single-file `thinkrail` CLI and Electrobun desktop installer.
+The release workflows live in `JetBrains/thinkrail-signing`; they check out public source and use these
+recipes to build, native-smoke, stamp, tag, and **stage the same public draft release**. Product source,
+PR CI, composite actions, and the version script remain here.
 
 **It does not publish.** Signing requires the JetBrains internal runners, which GitHub keeps away from
 public repositories, so `JetBrains/thinkrail-signing` (private) signs the staged assets, writes
-`SHA256SUMS`, and publishes the draft. This module's release contract therefore ends at a staged draft.
+`SHA256SUMS`, and publishes the draft. That signing workflow and draft handoff remain unchanged; this
+migration only relocates the build workflows and supplies their public repository/SHA/credentials.
 
 ## CI vs release
 
@@ -30,10 +31,10 @@ public repositories, so `JetBrains/thinkrail-signing` (private) signs the staged
   (`binary-windows`), plus a host-target Electrobun package, native-window smoke, shared artifact probes,
   and desktop-backed no-agent e2e. The Linux desktop target runs under Xvfb with CI-only software
   rendering. Fast enough for PRs, no provider auth. Gates merges.
-- **Release** (`nightly.yml` / `stable.yml` → `_release.yml` → `_build.yml`): trusts a green `main`,
+- **Release** (private `nightly.yml` / `stable.yml` → `_release.yml` → `_build.yml`): trusts public `main`,
   produces native-smoked CLI binaries plus desktop installers, pushes the tag, and stages them as a
-  **draft**. A draft and its assets are invisible to unauthenticated users, so nothing unsigned is ever
-  public. Signing and publication belong to `thinkrail-signing`; notarization and desktop updater
+  **draft**. A draft and its assets stay invisible to unauthenticated users while signing is pending.
+  Signing and publication belong to `thinkrail-signing`; notarization and desktop updater
   publication remain deferred gates.
 
 **Why Windows gates PRs and macOS does not.** A release build is all-or-nothing: `release` needs
@@ -46,13 +47,18 @@ dearer, so it stays release-matrix-only. A red release matrix still notifies nob
 
 ## Channels
 
-Both channels are `main`-only, versioned by `scripts/next-version.sh` (channel-aware semver from git
+Both private entrypoints are `main`-only and check out public `main`, then use the public
+`scripts/next-version.sh` (channel-aware semver from git
 tags: `vX.Y.Z` stable, `vX.Y.Z-nightly.N`):
 
 - **Nightly** — cron 06:00 UTC + manual dispatch. Computes the next nightly, **skips when no commits**
   since the last one, stages a **prerelease** draft `vX.Y.Z-nightly.N`.
 - **Stable** — manual dispatch with `bump = patch|minor|major|explicit`. Stages `vX.Y.Z`. The script
   guards that a minor/major bump clears any in-flight nightly base; patch hotfixes ship out-of-band.
+
+The private controller passes the resolved public source SHA to each build and the draft-staging job;
+its own `GITHUB_SHA` is not product identity. The staging job uses its existing private `PUBLISH_TOKEN`
+in the main-only signing environment for public tag/draft writes. Native builds do not inherit secrets.
 
 **The release job pushes the tag itself.** A draft creates no tag, and `next-version.sh` reads
 `git tag -l`, so leaving the tag to publication would make the next nightly recompute the same version
@@ -65,7 +71,7 @@ different commit.
 
 ## Build strategy — native OS matrix
 
-`_build.yml` builds both artifact families on the selected native runners. CLI passes its matching
+The private `_build.yml` builds both artifact families on the same native runners. CLI passes its matching
 `--target`; Electrobun builds for the current runner so every FFI/helper/native-wrapper path is executed
 where it will ship:
 
@@ -76,7 +82,7 @@ where it will ship:
 | `bun-darwin-arm64` | `macos-14`         | `thinkrail-darwin-arm64`    | Electrobun macOS ARM64 `.dmg` |
 | `bun-windows-x64`  | `windows-latest`   | `thinkrail-windows-x64.exe` | Electrobun Windows x64 setup `.zip` |
 
-`bun-darwin-x64` (Intel mac, `macos-13`) is **commented out** in `_build.yml`: that runner's queue is
+`bun-darwin-x64` (Intel mac, `macos-13`) is **commented out** in the private `_build.yml`: that runner's queue is
 long enough to stall every release. Re-enable the matrix leg if macOS x64 downloads are needed.
 
 (Four targets ship both families; `darwin-x64` remains disabled for runner-queue latency.) Electrobun's
@@ -147,7 +153,8 @@ channel, download the platform asset + `SHA256SUMS`, verify the checksum, and dr
 
 Both depend on the **artifact-name contract** this module produces (`thinkrail-<os>-<arch>` with `os` ∈
 {`linux`,`darwin`,`windows`}, `arch` ∈ {`x64`,`arm64`}, `.exe` on Windows) and the `SHA256SUMS` file —
-change the asset names in `_build.yml`/`build-binary` and **both installers** must change in lockstep.
+change the asset names in the private `_build.yml` or public `build-binary` action and **both installers**
+must change in lockstep.
 The README documents the user-facing install. `thinkrail update` (the CLI's self-update, see
 `module-cli`) re-invokes `install.sh` on macOS/Linux — the installers stay the one place the
 download/verify/PATH logic lives; on Windows it prints the `install.ps1` one-liner instead of updating
@@ -155,21 +162,24 @@ in place.
 
 ## Boundary
 
-- **Owns:** everything under `.github/` (workflows, composite actions, the version script) — the CI +
-  release automation, the tag, and the artifact/version contract, up to and including a staged draft.
-- **Does not own:** signing, `SHA256SUMS`, and publication. Those are `thinkrail-signing`'s; its `SPEC.md`
-  is the source of truth for them.
+- **Owns:** public CI/site workflows, reusable composite actions, the version script, and the
+  artifact/version contract.
+- **Does not own:** the relocated nightly/stable/build/release workflows, tag/draft writes, signing,
+  `SHA256SUMS`, or publication. Those run in `thinkrail-signing`; its `SPEC.md` owns their orchestration.
 - **Consumes:** `apps/cli`'s binary build/smoke, `apps/desktop`'s package/native smoke, the shared
   version-stamping seam, and root scripts (`build:web`, `lint`, `typecheck`, `test`, `e2e` and artifact
   e2e variants). It **injects** the version at
   build time but does not otherwise reach into product code.
 - **Forbidden:** baking release logic into product code (the pipeline calls the same scripts a developer
   runs); a release-only build path that CI never exercises (CI builds+smokes the host target every PR);
-  publishing a release from this repo, or writing `SHA256SUMS` here — both would ship unsigned artifacts
-  or a manifest that the signing step then invalidates.
+  restoring a second public release-build controller, publishing a release from this repo, or writing
+  `SHA256SUMS` before signing — those duplicate orchestration or invalidate the signed-asset manifest.
 
 ## Get right
 
+- **Coordinate the relocation.** Pause/drain the public nightly and stable build workflows, then merge
+  their private copies and public removal together. Keep the existing private signer enabled: its
+  public-draft discovery, current signing behavior, and publication have not changed.
 - **Native build == correct runtime.** Do not collapse the matrix to cross-compilation without another
   way to execute each target's PTY, trash helper, Electrobun wrapper/system renderer, and normal quit path.
   Linux release additionally requires clean Ubuntu 24.04 x64/ARM64 smoke with glibc 2.38 and the declared
