@@ -68,8 +68,16 @@ ref off the workspace-create critical path.
   is literal — no caller re-spells the `rev-parse` by hand;
   **`nonInteractiveGitEnv()`** — the default environment both runners spawn under (`git`'s only option is
   `raw`; `gitAsync` alone accepts an `opts.env` override, e.g. `pr`'s non-interactive push, which layers its
-  own SSH batch-mode settings): `process.env` plus `GIT_TERMINAL_PROMPT=0`, and **nothing else** by default.
-  It reads no config and rewrites none of the user's ssh setup on its own;
+  own SSH batch-mode settings): `process.env` plus `GIT_TERMINAL_PROMPT=0` and `GIT_OPTIONAL_LOCKS=0`, and
+  **nothing else** by default. It reads no config and rewrites none of the user's ssh setup on its own.
+  `GIT_OPTIONAL_LOCKS=0` is what keeps the host's own reads from looking like repository changes to the
+  host: `git status` and `git diff` otherwise refresh and rewrite `.git/index` opportunistically, the
+  git-dir watcher (`watch`) counts any write there as a metadata change, and its nudge republishes a
+  pathless `fsChanged` that makes every client run `status`/`diff` again — a cycle that, while an agent
+  keeps the index racy, spawned ~45 git processes a second until the desktop's bundled Bun crashed
+  (JetBrains/thinkrail#438). With optional locks off, a read never takes the index lock and never
+  rewrites the file, so the cycle has no first step. Writes are unaffected: a commit or checkout takes
+  the locks it needs regardless of the setting;
   **Request-path reads run through `gitAsync`** — `resolveDiffRange`,
   `gitStatus`, `gitDiffFile`, `listCommits`, `listBranches` and the workspace badge fan-out are async, so a
   multi-spawn read can never freeze the host's single cooperative event loop (profiled at 119–246ms of
