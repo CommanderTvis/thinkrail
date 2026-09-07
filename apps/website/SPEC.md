@@ -60,7 +60,13 @@ binary.
     (`scripts/build-blog.ts` + HTML string templates) is deleted.
   - *Lint caveat:* Biome parses only `.astro` frontmatter, so `noUnusedVariables`/`noUnusedImports`
     are disabled for `*.astro` in `biome.json` (template usage is invisible to it — every flag would
-    be a false positive). `astro check` covers the templates instead.
+    be a false positive). `.astro` templates are currently type-checked by nobody — see *TypeScript 7* below.
+
+  - *TypeScript 7 (decision, 2026-09):* `astro check` is gone. It needs `@astrojs/check`, whose language
+    server refuses TypeScript 7 (the native compiler ships no programmatic API yet — withastro/roadmap#1321),
+    and the repo pins exactly one TypeScript. `typecheck` is now `astro sync && tsc --noEmit`: the generated
+    `.astro/types.d.ts` plus every `.ts`/`.tsx` under strict `tsc`. The frontmatter of the nine `.astro`
+    templates is unchecked until Astro's tooling supports TypeScript 7; restore `astro check` then.
 
 The parent owns the route-composition edges; the vibecoding leaf has no sibling dependency:
 
@@ -166,8 +172,8 @@ bootstrap, or static GTM `noscript` iframe; its spec owns the cookieless behavio
 ## Deploy
 
 Cloudflare Pages project `thinkrail-website` owns production and previews for the one static artifact.
-`.github/workflows/site.yml` runs `bun run --filter @thinkrail/website build` (`astro check && astro
-build` plus artifact validation) and direct-uploads `apps/website/dist` to branch `main` on pushes that
+`.github/workflows/site.yml` runs `bun run --filter @thinkrail/website build` (`astro sync && tsc --noEmit`,
+then `astro build` plus artifact validation) and direct-uploads `apps/website/dist` to branch `main` on pushes that
 touch this module, [[module-website-analytics]], the root package manifest, or the lockfile (plus manual
 dispatch). It verifies the provider URL before succeeding. `thinkrail.ai` is the project's custom apex
 domain; provider URLs are deployment probes, not product identities.
