@@ -25,7 +25,7 @@ import {
 	useAppStore,
 } from "@/store";
 import { errorText, getTransport } from "@/transport";
-import { ActivityBreadcrumbTrail } from "./activityBreadcrumbs";
+import { ACTIVITY_BREADCRUMB_HEIGHT, ActivityBreadcrumbTrail } from "./activityBreadcrumbs";
 import { AskStatesContext, deriveAskStates } from "./askState";
 import { type ChatActions, ChatActionsContext } from "./ChatActions";
 import { ChatHeader } from "./ChatHeader";
@@ -39,6 +39,7 @@ import {
 } from "./Composer";
 import type { ChatMessageOrder } from "./chatPreferences";
 import { ExtUiDialog } from "./ExtUiDialog";
+import { FoldGeometryProvider } from "./foldState";
 import { HistoryOverlay } from "./HistoryOverlay";
 import { deriveMessageActions } from "./messageActions";
 import {
@@ -51,7 +52,12 @@ import { QueueStrip } from "./QueueStrip";
 import { estimateChatRowHeights, type RowHeightEstimateCache } from "./rowHeightEstimates";
 import { type ChatRow, deriveRows, projectRows, rowIndexForTurn } from "./rows";
 import { SkillsDialog } from "./SkillsDialog";
-import { StreamIndicator, type StreamStatus, streamStatus } from "./StreamIndicator";
+import {
+	CHAT_STATUS_SLOT_HEIGHT,
+	type StreamStatus,
+	StreamStatusSlot,
+	streamStatus,
+} from "./StreamIndicator";
 import { SubagentTranscriptDialog } from "./SubagentTranscriptDialog";
 import { parseTemplateSlots } from "./slotSession";
 import { TemplateEditorDialog } from "./TemplateEditorDialog";
@@ -71,6 +77,7 @@ const TRY_AGAIN_PROMPT = "Try again.";
 const CHAT_VIEWPORT_INCREASE = 800;
 const CHAT_MIN_OVERSCAN_ITEMS = 2;
 const CHAT_LATEST_EDGE_MARGIN = 8;
+const chatLocationRevealClaims = new WeakMap<object, object>();
 
 function turnAnchorText(turn: ChatTurn): string {
 	if (turn.kind === "user") {
@@ -131,10 +138,8 @@ function StreamHeader({ context }: { context: ChatListContext }) {
 	return (
 		<div ref={context.headerRef}>
 			{inset}
-			{context.messageOrder === "newest-first" && context.status ? (
-				<div className={cn(context.measureClassName, "px-12 pb-8")}>
-					<StreamIndicator status={context.status} />
-				</div>
+			{context.messageOrder === "newest-first" ? (
+				<StreamStatusSlot status={context.status} measureClassName={context.measureClassName} />
 			) : null}
 		</div>
 	);
@@ -146,14 +151,9 @@ function StreamFooter({ context }: { context: ChatListContext }) {
 			<div ref={context.runwayRef} data-testid="chat-stream-runway" className="h-0" aria-hidden />
 		) : null;
 	}
-	if (!context.status && !context.runwayActive) return null;
 	return (
 		<>
-			{context.status ? (
-				<div className={cn(context.measureClassName, "px-12 pb-8")}>
-					<StreamIndicator status={context.status} />
-				</div>
-			) : null}
+			<StreamStatusSlot status={context.status} measureClassName={context.measureClassName} />
 			{context.runwayActive ? (
 				<>
 					<div ref={context.streamEdgeRef} data-testid="chat-stream-edge" className="h-0" />
@@ -223,6 +223,7 @@ export default function ChatView({
 		turns,
 		toolResults,
 		isStreaming,
+		settlementTick,
 		currentAssistantId,
 		stats,
 		commands,
@@ -278,10 +279,10 @@ export default function ChatView({
 		[chronologicalRows, isStreaming],
 	);
 
-	const currentStreamStatus = useMemo<StreamStatus | null>(() => {
-		const last = turns[turns.length - 1];
-		return isStreaming && last?.kind !== "retry" ? streamStatus(turns, currentAssistantId) : null;
-	}, [turns, isStreaming, currentAssistantId]);
+	const currentStreamStatus = useMemo<StreamStatus | null>(
+		() => (isStreaming ? streamStatus(turns, currentAssistantId) : null),
+		[turns, isStreaming, currentAssistantId],
+	);
 
 	const recentPrompts = useMemo(() => {
 		const texts = turns
@@ -319,8 +320,6 @@ export default function ChatView({
 			: null;
 	const {
 		followOutput,
-		handleAtBottom,
-		handleAtTop,
 		handleContentHeight,
 		handleScrollerRef,
 		headerRef,
@@ -330,19 +329,26 @@ export default function ChatView({
 		scrollerElement,
 		showScrollButton,
 		scrollButtonLabel,
+		scrollMoving,
 		scrollToLatest,
 		armImmediateTurn,
-		releaseFollow,
+		cancelImmediateTurn,
+		cancelAutomaticReveal,
 		revealElement,
+		revealRow,
+		prepareFoldChange,
 		runwayActive,
 		followState,
 		containerProps,
 	} = useChatScroll(
 		virtuosoRef,
 		isStreaming,
+		settlementTick,
 		chatMessageOrder,
 		latestUserRow,
 		latestRow,
+		firstItemIndex,
+		rowHeightEstimates,
 		streamingResponseMovement,
 	);
 	const measureClassName = transcriptMeasureClassName(chatLineWidthBounded);
@@ -393,6 +399,14 @@ export default function ChatView({
 	} = useHistorySearch(sessionId, workspaceId, projectId);
 
 	const chatLocationRequest = useAppStore((s) => s.chatLocationRequest);
+	const activeChatLocationReveal = useRef<typeof chatLocationRequest>(null);
+	const locationRowsRef = useRef(rows);
+	locationRowsRef.current = rows;
+	const locationTurnsRef = useRef(turns);
+	locationTurnsRef.current = turns;
+	const locationTurnMapRef = useRef(runtime.turnIdByMessageIndex);
+	locationTurnMapRef.current = runtime.turnIdByMessageIndex;
+	const locationRowsReady = rows.length > 0;
 	const [flashRowId, setFlashRowId] = useState<string | null>(null);
 
 	useEffect(() => {
@@ -531,7 +545,6 @@ export default function ChatView({
 		behavior: Exclude<SubmitBehavior, "interrupt">,
 	) => {
 		const queued = behavior !== "send";
-		if (queued) releaseFollow();
 		if (!queued && (text || attachments.length > 0)) {
 			armImmediateTurn();
 			useAppStore.getState().appendUserMessage(sessionId, text, attachments);
@@ -549,6 +562,10 @@ export default function ChatView({
 			.catch((err) => {
 				useAppStore.getState().appendErrorTurn(sessionId, errorText(err));
 				if (queued) restoreTextToDraft(text);
+				else {
+					const streaming = useAppStore.getState().sessions[sessionId]?.isStreaming ?? false;
+					cancelImmediateTurn(streaming);
+				}
 			});
 	};
 
@@ -669,38 +686,63 @@ export default function ChatView({
 			!chatLocationRequest ||
 			chatLocationRequest.workspaceId !== workspaceId ||
 			chatLocationRequest.sessionId !== sessionId ||
-			rows.length === 0
+			!locationRowsReady
 		) {
 			return;
 		}
 		if (useAppStore.getState().chatLocationRequest !== chatLocationRequest) return;
+		if (activeChatLocationReveal.current === chatLocationRequest) return;
 		const { messageIndex, anchorText } = chatLocationRequest;
+		const currentRows = locationRowsRef.current;
+		const currentTurns = locationTurnsRef.current;
 		const prefix = anchorText.slice(0, 40);
-		const mappedId = runtime.turnIdByMessageIndex?.[messageIndex];
-		const mapped = mappedId ? turns.find((t) => t.id === mappedId) : undefined;
+		const mappedId = locationTurnMapRef.current?.[messageIndex];
+		const mapped = mappedId ? currentTurns.find((t) => t.id === mappedId) : undefined;
 		const target =
 			mapped && turnAnchorText(mapped).includes(prefix)
 				? mapped
-				: turns.findLast((t) => turnAnchorText(t).includes(prefix));
-		const index = target ? rowIndexForTurn(rows, target.id) : -1;
+				: currentTurns.findLast((t) => turnAnchorText(t).includes(prefix));
+		const index = target ? rowIndexForTurn(currentRows, target.id) : -1;
 		if (index === -1) {
 			toast.error("couldn't locate the message — the session may have changed");
 			useAppStore.getState().clearChatLocation();
 			return;
 		}
-		releaseFollow();
-		virtuosoRef.current?.scrollToIndex({ index, align: "center" });
-		setFlashRowId(rows[index]?.id ?? null);
-		useAppStore.getState().clearChatLocation();
-	}, [
-		chatLocationRequest,
-		releaseFollow,
-		rows,
-		runtime.turnIdByMessageIndex,
-		sessionId,
-		turns,
-		workspaceId,
-	]);
+		const rowId = currentRows[index]?.id;
+		if (!rowId) {
+			useAppStore.getState().clearChatLocation();
+			return;
+		}
+		const revealClaim = {};
+		chatLocationRevealClaims.set(chatLocationRequest, revealClaim);
+		activeChatLocationReveal.current = chatLocationRequest;
+		const cancelReveal = revealRow(
+			rowId,
+			() => locationRowsRef.current.findIndex((row) => row.id === rowId),
+			"center",
+			(result) => {
+				if (activeChatLocationReveal.current !== chatLocationRequest) return;
+				activeChatLocationReveal.current = null;
+				if (useAppStore.getState().chatLocationRequest !== chatLocationRequest) return;
+				if (result === "found") setFlashRowId(rowId);
+				else if (result === "missing")
+					toast.error("couldn't locate the message — the session may have changed");
+				useAppStore.getState().clearChatLocation();
+			},
+		);
+		return () => {
+			if (activeChatLocationReveal.current === chatLocationRequest) {
+				activeChatLocationReveal.current = null;
+			}
+			cancelReveal();
+			queueMicrotask(() => {
+				if (chatLocationRevealClaims.get(chatLocationRequest) !== revealClaim) return;
+				chatLocationRevealClaims.delete(chatLocationRequest);
+				const state = useAppStore.getState();
+				if (state.chatLocationRequest === chatLocationRequest) state.clearChatLocation();
+			});
+		};
+	}, [chatLocationRequest, locationRowsReady, revealRow, sessionId, workspaceId]);
 
 	const historyOpenRequest = useAppStore((s) => s.historyOpenRequest);
 	const historyOverlayOpen = historyState.open;
@@ -759,11 +801,12 @@ export default function ChatView({
 				getTransport()
 					.request("session.answerQuestion", { sessionId, toolCallId, result })
 					.then(() => undefined),
+			cancelAutomaticReveal,
 			focusComposer: () => composerRef.current?.refocus(),
 			openSubagentTranscript: setTranscriptChildId,
 			revealChatElement: revealElement,
 		}),
-		[revealElement, sessionId],
+		[cancelAutomaticReveal, revealElement, sessionId],
 	);
 
 	const onExtUiReply = (value: string | boolean | null) => {
@@ -785,18 +828,6 @@ export default function ChatView({
 					data-testid="chat-view"
 					data-line-width-bounded={chatLineWidthBounded}
 					data-message-order={chatMessageOrder}
-					onPointerDownCapture={() => {
-						if (isStreaming) releaseFollow();
-					}}
-					onKeyDownCapture={(event) => {
-						if (
-							isStreaming &&
-							event.target instanceof Element &&
-							!event.target.closest('[data-testid="chat-scroll"]')
-						) {
-							releaseFollow();
-						}
-					}}
 					className="flex h-full min-h-0 min-w-0 flex-col bg-container-workspace-bg [container-type:size]"
 				>
 					<Popover open={planOpen} onOpenChange={setPlanOpen}>
@@ -835,6 +866,7 @@ export default function ChatView({
 						data-follow-state={followState}
 						data-latest-edge={chatMessageOrder === "newest-first" ? "top" : "bottom"}
 						data-streaming={isStreaming}
+						data-scroll-moving={scrollMoving}
 						className="relative flex min-h-0 flex-1 flex-col [container-type:size]"
 						{...containerProps}
 					>
@@ -864,7 +896,7 @@ export default function ChatView({
 								)}
 								initialTopMostItemIndex={
 									chatMessageOrder === "newest-first"
-										? { index: 0, align: "start" }
+										? { index: 0, align: "start", offset: -CHAT_STATUS_SLOT_HEIGHT }
 										: {
 												index: Math.max(rows.length - 1, 0),
 												align: "end",
@@ -872,36 +904,36 @@ export default function ChatView({
 											}
 								}
 								followOutput={followOutput}
-								atBottomStateChange={handleAtBottom}
-								atTopStateChange={handleAtTop}
 								rangeChanged={({ startIndex }) => {
 									const localIndex = startIndex - firstItemIndex;
 									visibleAnchorRowId.current = rows[localIndex]?.id ?? null;
 								}}
 								totalListHeightChanged={handleContentHeight}
-								atBottomThreshold={50}
-								atTopThreshold={50}
 								computeItemKey={(_, row) => row.id}
 								itemContent={(index, row) => (
 									<div
 										data-testid="chat-row"
+										data-chat-row-id={row.id}
+										data-chat-row-index={index - firstItemIndex}
 										data-flash={row.id === flashRowId || undefined}
 										className={cn(
 											measureClassName,
 											"rounded-[var(--radius-sm)] px-12 py-4 transition-colors data-[flash]:bg-primary-subtle",
 										)}
 									>
-										<ChatTurnView
-											row={row}
-											workspaceRoot={workspaceRoot}
-											onOpenFile={onOpenFile}
-											agentResponded={messageActions.agentRespondedByUserId.get(row.id) ?? false}
-											isFinalAnswer={messageActions.finalAnswerRowIds.has(row.id)}
-											onOpenSpec={onOpenSpec}
-											onOpenChange={onOpenChange}
-											onReveal={onReveal}
-											onTryAgain={() => performSend(TRY_AGAIN_PROMPT, [], "send")}
-										/>
+										<FoldGeometryProvider onBeforeChange={prepareFoldChange}>
+											<ChatTurnView
+												row={row}
+												workspaceRoot={workspaceRoot}
+												onOpenFile={onOpenFile}
+												agentResponded={messageActions.agentRespondedByUserId.get(row.id) ?? false}
+												isFinalAnswer={messageActions.finalAnswerRowIds.has(row.id)}
+												onOpenSpec={onOpenSpec}
+												onOpenChange={onOpenChange}
+												onReveal={onReveal}
+												onTryAgain={() => performSend(TRY_AGAIN_PROMPT, [], "send")}
+											/>
+										</FoldGeometryProvider>
 										{chatMessageOrder === "newest-first" &&
 										runwayActive &&
 										index === firstItemIndex ? (
@@ -918,6 +950,15 @@ export default function ChatView({
 							<ActivityBreadcrumbTrail
 								scroller={scrollerElement}
 								measureClassName={measureClassName}
+								onReveal={(node) =>
+									revealElement(node, {
+										block: "start",
+										provenance: "user-navigation",
+										runway: "preserve",
+										stability: "none",
+										topInset: ACTIVITY_BREADCRUMB_HEIGHT,
+									})
+								}
 							/>
 						</div>
 						{showScrollButton ? (
