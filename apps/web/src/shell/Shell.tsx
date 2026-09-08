@@ -4,17 +4,17 @@ import {
 	RiCircleFill,
 	RiSettings3Line as Settings,
 } from "@remixicon/react";
+import { applyCodeFont } from "@thinkrail/ui/editor";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@thinkrail/ui/resizable";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { useEffect, useRef, useState } from "react";
-import { applyCodeFont } from "@/panels/editorFont";
 import { QuietScrollArea } from "../components/QuietScrollArea";
 import { NotificationPermissionPrompt, useAttentionNotifications } from "../notifications";
 import { AnalyticsConsentDialog } from "../panels/AnalyticsConsentDialog";
 import { BranchList } from "../panels/BranchList";
 import { InterviewPromptDialog } from "../panels/InterviewPromptDialog";
 import { NewWorkspaceDialog } from "../panels/NewWorkspaceDialog";
-import { ProjectTree } from "../panels/ProjectTree";
+
 import { SearchOverlay } from "../panels/SearchOverlay";
 import { SettingsDialog } from "../panels/SettingsDialog";
 import { Toaster } from "../panels/Toaster";
@@ -46,6 +46,7 @@ import { JbcentralQuotaTopbar } from "./JbcentralQuotaTopbar";
 import { LayoutSettings } from "./LayoutSettings";
 import { useLocalLayoutState } from "./layoutState";
 import { NativeWindowControls } from "./NativeWindowControls";
+import { ProjectsTool } from "./ProjectsTool";
 import { SessionSwitcher } from "./SessionSwitcher";
 import { useCollapsibleRegion } from "./useCollapsibleRegion";
 import { useGlobalHotkeys } from "./useGlobalHotkeys";
@@ -96,7 +97,10 @@ export function Shell() {
 	} = useCollapsibleRegion(welcomeCenterRef, "welcome-left");
 
 	const [themeHint] = useState(readThemeHint);
-	const [findRequest, setFindRequest] = useState(0);
+	const [find, setFind] = useState<{ request: number; anchor: HTMLElement | null }>({
+		request: 0,
+		anchor: null,
+	});
 	const [searchOpen, setSearchOpen] = useState(false);
 	const welcomeGeneration = useAppStore((s) => s.welcomeGeneration);
 	const theme = useAppStore((s) => s.theme);
@@ -115,7 +119,11 @@ export function Shell() {
 	const codeFont = useAppStore((s) => s.codeFontFamily);
 	useEffect(() => applyCodeFont(codeFont), [codeFont]);
 	useGlobalHotkeys({
-		onFind: () => setFindRequest((current) => current + 1),
+		onFind: () =>
+			setFind((current) => ({
+				request: current.request + 1,
+				anchor: document.activeElement?.closest<HTMLElement>("section[data-group-id]") ?? null,
+			})),
 		...(activeWorkspaceId ? { onSearch: () => setSearchOpen(true) } : {}),
 		onProjects: hasActiveWorkspace
 			? () => {
@@ -330,7 +338,7 @@ export function Shell() {
 								className="h-full bg-container-sidebar-bg outline-none"
 							>
 								<QuietScrollArea className="h-full" viewportClassName="p-12">
-									<ProjectTree />
+									<ProjectsTool activeWorkspaceId={null} />
 								</QuietScrollArea>
 							</aside>
 						</ResizablePanel>
@@ -364,7 +372,13 @@ export function Shell() {
 				}}
 			/>
 			<NotificationPermissionPrompt />
-			{findRequest > 0 ? <FindBar request={findRequest} onClose={() => setFindRequest(0)} /> : null}
+			{find.request > 0 ? (
+				<FindBar
+					request={find.request}
+					anchor={find.anchor}
+					onClose={() => setFind({ request: 0, anchor: null })}
+				/>
+			) : null}
 			<Toaster />
 			<AppShortcuts />
 		</div>
