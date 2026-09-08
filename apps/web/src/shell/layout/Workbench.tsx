@@ -1635,19 +1635,14 @@ function CenterGroupView({
 			trailing={
 				<>
 					{renderCenterActions(group.id)}
-					{group.tabs.length === 0 ? (
-						<IconTooltip
-							label={isLayoutUnavailable(groupRemoval) ? groupRemoval.reason : "Remove group"}
-						>
+					{group.tabs.length === 0 && !isLayoutUnavailable(groupRemoval) ? (
+						<IconTooltip label="Remove group">
 							<button
 								type="button"
 								data-testid="remove-layout-group"
 								aria-label="Remove group"
-								disabled={isLayoutUnavailable(groupRemoval)}
-								onClick={() => {
-									if (!isLayoutUnavailable(groupRemoval)) shared.onApply(groupRemoval);
-								}}
-								className="flex w-32 shrink-0 items-center justify-center text-text-muted hover:bg-control-bg-hovered hover:text-text-default disabled:text-control-disabled-text"
+								onClick={() => shared.onApply(groupRemoval)}
+								className="flex w-32 shrink-0 items-center justify-center text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
 							>
 								<X className="size-16" />
 							</button>
@@ -2081,19 +2076,14 @@ function SideGroupView({
 						</button>
 					</IconTooltip>
 				) : null}
-				{group.tabs.length === 0 ? (
-					<IconTooltip
-						label={isLayoutUnavailable(groupRemoval) ? groupRemoval.reason : "Remove group"}
-					>
+				{group.tabs.length === 0 && !isLayoutUnavailable(groupRemoval) ? (
+					<IconTooltip label="Remove group">
 						<button
 							type="button"
 							data-testid="remove-layout-group"
 							aria-label="Remove group"
-							disabled={isLayoutUnavailable(groupRemoval)}
-							onClick={() => {
-								if (!isLayoutUnavailable(groupRemoval)) shared.onApply(groupRemoval);
-							}}
-							className="flex w-32 shrink-0 items-center justify-center border-border-muted border-b border-l text-text-muted hover:bg-control-bg-hovered hover:text-text-default disabled:text-control-disabled-text"
+							onClick={() => shared.onApply(groupRemoval)}
+							className="flex w-32 shrink-0 items-center justify-center border-border-muted border-b border-l text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
 						>
 							<X className="size-14" />
 						</button>
@@ -2460,19 +2450,14 @@ function BottomGroupView({
 						}
 					/>
 				</div>
-				{group.tabs.length === 0 ? (
-					<IconTooltip
-						label={isLayoutUnavailable(groupRemoval) ? groupRemoval.reason : "Remove group"}
-					>
+				{group.tabs.length === 0 && !isLayoutUnavailable(groupRemoval) ? (
+					<IconTooltip label="Remove group">
 						<button
 							type="button"
 							data-testid="remove-layout-group"
 							aria-label="Remove group"
-							disabled={isLayoutUnavailable(groupRemoval)}
-							onClick={() => {
-								if (!isLayoutUnavailable(groupRemoval)) shared.onApply(groupRemoval);
-							}}
-							className="flex w-32 shrink-0 items-center justify-center border-border-muted border-b border-l text-text-muted hover:bg-control-bg-hovered hover:text-text-default disabled:text-control-disabled-text"
+							onClick={() => shared.onApply(groupRemoval)}
+							className="flex w-32 shrink-0 items-center justify-center border-border-muted border-b border-l text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
 						>
 							<X className="size-14" />
 						</button>
