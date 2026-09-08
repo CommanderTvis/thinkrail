@@ -130,6 +130,10 @@ Electrobun's synchronous `before-quit` callback cancels quit while that promise 
 in the error-dialog finalizer, so even missing quit interception or a failed dialog cannot bypass shutdown.
 Abrupt death relies only on operating-system process cleanup.
 
+Startup regression tests mock the SDK's imported exports, including `ContextMenu`, so module linking
+reaches each intended failure stage. Subprocess assertion failures include stderr to distinguish a
+stale mock from a shutdown regression.
+
 Artifact tests drive this same entrypoint through opt-in environment/ready/control seams: isolated user
 data, a hidden neutral window for browser-backed tests, host/launcher ids and origin on DOM-ready, and
 normal quit. Native UI smoke can capture an external-open result and request one fixed navigation probe

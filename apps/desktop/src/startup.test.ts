@@ -41,6 +41,7 @@ mock.module("electrobun/main", () => ({
   ApplicationMenu: { setApplicationMenu() {} },
   BrowserView: {},
   BrowserWindow: class {},
+  ContextMenu: { showContextMenu() {} },
   PATHS: { RESOURCES_FOLDER: ${JSON.stringify(root)}, VIEWS_FOLDER: ${JSON.stringify(root)} },
   Updater: { getLocalInfo: async () => {
     calls.push("updates");
@@ -76,7 +77,7 @@ console.log(JSON.stringify(calls));
 				stdout: "pipe",
 				stderr: "pipe",
 			});
-			expect(result.exitCode).toBe(0);
+			expect(result.exitCode, result.stderr.toString()).toBe(0);
 			expect(JSON.parse(result.stdout.toString())).toEqual([
 				"host",
 				...(failure === "boot" ? [] : ["listener"]),

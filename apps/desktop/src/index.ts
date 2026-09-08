@@ -6,11 +6,14 @@ import Electrobun, {
 	ApplicationMenu,
 	BrowserView,
 	BrowserWindow,
+	ContextMenu,
 	PATHS,
 	Utils,
 } from "electrobun/main";
 import { installDesktopApplicationMenu } from "./applicationMenu";
+import { desktopContextMenu } from "./contextMenu";
 import { installExternalNavigation } from "./externalNavigation";
+import { HostPortStore } from "./hostPortStore";
 import {
 	injectInitialDesktopPreferences,
 	readDesktopPreferenceRemove,
@@ -44,19 +47,23 @@ async function start(): Promise<void> {
 	const serverRuntime = (await import(
 		pathToFileURL(join(runtimeDir, "server-runtime.ts")).href
 	)) as DesktopServerRuntime;
+	const userData = process.env.THINKRAIL_DESKTOP_USER_DATA ?? Utils.paths.userData;
+	// The webview's origin is its storage identity, and the port is in it — see SPEC.md.
+	const hostPorts = new HostPortStore(join(userData, "host-ports.json"));
 	const host = await serverRuntime.startDesktopHost({
 		runtimeDir,
 		staticDir: join(PATHS.VIEWS_FOLDER, "web"),
 		appVersion: version,
 		channel,
+		port: hostPorts.read(BACKEND_PROFILE_ID),
 	});
+	hostPorts.write(BACKEND_PROFILE_ID, host.port);
 	const quitCoordinator = createElectrobunQuitCoordinator(() => host.server.shutdown());
 	startupQuitCoordinator = quitCoordinator;
 	Electrobun.events.on("before-quit", (event: BeforeQuitEvent) => {
 		quitCoordinator.handleBeforeQuit(event);
 	});
 	const origin = `http://127.0.0.1:${host.port}`;
-	const userData = process.env.THINKRAIL_DESKTOP_USER_DATA ?? Utils.paths.userData;
 	const routes = new RouteStore(join(userData, "routes.json"));
 	const preferences = new PreferenceStore(join(userData, "preferences.json"));
 	const initialRoute = routes.read(BACKEND_PROFILE_ID, WINDOW_ID);
@@ -88,6 +95,11 @@ async function start(): Promise<void> {
 				routeChanged: ({ hash }) => {
 					if (!neutral) routes.write(BACKEND_PROFILE_ID, WINDOW_ID, hash);
 				},
+				zoomToggle: () => {
+					if (mainWindow.isMaximized()) mainWindow.unmaximize();
+					else mainWindow.maximize();
+				},
+				contextMenu: (payload) => ContextMenu.showContextMenu(desktopContextMenu(payload)),
 				preferenceWrite: (payload) => {
 					if (neutral) return;
 					const preference = readDesktopPreferenceWrite(payload);
@@ -124,6 +136,9 @@ async function start(): Promise<void> {
 			process.env.THINKRAIL_DESKTOP_E2E_HOST === "1",
 		navigationRules: neutral ? null : JSON.stringify(["^*", `${origin}/*`]),
 		frame: { x: 80, y: 60, width: 1440, height: 920 },
+		// The app's own header is the title bar; macOS keeps only the traffic lights, inset to clear it.
+		titleBarStyle: "hiddenInset",
+		trafficLightOffset: { x: 20, y: 8 },
 	});
 	const navigationProbePath = neutral
 		? undefined
