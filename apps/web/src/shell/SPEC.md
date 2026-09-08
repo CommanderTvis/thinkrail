@@ -159,5 +159,17 @@ genuinely-stuck case it exists for.
 - `Mod+B` toggles the left side, restoring local group/tab attention or an eligible singleton tool;
 - `Mod+J` does the same for the right side;
 - `Mod+Shift+J` toggles bottom, restoring local bottom attention, a bottom-targeted singleton, or the terminal creation surface.
+- `Mod+F` opens the shell's own **`FindBar`** everywhere the focus is not inside a Monaco editor — a
+  markdown preview, a rendered diff, a PDF's text layer, the chat, a terminal. Monaco keeps its own find
+  widget, so inside an editor the chord is left alone. The bar walks the document's visible text nodes
+  itself (a `TreeWalker`, case-insensitive, its own input excluded) and paints every match through the
+  CSS Custom Highlight API (`::highlight(thinkrail-find)` / `-current` in `index.css`, on the selection
+  tokens), falling back to selecting the current match where `CSS.highlights` is missing. Painting a
+  highlight never moves focus or the selection, which is why `window.find` was rejected: it matches the
+  query inside the bar's own input and steals the caret. Enter / Shift+Enter step with wrap, a count
+  shows `i/n`, the border turns error-red on no match, Esc closes and clears the paint. It exists because
+  the desktop shell has no browser find bar at all, and in a browser tab it replaces the browser's, which
+  never reaches a Monaco-rendered file anyway. Ceilings: the whole document is searched, not the active
+  pane, and a match spanning two text nodes is not found.
 
 Letter chords match physical `KeyboardEvent.code`, never layout-dependent `key`. The three layout chords remain app-owned inside xterm, do not repeat, and are suppressed while a modal dialog is open. With no active workspace, right/bottom chords neither act nor swallow the browser chord; Projects remains available. Terminal `Ctrl+R` still belongs to xterm; `Ctrl+Shift+R`, macOS `Cmd+R`, F5, and browser reload remain untouched. All other arrangement operations are exposed by the layout command/menu system in [[submodule-web-shell-layout]].

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { panelHotkeyCommand } from "./useGlobalHotkeys";
+import { isFindChord, panelHotkeyCommand } from "./useGlobalHotkeys";
 
 const key = (
 	code: string,
@@ -19,6 +19,17 @@ const key = (
 });
 
 const all = { projects: true, workspace: true, bottom: true } as const;
+
+describe("find chord", () => {
+	test("is the platform modifier plus F, physical key, no other modifier", () => {
+		expect(isFindChord(key("KeyF"), "Linux")).toBe(true);
+		expect(isFindChord(key("KeyF", { ctrlKey: false, metaKey: true }), "MacIntel")).toBe(true);
+		expect(isFindChord(key("KeyF", { ctrlKey: false, metaKey: true }), "Linux")).toBe(false);
+		expect(isFindChord(key("KeyF", { shiftKey: true }), "Linux")).toBe(false);
+		expect(isFindChord(key("KeyF", { altKey: true }), "Linux")).toBe(false);
+		expect(isFindChord(key("KeyG"), "Linux")).toBe(false);
+	});
+});
 
 describe("panel hotkey routing", () => {
 	test("keeps the existing physical-key chords and adds Mod+Shift+J for bottom", () => {

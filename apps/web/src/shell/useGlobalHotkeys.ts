@@ -3,12 +3,23 @@ import { hasPlatformModifier } from "../lib";
 import { selectHistoryTarget, useAppStore } from "../store";
 
 const TERMINAL_ROOT_SELECTOR = ".xterm";
+const MONACO_ROOT_SELECTOR = ".monaco-editor";
 
 type GlobalHotkeyActions = {
 	onProjects: () => void;
 	onWorkspace?: () => void;
 	onBottom?: () => void;
+	onFind: () => void;
 };
+
+export function isFindChord(event: PanelHotkeyEvent, platform?: string): boolean {
+	return (
+		event.code === "KeyF" &&
+		!event.altKey &&
+		!event.shiftKey &&
+		hasPlatformModifier(event, platform)
+	);
+}
 
 type PanelHotkeyCommand = "projects" | "workspace" | "bottom";
 
@@ -40,6 +51,10 @@ function isInTerminal(target: EventTarget | null): boolean {
 	return target instanceof Element && target.closest(TERMINAL_ROOT_SELECTOR) !== null;
 }
 
+function isInMonaco(target: EventTarget | null): boolean {
+	return target instanceof Element && target.closest(MONACO_ROOT_SELECTOR) !== null;
+}
+
 export function useGlobalHotkeys(actions: GlobalHotkeyActions): void {
 	const actionsRef = useRef(actions);
 	actionsRef.current = actions;
@@ -63,6 +78,13 @@ export function useGlobalHotkeys(actions: GlobalHotkeyActions): void {
 					else if (command === "workspace") actionsRef.current.onWorkspace?.();
 					else actionsRef.current.onBottom?.();
 				}
+				return;
+			}
+
+			if (isFindChord(event) && !hasOpenModal() && !isInMonaco(event.target)) {
+				event.preventDefault();
+				event.stopPropagation();
+				if (!event.repeat) actionsRef.current.onFind();
 				return;
 			}
 
