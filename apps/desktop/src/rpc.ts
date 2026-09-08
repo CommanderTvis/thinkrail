@@ -20,6 +20,7 @@ export type DesktopRpc = {
 			preferenceRemove: { key: string };
 			titleBarDoubleClick: undefined;
 			pageZoomRequested: { action: PageZoomAction };
+			contextMenu: { editable: boolean };
 		};
 	};
 	webview: {
