@@ -34,6 +34,7 @@ import { LayoutSettings } from "./LayoutSettings";
 import { useLocalLayoutState } from "./layoutState";
 import { LocationBar } from "./locationBar";
 import { NativeWindowControls } from "./NativeWindowControls";
+import { FindBar } from "./FindBar";
 import { PROJECT_HOME_PROJECTS_REGION_ID, ProjectHome } from "./ProjectHome";
 import { SessionSwitcher } from "./SessionSwitcher";
 import { readSettingsShortcutLabel } from "./useAppShortcuts";
@@ -77,6 +78,10 @@ export function Shell() {
 
 	const [themeHint] = useState(readThemeHint);
 	const [settingsShortcut] = useState(readSettingsShortcutLabel);
+	const [find, setFind] = useState<{ request: number; anchor: HTMLElement | null }>({
+		request: 0,
+		anchor: null,
+	});
 	const welcomeGeneration = useAppStore((s) => s.welcomeGeneration);
 	const theme = useAppStore((s) => s.theme);
 	const themeMode = useAppStore((s) => s.themeMode);
@@ -92,6 +97,11 @@ export function Shell() {
 		return preference.themeMode === "system" ? onSystemAppearanceChange(apply) : undefined;
 	}, [themeHint, welcomeGeneration, theme, themeMode, systemThemePair]);
 	useGlobalHotkeys({
+		onFind: () =>
+			setFind((current) => ({
+				request: current.request + 1,
+				anchor: document.activeElement?.closest<HTMLElement>("section[data-group-id]") ?? null,
+			})),
 		onProjects: hasActiveWorkspace
 			? () => {
 					if (!activeWorkspaceId) return;
@@ -230,6 +240,13 @@ export function Shell() {
 				}}
 			/>
 			<NotificationPermissionPrompt />
+			{find.request > 0 ? (
+				<FindBar
+					request={find.request}
+					anchor={find.anchor}
+					onClose={() => setFind({ request: 0, anchor: null })}
+				/>
+			) : null}
 			<Toaster />
 			<AppShortcuts />
 		</div>
