@@ -85,6 +85,18 @@ Object.defineProperty(globals, STABLE_PREFERENCES_GLOBAL, {
 // having `apps/web` import anything from here. See apps/web/src/shell/SPEC.md.
 window.__thinkrailDesktop = true;
 window.__thinkrailToggleWindowZoom = () => electroview.rpc?.send.zoomToggle({});
+if (navigator.userAgent.includes("Macintosh")) {
+	document.addEventListener("contextmenu", (event) => {
+		if (event.defaultPrevented) return;
+		event.preventDefault();
+		const target = event.target;
+		const editable =
+			target instanceof HTMLInputElement ||
+			target instanceof HTMLTextAreaElement ||
+			(target instanceof HTMLElement && target.isContentEditable);
+		electroview.rpc?.send.contextMenu({ editable });
+	});
+}
 const sendRoute = () => electroview.rpc?.send.routeChanged({ hash: window.location.hash });
 const replaceState = history.replaceState.bind(history);
 history.replaceState = (...args: Parameters<History["replaceState"]>) => {

@@ -13,6 +13,7 @@ export type DesktopRpc = {
 			preferenceRemove: { key: string };
 			/** Our titlebar is the window's; double-clicking it has to reach the window call. */
 			zoomToggle: Record<string, never>;
+			contextMenu: { editable: boolean };
 		};
 	};
 	webview: {

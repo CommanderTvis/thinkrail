@@ -7,10 +7,12 @@ import Electrobun, {
 	ApplicationMenu,
 	BrowserView,
 	BrowserWindow,
+	ContextMenu,
 	PATHS,
 	Utils,
 } from "electrobun/main";
 import { installDesktopApplicationMenu } from "./applicationMenu";
+import { desktopContextMenu } from "./contextMenu";
 import { installExternalNavigation } from "./externalNavigation";
 import { HostPortStore } from "./hostPortStore";
 import {
@@ -95,6 +97,7 @@ async function start(): Promise<void> {
 					if (mainWindow.isMaximized()) mainWindow.unmaximize();
 					else mainWindow.maximize();
 				},
+				contextMenu: (payload) => ContextMenu.showContextMenu(desktopContextMenu(payload)),
 				preferenceWrite: (payload) => {
 					if (neutral) return;
 					const preference = readDesktopPreferenceWrite(payload);
