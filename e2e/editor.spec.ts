@@ -1,5 +1,12 @@
+import { renameSync, rmSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { expect, test } from "@playwright/test";
-import { createWorkspaceViaDialog, openFixtureProject } from "./fixtures/app";
+import {
+	createWorkspaceViaDialog,
+	enterDefaultWorkspace,
+	openFixtureProject,
+} from "./fixtures/app";
+import { E2E_FIXTURE_REPO } from "./fixtures/paths";
 
 test("opens a file in a center Monaco tab, focuses on re-open, and closes", async ({ page }) => {
 	await openFixtureProject(page);
@@ -70,5 +77,191 @@ test("opens a non-markdown file straight to Monaco with no rendered-view toggle"
 	await expect(page.getByTestId("editor-tab").filter({ hasText: "notes.txt" })).toBeVisible();
 	await expect(page.getByTestId("editor-pane")).toContainText("plain-text-fixture");
 	await expect(page.getByTestId("markdown-view-toggle")).toHaveCount(0);
+	await expect(page.getByTestId("markdown-preview")).toHaveCount(0);
+});
+
+test("an image opens as a rendered preview, not a Monaco buffer of bytes", async ({ page }) => {
+	await openFixtureProject(page);
+	await createWorkspaceViaDialog(page);
+	await page.getByTestId("tab-files").click();
+	await page.getByTestId("file-node").filter({ hasText: "logo.png" }).dblclick();
+
+	await expect(page.getByTestId("editor-tab").filter({ hasText: "logo.png" })).toBeVisible();
+	const img = page.getByTestId("image-preview-img");
+	await expect(img).toBeVisible();
+	// Proves the bytes actually decoded over the /files route — a broken img element is still "visible".
+	await expect.poll(() => img.evaluate((el) => (el as HTMLImageElement).naturalWidth)).toBe(1);
+	await expect(page.getByTestId("image-preview-size")).toHaveText("1 × 1");
+
+	// The same zoom vocabulary the pdf-preview plugin's viewer uses, same gestures, same buttons.
+	await expect(page.getByTestId("image-zoom-level")).toHaveText("100%");
+	await page.getByTestId("image-zoom-in").click();
+	await expect(page.getByTestId("image-zoom-level")).toHaveText("115%");
+	await page.getByTestId("image-zoom-reset").click();
+	await expect(page.getByTestId("image-zoom-level")).toHaveText("100%");
+
+	// A picture is not text: no markdown chrome, no editor.
+	await expect(page.getByTestId("markdown-view-toggle")).toHaveCount(0);
+	await expect(page.getByTestId("markdown-preview")).toHaveCount(0);
+});
+
+test("a rewritten image shows its new pixels without reopening the tab", async ({ page }) => {
+	await openFixtureProject(page);
+	const workspace = await createWorkspaceViaDialog(page);
+	await page.getByTestId("tab-files").click();
+	await page.getByTestId("file-node").filter({ hasText: "logo.png" }).dblclick();
+	await expect(page.getByTestId("image-preview-size")).toHaveText("1 × 1");
+
+	// A 2×1 replacement: the dimensions caption changing is the reload, observed end to end.
+	const twoByOne = Buffer.from(
+		"iVBORw0KGgoAAAANSUhEUgAAAAIAAAABCAIAAAB7QOjdAAAADUlEQVR4nGP4z8AARAAI/gH/xp559wAAAABJRU5ErkJggg==",
+		"base64",
+	);
+	const target = join(workspace.worktreePath, "logo.png");
+	writeFileSync(target, twoByOne);
+	await expect(page.getByTestId("image-preview-size")).toHaveText("2 × 1", { timeout: 10_000 });
+
+	// The way an exporter does it: the file goes away and comes back under a rename.
+	const temp = `${target}.tmp`;
+	rmSync(target);
+	writeFileSync(
+		temp,
+		Buffer.from(
+			"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M8AAAMCAoGB9x0AAAAASUVORK5CYII=",
+			"base64",
+		),
+	);
+	renameSync(temp, target);
+	await expect(page.getByTestId("image-preview-size")).toHaveText("1 × 1", { timeout: 10_000 });
+});
+
+test("an issue number in a stylesheet comment is not painted as a colour", async ({ page }) => {
+	writeFileSync(
+		join(E2E_FIXTURE_REPO, "issue-130.css"),
+		"/** GH #130: per booking form */\na {\n  color: #abc;\n}\n",
+	);
+	await openFixtureProject(page);
+	await enterDefaultWorkspace(page);
+	await page.getByTestId("tab-files").click();
+	await page.getByTestId("file-node").filter({ hasText: "issue-130.css" }).dblclick();
+	const pane = page.getByTestId("editor-pane");
+	await expect(pane).toContainText("GH #130");
+	await expect(pane).toContainText("color: #abc");
+	// Monaco's CSS colour provider would decorate both `#130` and `#abc` once its worker answers; with
+	// decorators off, neither ever appears.
+	await expect(pane.locator(".colorpicker-color-decoration")).toHaveCount(0);
+	await page.waitForTimeout(500);
+	await expect(pane.locator(".colorpicker-color-decoration")).toHaveCount(0);
+});
+
+test("the markdown outline lists the document's headings and scrolls to one", async ({ page }) => {
+	await openFixtureProject(page);
+	await createWorkspaceViaDialog(page);
+	await page.getByTestId("tab-files").click();
+	await page.getByTestId("file-node").filter({ hasText: "LARGE.md" }).dblclick();
+	await expect(page.getByTestId("markdown-preview")).toBeVisible();
+
+	// Off by default, and the toggle belongs to the rendered view only.
+	await expect(page.getByTestId("markdown-outline")).toHaveCount(0);
+	const toggle = page.getByTestId("md-toggle-outline");
+	await expect(toggle).toHaveAttribute("aria-pressed", "false");
+
+	await toggle.click();
+	await expect(page.getByTestId("markdown-outline")).toBeVisible();
+	const entries = page.getByTestId("markdown-outline-entry");
+	await expect(entries.first()).toBeVisible();
+
+	// The entry must link to a heading that actually rendered — the reason the outline is read from the
+	// DOM rather than the markdown AST.
+	const id = await entries.first().getAttribute("data-heading-id");
+	expect(id).toBeTruthy();
+	await expect(page.locator(`#${id}`)).toHaveCount(1);
+
+	// The outline survives every view — in Source it drives the editor jump alone.
+	await page.getByTestId("md-toggle-source").click();
+	await expect(page.getByTestId("markdown-outline")).toBeVisible();
+	await page.getByTestId("md-toggle-preview").click();
+	await expect(page.getByTestId("markdown-outline")).toBeVisible();
+});
+
+test("an outline click reveals the heading's line in the source editor", async ({ page }) => {
+	writeFileSync(
+		join(E2E_FIXTURE_REPO, "toc.md"),
+		[
+			"# Top",
+			"",
+			...Array.from({ length: 300 }, (_, at) => `filler ${at}`),
+			"",
+			"## Deep section",
+			"",
+			"body",
+			"",
+		].join("\n"),
+	);
+	await openFixtureProject(page);
+	await enterDefaultWorkspace(page);
+	await page.getByTestId("tab-files").click();
+	await page.getByTestId("file-node").filter({ hasText: "toc.md" }).dblclick();
+	await page.getByTestId("md-toggle-source").click();
+	await page.getByTestId("md-toggle-outline").click();
+
+	// Monaco renders only the viewport, so the heading's text appearing is the reveal itself.
+	const editorLines = page.getByTestId("editor-pane").locator(".view-lines");
+	await expect(editorLines).not.toContainText("Deep section");
+	await page.getByTestId("markdown-outline-entry").filter({ hasText: "Deep section" }).click();
+	await expect(editorLines).toContainText("## Deep section");
+});
+
+test("a wide markdown document stays inside its pane instead of being clipped", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	await createWorkspaceViaDialog(page);
+	await page.getByTestId("tab-files").click();
+	await page.getByTestId("file-node").filter({ hasText: "WIDE.md" }).dblclick();
+
+	const preview = page.getByTestId("markdown-preview");
+	await expect(preview).toBeVisible();
+
+	// The scroller must stay inside its pane. A flex item defaults to `min-width:auto` and grows past it
+	// instead, which is what clipped headings and prose off the right edge.
+	const pane = page.getByTestId("editor-pane").first();
+	const paneWidth = (await pane.boundingBox())?.width ?? 0;
+	expect(paneWidth).toBeGreaterThan(0);
+	expect((await preview.boundingBox())?.width ?? 0).toBeLessThanOrEqual(paneWidth + 1);
+
+	// Prose wraps rather than scrolling: the document itself must not overflow sideways.
+	const doc = await preview.evaluate((el) => ({
+		scrollWidth: el.scrollWidth,
+		clientWidth: el.clientWidth,
+	}));
+	expect(doc.scrollWidth).toBeLessThanOrEqual(doc.clientWidth + 1);
+
+	// A wide table is the exception — it scrolls inside its own box, so the page never has to.
+	const table = preview.locator("table").first();
+	await expect(table).toBeVisible();
+	await expect
+		.poll(() => table.evaluate((el) => el.scrollWidth - el.clientWidth))
+		.toBeGreaterThan(0);
+});
+
+test("the markdown Split view edits and previews at once, and closes back to Source", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	await createWorkspaceViaDialog(page);
+	await page.getByTestId("tab-files").click();
+	await page.getByTestId("file-node").filter({ hasText: "README.md" }).dblclick();
+	await expect(page.getByTestId("markdown-preview")).toContainText("sample-project");
+
+	await page.getByTestId("md-toggle-split").click();
+	await expect(page.getByTestId("md-toggle-split")).toHaveAttribute("data-active", "true");
+	await expect(page.getByTestId("embedded-pane-title")).toHaveText("Preview");
+	await expect(page.getByTestId("markdown-preview")).toContainText("sample-project");
+	await expect(page.getByTestId("editor-pane")).toContainText("# sample-project");
+
+	// Closing the preview half is a deliberate return to plain Source, not a hidden mode.
+	await page.getByTestId("embedded-pane-close").click();
+	await expect(page.getByTestId("md-toggle-source")).toHaveAttribute("data-active", "true");
 	await expect(page.getByTestId("markdown-preview")).toHaveCount(0);
 });
