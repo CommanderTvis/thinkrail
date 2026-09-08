@@ -1,7 +1,5 @@
+import { version } from "@thinkrail/shared/version";
 import type { ElectrobunConfig } from "electrobun";
-
-const version = process.env.THINKRAIL_DESKTOP_VERSION;
-if (!version) throw new Error("THINKRAIL_DESKTOP_VERSION is required");
 
 export default {
 	app: {
@@ -13,15 +11,16 @@ export default {
 		exitOnLastWindowClosed: true,
 	},
 	build: {
-		bunVersion: "1.3.14",
+		mainProcess: "bun",
 		bun: { entrypoint: "src/index.ts" },
+		views: { preload: { entrypoint: "src/preload.ts", format: "iife" } },
 		copy: {
-			".stage/web": "views/web",
+			"../web/dist": "views/web",
 			".stage/runtime": "runtime",
 		},
-		useAsar: false,
 		mac: { bundleCEF: false, icons: "assets/icon.iconset" },
 		linux: { bundleCEF: false, icon: "assets/icon.png" },
 		win: { bundleCEF: false, icon: "assets/icon.ico" },
 	},
+	scripts: { preBuild: "preBuild.ts", postBuild: "postBuild.ts" },
 } satisfies ElectrobunConfig;

@@ -46,6 +46,11 @@ packages/pi-thinkrail-workflow pi extension: the workflow skill system + its alw
                     (bundled into every session; workspace-internal, not portable)
 ```
 
+Artifact verification is a separate source-only workspace, [[module-artifact-tests]]. It depends on
+CLI build metadata, server test fixtures, and shared teardown; root tools and browser E2E consume it.
+No product package imports the test workspace, and it has no application build step or Electrobun SDK
+dependency. This keeps test process drivers outside both launchers and the server library.
+
 ## Decisions
 
 1. **Client/host split.** Engine host owns `pi` and state; the UI is a portable client; the wire is the
@@ -156,6 +161,11 @@ packages/pi-thinkrail-workflow pi extension: the workflow skill system + its alw
     pin (`19.3.0-canary-a1124489-20260826`); the checker accepts the full identifier grammar, including
     hyphens, without admitting a range.
 
+    The root `packageManager` field also pins Bun for development, CI, and CLI compilation; Bun types
+    live in the catalog. Bun `1.4.0` aligns these paths with the desktop runtime, whose version is still
+    owned independently by its Electrobun release (see [[module-desktop]]). CI reads the root pin rather
+    than maintaining a second version in workflow YAML.
+
 11. **Terminal = xterm.js on the DOM renderer.** The browser terminal is `@xterm/xterm`, driven from
     `apps/web/src/panels/TerminalInstance.tsx` against a real PTY (`bun-pty`) in
     `packages/server/src/terminal`. It stays the choice because it is the only production-ready browser
@@ -197,8 +207,10 @@ packages/pi-thinkrail-workflow pi extension: the workflow skill system + its alw
     exact `thinkrail.ai` origin. The retired `vibecoding.thinkrail.ai` hostname is an edge redirect that
     preserves path and query, never a proxy to a second site.
 
-15. **Desktop packaging preserves the host/runtime boundary.** Electrobun `1.18.1` packages Bun `1.3.14`
-    and embeds the host in its Bun process; it never wraps or spawns the CLI. The native window loads the
+15. **Desktop packaging preserves the host/runtime boundary.** Electrobun `2.0.1` explicitly selects
+    its release-owned Bun `1.4.0` runtime and embeds the host in that process, not the default Cottontail
+    runtime; it never wraps or spawns the CLI. Its exact npm bootstrap pin selects the Hutch build
+    toolchain and generated SDK; Bun remains the workspace package manager. The native window loads the
     packaged web build from the host's actual loopback port so UI, wire, files, and SPA fallback keep one
     origin. Native resources that require paths stay unpacked. The shell sets the staged `bun-pty` library
     before server import and loads PI from a separately bundled `.ts` runtime so external TypeScript
@@ -207,20 +219,14 @@ packages/pi-thinkrail-workflow pi extension: the workflow skill system + its alw
     or canonical-data-directory ownership policy. Each host binds its own loopback port; when multiple hosts
     point at the same mutable data directory, cross-process consistency is intentionally not guaranteed.
     Desktop artifacts are additive; native WebKitGTK on Ubuntu 24.04+/glibc 2.38 is
-    the supported Linux floor. Release build workflows run in `JetBrains/thinkrail-signing` (private),
-    checking out an explicit public source commit and invoking the unchanged public build/version
-    recipes. They create the same tags and draft releases in this public repository; the existing
-    private signing workflow still discovers, signs, and publishes those drafts. Product source and
-    ordinary CI remain public. This is a workflow relocation, not a signing or handoff redesign.
-    Windows artifacts carry an EV Authenticode signature; the macOS CLI binary carries a Developer ID signature that Gatekeeper
-    still rejects without notarization, and the macOS `.dmg` stays unsigned because Electrobun's
-    payload self-extracts after download.
-
-    Signing can only fail *closed*, so a draft that is never published means releases stop appearing
-    rather than appearing unsigned — the failure mode that silently ended the pre-pivot pipeline, and the
-    reason the signing repo alarms on a stale draft. How the tag and the draft are staged is
-    [[module-ci-release]]'s contract, not restated here.
-    Detail: [[module-desktop]], [[module-ci-release]].
+    the supported Linux floor. The standard framework CLI/configuration owns bundling and installers;
+    a documented pre-build hook prepares ThinkRail's physical resources and PI runtime. Release workflows
+    in `JetBrains/thinkrail-signing` consume the public build recipes and coordinate build → JetBrains
+    service signing → publication for an explicit public source commit. Product code and ordinary CI stay
+    public; credentials and publication stay private. macOS service signing consumes the framework's
+    expanded app archive and finalizes the DMG through the documented JetBrains SRE flow, without a local
+    Apple credential flow or mutation of Electrobun's compressed wrapper. Exact handoff and release
+    verification contracts belong to [[module-ci-release]]. Detail: [[module-desktop]], [[module-ci-release]].
 
 16. **Delegation is portable; ThinkRail is one embedder.** `packages/pi-delegation` owns the session
     fabric: one creation primitive with orthogonal axes, a run-owning handle, lineage, registry, and

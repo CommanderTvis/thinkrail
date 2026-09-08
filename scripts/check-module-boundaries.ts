@@ -18,6 +18,10 @@ interface ModuleRule {
 }
 
 const MODULE_RULES: readonly ModuleRule[] = [
+	{
+		root: "packages/artifact-tests",
+		allowed: ["apps/cli", "packages/server", "packages/shared"],
+	},
 	{ root: "packages/contracts", allowed: [] },
 	{ root: "packages/shared", allowed: ["packages/contracts"] },
 	{ root: "packages/pi-delegation", allowed: [] },
@@ -52,6 +56,8 @@ const DEPENDENCY_SECTIONS = [
 const SOURCE_EXTENSIONS = new Set([".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs"]);
 const EXCLUDED_DIRECTORIES = new Set([
 	".git",
+	".hutch",
+	".cottontail-tmp",
 	".stage",
 	"artifacts",
 	"build",

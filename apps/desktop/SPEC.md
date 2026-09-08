@@ -6,7 +6,7 @@ title: Desktop launcher/client (Electrobun)
 parent: architecture
 depends-on: [module-server, module-contracts, module-shared]
 tags: [desktop, v1, launcher, packaging]
-references: [submodule-web-navigation]
+references: [submodule-web-navigation, module-artifact-tests]
 ---
 
 ## Responsibility
@@ -21,15 +21,14 @@ engine architecture.
 
 - **Owns:** Electrobun configuration and lifecycle; native window policy; local `bootHost()` startup;
   packaged resource staging; the PI-compatible server-runtime bundle; desktop route preload/persistence;
-  a bounded generic client-preference adapter under stable backend-profile/window identity; desktop package
-  smoke; and the desktop artifact adapter used by shared host probes.
-- **Public surface:** the packaged desktop application and its installers — the Windows setup stub
-  signed, the macOS `.dmg` and the Linux tarballs not (see *Signing*, below); the build/test-only
-  `@thinkrail/desktop/artifact` launcher and installer locators consumed by smoke and E2E harnesses.
-- **Allowed deps:** `server` for the embedded host, build-support manifest, and artifact probes; `shared`
-  for release identity and the retrying teardown both smokes clean up with; `contracts` for
+  a bounded generic client-preference adapter under stable backend-profile/window identity; and the
+  opt-in live-window test seam. Standalone artifact harnesses belong to [[module-artifact-tests]].
+- **Public surface:** the packaged desktop application and its installers. No test-helper library is
+  exported by the application package.
+- **Allowed deps:** `server` for the embedded host and build-support manifest; `shared`
+  for release identity; `contracts` for
   compatibility/native-bridge types; the completed built web
-  artifact; Electrobun `1.18.1`; Bun/Node.
+  artifact; Electrobun `2.0.1` and its generated SDK; Bun/Node.
 - **Forbidden:** spawning the CLI or a second engine process; implementing ordinary product feature or
   agent/domain logic; importing web source at runtime; introducing a desktop-only wire or UI state model;
   storing one active location on the backend; or bundling CEF without a new acceptance failure that
@@ -51,8 +50,8 @@ another.
 ## Startup and packaged runtime
 
 1. Resolve app resources and set `BUN_PTY_LIB` to the staged current-target FFI library before any server
-   import. Electrobun uses ordinary `Bun.build`; unlike `bun build --compile`, it does not embed
-   `bun-pty`'s library.
+   import. Electrobun emits an ordinary JavaScript entry, not a `bun build --compile` executable, so it
+   does not embed `bun-pty`'s library.
 2. Dynamically import the separately built, unpacked `server-runtime.ts` resource. The `.ts` filename is a
    runtime contract: PI then selects its TypeScript source-runtime Jiti path and supplies bundled virtual
    modules to external extensions. Flattening PI into Electrobun's normal `.js` entry makes it select
@@ -86,7 +85,7 @@ flow through the operating-system responder chain across ordinary inputs, Monaco
 webview surfaces without competing with their local key handling.
 
 macOS receives the conventional application, Edit, and Window role menus. Windows receives the supported
-Edit role menu. Linux skips registration because Electrobun 1.18.1 does not support application menus
+Edit role menu. Linux skips registration because Electrobun 2.0.1 does not support application menus
 there; WebKitGTK keeps its renderer-native editing behavior. The policy is platform-pure and the packaged
 ready seam reports whether registration ran, so unit tests pin menu composition while expanded-app smoke
 pins production wiring.
@@ -94,7 +93,12 @@ pins production wiring.
 ## Navigation and window security
 
 The native window permits navigation only within its exact loopback origin. User-requested external URLs
-open through the OS instead of replacing the app surface.
+open through the OS instead of replacing the app surface. Navigation listeners use the SDK emitter's
+webview-scoped `will-navigate-<id>` and `new-window-open-<id>` channels; the unscoped payload has no
+webview id, and the instance listener's typed event list omits popups. Payload types are derived from
+SDK event factories, not copied into local declarations. Detail can be a raw URL, a popup object, or
+serialized navigation JSON; bounded decoding retains only a string URL and the HTTP/HTTPS/mailto
+allowlist. Native `navigationRules` enforce confinement: navigation-event responses cannot cancel it.
 
 A desktop preload sends typed, one-way route and local-preference messages. It wraps
 `history.replaceState` and `history.pushState` before page scripts and also reports initial/hash/pop
@@ -119,40 +123,74 @@ agent work within its bound, drains analytics, disposes server resources and PTY
 Electrobun's synchronous `before-quit` callback cancels quit while that promise is pending and retries
 `Utils.quit()` under a completion guard. Abrupt death relies only on operating-system process cleanup.
 
+Artifact tests drive this same entrypoint through opt-in environment/ready/control seams: isolated user
+data, a hidden neutral window for browser-backed tests, host/launcher ids and origin on DOM-ready, and
+normal quit. Native UI smoke can capture an external-open result and request one fixed navigation probe
+instead of launching the user's browser. These hooks need the live window; their standalone drivers and
+assertions live in the test package, which product code never imports.
+
 ## Build and release
 
-The package pins Electrobun `1.18.1` and packaged Bun `1.3.14`. Its explicit build wrapper requires a
-completed `apps/web/dist`, consumes the server-owned runtime manifest, stages target PTY/trash/skill/web
-resources under an ignored package-local directory, emits the transient static factory entry, bundles the
-self-contained server runtime to a packaged `.ts` filename, runs Electrobun, and removes generated source
-even on failure. Ordinary root development and web-build commands do not download or build Electrobun.
-The wrapper also injects the shared baked version while Electrobun evaluates its isolated config process.
+The package pins the Electrobun `2.0.1` npm bootstrap as a build-only dependency. That exact pin selects
+its paired Hutch toolchain and SDK; direct global Hutch invocation and floating version overrides are not
+part of the build path. The application explicitly selects the real Bun main process, not the default
+Cottontail runtime. Electrobun owns the packaged Bun `1.4.0` version; per-project runtime overrides are
+unsupported. The repository's independently pinned development/CI runtime is aligned with it through
+[[architecture]]'s root toolchain contract.
 
-Electrobun `1.18.1` publishes implementation `.ts` files that do not typecheck under the repository's
-strict TypeScript 6 settings. Desktop typecheck therefore maps only the consumed Electrobun API surface
-to a package-local declaration adapter through a dedicated typecheck config. The runtime build config has
-no such mapping and always resolves the real package. The adapter is a compatibility boundary, not a
-runtime fork, and must stay limited to APIs the launcher and preload actually consume.
+The package runs the official `electrobun build` / `dev` commands. Configuration reads the same shared
+version module as the launcher, without an environment-version bridge. One documented `preBuild` hook
+builds the shared web artifact and stages the application-specific PTY/trash/skill resources and PI
+runtime. The hook runs under Hutch's Cottontail, so it invokes the real Bun CLI to bundle the separately
+staged `.ts` server runtime rather than changing PI's bundler. Its transient factory entry is removed
+even on failure. Staged resources include the workflow SPEC consumed by the bundled skills. A documented
+`postBuild` hook removes staging after the framework has copied it; a failed build's staging is replaced
+at the next pre-build. Builds in one worktree remain sequential.
+
+Electrobun's `build.views` owns the browser preload bundle; `build.copy` owns physical resource inclusion.
+There is no custom SDK resolver, SDK metadata validator, or Electrobun command runner. App-local Hutch
+configuration selects Bun as package manager, retaining the workspace catalog and `bun.lock`.
+
+Hutch owns the generated `.hutch/devkit` projection and download cache. The projection and transient
+`.cottontail-tmp` loaders are ignored and excluded from repository source-boundary scans, never edited
+or committed. Framework builds prepare it
+implicitly; typecheck runs the standard `electrobun prepare` command before TypeScript. Preparation errors
+propagate normally, and a fresh machine needs network access. Ordinary install, web-only development/
+builds, and unit tests do not prepare the native SDK.
+
+Desktop typechecking consumes the official SDK's `.ts` sources through the same baseUrl-free paths used
+by editor tooling; no handwritten API declarations or shadow typecheck config exist. As explicitly
+approved, desktop alone sets `exactOptionalPropertyTypes: false` to match Electrobun's source contract,
+while retaining `strict: true` and `noUncheckedIndexedAccess: true`. This setting applies to the desktop
+compilation, including imported workspace source; every other package retains its separate unchanged
+strict check. The upstream source incompatibility is tracked in Electrobun issue #516; `skipLibCheck`
+cannot exclude imported implementation `.ts`. The direct-source approach follows the v2 migration guide
+and avoids a second declaration-generation pipeline. Canonical main imports use `electrobun/main`; the
+preload retains `electrobun/view`, and the RPC schema retains its `bun`/`webview` keys.
+
+References: [official v2 migration](https://framework.blackboard.sh/electrobun/guides/migrating-to-v2/),
+[upstream optional-property issue](https://github.com/blackboardsh/electrobun/issues/516).
 
 Desktop installers ship beside the CLI artifacts for macOS ARM64, Windows x64, Linux x64, and
-Linux ARM64. Nightly maps to Electrobun canary and stable maps to stable. Updater UX is deferred.
+Linux ARM64. Electrobun 2.0.1 publishes no macOS x64 core. Nightly maps to Electrobun canary and stable
+maps to stable. Standard formats are DMG on macOS, a setup-EXE-plus-payload ZIP on Windows, and a setup
+tar.gz on Linux. The private release pipeline retains the existing `thinkrail-desktop-*` download aliases;
+its collector selects the exact framework artifact for the channel and native target. The macOS app
+archive is transferred privately for SRE finalization, never published as an updater payload. Updater UX
+and publication of updater metadata/patches remain deferred.
 
 ### Signing
 
-Signing happens outside this repository (`JetBrains/thinkrail-signing`), and reaches only the Windows
-installer's `ThinkRail-Setup.exe` stub. The payload beside it is keyed by the `hash` field in
-`ThinkRail-Setup.metadata.json`, so rewriting it would desync the installer. The macOS `.dmg` is not
-signed at all: `ThinkRail.app` seals no resources and its real payload — Bun runtime, `bun-pty` — is a
-`.tar.zst` under `Contents/Resources/` that self-extracts on first launch. Notarization requires every
-executable to be present and signed at submission, so signing the `.dmg` would be cosmetic while
-Gatekeeper still blocked the download. Making macOS desktop signable is a packaging change here, not a
-pipeline change.
+Signing and notarization use JetBrains-provided services through the private release coordinator;
+public builds contain neither service credentials nor a new Apple-login/keychain flow. Current Windows
+coverage signs the setup stub without rewriting its hash-keyed adjacent payload.
 
-Smoke teardown of a temp tree that a launcher ran from must go through `@thinkrail/shared/removeTree`.
-Windows releases handles asynchronously after a child exits, so a bare recursive remove throws `EBUSY`
-and fails the release *after* every assertion has already passed. `rmSync`'s own `maxRetries`/`retryDelay`
-do not fix that here — Bun ignores them — so the retry loop has to be ours. The retry is teardown
-resilience, not error suppression: a tree that stays locked past the backoff still throws.
+The native macOS build also exposes Electrobun's standard expanded `.app.tar.zst` as a private signing
+input. The approved JetBrains SRE flow signs the expanded app and finalizes a conventional DMG around it,
+then signs/notarizes/staples that container. It does not mutate Electrobun's compressed self-extractor
+payload or use an incorrect pre-metadata sealing hook. Local framework DMGs remain unsigned build outputs;
+only the private pipeline's verified final DMG is a signed release. The handoff and verification contract
+belong to [[module-ci-release]].
 
 Linux uses native WebKitGTK without CEF and declares Ubuntu 24.04+/glibc 2.38 plus `libgtk-3-0`,
 `libwebkit2gtk-4.1-0`, `libayatana-appindicator3-1`, and `librsvg2-2`. Xvfb software-rendering flags are
@@ -160,32 +198,13 @@ CI-only and are never shipped as user configuration.
 
 ## Verification
 
-- Expanded-app smoke uses isolated HOME/data/PI/cache paths and ready/control files. It requires the
-  real webview to reach DOM-ready, confirms native application-menu registration on supported targets,
-  runs the shared artifact probes with repository reads denied, quits through normal lifecycle, and
-  observes clean process exit.
-- First-install smoke executes the produced DMG app, Windows setup ZIP, or Linux setup tarball against
-  isolated installation roots, boots the installed host, checks health, and requires graceful exit. The
-  release matrix must pass both smoke layers before uploading the installer.
-- Electrobun names installer artifacts per channel, and the channel lands in a different position on each
-  platform: the Linux setup tarball carries it in the app-file stem (`ThinkRail-canary-Setup.tar.gz`)
-  while the Windows setup executable inside the ZIP carries it after `-Setup`
-  (`ThinkRail-Setup-canary.exe`; only `stable` is unsuffixed). First-install smoke therefore resolves the
-  Windows setup executable from the requested channel and `src/artifact.test.ts` pins that derivation: a
-  channel-blind `*Setup.exe` match passes stable and fails every nightly, which is how the first Windows
-  nightly after desktop packaging landed failed while every other target published.
-- The shared host-agnostic artifact suite runs through a desktop adapter and the CLI adapter. Both must
-  load an external synthetic PI extension with no `pi` executable under default and custom agent dirs,
-  create a session through all bundled factories, expose bundled and project-portable skills, reach an
-  OAuth auth URL, exercise transcript trash, serve health/UI, and shut down. Desktop proof must not read
-  repository or project `node_modules` paths.
-- Desktop-backed no-agent Playwright launches the packaged process as host while its required native
-  window stays hidden on a neutral local page, avoiding two hydrated clients competing for terminals or
-  layout. A separate native smoke loads the real UI.
-- Every native release runner boot-smokes its own package. Linux x64/ARM64 additionally run in clean
-  Ubuntu 24.04 images; native Windows execution is mandatory because it cannot be inferred locally.
+[[module-artifact-tests]] owns expanded-app/first-install smoke, shared host probes, native navigation/
+preload verification, and installer isolation. Every native release target must pass both smoke layers;
+[[module-browser-e2e]] additionally covers wire-backed behavior against the packaged host. No platform's
+native result is inferred from another platform's run. Signed download acceptance requires the private
+release checks described in [[module-ci-release]].
 
 ## Deferred
 
-Shared/remote backend profiles, profile selection, multi-window/deep-link routing, CEF, a signed and
-notarized macOS `.dmg` (see above), and Electrobun updater UX.
+Shared/remote backend profiles, profile selection, multi-window/deep-link routing, CEF, and Electrobun
+updater UX.
