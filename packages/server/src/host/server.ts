@@ -115,7 +115,9 @@ import {
 	isPromptCommitted,
 	isSettledTurn,
 	maybeAutoRenameWorkspace,
+	maybeAutoRenameWorkspaceFromTurn,
 	maybeNaiveNameWorkspace,
+	maybeNaiveNameWorkspaceFromPrompt,
 } from "./autoRename";
 import { setFsNudgePublisher } from "./fsNudge";
 import { handleRequest, requestMethodDiagnostic } from "./handlers";
@@ -281,6 +283,15 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 				if (delivery === null) return new Response("not found", { status: 404 });
 				if (delivery === "unknown-token") return new Response("unknown terminal", { status: 404 });
 				if (delivery === "unreadable") return new Response("ignored");
+				const { event, query, response } = delivery.report;
+				if (event === "prompt_submit" && query) {
+					void maybeNaiveNameWorkspaceFromPrompt(delivery.workspaceId, query);
+				} else if (event === "stop" && query) {
+					void maybeAutoRenameWorkspaceFromTurn(delivery.workspaceId, {
+						prompt: query,
+						answer: response ?? "",
+					});
+				}
 				if (delivery.report.session_id) {
 					rememberAgentSession(delivery.workspaceId, delivery.tabKey, delivery.report.session_id);
 					// The blueprint's author is a terminal like any other, but its id must outlive the PTY: this
