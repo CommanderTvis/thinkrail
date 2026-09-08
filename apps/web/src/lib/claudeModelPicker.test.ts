@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
+	composerDraft,
 	confirmationChoice,
 	driveModelPicker,
 	highlightNamesModel,
@@ -60,6 +61,22 @@ const CONFIRM = [
 	"  2. No, go back",
 ];
 
+describe("composerDraft", () => {
+	test("reads what is typed after the composer's ❯, and nothing when it is empty", () => {
+		expect(composerDraft(["$ claude", "", "❯ Docker CI is quite slow", "  auto mode on"])).toBe(
+			"Docker CI is quite slow",
+		);
+		expect(composerDraft(["$ claude", "❯ ", "  auto mode on"])).toBeUndefined();
+		expect(composerDraft(["$ claude", "❯"])).toBeUndefined();
+	});
+
+	test("a placeholder hint, an open picker, or a plain shell is not a draft", () => {
+		expect(composerDraft(['❯ Try "fix lint errors"'])).toBeUndefined();
+		expect(composerDraft(renderPicker(3))).toBeUndefined();
+		expect(composerDraft(["$ ls", "README.md", "$ "])).toBeUndefined();
+	});
+});
+
 describe("confirmationChoice", () => {
 	test("reads which answer the confirmation is sitting on", () => {
 		expect(confirmationChoice(CONFIRM)).toBe("yes");
@@ -105,18 +122,17 @@ function fakePicker(initialHighlight: number): FakePicker {
 				if (open && data === "\x1b[B") highlighted = (highlighted + 1) % PICKER_ROWS.length;
 				if (open && data === "s") confirming = true;
 			},
-			readLines: () => (confirming ? CONFIRM : open ? renderPicker(highlighted) : ["❯ /model"]),
+			readLines: () => (confirming ? CONFIRM : open ? renderPicker(highlighted) : ["❯ "]),
 			delay: () => Promise.resolve(),
 		},
 	};
 }
 
 describe("driveModelPicker", () => {
-	test("clears the draft, arrows to the target, presses s — never a digit — and puts the draft back", async () => {
+	test("arrows to the target and presses s — never a digit", async () => {
 		const picker = fakePicker(5);
 		await expect(driveModelPicker(picker.io, "sonnet")).resolves.toBe("switched");
 		expect(picker.writes).toEqual([
-			"\u0015",
 			"/model",
 			"\r",
 			"\x1b[B",
@@ -125,7 +141,6 @@ describe("driveModelPicker", () => {
 			"\x1b[B",
 			"s",
 			"\r",
-			"\u0019",
 		]);
 	});
 
@@ -133,29 +148,24 @@ describe("driveModelPicker", () => {
 		const picker = fakePicker(5);
 		await expect(driveModelPicker(picker.io, "opus")).resolves.toBe("switched");
 		// The cached-conversation confirmation is answered rather than left on screen.
-		expect(picker.writes).toEqual(["\u0015", "/model", "\r", "s", "\r", "\u0019"]);
+		expect(picker.writes).toEqual(["/model", "\r", "s", "\r"]);
 	});
 
-	test("a half-typed prompt is not lost by any exit — every path yanks it back", async () => {
-		const missing = fakePicker(5);
-		await expect(driveModelPicker(missing.io, "unknown")).resolves.toBe("not-found");
-		expect(missing.writes.at(-1)).toBe("\u0019");
-
+	test("a half-typed prompt refuses the drive before a single key is typed", async () => {
 		const writes: string[] = [];
 		const io: ModelPickerIo = {
 			write: (data) => writes.push(data),
-			readLines: () => ["$ /model", "zsh: no such file or directory"],
+			readLines: () => ["❯ Docker CI is quite slow"],
 			delay: () => Promise.resolve(),
 		};
-		await expect(driveModelPicker(io, "sonnet")).resolves.toBe("no-picker");
-		expect(writes.at(-1)).toBe("\u0019");
+		await expect(driveModelPicker(io, "sonnet")).resolves.toBe("draft");
+		expect(writes).toEqual([]);
 	});
 
 	test("escapes out when no row ever names the target", async () => {
 		const picker = fakePicker(5);
 		await expect(driveModelPicker(picker.io, "unknown")).resolves.toBe("not-found");
-		expect(picker.writes.at(-2)).toBe("\x1b");
-		expect(picker.writes.at(-1)).toBe("\u0019");
+		expect(picker.writes.at(-1)).toBe("\x1b");
 		expect(picker.writes).not.toContain("s");
 	});
 
@@ -167,6 +177,6 @@ describe("driveModelPicker", () => {
 			delay: () => Promise.resolve(),
 		};
 		await expect(driveModelPicker(io, "sonnet")).resolves.toBe("no-picker");
-		expect(writes).toEqual(["\u0015", "/model", "\r", "\x1b", "\u0019"]);
+		expect(writes).toEqual(["/model", "\r", "\x1b"]);
 	});
 });

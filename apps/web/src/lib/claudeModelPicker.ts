@@ -4,7 +4,7 @@ export interface ModelPickerIo {
 	delay: (ms: number) => Promise<void>;
 }
 
-export type ModelPickerOutcome = "switched" | "no-picker" | "not-found";
+export type ModelPickerOutcome = "switched" | "no-picker" | "not-found" | "draft";
 
 const ENTER_DELAY_MS = 250;
 const POLL_MS = 150;
@@ -13,12 +13,23 @@ const MOVE_POLLS = 8;
 const MAX_STEPS = 12;
 
 const HIGHLIGHTED_ROW = /^\s*❯\s*\d+\.\s+(.+?)(?:\s{2}.*)?$/;
+const COMPOSER_LINE = /^\s*❯\s?(.*)$/;
+const COMPOSER_PLACEHOLDER = /^Try "/;
 const CONFIRM_PROMPT = /Switch model\?|Change effort level\?/;
 const CONFIRM_POLLS = 8;
 
-/** Claude Code's own kill/yank: clear whatever is typed, and put it back afterwards. */
-export const KILL_LINE = "\u0015";
-export const YANK_LINE = "\u0019";
+/** What the user has typed at Claude Code's prompt, read off its composer line; undefined when empty. */
+export function composerDraft(lines: readonly string[]): string | undefined {
+	for (let i = lines.length - 1; i >= 0; i--) {
+		const line = lines[i] ?? "";
+		if (HIGHLIGHTED_ROW.test(line)) return undefined;
+		const match = COMPOSER_LINE.exec(line);
+		if (!match) continue;
+		const text = (match[1] ?? "").trim();
+		return text && !COMPOSER_PLACEHOLDER.test(text) ? text : undefined;
+	}
+	return undefined;
+}
 
 export function pickerHighlight(lines: readonly string[]): string | undefined {
 	for (let i = lines.length - 1; i >= 0; i--) {
@@ -65,10 +76,8 @@ export async function driveModelPicker(
 	io: ModelPickerIo,
 	model: string,
 ): Promise<ModelPickerOutcome> {
-	// A slash command only opens the picker at the start of a line, so a half-typed prompt would swallow
-	// it. The draft is killed first and yanked back at the end — the agent's own pair. See lib/SPEC.md.
-	io.write(KILL_LINE);
-	await io.delay(ENTER_DELAY_MS);
+	// A slash command only opens the picker at the start of an empty line — see lib/SPEC.md.
+	if (composerDraft(io.readLines()) !== undefined) return "draft";
 	io.write("/model");
 	await io.delay(ENTER_DELAY_MS);
 	io.write("\r");
@@ -79,14 +88,12 @@ export async function driveModelPicker(
 	}
 	if (label === undefined) {
 		io.write("\x1b");
-		io.write(YANK_LINE);
 		return "no-picker";
 	}
 	for (let step = 0; step < MAX_STEPS; step++) {
 		if (highlightNamesModel(label, model)) {
 			io.write("s");
 			await answerConfirmation(io);
-			io.write(YANK_LINE);
 			return "switched";
 		}
 		const before = label;
@@ -97,6 +104,5 @@ export async function driveModelPicker(
 		}
 	}
 	io.write("\x1b");
-	io.write(YANK_LINE);
 	return "not-found";
 }

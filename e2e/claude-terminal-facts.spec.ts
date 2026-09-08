@@ -5,6 +5,7 @@ import {
 	openFixtureProject,
 	openTerminal,
 	runInTerminal,
+	visibleTerminal,
 	waitTerminalReady,
 } from "./fixtures/app";
 

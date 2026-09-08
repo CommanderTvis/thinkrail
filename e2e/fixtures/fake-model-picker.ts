@@ -21,14 +21,21 @@ function render(): void {
 
 process.stdin.setRawMode?.(true);
 process.stdin.resume();
+function composer(): void {
+	process.stdout.write(`\r\x1b[2K❯ ${typed.replace(/[\r\n]/g, "")}`);
+}
+
 process.stdin.on("data", (chunk: Buffer) => {
 	const data = chunk.toString();
 	if (!pickerOpen) {
-		typed += data;
+		// Ctrl+U clears the composer, as the real one's kill-line does.
+		typed = data.includes("\x15") ? "" : typed + data;
 		if (typed.includes("/model") && typed.includes("\r")) {
 			pickerOpen = true;
 			render();
+			return;
 		}
+		composer();
 		return;
 	}
 	if (data.includes("\x1b[B")) {
@@ -52,3 +59,4 @@ process.stdin.on("data", (chunk: Buffer) => {
 });
 
 process.stdout.write("fake-model-picker ready\r\n");
+composer();
