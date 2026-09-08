@@ -513,7 +513,8 @@ Panes mount only while their resource is locally selected, so without that recor
 while it sat in the background would mount with the new target already in hand, conclude nothing changed, and show the *old*
 target's diff under the new target's label; the cached value is what the mount compares against. Its
 per-resource view state: `view` split|inline via
-**`setDiffTabView`**, split the default; a markdown diff's `rendered` flag via **`setDiffTabRendered`**
+**`setDiffTabView`**, unset until the user picks (`DiffPane` derives split-or-inline from the pane's
+width until then — see `panels/SPEC.md`); a markdown diff's `rendered` flag via **`setDiffTabRendered`**
 (swaps raw lines for compiled documents — `DiffPane` offers it for markdown paths only); and
 `ignoreWhitespace` via **`setDiffTabIgnoreWhitespace`** (Monaco's `ignoreTrimWhitespace`). All three go
 through one internal `patchDiffRenderState(state, workspaceId, id, patch)` helper — locate-the-resource-cache

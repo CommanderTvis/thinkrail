@@ -509,6 +509,8 @@ test("The diff header keeps its controls on a narrow pane, however long the file
 	await page.getByTestId("change-item").filter({ hasText: "diffScopeResolver" }).click();
 	await expect(page.getByTestId("diff-pane")).toBeVisible();
 
+	await expect(page.getByTestId("diff-toggle-split")).toHaveAttribute("data-active", "true");
+
 	await page.setViewportSize({ width: 620, height: 800 });
 	await expect(page.getByTestId("diff-toggle-whitespace")).toBeVisible();
 	await expect(page.getByTestId("diff-copy")).toBeVisible();
@@ -517,6 +519,13 @@ test("The diff header keeps its controls on a narrow pane, however long the file
 		.getByTestId("diff-path")
 		.evaluate((n) => n.scrollWidth - n.clientWidth);
 	expect(chipOverflow).toBeLessThanOrEqual(1);
+
+	// Too narrow for two readable columns: the unpinned default follows the pane, a click pins it.
+	await expect(page.getByTestId("diff-toggle-inline")).toHaveAttribute("data-active", "true");
+	await page.getByTestId("diff-toggle-split").click();
+	await expect(page.getByTestId("diff-toggle-split")).toHaveAttribute("data-active", "true");
+	await page.setViewportSize({ width: 1280, height: 800 });
+	await expect(page.getByTestId("diff-toggle-split")).toHaveAttribute("data-active", "true");
 });
 
 test("A commit scope keeps the header readable: short sha on the pill, subject in its tooltip", async ({
