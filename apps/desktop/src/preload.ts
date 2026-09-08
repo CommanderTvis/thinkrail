@@ -25,6 +25,12 @@ import {
 	readWindowChromeFlag,
 } from "./windowChrome";
 
+declare global {
+	interface Window {
+		__thinkrailDesktop?: boolean;
+	}
+}
+
 interface DesktopPreferenceAdapter {
 	getItem(key: string): string | null;
 	setItem(key: string, value: string): void;
@@ -150,6 +156,21 @@ Object.defineProperty(globals, STABLE_PREFERENCES_GLOBAL, {
 	enumerable: false,
 });
 
+// The web app depends on contracts alone, so the desktop marks itself with plain globals rather than
+// having `apps/web` import anything from here. See apps/web/src/shell/SPEC.md.
+window.__thinkrailDesktop = true;
+if (navigator.userAgent.includes("Macintosh")) {
+	document.addEventListener("contextmenu", (event) => {
+		if (event.defaultPrevented) return;
+		event.preventDefault();
+		const target = event.target;
+		const editable =
+			target instanceof HTMLInputElement ||
+			target instanceof HTMLTextAreaElement ||
+			(target instanceof HTMLElement && target.isContentEditable);
+		electroview.rpc?.send.contextMenu({ editable });
+	});
+}
 const sendRoute = () => electroview.rpc?.send.routeChanged({ hash: window.location.hash });
 const replaceState = history.replaceState.bind(history);
 history.replaceState = (...args: Parameters<History["replaceState"]>) => {
