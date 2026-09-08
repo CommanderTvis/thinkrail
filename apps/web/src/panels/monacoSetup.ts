@@ -63,6 +63,8 @@ export function sharedEditorOptions(lineWidth: number, bounded: boolean) {
 		// Cyrillic prose is not a homoglyph attack: flagging every с and о makes non-Latin documents
 		// unreadable, and this editor's files are the user's own worktree, not untrusted paste.
 		unicodeHighlight: { ambiguousCharacters: false },
+		// `#130` in a comment is an issue number, not a colour swatch. See panels/SPEC.md.
+		colorDecorators: false,
 		...(lineHeight && lineHeight > 0 ? { lineHeight } : {}),
 	} as const;
 }

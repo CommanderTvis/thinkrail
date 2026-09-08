@@ -2068,6 +2068,10 @@ tab — `external-file` when the path escaped the worktree, which is most of Cla
   nullable editor selection-foreground override when provided. `MonacoDiff` re-themes exactly like
   `MonacoEditor` — both consume `monacoSetup.ts`'s define + observer, so a palette swap lands in the
   diff tab too.
+- **An issue number is not a colour.** Monaco's colour decorators are off too (`colorDecorators: false`
+  in `sharedEditorOptions`): its CSS-family colour provider paints a swatch before any `#rgb`-shaped
+  token, comments included, so `/** GH #130: … */` in a stylesheet grew a dark square. A swatch in a
+  code buffer earns nothing here that the rendered preview does not do better.
 - **Cyrillic prose is not a homoglyph attack.** Monaco's ambiguous-Unicode highlight is off in
   `sharedEditorOptions`: flagging every Cyrillic с and о as a potential attack boxes half the letters of
   a Russian document, and the editor's files are the user's own worktree, not untrusted paste.
