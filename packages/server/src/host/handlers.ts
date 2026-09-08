@@ -151,6 +151,7 @@ import { logger } from "../log";
 import { openPr, previewPr } from "../pr";
 import {
 	acknowledgeProjectSkills,
+	cloneProject,
 	closeProject,
 	createProject,
 	initProject,
@@ -403,6 +404,10 @@ const handlers: Record<string, Handler> = {
 	"project.create": (params) => {
 		const p = params as { parentPath: string; name: string };
 		return createProject(p.parentPath, p.name);
+	},
+	"project.clone": (params) => {
+		const p = params as { url: string; parentPath: string; name: string; depth?: number };
+		return cloneProject(p.url, p.parentPath, p.name, p.depth);
 	},
 	"project.list": () => listProjects(),
 	"project.hasSpecs": (params) => {

@@ -63,6 +63,7 @@ import { errorText, getTransport, prewarmWorkspaceSkillLoad } from "../transport
 import { ActivityGlyph } from "./ActivityGlyph";
 import { AddProjectMenu } from "./AddProjectMenu";
 import { BlueprintStartDialog } from "./BlueprintStartDialog";
+import { CloneProjectDialog } from "./CloneProjectDialog";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { ExistingWorktreeDialog } from "./ExistingWorktreeDialog";
 import { NewProjectDialog } from "./NewProjectDialog";
@@ -94,6 +95,7 @@ export function ProjectTree() {
 	const [dialogProjectId, setDialogProjectId] = useState<string | null>(null);
 	const [existingDialogProjectId, setExistingDialogProjectId] = useState<string | null>(null);
 	const [newProject, setNewProject] = useState(false);
+	const [cloneProject, setCloneProject] = useState(false);
 	const [blueprintProjectId, setBlueprintProjectId] = useState<string | null>(null);
 	const addProjectButtonRef = useRef<HTMLButtonElement>(null);
 	const projectNameButtonsRef = useRef(new Map<string, HTMLButtonElement>());
@@ -251,6 +253,7 @@ export function ProjectTree() {
 					onOpen={() => void pickAndOpen()}
 					onEnterHostPath={enterHostPath}
 					onNew={() => setNewProject(true)}
+					onClone={() => setCloneProject(true)}
 					onOpenRecent={(p) => void openProject(p)}
 				>
 					<Button
@@ -365,6 +368,13 @@ export function ProjectTree() {
 						setNewProject(false);
 						setBlueprintProjectId(project.id);
 					}}
+				/>
+			) : null}
+
+			{cloneProject ? (
+				<CloneProjectDialog
+					onOpenChange={setCloneProject}
+					onCloned={(project) => useAppStore.getState().selectProject(project.id, { reveal: true })}
 				/>
 			) : null}
 

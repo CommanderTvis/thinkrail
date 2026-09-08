@@ -1,4 +1,4 @@
-import { RiFolderLine as Folder, RiPencilRuler2Line as PencilRuler } from "@remixicon/react";
+import { RiPencilRuler2Line as PencilRuler } from "@remixicon/react";
 import type { Project } from "@thinkrail/contracts";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -9,10 +9,8 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from "@/components/ui/dialog";
-import { hostWording } from "@/lib/desktopShell";
 import { errorText, getTransport } from "@/transport";
-
-const PICK_TIMEOUT_MS = 30 * 60_000;
+import { FolderField } from "./FolderField";
 
 export function NewProjectDialog({
 	onOpenChange,
@@ -31,28 +29,6 @@ export function NewProjectDialog({
 
 	const trimmed = name.trim();
 	const target = parent && trimmed ? `${parent.replace(/\/$/, "")}/${trimmed}` : null;
-
-	const pickParent = async () => {
-		setError(null);
-		try {
-			const { path } = await getTransport().request(
-				"dialog.selectDirectory",
-				{},
-				{ timeoutMs: PICK_TIMEOUT_MS },
-			);
-			if (path) setParent(path);
-		} catch (err) {
-			setError(
-				errorText(
-					err,
-					hostWording(
-						"Couldn't open the folder picker on the host.",
-						"Couldn't open the folder picker.",
-					),
-				),
-			);
-		}
-	};
 
 	const create = async () => {
 		if (!parent) return;
@@ -106,21 +82,18 @@ export function NewProjectDialog({
 						<DialogHeader>
 							<DialogTitle>New project</DialogTitle>
 							<DialogDescription>
-								Creates the folder and runs `git init` in it. Nothing is committed.
+								Creates the folder and runs <code className="tr-code-text">git init</code> in it.
+								Nothing is committed.
 							</DialogDescription>
 						</DialogHeader>
 
-						<button
-							type="button"
-							data-testid="new-project-parent"
-							onClick={() => void pickParent()}
-							className="flex w-full items-center gap-8 rounded-[var(--radius-sm)] border border-control-border-default bg-control-bg px-12 py-8 text-left hover:bg-control-bg-hovered"
-						>
-							<Folder className="size-16 shrink-0 text-text-muted" />
-							<span className="min-w-0 flex-1 truncate">
-								{parent ?? "Choose the folder to create it in…"}
-							</span>
-						</button>
+						<FolderField
+							value={parent}
+							placeholder="Choose the folder to create it in…"
+							testId="new-project-parent"
+							onPick={setParent}
+							onError={setError}
+						/>
 
 						<input
 							data-testid="new-project-name"

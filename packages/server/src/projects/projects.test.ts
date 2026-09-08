@@ -11,6 +11,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+	cloneProject,
 	closeProject,
 	createProject,
 	initProject,
@@ -369,4 +370,53 @@ test("createProject trims the typed name rather than creating a folder with edge
 
 	expect(project.name).toBe("spaced");
 	expect(existsSync(join(dataDir, "spaced"))).toBe(true);
+});
+
+test("cloneProject clones the source into the chosen folder and opens it", async () => {
+	const source = join(dataDir, "source");
+	makeRepo(source);
+
+	const project = await cloneProject(source, dataDir, "cloned");
+
+	expect(project.name).toBe("cloned");
+	expect(project.hasGit).toBeUndefined();
+	expect(existsSync(join(dataDir, "cloned", "README.md"))).toBe(true);
+	expect(listProjects().map((p) => p.id)).toEqual([project.id]);
+});
+
+test("cloneProject honours a depth, and refuses one that is not a positive whole number", async () => {
+	const source = join(dataDir, "source");
+	makeRepo(source);
+	writeFileSync(join(source, "second.txt"), "second\n");
+	git(source, "add", "-A");
+	git(source, "commit", "-m", "second");
+
+	const shallow = await cloneProject(`file://${source}`, dataDir, "shallow", 1);
+	const count = Bun.spawnSync(["git", "-C", shallow.path, "rev-list", "--count", "HEAD"]);
+	expect(count.stdout.toString().trim()).toBe("1");
+
+	for (const depth of [0, -1, 1.5, Number.NaN]) {
+		await expect(cloneProject(source, dataDir, "bad", depth)).rejects.toThrow(/Clone depth/);
+	}
+	expect(existsSync(join(dataDir, "bad"))).toBe(false);
+});
+
+test("cloneProject refuses bad input up front, and a failed clone leaves no folder", async () => {
+	mkdirSync(join(dataDir, "taken"));
+	const source = join(dataDir, "source");
+	makeRepo(source);
+
+	await expect(cloneProject("", dataDir, "x")).rejects.toThrow(/Not a repository URL/);
+	await expect(cloneProject("--upload-pack=evil", dataDir, "x")).rejects.toThrow(
+		/Not a repository URL/,
+	);
+	await expect(cloneProject(source, dataDir, "../escape")).rejects.toThrow(
+		/Not a usable folder name/,
+	);
+	await expect(cloneProject(source, dataDir, "taken")).rejects.toThrow(/Already exists/);
+	await expect(cloneProject(join(dataDir, "missing"), dataDir, "gone")).rejects.toThrow(
+		/does not exist/,
+	);
+	expect(existsSync(join(dataDir, "gone"))).toBe(false);
+	expect(listProjects()).toEqual([]);
 });

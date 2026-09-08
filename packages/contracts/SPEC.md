@@ -375,7 +375,8 @@ of the host.
 - **wsProtocol.ts** — `WS_METHODS` (`project.*` — incl. **`project.close`** (mark the stable record
   closed without deleting associated state), **`project.inspect`** (classify a path) + **`project.init`** (`{parentPath, name}` → create the folder,
   `git init` it with no commit, open it)
-  (`git init` + commit, then open) + **`project.hasSpecs`** (lazy per-project "contains a registered
+  (`git init` + commit, then open) + **`project.clone`** (`{url, parentPath, name, depth?}` → `git clone [--depth]` into
+  `parentPath/name`, then open; long-running, so the client raises its own request timeout) + **`project.hasSpecs`** (lazy per-project "contains a registered
   spec?" for the Welcome screen — a full-tree walk, so requested only for the shown project,
   never eagerly for every project) / `workspace.*` — notably **`workspace.list { projectId,
   includeDiffStats? }`**, where omitted/true preserves the existing full rows with computed aggregates and

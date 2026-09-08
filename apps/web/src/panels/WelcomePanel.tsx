@@ -15,6 +15,7 @@ import { useAppStore } from "../store";
 import { getTransport } from "../transport";
 import { AddProjectMenu } from "./AddProjectMenu";
 import { BlueprintStartDialog } from "./BlueprintStartDialog";
+import { CloneProjectDialog } from "./CloneProjectDialog";
 import { enterDefaultWorkspace } from "./defaultWorkspace";
 import { NewProjectDialog } from "./NewProjectDialog";
 import { NewWorkspaceDialog } from "./NewWorkspaceDialog";
@@ -34,6 +35,7 @@ export function WelcomePanel() {
 	const [hasSpecs, setHasSpecs] = useState<boolean | null>(null);
 	const [blueprintStart, setBlueprintStart] = useState<string | null>(null);
 	const [newProject, setNewProject] = useState(false);
+	const [cloneProject, setCloneProject] = useState(false);
 
 	const project = projects.find((p) => p.id === selectedProjectId) ?? projects[0] ?? null;
 
@@ -108,6 +110,7 @@ export function WelcomePanel() {
 			onOpen={() => void pickAndOpen()}
 			onEnterHostPath={enterHostPath}
 			onNew={() => setNewProject(true)}
+			onClone={() => setCloneProject(true)}
 			onOpenRecent={(path) => void openProject(path)}
 			align="start"
 		>
@@ -203,6 +206,12 @@ export function WelcomePanel() {
 						setNewProject(false);
 						setBlueprintStart(created.id);
 					}}
+				/>
+			) : null}
+			{cloneProject ? (
+				<CloneProjectDialog
+					onOpenChange={setCloneProject}
+					onCloned={(cloned) => useAppStore.getState().selectProject(cloned.id, { reveal: true })}
 				/>
 			) : null}
 			{blueprintStart ? (
