@@ -305,6 +305,23 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 
 	useWorkspaceLayoutState(workspaceId);
 
+	const blueprintKnown = useAppStore(
+		(state) => state.blueprintByWorkspace[workspaceId] !== undefined,
+	);
+	useEffect(() => {
+		if (blueprintKnown) return;
+		let cancelled = false;
+		getTransport()
+			.request("blueprint.get", { workspaceId })
+			.then((fetched) => {
+				if (!cancelled && fetched) useAppStore.getState().setWorkspaceBlueprint(fetched);
+			})
+			.catch(() => {});
+		return () => {
+			cancelled = true;
+		};
+	}, [blueprintKnown, workspaceId]);
+
 	useEffect(() => {
 		if (!document) return;
 		const state = useAppStore.getState();

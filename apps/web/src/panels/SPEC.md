@@ -409,8 +409,14 @@ back too: a pi chat by its persisted session id, a Claude terminal by reattachin
 terminal module's existing resume machinery prefills `claude --resume <session>` for the reader to
 confirm. Spending a resume stays their decision, exactly as it is everywhere else in the app.
 
-**`BlueprintPane`** is the tab body, and it hydrates itself: the layout tab is persisted, so a reload
-arrives with no store entry and reads `blueprint.get` for its workspace. Until the author has written
+**`BlueprintPane`** is the pane body, and the **workbench hydrates the blueprint before the pane can
+exist**: a reload or host restart arrives with the author's chat or terminal tab restored from the
+layout but `store.blueprintByWorkspace` empty, and the embedded pane is only offered to a host that the
+store says authors a blueprint — so with nothing reading it, the pane silently never came back and the
+reader had to open `BLUEPRINT.md` from Files to summon it. `WorkspaceWorkbench` therefore reads
+`blueprint.get` for its workspace whenever the store holds no entry, and the pane re-appears on its
+author the moment the reply lands (`blueprint-watch.spec.ts` reloads to pin it). The pane keeps its own
+`blueprint.get` as a belt for the raw-source hatch. Until the author has written
 `BLUEPRINT.md` the pane says so plainly (`phase: "awaiting"`) instead of showing an empty document.
 
 **Blueprint is the spec-first path, and it is reachable from every state that has a project.** In a
