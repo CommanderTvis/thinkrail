@@ -273,11 +273,19 @@ of the host.
   **`AppConfig`** (`{ theme, themeMode, systemThemePair?, analyticsEnabled, analyticsConsentConfirmed, terminalReplayKb,
   terminalWindowsShell, composerGrowthLimit, chatLineWidth, fileLineWidth, chatLineWidthBounded,
   fileLineWidthBounded, customLayoutPresets, defaultModel?, defaultEffort?, reviewModel?, reviewEffort?,
-  reviewAutoFix, agentReviewEnabled, subagentsEnabled, jbcentralQuotaEnabled, jbcentralQuotaRefreshSeconds }` — an extensible bag; the line-width fields join
+  reviewAutoFix, agentReviewEnabled, subagentsEnabled, jbcentralQuotaEnabled, jbcentralQuotaRefreshSeconds, plugins, pluginPaths }` — an extensible bag; the line-width fields join
   the wire at protocol v61 and `terminalWindowsShell` at v62. **`DEFAULT_MODEL_PROTOCOL_VERSION`** pins
   v72's AppConfig `defaultModel`/`defaultEffort` and host-side default resolution; the Settings controls are
   hidden against older hosts. `defaultModel` is a full allowlisted `WireModel`, `defaultEffort` is an optional
-  `ThinkingLevel`, and `settings.update` accepts `null` to clear either optional value. `terminalWindowsShell`
+  `ThinkingLevel`, and `settings.update` accepts `null` to clear either optional value. `plugins: Record<string,
+  PluginSettingsNamespace>` holds each plugin's own settings namespace keyed by plugin id
+  (`PluginSettingsNamespace = { enabled? } & Record<string, unknown>` — the shared `enabled` toggle plus
+  whatever else the plugin's own contract declares); `pluginPaths: string[]` is the list of additional
+  absolute directories scanned for external plugins, beyond the builtin ones. `AppConfigUpdate` mirrors
+  every field as an optional patch except `plugins`, which arrives as `Record<string,
+  PluginSettingsNamespace | null>` — `null` resets one namespace back to `{}` rather than clearing the
+  whole map, so two clients patching different plugins' settings in sequence never clobber each other.
+  `terminalWindowsShell`
   (`"auto" | "pwsh" | "powershell" | "cmd"`, default `"auto"`) is read only by `server/terminal` on
   Windows and ignored elsewhere — see
   `submodule-server-terminal`'s shell-selection decision for what each value spawns.
@@ -285,7 +293,9 @@ of the host.
   `template.get` reads, allowing Create Workspace to preview global plus current-checkout project templates
   without sending host paths; older hosts retain a global-only fallback. `themeMode` defaults to `"fixed"`
   and no pair, preserving both legacy configs
-  and the explicit Dark default; `subagentsEnabled` is the host-wide subagent default (`true` for current
+  and the explicit Dark default; the Claude Code launcher's own command line now lives in its plugin
+  namespace (`plugins["claude-code"].command`, default `"claude"`), normalised plugin-side so a blank value
+  can never reach a shell — see `module-plugin-claude-code`; `subagentsEnabled` is the host-wide subagent default (`true` for current
   behavior), overridden only by `Workspace.subagentsOverride`; `agentReviewEnabled` (default `false`, on the
   wire from `AGENT_REVIEW_SETTING_PROTOCOL_VERSION` = v68) gates the worker's in-session `request_review`
   tool and applies live to open sessions — the Review button is independent (see [[submodule-server-host-plan-review]]); `customLayoutPresets` is the bounded
@@ -392,6 +402,30 @@ of the host.
   attention, or current/default-selection identity. Every current-layout type—including the projected
   `WorkspaceLayoutDocument`, `WorkbenchFrame`, and `WorkspaceViewState`—is web-local and deliberately absent
   from contracts. There is no current-layout method or push channel.
+  **Plugin roster DTOs** (see [[module-plugin-api]] for the full contract) — **`PluginRosterEntry`**
+  (`{ id, label, icon, version, wireVersion, origin, status, reason?, dependsOn, modifiesSystemPrompt,
+  contributes, channels, web? }`; `origin: "builtin" | "external"`; `status: "active" | "disabled" |
+  "failed" | "refused"` with `reason` naming the failure/refusal only in those states; `channels` is the
+  wire-facing projection of the contract's channels (`Record<name, { kind: "state"; snapshot; key } |
+  { kind: "event" }>`) — everything a web half needs to key a subscription's snapshot-then-stream without
+  ever loading the typebox contract; `web` names the external plugin's own module + optional stylesheet,
+  both served under `/plugin/<id>/`) — the read side of
+  `plugins.list`/`plugins.rescan`/`plugins.retry` and the initial `server.welcome.plugins`;
+  **`PluginContributions`** (`{ sideTools, fileViewers }`) declares what a plugin adds to the shell —
+  **`PluginSideToolContribution`** (`{ tool, label, icon, defaultSide }`) and
+  **`PluginFileViewerContribution`** (`{ extensions, names, read: "text" | "none" }`) — without granting
+  any capability; the plugin only gets to register the matching component once active, over in
+  `@thinkrail/plugin-api/web`. **`PluginToolId`** is the `` `plugin:${id}:${tool}` `` pattern a plugin's
+  contributed tool is addressed by; **`LayoutToolId`** widens from the closed **`BuiltinLayoutToolId`**
+  union (`"projects" | "files" | "changes" | "review"`) to
+  `BuiltinLayoutToolId | PluginToolId`, so a stored layout can name either kind of tool.
+  **`LEGACY_LAYOUT_TOOL_IDS`** (`{ specs: "plugin:spec-dialect:specs", claude: "plugin:claude-code:config",
+  graph: "plugin:branch-graph:graph" }`) is the one shared table the web and server layout validators both
+  migrate a persisted document's pre-plugin-split tool ids through.
+  **`TerminalAgentRecord`** (`{ kind, command, sessionId?, cwd?, model? }`) is the generalized shape a
+  plugin records against a terminal tab in place of the old fixed `TerminalAgentKind`; it is declared here
+  ahead of use — `TerminalTabInfo.agent` itself still carries the old shape until the terminal-owning
+  plugin migrates it.
 - **nativeClient.ts** — type-only optional native-client capabilities outside the host wire. The desktop
   update bridge exposes a monotonic state snapshot, prompt check/download/install actions, failed-operation
   identity, and state subscription without exposing feed selection. Available, byte-transfer, preparation,
@@ -403,9 +437,15 @@ of the host.
   v64 advisory). `host.updateAvailable` publishes full replacements. Protocol v70 adds parameterless
   `host.update`; no output, arbitrary diagnostic, feed URL, artifact, platform path, or shell command crosses
   the wire.
+- **The interactive-spec wire moved to `@thinkrail/plugin-blueprint`.** `BlueprintDoc`, `BlueprintControl`,
+  `BlueprintEdit`, `BlueprintSource`, `BlueprintState` and the nine `blueprint.*` methods are no longer
+  part of this package — they are the plugin's own typebox schemas under its `plugin.blueprint.*`
+  namespace, vendored rather than shared through core contracts. See [[module-plugin-blueprint]].
 - **wsProtocol.ts** — `WS_METHODS` (`project.*` — incl. **`project.close`** (mark the stable record
-  closed without deleting associated state), **`project.inspect`** (classify a path) + **`project.init`**
-  (`git init` + commit, then open) + **`project.hasSpecs`** (lazy per-project "contains a registered
+  closed without deleting associated state), **`project.inspect`** (classify a path) + **`project.init`** (`{parentPath, name}` → create the folder,
+  `git init` it with no commit, open it)
+  (`git init` + commit, then open) + **`project.clone`** (`{url, parentPath, name, depth?}` → `git clone [--depth]` into
+  `parentPath/name`, then open; long-running, so the client raises its own request timeout) + **`project.hasSpecs`** (lazy per-project "contains a registered
   spec?" for the Welcome screen — a full-tree walk, so requested only for the shown project,
   never eagerly for every project) / `workspace.*` — notably **`workspace.list { projectId,
   includeDiffStats? }`**, where omitted/true preserves the existing full rows with computed aggregates and
@@ -445,6 +485,8 @@ of the host.
   returning `JbcentralActionResult`; none accepts an executable, artifact path, output, URL, or secret from
   the client) / **`jbcentralQuota`** (v59; optional `force` bypasses completed-cache age but still joins an
   in-flight read; disabled/unhealthy returns `hidden` without invoking quota)) /
+  **`workspace.suggestName`** (the next free `workspace-N` for a project — the placeholder the New
+  Workspace dialog shows before the user renames it; suggesting reserves nothing) /
   **`workspace.listExisting`** (the selected project's unattached Git worktrees, with detached rows
   disabled by status) / **`workspace.openExisting`** (revalidate + register one branch-backed checkout as
   `kind: "external"`, emitting the ordinary `workspace.created`, without mutating Git or disk) /
@@ -527,7 +569,9 @@ of the host.
   global; **`template.save`**, **`template.delete`**) — all
   read/write pi's prompt dirs (global + project), so templates stay CLI-portable,
   `WS_CHANNELS` (`server.welcome` — which carries the initial `config: AppConfig` alongside **`projects`**
-  (open records) and **`recentProjects`** (all known records, open + closed), plus optional
+  (open records), **`recentProjects`** (all known records, open + closed), and **`plugins:
+  PluginRosterEntry[]`** (the installed plugin roster the client renders tools/settings from on connect),
+  plus optional
   **`hostUpdate: HostUpdateNotice`** and **`hostPlatform`**
   (`darwin | linux | win32`, optional for older hosts) — the OS the *host* runs on, so a client that
   offers host-executed commands (the PR setup dialog) picks the right ones instead of guessing from
@@ -568,7 +612,16 @@ of the host.
   after the cap stays `detected`, and only a pathless platform/startup uncertainty is `unknown`; a pathless
   non-truncated/`none` frame is a whole-workspace invalidation such as repo-metadata drift); an
   **invalidation nudge, not data**: clients re-read via the existing read methods, so a duplicate/replayed
-  frame is harmless.
+  frame is harmless / **`plugins.changed`** — the roster republished after any plugin activation,
+  deactivation, failure, or retry (see [[module-plugin-api]]).
+  `plugins.*` — **`list`** (re-read the current **`PluginRosterEntry[]`**) / **`rescan`** (re-discover
+  external plugins under `AppConfig.pluginPaths` and reconcile) / **`retry`** (`{ id }`, re-attempt one
+  `"failed"` plugin's activation) — all three return the fresh roster. Each individual plugin's own
+  methods and channels ride under the shared **`PluginWireName`** pattern (`` `plugin.${id}.${name}` ``),
+  which `WsMethodMap` carries as a template-literal index signature alongside the fixed method rows —
+  their `params`/`result` are `unknown` on the wire, typed only by the owning plugin's own
+  `PluginContract`; `WsChannel` is widened the same way. **`PLUGIN_ROSTER_PROTOCOL_VERSION`** pins the
+  roster + `plugins.*` methods/channel to their v66 introduction.
   The `WsMethodMap` typed request/result map +
   `WsParams`/`WsResult` helpers, and `PROTOCOL_VERSION`. Request ids are also the reconnect idempotency key:
   an unresolved client replays the same frame/id, and the host returns the one cached result for
@@ -668,8 +721,9 @@ so an already-loaded old client clears retired markers after reconnect. No activ
   never a top-level event `type`.
 - Internal relative imports are **extensionless** (`./domain`), not `./domain.ts` — `composite` emits
   declarations, which is incompatible with `allowImportingTsExtensions`.
-- **Bundle gate:** `bun build` the web app and confirm **no** `@anthropic-ai/sdk` /
-  `openai` / `node:fs` appears.
+- **Bundle gate:** `bun run check:web-bundle` (`scripts/check-web-bundle.ts`, CI-only, run after
+  `bun run build:web`) scans the built web assets for `@anthropic-ai/sdk`, `openai`, `node:fs`, a
+  typebox schema-value marker, and any plugin `./host` module id — see `scripts/SPEC.md`.
 
 ## Consumed by
 
