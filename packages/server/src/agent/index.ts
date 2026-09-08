@@ -45,4 +45,5 @@ export {
 export * from "./sessionRepair";
 export type { SkillAdmissionContext, SkillDecision, SkillFacts } from "./skillAdmission";
 export { isProjectSkillPath } from "./skillSources";
+export { trashFile } from "./trash";
 export * from "./webUiContext";
