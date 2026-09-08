@@ -93,6 +93,7 @@ import {
 	readLayoutNavigationClock,
 	readLayoutSelection,
 	tupleKey,
+	useElementSize,
 } from "../../lib";
 import { GroupPlacementPicker, type PlacementGroup, type PlacementRegion } from "./GroupPlacement";
 import {
@@ -361,25 +362,6 @@ function bindSideResize(
 			if (activeSide.current === side) activeSide.current = null;
 		},
 	};
-}
-
-function useElementSize(): {
-	ref: React.RefObject<HTMLDivElement | null>;
-	width: number;
-	height: number;
-} {
-	const ref = useRef<HTMLDivElement>(null);
-	const [size, setSize] = useState({ width: 0, height: 0 });
-	useEffect(() => {
-		const element = ref.current;
-		if (!element) return;
-		const update = () => setSize({ width: element.clientWidth, height: element.clientHeight });
-		update();
-		const observer = new ResizeObserver(update);
-		observer.observe(element);
-		return () => observer.disconnect();
-	}, []);
-	return { ref, ...size };
 }
 
 interface HorizontalOverflow {

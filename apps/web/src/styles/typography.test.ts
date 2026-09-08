@@ -429,8 +429,9 @@ describe("generated CSS", () => {
 		expect(GENERATED).toContain("--tr-font-size-s13: 13px;");
 		expect(GENERATED).toContain("--tr-line-height-default: 1.6;");
 		const monaco = read(join(SRC, "panels/monacoSetup.ts"));
+		const editorFont = read(join(SRC, "panels/editorFont.ts"));
 		const xterm = read(join(SRC, "panels/TerminalInstance.tsx"));
-		expect(monaco).toContain('cssVar("--tr-font-size-s11")');
+		expect(editorFont).toContain('cssVar("--tr-font-size-s11")');
 		expect(xterm).toContain('cssVar("--tr-font-size-s13")');
 		for (const file of [monaco, xterm]) {
 			expect(file).toContain('cssVar("--tr-font-family-code")');

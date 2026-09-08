@@ -103,8 +103,10 @@ Tiny UI helpers shared across components.
   `relativeTime`, `platformShortcutLabel`, `hasPlatformModifier`, `copyText`, `randomId`,
   `DOUBLE_CLICK_SETTLE_MS`, `tupleKey`, `parseTupleKey`, `layoutResourceIdentity`,
   `readLayoutSelection`, `readLayoutNavigationClock`, the `LayoutAttention` type, `parseCliAgentSequence`,
-  `statusForEvent`, and the `ClaudeCodeStatus`/`ClaudeCodePayload` types.
-- **Allowed deps:** `clsx`, `tailwind-merge`; `@thinkrail/contracts` (types only for canonical messages;
+  `statusForEvent`, the `ClaudeCodeStatus`/`ClaudeCodePayload` types, and `useElementSize` (the one
+  ResizeObserver-backed element measurement, shared by the workbench's panes and the diff pane so a
+  width-driven decision is measured the same way everywhere).
+- **Allowed deps:** `clsx`, `tailwind-merge`; `react` (hooks only — `useElementSize`); `@thinkrail/contracts` (types only for canonical messages;
   the layout-resource identity input is a local structural type); `shiki`/`@shikijs/*` (the per-file shiki modules only — never reachable
   through the barrel).
 - **Forbidden:** every app-internal module — this is a leaf.

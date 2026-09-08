@@ -1783,10 +1783,16 @@ tab — `external-file` when the path escaped the worktree, which is most of Cla
   **¶ hide-whitespace** toggle (Monaco's `ignoreTrimWhitespace`, per tab via
   `store.setDiffTabIgnoreWhitespace`), a **copy-contents** button (the modified side; no clipboard → no-op,
   the text stays selectable), and the per-tab
-  **Split | Inline** toggle via `store.setDiffTabView`; split is the default — over the read-only lazy
+  **Split | Inline** toggle via `store.setDiffTabView`; **until the user picks, the default follows the
+  pane's width**: `diffLayout.narrowForSplit(paneWidth, editorFontSize)` (unit-tested) says a pane whose
+  halves would each show fewer than 40 monospace columns — line-number chrome deducted, the editor's own
+  font size read through `editorFont` — defaults to Inline, wider panes to Split, and the choice re-derives
+  live as the pane is resized. A click on either segment writes `view` and pins it for that tab. The
+  toggle always shows the effective view, which is why this lives here and not in Monaco's
+  `useInlineViewWhenSpaceIsLimited` (kept `false`): Monaco's switch flips the rendering while the segment
+  still says Split — over the read-only lazy
   `MonacoDiff` (`@monaco-editor/react` `DiffEditor`, model paths derived from the file's path so both
-  sides highlight alike; `useInlineViewWhenSpaceIsLimited: false` — the toggle must do what it says, so
-  Split never silently renders as inline on a narrow pane; **`hideUnchangedRegions: { enabled: true }`** —
+  sides highlight alike; **`hideUnchangedRegions: { enabled: true }`** —
   Monaco's own collapsed context (“N hidden lines” with an expand control, in both layouts), never a
   hand-rolled folding of our own; the inline view's dual line-number gutter
   — base-branch no. left, worktree no. right — is Monaco's standard and stays; on unmount it sets
