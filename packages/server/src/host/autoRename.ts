@@ -1,6 +1,11 @@
 import type { PiEvent, TranscriptMessage, Workspace } from "@thinkrail/contracts";
 import { getSessionMessages } from "../agent";
-import { extractFirstTurn, naiveWorkspaceName, suggestWorkspaceName } from "../assist";
+import {
+	extractFirstTurn,
+	naiveWorkspaceName,
+	suggestWorkspaceName,
+	type WorkspaceNameTurn,
+} from "../assist";
 import { logger } from "../log";
 import { getWorkspace, renameWorkspace } from "../workspaces";
 
@@ -22,24 +27,42 @@ const naiveInFlight = new Set<string>();
 
 export type TranscriptReader = () => Promise<TranscriptMessage[]>;
 
-export async function maybeNaiveNameWorkspace(
+function transcriptReader(sessionId: string, workspaceId: string): TranscriptReader {
+	return async () =>
+		(await getSessionMessages(sessionId, workspaceId, getWorkspace(workspaceId).worktreePath))
+			.messages;
+}
+
+export function maybeNaiveNameWorkspace(
 	sessionId: string,
 	workspaceId: string,
-	readTranscript?: TranscriptReader,
+	readTranscript: TranscriptReader = transcriptReader(sessionId, workspaceId),
+): Promise<Workspace | null> {
+	return maybeNaiveNameWorkspaceFrom(
+		workspaceId,
+		async () => extractFirstTurn(await readTranscript())?.prompt ?? null,
+	);
+}
+
+export function maybeNaiveNameWorkspaceFromPrompt(
+	workspaceId: string,
+	prompt: string,
+): Promise<Workspace | null> {
+	return maybeNaiveNameWorkspaceFrom(workspaceId, async () => prompt);
+}
+
+async function maybeNaiveNameWorkspaceFrom(
+	workspaceId: string,
+	readPrompt: () => Promise<string | null>,
 ): Promise<Workspace | null> {
 	if (naiveInFlight.has(workspaceId)) return null;
 	if (!isPristine(workspaceId)) return null;
 
 	naiveInFlight.add(workspaceId);
 	try {
-		const read =
-			readTranscript ??
-			(async () =>
-				(await getSessionMessages(sessionId, workspaceId, getWorkspace(workspaceId).worktreePath))
-					.messages);
-		const turn = extractFirstTurn(await read());
-		if (!turn) return null;
-		const name = naiveWorkspaceName(turn.prompt);
+		const prompt = await readPrompt();
+		if (!prompt) return null;
+		const name = naiveWorkspaceName(prompt);
 		if (!name) return null;
 
 		if (!isPristine(workspaceId)) return null;
@@ -55,16 +78,36 @@ export async function maybeNaiveNameWorkspace(
 function isPristine(workspaceId: string): boolean {
 	try {
 		const ws = getWorkspace(workspaceId);
-		return !ws.renamed && PRISTINE_BRANCH.test(ws.branch);
+		return isAutoNameable(ws) && !ws.renamed && PRISTINE_BRANCH.test(ws.branch);
 	} catch {
 		return false;
 	}
 }
 
-export async function maybeAutoRenameWorkspace(
+function isAutoNameable(ws: Workspace): boolean {
+	return ws.kind !== "default" && ws.kind !== "external";
+}
+
+export function maybeAutoRenameWorkspace(
 	sessionId: string,
 	workspaceId: string,
-	readTranscript?: TranscriptReader,
+	readTranscript: TranscriptReader = transcriptReader(sessionId, workspaceId),
+): Promise<Workspace | null> {
+	return maybeAutoRenameWorkspaceFrom(workspaceId, async () =>
+		extractFirstTurn(await readTranscript()),
+	);
+}
+
+export function maybeAutoRenameWorkspaceFromTurn(
+	workspaceId: string,
+	turn: WorkspaceNameTurn,
+): Promise<Workspace | null> {
+	return maybeAutoRenameWorkspaceFrom(workspaceId, async () => turn);
+}
+
+async function maybeAutoRenameWorkspaceFrom(
+	workspaceId: string,
+	readTurn: () => Promise<WorkspaceNameTurn | null>,
 ): Promise<Workspace | null> {
 	if (inFlight.has(workspaceId)) return null;
 	let ws: Workspace;
@@ -73,16 +116,11 @@ export async function maybeAutoRenameWorkspace(
 	} catch {
 		return null;
 	}
-	if (ws.renamed) return null;
+	if (ws.renamed || !isAutoNameable(ws)) return null;
 
 	inFlight.add(workspaceId);
 	try {
-		const read =
-			readTranscript ??
-			(async () => (await getSessionMessages(sessionId, workspaceId, ws.worktreePath)).messages);
-		const messages = await read();
-
-		const turn = extractFirstTurn(messages);
+		const turn = await readTurn();
 		if (!turn) return null;
 		const name = await suggestWorkspaceName(turn);
 		if (!name) return null;

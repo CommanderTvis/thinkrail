@@ -324,6 +324,14 @@ channel fan-out, and the process-boot wrapper both launchers share.
     (a broken rename path must stay distinguishable from "assist had nothing"). Its own per-workspace
     **in-flight set** (independent of the naive one — the two passes can overlap on a short turn) dedupes
     concurrent turns/sessions.
+  - **A Claude Code terminal is a second source of the same two passes.** The status plugin's
+    `prompt_submit` carries the prompt (`query`, first 200 chars) and its `stop` carries the turn's
+    last prompt and reply (`query` / `response`), so the `/agent-status/` route feeds
+    `maybeNaiveNameWorkspaceFromPrompt` and `maybeAutoRenameWorkspaceFromTurn` — the transcript-free
+    halves of the same functions, sharing the pristine / `renamed` / in-flight gates — and a workspace
+    driven from Claude names itself exactly as one driven from the chat. Both passes also skip a
+    `default` or `external` workspace up front: `renameWorkspace` refuses those by contract, and asking
+    the model for a name that cannot land wasted a one-shot per turn.
   - The **workspace-archive teardown** — the other composition of `agent` + `terminal` + `workspaces` only
     the host may make. `workspace.remove` **rejects a `kind: "default"` workspace loudly, before any
     side-effect** (the record's `worktreePath` is the project folder — the reclaim's `rm -rf` fallback
