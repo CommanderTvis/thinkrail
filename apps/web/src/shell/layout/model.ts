@@ -1368,10 +1368,33 @@ export function revealTool(
 	tool: LayoutToolId,
 	maxSideGroups: number,
 	maxBottomGroups = 3,
+	target?: LayoutGroupLocation,
 ): LayoutOperationResult {
 	const requestedTab = withAvailablePlacementId(document, toolTab(tool));
 	const placedTab = resolvePlacedResource(document, requestedTab).placed;
 	const existing = placedTab ? findTabLocation(document, placedTab.id) : null;
+	if (!placedTab && target && target.area !== "center") {
+		const region = document[target.area];
+		const group = region.groups.find((candidate) => candidate.id === target.groupId);
+		if (group) {
+			return {
+				document: {
+					...document,
+					[target.area]: {
+						...region,
+						visible: true,
+						groups: region.groups.map((candidate) =>
+							candidate.id === group.id
+								? { ...candidate, folded: false, tabs: [...candidate.tabs, requestedTab] }
+								: candidate,
+						),
+					},
+				},
+				focusGroupId: group.id,
+				focusTabId: requestedTab.id,
+			};
+		}
+	}
 	if (placedTab && existing && existing.area !== "center") {
 		const region = document[existing.area];
 		const group = region.groups.find((candidate) => candidate.id === existing.groupId);

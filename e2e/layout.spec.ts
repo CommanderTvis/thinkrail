@@ -464,6 +464,12 @@ test("the side group menu shows tools for its own side and opens terminals in th
 	await specsGroup.getByRole("button", { name: "Add to this group" }).click();
 	await expect(page.getByTestId("show-tool-changes")).toBeVisible();
 	await expect(page.getByTestId("show-tool-projects")).toHaveCount(0);
+
+	// "Show" from a group's own menu lands the tool in that group, not wherever it last lived.
+	const rightGroups = await sideGroups(page, "right").count();
+	await page.getByTestId("show-tool-changes").click();
+	await expect(specsGroup.getByTestId("tab-changes")).toHaveCount(1);
+	await expect(sideGroups(page, "right")).toHaveCount(rightGroups);
 });
 
 test("a terminal can move to its own side group; resize, fold, and visibility gate its one body", async ({
