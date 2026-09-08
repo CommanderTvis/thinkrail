@@ -7,6 +7,7 @@ import Electrobun, {
 	ApplicationMenu,
 	BrowserView,
 	BrowserWindow,
+	ContextMenu,
 	PATHS,
 	Utils,
 } from "electrobun/main";
@@ -17,7 +18,9 @@ import {
 	readMenuAction,
 } from "./applicationMenu";
 import { attributionClaimOnFirstReadiness } from "./attributionReadiness";
+import { desktopContextMenu } from "./contextMenu";
 import { installExternalNavigation } from "./externalNavigation";
+import { HostPortStore } from "./hostPortStore";
 import { preferNativeHostBridge, usesNativeHostBridge } from "./hostTransport";
 import { createKeyStateReader } from "./keyState";
 import { createPageZoomGestureHandler, nextPageZoom } from "./pageZoom";
@@ -143,6 +146,9 @@ async function start(): Promise<void> {
 	const serverRuntime = (await import(
 		pathToFileURL(join(runtimeDir, "server-runtime.ts")).href
 	)) as DesktopServerRuntime;
+	const userData = process.env.THINKRAIL_DESKTOP_USER_DATA ?? Utils.paths.userData;
+	// The webview's origin is its storage identity, and the port is in it — see SPEC.md.
+	const hostPorts = new HostPortStore(join(userData, "host-ports.json"));
 	const host = await serverRuntime.startDesktopHost({
 		runtimeDir,
 		staticDir: join(PATHS.VIEWS_FOLDER, "web"),
@@ -152,14 +158,15 @@ async function start(): Promise<void> {
 		...(Electrobun.app.isPackaged
 			? { openExternal: (url: string) => Utils.openExternal(url) }
 			: {}),
+		port: hostPorts.read(BACKEND_PROFILE_ID),
 	});
+	hostPorts.write(BACKEND_PROFILE_ID, host.port);
 	const quitCoordinator = createElectrobunQuitCoordinator(() => host.server.shutdown());
 	startupQuitCoordinator = quitCoordinator;
 	Electrobun.events.on("before-quit", (event: BeforeQuitEvent) => {
 		quitCoordinator.handleBeforeQuit(event);
 	});
 	const origin = `http://127.0.0.1:${host.port}`;
-	const userData = process.env.THINKRAIL_DESKTOP_USER_DATA ?? Utils.paths.userData;
 	const routes = new RouteStore(join(userData, "routes.json"));
 	const preferences = new PreferenceStore(join(userData, "preferences.json"));
 	const initialRoute = routes.read(BACKEND_PROFILE_ID, WINDOW_ID);
@@ -258,6 +265,7 @@ async function start(): Promise<void> {
 				routeChanged: ({ hash }) => {
 					if (!neutral) routes.write(BACKEND_PROFILE_ID, WINDOW_ID, hash);
 				},
+				contextMenu: (payload) => ContextMenu.showContextMenu(desktopContextMenu(payload)),
 				preferenceWrite: (payload) => {
 					if (neutral) return;
 					const preference = readDesktopPreferenceWrite(payload);
