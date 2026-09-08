@@ -115,6 +115,20 @@ there; WebKitGTK keeps its renderer-native editing behavior. The policy is platf
 ready seam reports whether registration ran, so unit tests pin menu composition while expanded-app smoke
 pins production wiring.
 
+## Context menu
+
+WKWebView's own right-click menu on macOS is the system text menu: Look Up, Translate, web search,
+Speech, Services, and on editable text the whole Font / Spelling / Substitutions tree. Electrobun 2.0.1
+exposes no way to trim it, only `ContextMenu.showContextMenu` for a native menu of the same role items the
+application menu uses. So on macOS the preload cancels every `contextmenu` event the page itself did not
+already handle (Radix context menus and Monaco call `preventDefault` first and keep their own menus) and
+sends one typed `contextMenu { editable }` message; the main process shows Copy over plain text and
+Cut / Copy / Paste / Select All over inputs, textareas, and contenteditable, all as responder-chain roles
+so they reach xterm and Monaco exactly as the Edit menu does. The preload gates on the WebKit user agent
+because `showContextMenu` is a no-op on Linux and only partially role-aware on Windows, where the native
+menus are not the problem; the menu composition is a pure, unit-tested function of the payload, and a
+malformed payload degrades to the plain-text menu.
+
 ## Navigation and window security
 
 The native window permits navigation only within its own loopback origin. User-requested external URLs
