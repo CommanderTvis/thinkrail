@@ -93,7 +93,10 @@ export function Shell() {
 	const welcomeProjects = useCollapsibleRegion(welcomeCenterRef, "welcome-left");
 
 	const [themeHint] = useState(readThemeHint);
-	const [findRequest, setFindRequest] = useState(0);
+	const [find, setFind] = useState<{ request: number; anchor: HTMLElement | null }>({
+		request: 0,
+		anchor: null,
+	});
 	const [searchOpen, setSearchOpen] = useState(false);
 	const welcomeGeneration = useAppStore((s) => s.welcomeGeneration);
 	const theme = useAppStore((s) => s.theme);
@@ -112,7 +115,11 @@ export function Shell() {
 	const codeFont = useAppStore((s) => s.codeFontFamily);
 	useEffect(() => applyCodeFont(codeFont), [codeFont]);
 	useGlobalHotkeys({
-		onFind: () => setFindRequest((current) => current + 1),
+		onFind: () =>
+			setFind((current) => ({
+				request: current.request + 1,
+				anchor: document.activeElement?.closest<HTMLElement>("section[data-group-id]") ?? null,
+			})),
 		...(activeWorkspaceId ? { onSearch: () => setSearchOpen(true) } : {}),
 		onProjects: hasActiveWorkspace
 			? () => {
@@ -327,7 +334,13 @@ export function Shell() {
 				</div>
 			)}
 			{analyticsConsentOpen ? <AnalyticsConsentDialog /> : <InterviewPromptDialog />}
-			{findRequest > 0 ? <FindBar request={findRequest} onClose={() => setFindRequest(0)} /> : null}
+			{find.request > 0 ? (
+				<FindBar
+					request={find.request}
+					anchor={find.anchor}
+					onClose={() => setFind({ request: 0, anchor: null })}
+				/>
+			) : null}
 			<Toaster />
 		</div>
 	);

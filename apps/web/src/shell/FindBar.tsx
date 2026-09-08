@@ -5,6 +5,7 @@ import {
 } from "@remixicon/react";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { createPortal } from "react-dom";
 
 export const FIND_HIGHLIGHT = "thinkrail-find";
 export const FIND_CURRENT_HIGHLIGHT = "thinkrail-find-current";
@@ -58,7 +59,15 @@ function clearPaint(): void {
 	}
 }
 
-export function FindBar({ request, onClose }: { request: number; onClose: () => void }) {
+export function FindBar({
+	request,
+	anchor,
+	onClose,
+}: {
+	request: number;
+	anchor: HTMLElement | null;
+	onClose: () => void;
+}) {
 	const barRef = useRef<HTMLElement>(null);
 	const inputRef = useRef<HTMLInputElement>(null);
 	const [query, setQuery] = useState("");
@@ -88,11 +97,11 @@ export function FindBar({ request, onClose }: { request: number; onClose: () => 
 	};
 	const missed = query !== "" && matches.length === 0;
 
-	return (
+	const bar = (
 		<search
 			ref={barRef}
 			data-testid="find-bar"
-			className="fixed top-[calc(var(--panel-header-row-height)+16px)] right-16 z-50 flex items-center gap-4 rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg p-4 shadow-[var(--shadow-md)]"
+			className={`${anchor ? "absolute" : "fixed"} top-[calc(var(--panel-header-row-height)+16px)] right-16 z-50 flex items-center gap-4 rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg p-4 shadow-[var(--shadow-md)]`}
 		>
 			<input
 				ref={inputRef}
@@ -150,4 +159,5 @@ export function FindBar({ request, onClose }: { request: number; onClose: () => 
 			</Button>
 		</search>
 	);
+	return anchor ? createPortal(bar, anchor) : bar;
 }
