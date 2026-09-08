@@ -67,5 +67,4 @@ export {
 	setTitleToolHost,
 	type TitleToolHost,
 } from "./titleTool";
-export { trashFile } from "./trash";
 export * from "./webUiContext";
