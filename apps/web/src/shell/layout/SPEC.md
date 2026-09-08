@@ -41,7 +41,7 @@ only its final keep while retaining the leading preview-slot claim, whether cont
 host read. It never persists an intermediate preview. Pointer/resize drafts and viewport compression remain
 runtime-only.
 
-Frame groups may remain empty in any workspace. Closing a final resource therefore leaves topology untouched. Explicit remove/merge is the only way to delete a group, and its result rehomes every resource that references it across all locally retained workspace views. At least one center leaf always remains.
+Frame groups may remain empty in any workspace. Closing a final resource therefore leaves topology untouched. Explicit remove/merge is the only way to delete a group, and its result rehomes every resource that references it across all locally retained workspace views. At least one center leaf always remains. **An empty group's strip shows its remove cross only when removal can act**: the final center group used to draw a greyed cross whose tooltip explained it could not be removed, which reads as a broken control rather than an absent one, so the strip omits the cross entirely there. The group's context menu keeps the disabled "Remove group — reason" entry, since a menu is where a reason belongs.
 
 ## Layout grammar
 
