@@ -63,7 +63,7 @@ function fakeSlider(start: ClaudeEffortLevel): FakeSlider {
 				if (data === "\x1b[D") index = Math.max(0, index - 1);
 			},
 			readLines: () =>
-				open ? renderEffort(CLAUDE_EFFORT_LEVELS[index] as ClaudeEffortLevel) : ["❯ /effort"],
+				open ? renderEffort(CLAUDE_EFFORT_LEVELS[index] as ClaudeEffortLevel) : ["❯ "],
 			delay: () => Promise.resolve(),
 		},
 	};
@@ -73,7 +73,7 @@ describe("driveEffortPicker", () => {
 	test("steers right to the rung asked for and takes it for the session", async () => {
 		const slider = fakeSlider("low");
 		await expect(driveEffortPicker(slider.io, "xhigh")).resolves.toBe("switched");
-		expect(slider.writes).toEqual(["", "/effort", "\r", "\x1b[C", "\x1b[C", "\x1b[C", "s", ""]);
+		expect(slider.writes).toEqual(["/effort", "\r", "\x1b[C", "\x1b[C", "\x1b[C", "s"]);
 	});
 
 	test("steers left, and takes the current rung without moving at all", async () => {
@@ -84,10 +84,21 @@ describe("driveEffortPicker", () => {
 
 		const already = fakeSlider("high");
 		await expect(driveEffortPicker(already.io, "high")).resolves.toBe("switched");
-		expect(already.writes).toEqual(["", "/effort", "\r", "s", ""]);
+		expect(already.writes).toEqual(["/effort", "\r", "s"]);
 	});
 
-	test("no slider, or a level nobody has, gives up without losing the draft", async () => {
+	test("a half-typed prompt refuses the drive before a single key is typed", async () => {
+		const writes: string[] = [];
+		const io: ModelPickerIo = {
+			write: (data) => writes.push(data),
+			readLines: () => ["❯ half a thought"],
+			delay: () => Promise.resolve(),
+		};
+		await expect(driveEffortPicker(io, "high")).resolves.toBe("draft");
+		expect(writes).toEqual([]);
+	});
+
+	test("no slider, or a level nobody has, gives up with Esc", async () => {
 		const writes: string[] = [];
 		const io: ModelPickerIo = {
 			write: (data) => writes.push(data),
@@ -95,7 +106,7 @@ describe("driveEffortPicker", () => {
 			delay: () => Promise.resolve(),
 		};
 		await expect(driveEffortPicker(io, "high")).resolves.toBe("no-picker");
-		expect(writes).toEqual(["", "/effort", "\r", "\x1b", ""]);
+		expect(writes).toEqual(["/effort", "\r", "\x1b"]);
 
 		const slider = fakeSlider("low");
 		await expect(driveEffortPicker(slider.io, "turbo" as ClaudeEffortLevel)).resolves.toBe(

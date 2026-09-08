@@ -32,6 +32,7 @@ import {
 	CLAUDE_MODELS,
 	type ClaudeEffortLevel,
 	carriesFileDrag,
+	composerDraft,
 	cssColorToHex,
 	draggedFile,
 	driveEffortPicker,
@@ -649,9 +650,11 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 						variant: "error",
 						title: `Couldn't switch the ${what}`,
 						message:
-							outcome === "no-picker"
-								? `Claude Code didn't open its ${what} picker — is the session waiting at its prompt?`
-								: `The ${what} picker didn't offer ${choice}.`,
+							outcome === "draft"
+								? `Send or clear what you typed at Claude's prompt first.`
+								: outcome === "no-picker"
+									? `Claude Code didn't open its ${what} picker — is the session waiting at its prompt?`
+									: `The ${what} picker didn't offer ${choice}.`,
 					});
 				})
 				.catch(() =>
@@ -680,6 +683,18 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 			),
 		[drivePicker],
 	);
+	const [draft, setDraft] = useState<string | null>(null);
+	const noteDraft = useCallback((open: boolean) => {
+		if (!open) return;
+		const term = termRef.current;
+		setDraft(term ? (composerDraft(terminalTail(term)) ?? null) : null);
+	}, []);
+	const draftNote =
+		draft === null ? null : (
+			<DropdownMenuItem disabled data-testid="terminal-menu-draft">
+				Send or clear what you typed first
+			</DropdownMenuItem>
+		);
 
 	const hostKey = embeddedHostKey("terminal", tabKey);
 	const visualization = useAppStore((s) => s.visualizationsByTerminal[workspaceId]?.[tabKey]);
@@ -729,7 +744,7 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 						fact.kind === "model" ? (
 							// The chip already says which model runs; clicking it changes the answer by driving
 							// the session's own /model picker to a session-only pick. See panels/SPEC.md.
-							<DropdownMenu key={fact.kind}>
+							<DropdownMenu key={fact.kind} onOpenChange={noteDraft}>
 								<DropdownMenuTrigger asChild>
 									<button
 										type="button"
@@ -743,17 +758,18 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 									</button>
 								</DropdownMenuTrigger>
 								<DropdownMenuContent data-testid="terminal-model-menu" align="start" side="top">
-									{CLAUDE_MODELS.map((model) => (
-										<DropdownMenuItem key={model.id} onSelect={() => switchModel(model.id)}>
-											{model.label}
-										</DropdownMenuItem>
-									))}
+									{draftNote ??
+										CLAUDE_MODELS.map((model) => (
+											<DropdownMenuItem key={model.id} onSelect={() => switchModel(model.id)}>
+												{model.label}
+											</DropdownMenuItem>
+										))}
 								</DropdownMenuContent>
 							</DropdownMenu>
 						) : fact.kind === "effort" ? (
 							// Effort is a slider in the agent's own UI; the chip drives it the same way the model
 							// chip drives the model picker, session-only. See panels/SPEC.md.
-							<DropdownMenu key={fact.kind}>
+							<DropdownMenu key={fact.kind} onOpenChange={noteDraft}>
 								<DropdownMenuTrigger asChild>
 									<button
 										type="button"
@@ -767,11 +783,12 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 									</button>
 								</DropdownMenuTrigger>
 								<DropdownMenuContent data-testid="terminal-effort-menu" align="start" side="top">
-									{CLAUDE_EFFORT_LEVELS.map((level) => (
-										<DropdownMenuItem key={level} onSelect={() => switchEffort(level)}>
-											{level}
-										</DropdownMenuItem>
-									))}
+									{draftNote ??
+										CLAUDE_EFFORT_LEVELS.map((level) => (
+											<DropdownMenuItem key={level} onSelect={() => switchEffort(level)}>
+												{level}
+											</DropdownMenuItem>
+										))}
 								</DropdownMenuContent>
 							</DropdownMenu>
 						) : (

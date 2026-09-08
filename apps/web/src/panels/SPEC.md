@@ -1200,8 +1200,10 @@ effort on the next turn.
   onto the row naming the pick, press `s`. `s` is the CLI's only session-only selection — `/model
   <alias>` typed as a command, Enter in the picker, and the picker's digit shortcuts all *save the pick
   as the user's global default*, which a per-terminal chip must never do. The picker can't be driven
-  blind: the prompt may not be empty (a half-typed message swallows the slash command, so the draft is
-  killed with `Ctrl+U` and yanked back with `Ctrl+Y` around the whole drive), its rows vary with the
+  blind: the prompt may not be empty (a half-typed message swallows the slash command, so the menu
+  reads the composer line as it opens and offers one disabled "Send or clear what you typed first" row
+  in place of the models — and the drive itself refuses the same way, as a toast, if the draft appeared
+  between the menu opening and the pick), its rows vary with the
   current default (a plain `Opus` row exists only when Opus is current,
   otherwise only `Opus (1M context)`), the highlight opens on the current model, and arrows wrap — so
   the driver is a feedback loop reading the rendered `❯` row between keystrokes, not a canned

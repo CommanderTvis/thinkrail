@@ -69,10 +69,14 @@ Tiny UI helpers shared across components.
   current default and its arrows wrap, so the driver is a feedback loop over the rendered `❯` row
   (`pickerHighlight` parses it, `highlightNamesModel` matches label to alias — the bare row or its
   parenthesised variant, never the `Default` row); it escapes out and reports `no-picker`/`not-found`
-  when the loop can't land. **The prompt is cleared first and restored afterwards** (`Ctrl+U` then
-  `Ctrl+Y`, Claude Code's own kill/yank): a slash command only opens the picker at the start of a line,
-  so a half-typed prompt used to swallow `/model` and produce nothing but an unhelpful toast — and every
-  exit path yanks the draft back, including the ones that give up. **A cached conversation is asked to
+  when the loop can't land. **A drive refuses over a draft** (`composerDraft`, the text after the
+  composer's `❯` on the last such line, ignoring the picker's own `❯ N.` rows and the empty composer's
+  `Try "…"` hint): a slash command only opens the picker at the start of an empty line, so a half-typed
+  prompt swallowed `/model` — and the earlier answer, killing the draft with `Ctrl+U` and yanking it back
+  with `Ctrl+Y`, stopped working when the composer became multi-line, leaving `/model` appended under the
+  draft as a second line. The drive now returns `draft` without typing anything, and the chip's menu
+  reads the same line when it opens so it can say so instead of offering models. Ceiling: a draft whose
+  first line is empty is invisible to this reader. **A cached conversation is asked to
   confirm** ("Switch model? … Your next response will be slower") — the chip's menu was already the
   user's answer, so `confirmationChoice` reads which option the highlight sits on and the drive takes
   "Yes" rather than leaving a question on screen with nobody to press it. **Both pickers ask**: `/effort`
@@ -98,7 +102,7 @@ Tiny UI helpers shared across components.
   collapses in-root `.`/`..` aliases but preserves an attempted leading escape for host rejection; Windows
   drive-rooted containment compares path/root case-insensitively while preserving the candidate's casing),
   `shallowEqualArrays`, `userText`, `parseSkillInvocation`, `matchesSkillInvocationCommand`,
-  `claudeLaunchCommand`, `shellQuotePath`, `CLAUDE_LAUNCH_MENU`, `FILE_DRAG_TYPE`, `startFileDrag`,
+  `claudeLaunchCommand`, `shellQuotePath`, `CLAUDE_LAUNCH_MENU`, `composerDraft`, `FILE_DRAG_TYPE`, `startFileDrag`,
   `carriesFileDrag`, `draggedFile`, the `DraggedFile` type, `mergeText`, `hasConflictMarkers`,
   `relativeTime`, `platformShortcutLabel`, `hasPlatformModifier`, `copyText`, `randomId`,
   `DOUBLE_CLICK_SETTLE_MS`, `tupleKey`, `parseTupleKey`, `layoutResourceIdentity`,

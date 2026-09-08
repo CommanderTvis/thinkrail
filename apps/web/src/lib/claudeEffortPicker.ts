@@ -1,5 +1,5 @@
 import type { ModelPickerIo, ModelPickerOutcome } from "./claudeModelPicker";
-import { answerConfirmation, KILL_LINE, YANK_LINE } from "./claudeModelPicker";
+import { answerConfirmation, composerDraft } from "./claudeModelPicker";
 
 /** The rungs of Claude Code's effort slider, in the order it draws them. */
 export const CLAUDE_EFFORT_LEVELS = ["low", "medium", "high", "xhigh", "max", "ultracode"] as const;
@@ -60,8 +60,8 @@ export function effortHighlight(lines: readonly string[]): ClaudeEffortLevel | u
 /**
  * Drive `/effort` to a level and take it for this session only.
  *
- * The same shape as the model picker — kill the draft, open, steer, press `s`, yank the draft back —
- * but the slider is steered with ←/→ by distance rather than walked down a list.
+ * The same shape as the model picker — refuse over a draft, open, steer, press `s` — but the slider is
+ * steered with ←/→ by distance rather than walked down a list.
  */
 export async function driveEffortPicker(
 	io: ModelPickerIo,
@@ -70,8 +70,7 @@ export async function driveEffortPicker(
 	const target = CLAUDE_EFFORT_LEVELS.indexOf(level);
 	if (target === -1) return "not-found";
 
-	io.write(KILL_LINE);
-	await io.delay(ENTER_DELAY_MS);
+	if (composerDraft(io.readLines()) !== undefined) return "draft";
 	io.write("/effort");
 	await io.delay(ENTER_DELAY_MS);
 	io.write("\r");
@@ -83,7 +82,6 @@ export async function driveEffortPicker(
 	}
 	if (current === undefined) {
 		io.write("\x1b");
-		io.write(YANK_LINE);
 		return "no-picker";
 	}
 
@@ -92,7 +90,6 @@ export async function driveEffortPicker(
 		if (at === target) {
 			io.write("s");
 			await answerConfirmation(io);
-			io.write(YANK_LINE);
 			return "switched";
 		}
 		const before: ClaudeEffortLevel = current;
@@ -105,6 +102,5 @@ export async function driveEffortPicker(
 		if (current === before) break;
 	}
 	io.write("\x1b");
-	io.write(YANK_LINE);
 	return "not-found";
 }
