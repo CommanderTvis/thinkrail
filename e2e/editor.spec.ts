@@ -181,6 +181,25 @@ test("a rewritten image shows its new pixels without reopening the tab", async (
 	await expect(page.getByTestId("image-preview-size")).toHaveText("1 × 1", { timeout: 10_000 });
 });
 
+test("an issue number in a stylesheet comment is not painted as a colour", async ({ page }) => {
+	writeFileSync(
+		join(E2E_FIXTURE_REPO, "issue-130.css"),
+		"/** GH #130: per booking form */\na {\n  color: #abc;\n}\n",
+	);
+	await openFixtureProject(page);
+	await enterDefaultWorkspace(page);
+	await page.getByTestId("tab-files").click();
+	await page.getByTestId("file-node").filter({ hasText: "issue-130.css" }).dblclick();
+	const pane = page.getByTestId("editor-pane");
+	await expect(pane).toContainText("GH #130");
+	await expect(pane).toContainText("color: #abc");
+	// Monaco's CSS colour provider would decorate both `#130` and `#abc` once its worker answers; with
+	// decorators off, neither ever appears.
+	await expect(pane.locator(".colorpicker-color-decoration")).toHaveCount(0);
+	await page.waitForTimeout(500);
+	await expect(pane.locator(".colorpicker-color-decoration")).toHaveCount(0);
+});
+
 test("the markdown outline lists the document's headings and scrolls to one", async ({ page }) => {
 	await openFixtureProject(page);
 	await createWorkspaceViaDialog(page);
