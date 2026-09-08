@@ -2,6 +2,7 @@ import {
 	RiClipboardLine as Clipboard,
 	RiFileCodeLine as FileCode,
 	RiFolderOpenLine as FolderOpen,
+	RiDeleteBin6Line as Trash2,
 } from "@remixicon/react";
 import type { FileNode } from "@thinkrail/contracts";
 import { BLUEPRINT_FILE } from "@thinkrail/contracts";
@@ -15,8 +16,9 @@ import {
 import { startFileDrag } from "@/lib";
 import { copyText } from "@/lib/utils";
 import { LoadingRegion } from "../components/Skeleton";
-import type { TabIntent } from "../store";
-import { getTransport } from "../transport";
+import { type TabIntent, toast } from "../store";
+import { errorText, getTransport } from "../transport";
+import { ConfirmDialog } from "./ConfirmDialog";
 import { type ResolvedFolderChain, resolveFolderChain } from "./folderChains";
 import { openFileInTab } from "./openTabs";
 import { TreeRow } from "./TreeRow";
@@ -88,6 +90,7 @@ function FileNodeRow({
 }) {
 	const isDir = node.kind === "dir";
 	const [directory, setDirectory] = useState<ResolvedFolderChain<FileNode> | null>(null);
+	const [confirmDelete, setConfirmDelete] = useState(false);
 	const pendingExpand = useRef(false);
 
 	const { reload } = useWorkspaceRead(
@@ -177,8 +180,31 @@ function FileNodeRow({
 						<Clipboard />
 						Copy path
 					</ContextMenuItem>
+					<ContextMenuItem data-testid="file-node-delete" onSelect={() => setConfirmDelete(true)}>
+						<Trash2 />
+						{isDir ? "Delete folder" : "Delete file"}
+					</ContextMenuItem>
 				</ContextMenuContent>
 			</ContextMenu>
+			<ConfirmDialog
+				open={confirmDelete}
+				onOpenChange={setConfirmDelete}
+				title={`Delete ${label}?`}
+				description={
+					isDir
+						? "The folder and everything in it move to the trash."
+						: "The file moves to the trash."
+				}
+				confirmLabel="Delete"
+				destructive
+				confirmTestId="file-node-delete-confirm"
+				onConfirm={() => {
+					setConfirmDelete(false);
+					void getTransport()
+						.request("fs.trashPath", { workspaceId, path: node.path })
+						.catch((err) => toast.error(errorText(err, `Couldn't delete ${label}`)));
+				}}
+			/>
 			{isDir && expanded && children && (
 				<ul className="flex flex-col pl-12">
 					{children.map((child) => (

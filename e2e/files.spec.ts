@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { expect, test } from "@playwright/test";
 import {
@@ -11,6 +11,7 @@ import {
 	visibleTerminalScreen,
 	worktreeRows,
 } from "./fixtures/app";
+import { E2E_FIXTURE_REPO } from "./fixtures/paths";
 
 test("shows files and compacts single-directory runs in the Files tree", async ({ page }) => {
 	await openFixtureProject(page);
@@ -93,7 +94,27 @@ test("a file row has our own context menu, not the webview's", async ({ page }) 
 	await expect(menu).toBeVisible();
 	await expect(menu.getByTestId("file-node-reveal")).toBeVisible();
 	await expect(menu.getByTestId("file-node-copy-path")).toBeVisible();
+	await expect(menu.getByTestId("file-node-delete")).toHaveText("Delete file");
 
 	await page.keyboard.press("Escape");
 	await expect(menu).toHaveCount(0);
+});
+
+test("a file row's Delete asks first, then moves the file to the trash", async ({ page }) => {
+	await openFixtureProject(page);
+	await enterDefaultWorkspace(page);
+	await page.getByTestId("tab-files").click();
+
+	const disposable = join(E2E_FIXTURE_REPO, "disposable.txt");
+	writeFileSync(disposable, "gone soon\n");
+	const row = page.getByTestId("file-node").filter({ hasText: "disposable.txt" });
+	await expect(row).toBeVisible();
+
+	await row.click({ button: "right" });
+	await page.getByTestId("file-node-delete").click();
+	await expect(page.getByTestId("confirm-dialog")).toContainText("Delete disposable.txt?");
+	await page.getByTestId("file-node-delete-confirm").click();
+
+	await expect(row).toHaveCount(0);
+	expect(existsSync(disposable)).toBe(false);
 });

@@ -200,6 +200,7 @@ export const WS_METHODS = {
 	workspaceOpenIn: "workspace.openIn",
 	workspaceReveal: "workspace.reveal",
 	fsRevealPath: "fs.revealPath",
+	fsTrashPath: "fs.trashPath",
 	editorList: "editor.list",
 	gitListBranches: "git.listBranches",
 	gitPrefetch: "git.prefetch",
@@ -502,6 +503,7 @@ export interface WsMethodMap {
 		result: FileWriteResult;
 	};
 	"fs.revealPath": { params: { workspaceId: string; path: string }; result: Ack };
+	"fs.trashPath": { params: { workspaceId: string; path: string }; result: Ack };
 	"spec.graph": { params: { workspaceId: string }; result: SpecGraphSnapshot };
 	"claudeConfig.get": { params: { workspaceId: string }; result: ClaudeConfigSnapshot };
 	"claudeConfig.account": { params: Record<string, never>; result: ClaudeAccount };

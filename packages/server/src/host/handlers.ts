@@ -70,6 +70,7 @@ import {
 	setSessionModel,
 	setSessionThinkingLevel,
 	steerSession,
+	trashFile,
 } from "../agent";
 import { bucketProviderModel, type SendMode, track } from "../analytics";
 import {
@@ -518,6 +519,15 @@ const handlers: Record<string, Handler> = {
 		const p = params as { workspaceId: string; path: string };
 		// Resolved through the worktree gate, so a path cannot walk out of the workspace it claims.
 		revealPathInFileManager(resolveWorktreeFile(p.workspaceId, p.path));
+		return {};
+	},
+	"fs.trashPath": async (params) => {
+		const p = params as { workspaceId: string; path: string };
+		const abs = resolveWorktreeFile(p.workspaceId, p.path);
+		if (abs === resolveWorktreeFile(p.workspaceId, ".")) {
+			throw new Error("The workspace folder itself cannot be deleted from here");
+		}
+		await trashFile(abs);
 		return {};
 	},
 	"fs.readFile": (params) => {

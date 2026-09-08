@@ -1014,7 +1014,7 @@ the absolute path as one shell word (`shellQuotePath`), like Finder would drop i
 composer it becomes an `@path` mention at the caret (`@dir/` for a folder), the same text `@`
 completion inserts. Pinned by `files.spec.ts`.
 
-A right-click on an All-files row opens `file-node-actions` (Reveal in Finder, Copy path). The menu
+A right-click on an All-files row opens `file-node-actions` (Reveal in Finder, Copy path, Delete). The menu
 exists mostly so the *webview's* does not: with no handler, WebKit shows its own Look Up / Translate /
 Share / **Show in Finder** menu, whose reveal item is about downloaded files and does nothing for a
 workspace path — it reads as a broken feature rather than an absent one.
@@ -1026,6 +1026,14 @@ workspace path — it reads as a broken feature rather than an absent one.
   the right verb. Linux has no portable "select this entry", so it opens the containing folder.
 - The label follows the platform's own name for its file manager; "Show in Finder" on Linux would read
   as a bug.
+- **Delete moves to the trash, after a confirmation.** `Delete file` / `Delete folder` opens the shared
+  destructive `ConfirmDialog` naming the row, then calls `fs.trashPath`, which the host resolves through
+  the same worktree gate as reveal and hands to the agent module's `trashFile` — the one OS-trash move
+  already used for chat transcripts — so a mis-click is recoverable from the Trash rather than gone.
+  The workspace folder itself is refused by name. A compact folder chain deletes from its top segment,
+  which is what the row shows. The tree does not remove the row itself: the worktree watcher's
+  `fsChanged` push re-reads the listing, the same path every external delete already takes, and a
+  failure is a toast.
 
 ## Tab labels carry our tooltip, not the browser's
 
