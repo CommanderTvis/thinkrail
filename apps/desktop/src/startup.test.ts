@@ -119,6 +119,7 @@ mock.module("electrobun/main", () => ({
       calls.push("splash-closed");
     }
   },
+  ContextMenu: { showContextMenu() {} },
   PATHS: { RESOURCES_FOLDER: ${JSON.stringify(root)}, VIEWS_FOLDER: ${JSON.stringify(root)} },
   Updater: {
     getLocalInfo: async () => {
@@ -167,7 +168,7 @@ console.log(JSON.stringify({ calls, cwd, splashText }));
 				stdout: "pipe",
 				stderr: "pipe",
 			});
-			expect(result.exitCode).toBe(0);
+			expect(result.exitCode, result.stderr.toString()).toBe(0);
 			expect(existsSync(homePath)).toBe(home === "present");
 			const run = JSON.parse(result.stdout.toString()) as {
 				calls: string[];

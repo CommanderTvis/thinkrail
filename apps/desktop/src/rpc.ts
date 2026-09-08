@@ -31,6 +31,7 @@ export type DesktopRpc = {
 			pageZoomRequested: { action: PageZoomAction };
 			pageZoomGestureRequested: PageZoomGesture;
 			menuLabelsChanged: { labels: Record<string, string> };
+			contextMenu: { editable: boolean };
 		};
 	};
 	webview: {

@@ -9,6 +9,7 @@ import Electrobun, {
 	ApplicationMenu,
 	BrowserView,
 	BrowserWindow,
+	ContextMenu,
 	PATHS,
 	Utils,
 } from "electrobun/main";
@@ -20,8 +21,10 @@ import {
 	readMenuLabels,
 } from "./applicationMenu";
 import { attributionClaimOnFirstReadiness } from "./attributionReadiness";
+import { desktopContextMenu } from "./contextMenu";
 import { desktopError, setDesktopErrorReporter } from "./errorReporting";
 import { installExternalNavigation } from "./externalNavigation";
+import { HostPortStore } from "./hostPortStore";
 import { createKeyStateReader } from "./keyState";
 import {
 	type DesktopDialogLabels,
@@ -268,6 +271,8 @@ async function start(): Promise<void> {
 		pathToFileURL(join(runtimeDir, "server-runtime.ts")).href
 	)) as DesktopServerRuntime;
 	await shellEnv;
+	// The webview's origin is its storage identity, and the port is in it — see SPEC.md.
+	const hostPorts = new HostPortStore(join(userData, "host-ports.json"));
 	const host = await serverRuntime.startDesktopHost({
 		runtimeDir,
 		staticDir: join(PATHS.VIEWS_FOLDER, "web"),
@@ -277,8 +282,10 @@ async function start(): Promise<void> {
 		...(Electrobun.app.isPackaged
 			? { openExternal: (url: string) => Utils.openExternal(url) }
 			: {}),
+		port: hostPorts.read(BACKEND_PROFILE_ID),
 	});
 	setDesktopErrorReporter(host.reportError);
+	hostPorts.write(BACKEND_PROFILE_ID, host.port);
 	const quitCoordinator = createElectrobunQuitCoordinator(
 		() => host.server.shutdown(),
 		() => dialogLabels,
@@ -389,6 +396,7 @@ async function start(): Promise<void> {
 				routeChanged: ({ hash }) => {
 					if (!neutral) routes.write(BACKEND_PROFILE_ID, WINDOW_ID, hash);
 				},
+				contextMenu: (payload) => ContextMenu.showContextMenu(desktopContextMenu(payload)),
 				preferenceWrite: (payload) => {
 					if (neutral) return;
 					const preference = readDesktopPreferenceWrite(payload);
