@@ -146,6 +146,13 @@
 	background: var(--selection-bg-muted);
 }
 
+::highlight(thinkrail-find) {
+	background: var(--selection-bg-muted);
+}
+::highlight(thinkrail-find-current) {
+	background: var(--selection-bg);
+}
+
 /* The rendered preview's floating icon (the React twin of Monaco's content widget): its position is a
    measured DOM rect, so the two coordinates arrive as custom properties the component sets on the node
    (`PreviewCommenting`) — the geometry stays HERE, next to the rest of the icon's skin, instead of

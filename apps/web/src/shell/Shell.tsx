@@ -34,6 +34,7 @@ import { UpdateReadyButton, UpdateSettings, useUpdates } from "../updates";
 import { BrandLogo } from "./BrandLogo";
 import { CollapsedPanelRail } from "./CollapsedPanelRail";
 import { isDesktopShell, requestWindowZoomToggle } from "./electrobunShell";
+import { FindBar } from "./FindBar";
 import { JbcentralQuotaTopbar } from "./JbcentralQuotaTopbar";
 import { LayoutSettings } from "./LayoutSettings";
 import { useLocalLayoutState } from "./layoutState";
@@ -87,6 +88,7 @@ export function Shell() {
 	const welcomeProjects = useCollapsibleRegion(welcomeCenterRef, "welcome-left");
 
 	const [themeHint] = useState(readThemeHint);
+	const [findRequest, setFindRequest] = useState(0);
 	const welcomeGeneration = useAppStore((s) => s.welcomeGeneration);
 	const theme = useAppStore((s) => s.theme);
 	const themeMode = useAppStore((s) => s.themeMode);
@@ -102,6 +104,7 @@ export function Shell() {
 		return preference.themeMode === "system" ? onSystemAppearanceChange(apply) : undefined;
 	}, [themeHint, welcomeGeneration, theme, themeMode, systemThemePair]);
 	useGlobalHotkeys({
+		onFind: () => setFindRequest((current) => current + 1),
 		onProjects: hasActiveWorkspace
 			? () => {
 					if (!activeWorkspaceId) return;
@@ -308,6 +311,7 @@ export function Shell() {
 				</div>
 			)}
 			<InterviewPromptDialog />
+			{findRequest > 0 ? <FindBar request={findRequest} onClose={() => setFindRequest(0)} /> : null}
 			<Toaster />
 		</div>
 	);
