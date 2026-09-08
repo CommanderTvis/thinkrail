@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, rmdirSync, rmSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, isAbsolute, join, resolve, sep } from "node:path";
 import type { Project, ProjectPathStatus } from "@thinkrail/contracts";
-import { canonicalPath, git } from "../git";
+import { canonicalPath, git, gitAsync } from "../git";
 import { dataDir, loadProjects, loadWorkspaces, saveProjects } from "../persistence";
 
 type ProjectPublisher = (project: Project) => void;
@@ -134,8 +134,9 @@ export function openProject(inputPath: string): Project {
 }
 
 const REJECTED_NAME = /[/\\]|^\.\.?$|^\s*$|\0/;
+const CLONE_TIMEOUT_MS = 10 * 60_000;
 
-export function createProject(parentPath: string, name: string): Project {
+function newFolderTarget(parentPath: string, name: string): string {
 	const trimmed = name.trim();
 	if (REJECTED_NAME.test(trimmed)) throw new Error(`Not a usable folder name: ${name}`);
 
@@ -149,7 +150,11 @@ export function createProject(parentPath: string, name: string): Project {
 
 	const target = join(parentPath, trimmed);
 	if (existsSync(target)) throw new Error(`Already exists: ${target}`);
+	return target;
+}
 
+export function createProject(parentPath: string, name: string): Project {
+	const target = newFolderTarget(parentPath, name);
 	mkdirSync(target);
 	try {
 		return initProject(target);
@@ -157,6 +162,30 @@ export function createProject(parentPath: string, name: string): Project {
 		rmdirSync(target);
 		throw error;
 	}
+}
+
+export async function cloneProject(
+	url: string,
+	parentPath: string,
+	name: string,
+	depth?: number,
+): Promise<Project> {
+	const source = url.trim();
+	if (!source || source.startsWith("-")) throw new Error(`Not a repository URL: ${url}`);
+	if (depth !== undefined && (!Number.isInteger(depth) || depth < 1)) {
+		throw new Error(`Clone depth must be a whole number of commits, at least 1: ${depth}`);
+	}
+	const target = newFolderTarget(parentPath, name);
+	const shallow = depth === undefined ? [] : ["--depth", String(depth)];
+	const clone = await gitAsync(parentPath, ["clone", ...shallow, "--", source, target], {
+		network: true,
+		timeoutMs: CLONE_TIMEOUT_MS,
+	});
+	if (!clone.ok) {
+		rmSync(target, { recursive: true, force: true });
+		throw new Error(clone.err || `git clone failed: ${source}`);
+	}
+	return openProject(target);
 }
 
 function newestFirst(projects: Project[]): Project[] {

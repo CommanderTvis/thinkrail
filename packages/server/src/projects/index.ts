@@ -1,5 +1,6 @@
 export {
 	acknowledgeProjectSkills,
+	cloneProject,
 	closeProject,
 	createProject,
 	getProjects,

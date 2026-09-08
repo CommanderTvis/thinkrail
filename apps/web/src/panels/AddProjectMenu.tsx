@@ -2,7 +2,7 @@ import {
 	RiEditLine as Edit,
 	RiFolderLine as Folder,
 	RiFolderAddLine as FolderPlus,
-	RiGlobalLine as Globe,
+	RiGitRepositoryLine as GitRepository,
 } from "@remixicon/react";
 import type { Project } from "@thinkrail/contracts";
 import type { ReactNode } from "react";
@@ -22,6 +22,7 @@ export function AddProjectMenu({
 	onOpen,
 	onEnterHostPath,
 	onNew,
+	onClone,
 	onOpenRecent,
 	align = "end",
 	children,
@@ -30,6 +31,7 @@ export function AddProjectMenu({
 	onOpen: () => void;
 	onEnterHostPath: () => void;
 	onNew: () => void;
+	onClone: () => void;
 	onOpenRecent: (path: string) => void;
 	align?: "start" | "center" | "end";
 	children: ReactNode;
@@ -50,9 +52,9 @@ export function AddProjectMenu({
 					<FolderPlus />
 					<span>New project</span>
 				</DropdownMenuItem>
-				<DropdownMenuItem disabled>
-					<Globe />
-					<span>Open GitHub project</span>
+				<DropdownMenuItem data-testid="menu-clone-project" onSelect={() => onClone()}>
+					<GitRepository />
+					<span>Clone repository…</span>
 				</DropdownMenuItem>
 				{recentProjects.length > 0 && (
 					<>

@@ -54,6 +54,17 @@ open and recent views, and open/close a project without breaking its workspace i
   split keeps **one** definition of what becoming a repo means, so the two doors can never drift into
   disagreeing about it. A failed init `rmdir`s the folder this call just made — an empty directory it
   created and nothing else, so the failure leaves no debris and can never remove a user's files.
+- **`cloneProject(url, parentPath, name, depth?)` is the third door.** It shares `createProject`'s target
+  validation (single-segment name, existing parent, no existing target), refuses an empty source or one
+  that starts with `-` (git would read it as an option; the argv also carries `--` so nothing else can),
+  then runs `git clone [--depth N] -- <url> <target>` through the async, network-bounded runner with a
+  ten-minute ceiling and opens the result. `depth` is optional and, when given, must be a whole number
+  of at least 1 — checked here before anything is spawned, because git would otherwise turn `0` or
+  `1.5` into its own less helpful refusal after the target folder was already claimed. The name is the caller's, never derived from the URL here — the UI
+  prefills it client-side and always sends it, so one derivation lives in one place. A failed clone
+  `rm -rf`s the target: the target was verified absent before the run, so whatever is there is git's
+  partial output and nothing of the user's. The thrown message is git's bounded stderr, because that is
+  the only useful diagnosis (auth, typo, unreachable host).
 - **The root commit is the feature, not a nicety.** Without it HEAD is unborn, and *every* git-backed
   surface fails at once: `createWorkspace` cannot branch (the user meets
   [[submodule-server-workspaces]]'s refusal), Changes reports `fatal: bad revision 'main'`, and the
@@ -78,7 +89,7 @@ open and recent views, and open/close a project without breaking its workspace i
   plain-folder project beyond the one hiding this module directly enables (see `ProjectTree.tsx`'s
   `project.hasGit === false` gate on the two worktree-creation menu items) — those panels still render for
   one, and read as "git status failed" rather than "there is no git here."
-- **Public surface (barrel):** `openProject`, `initProject`, `createProject`, `listProjects`,
+- **Public surface (barrel):** `openProject`, `initProject`, `createProject`, `cloneProject`, `listProjects`,
   `listRecentProjects`, `closeProject`, `getProjects`, `setProjectPublisher`, `inspectProjectPath`,
   `setProjectTrust`, `setProjectSkillEnabled`, `setProjectGroupEnabled`, `acknowledgeProjectSkills`.
 - **Allowed deps:** `persistence`; the `git` sub-module (shared `git()` runner, which now owns the

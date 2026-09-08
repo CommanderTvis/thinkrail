@@ -280,7 +280,7 @@ project folder"; **project + no specs** → a spec-first **"Draft a blueprint"**
 only possible action; once a project is shown, opening another is the projects-rail **"+"** (the same
 dropdown), so Welcome stays the *work-in-this-project* surface. That card hangs the shared
 **`AddProjectMenu`** dropdown off it (same menu as the projects-rail "+": Open project / Enter host
-path… / Open GitHub (soon) / Recents). Recents is the store's `recentProjects`: one last-opened path list
+path… / New project / Clone repository… / Recents). Recents is the store's `recentProjects`: one last-opened path list
 containing open + closed records with no status badge; selecting either runs the shared open flow and lands at Project Home, with a
 closed record retaining its id and workspace state. `Card` is a `forwardRef` usable as a Radix `asChild`
 trigger. **"Work in project folder"**
@@ -336,6 +336,24 @@ HEAD by name — see [[submodule-server-workspaces]]). That success state is als
 meet: **Draft a blueprint** hands straight to `BlueprintStartDialog`. The offer is a prop, and the rail's
 copy of the dialog omits it — inside a workspace a blueprint has nowhere to render, and an affordance
 whose destination does not exist is worse than a missing one.
+
+**`CloneProjectDialog`** is the third project door, beside open and create: a repository URL, the
+same **`FolderField`** parent picker both dialogs share (it owns the `dialog.selectDirectory` round
+trip, its raised human-scale timeout, and the host-vs-local picker-failure wording), and an **optional**
+folder-name field: empty by default, labelled as optional, with the URL's last path segment (`.git`
+stripped, `git@host:org/repo` handled) as its placeholder — the same placeholder-not-a-choice grammar as
+the workspace Name field, so the common case is two inputs, not three. Whatever the field resolves to
+(typed, else derived) feeds the target path shown before anything is cloned, exactly as in
+`NewProjectDialog`, and always travels on the wire: the host derives nothing from the URL, which keeps
+one derivation in one place. A fourth, optional **Depth** field (a number input, "full history" when
+empty) sends `depth` for a shallow clone; the dialog disables Clone while the value is not a whole
+number of at least 1, and the host checks the same rule again. `project.clone` is long (a real `git clone` over the network), so the request carries its
+own ten-minute timeout matching the host's bound rather than the transport default. Success closes the
+dialog and selects the new project (revealing its workspaces, like every other adoption); failure keeps
+the dialog open with git's own stderr as the reason, since "couldn't clone" hides exactly what the user
+needs (a missing key, a typo in the URL, a folder that already exists). There is no blueprint offer here:
+a clone has history and usually specs of its own, so Welcome's `hasSpecs` fork already decides what to
+show next.
 
 **A blueprint lives in the project folder, beside the agent that writes it.** `BlueprintStartDialog`
 takes the brief and opens the project's **Default workspace** — not a cut worktree. A spec is written
