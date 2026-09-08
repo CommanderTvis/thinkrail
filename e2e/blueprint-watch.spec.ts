@@ -75,6 +75,14 @@ test("a terminal author's write reaches the pane through the watcher alone", asy
 	// would tell a fresh author to write the file over this one.
 	await expect.poll(() => readFileSync(log, "utf8"), { timeout: 30_000 }).toContain("--continue");
 	expect(readFileSync(log, "utf8")).not.toContain("Write the interactive specification");
+	// A reload brings the author's tab back from the layout but not the store's blueprint entry; the
+	// workbench hydrates it, so the pane returns beside its author without opening the file again.
+	await page.reload();
+	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
+	await expect(page.getByTestId("blueprint")).toBeVisible({ timeout: 15_000 });
+	await expect(page.getByTestId("blueprint-document")).toContainText(
+		"an author that reports to nobody",
+	);
 	// The frontmatter is the same properties table a markdown file gets, and an edit there is staged
 	// with the prose edits rather than becoming a tab draft.
 	const properties = page.getByTestId("blueprint-document").getByTestId("frontmatter-properties");
