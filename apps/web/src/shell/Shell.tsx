@@ -39,6 +39,7 @@ import {
 import { UpdateInstallSurfaces, UpdateReadyButton, UpdateSettings, useUpdates } from "../updates";
 import { AppShortcuts } from "./AppShortcuts";
 import { BrandLogo } from "./BrandLogo";
+import { FindBar } from "./FindBar";
 import { JbcentralQuotaTopbar } from "./JbcentralQuotaTopbar";
 import { LayoutSettings } from "./LayoutSettings";
 import { useLocalLayoutState } from "./layoutState";
@@ -95,6 +96,10 @@ export function Shell() {
 
 	const [themeHint] = useState(readThemeHint);
 	const [settingsShortcut] = useState(readSettingsShortcutLabel);
+	const [find, setFind] = useState<{ request: number; anchor: HTMLElement | null }>({
+		request: 0,
+		anchor: null,
+	});
 	const welcomeGeneration = useAppStore((s) => s.welcomeGeneration);
 	const theme = useAppStore((s) => s.theme);
 	const themeMode = useAppStore((s) => s.themeMode);
@@ -122,6 +127,11 @@ export function Shell() {
 		userThemesUnsupported,
 	]);
 	useGlobalHotkeys({
+		onFind: () =>
+			setFind((current) => ({
+				request: current.request + 1,
+				anchor: document.activeElement?.closest<HTMLElement>("section[data-group-id]") ?? null,
+			})),
 		onProjects: hasActiveWorkspace
 			? () => {
 					if (!activeWorkspaceId) return;
@@ -269,6 +279,13 @@ export function Shell() {
 				}}
 			/>
 			<NotificationPermissionPrompt />
+			{find.request > 0 ? (
+				<FindBar
+					request={find.request}
+					anchor={find.anchor}
+					onClose={() => setFind({ request: 0, anchor: null })}
+				/>
+			) : null}
 			<Toaster />
 			<UpdateInstallSurfaces updates={updates} />
 			<AppShortcuts />
