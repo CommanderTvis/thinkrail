@@ -667,7 +667,7 @@ interface TabStripProps {
 	onApply: (result: LayoutMutationResult) => void;
 	onFocusAdjacentGroup: (delta: -1 | 1, fromGroupId?: string) => void;
 	onHideSide: (region: LayoutAuxiliaryRegion) => void;
-	onRevealTool: (tool: LayoutToolId) => void;
+	onRevealTool: (tool: LayoutToolId, target?: LayoutGroupLocation) => void;
 	canFocusAdjacentGroup: boolean;
 	renderTabAdornment: WorkbenchProps["renderTabAdornment"];
 	renderTabIcon: WorkbenchProps["renderTabIcon"];
@@ -961,7 +961,7 @@ interface WorkbenchTabProps {
 	onApply: (result: LayoutMutationResult) => void;
 	onFocusAdjacentGroup: (delta: -1 | 1, fromGroupId?: string) => void;
 	onHideSide: (region: LayoutAuxiliaryRegion) => void;
-	onRevealTool: (tool: LayoutToolId) => void;
+	onRevealTool: (tool: LayoutToolId, target?: LayoutGroupLocation) => void;
 	canFocusAdjacentGroup: boolean;
 	renderTabAdornment: WorkbenchProps["renderTabAdornment"];
 	renderTabIcon: WorkbenchProps["renderTabIcon"];
@@ -1455,7 +1455,7 @@ function WorkbenchTab({
 					<>
 						<ContextMenuSeparator />
 						{missingTools.map((tool) => (
-							<ContextMenuItem key={tool} onSelect={() => onRevealTool(tool)}>
+							<ContextMenuItem key={tool} onSelect={() => onRevealTool(tool, location)}>
 								Show {toolTab(tool).name}
 							</ContextMenuItem>
 						))}
@@ -1526,7 +1526,7 @@ interface SharedGroupProps {
 	onClose: (tab: LayoutTab) => void;
 	onFocusAdjacentGroup: (delta: -1 | 1, fromGroupId?: string) => void;
 	onHideSide: (region: LayoutAuxiliaryRegion) => void;
-	onRevealTool: (tool: LayoutToolId) => void;
+	onRevealTool: (tool: LayoutToolId, target?: LayoutGroupLocation) => void;
 	canFocusAdjacentGroup: boolean;
 	verticalTabs: VerticalTabsColumn | null;
 	defaultPaneDirection: LayoutTabPane["direction"];
@@ -2138,7 +2138,7 @@ function SideGroupMenu({
 	side: LayoutSide;
 	groupId: string;
 	renderSideMenuActions: WorkbenchProps["renderSideMenuActions"];
-	onRevealTool: (tool: LayoutToolId) => void;
+	onRevealTool: (tool: LayoutToolId, target?: LayoutGroupLocation) => void;
 }) {
 	const missing = revealable(
 		unplacedToolsForSide(document, side),
@@ -2164,7 +2164,7 @@ function SideGroupMenu({
 					<DropdownMenuItem
 						key={tool}
 						data-testid={`show-tool-${tool}`}
-						onSelect={() => onRevealTool(tool)}
+						onSelect={() => onRevealTool(tool, { area: side, groupId })}
 					>
 						Show {toolTab(tool).name}
 					</DropdownMenuItem>
@@ -3416,8 +3416,8 @@ export function Workbench({
 		[apply, document],
 	);
 	const revealMissingTool = useCallback(
-		(tool: LayoutToolId) => {
-			const result = revealTool(document, tool, maxSideGroups, maxBottomGroups);
+		(tool: LayoutToolId, target?: LayoutGroupLocation) => {
+			const result = revealTool(document, tool, maxSideGroups, maxBottomGroups, target);
 			if (!isLayoutUnavailable(result)) apply(result);
 		},
 		[apply, document, maxBottomGroups, maxSideGroups],

@@ -530,6 +530,20 @@ describe("workspace layout model", () => {
 		);
 		expect(revealed.document.bottom.visible).toBe(true);
 		expect(validateLayoutDocument(revealed.document, 6, 2)).toEqual([]);
+
+		// Asked from a specific group's menu, the tool lands in that group, not at its restore target.
+		const asked = document.bottom.groups[0];
+		if (!asked) throw new Error("no bottom group");
+		const targeted = mutation(
+			revealTool(document, "changes", 6, 2, { area: "bottom", groupId: asked.id }),
+		);
+		expect(findTabLocation(targeted.document, targeted.focusTabId ?? "missing")).toEqual({
+			area: "bottom",
+			groupId: asked.id,
+		});
+		expect(targeted.focusGroupId).toBe(asked.id);
+		expect(targeted.document.bottom.groups).toHaveLength(2);
+		expect(validateLayoutDocument(targeted.document, 6, 2)).toEqual([]);
 	});
 
 	test("bottom removal preserves every frame group after its final tab closes", () => {
