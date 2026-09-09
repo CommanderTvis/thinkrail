@@ -252,6 +252,9 @@ export const DEFAULT_LOCAL_LAYOUT_PREFERENCES: LocalLayoutPreferences = {
 
 export interface LocalLayoutStatePayload {
 	frame: WorkbenchFrame;
+	/** Restated only by a project switch; every other layout write leaves both untouched. */
+	framesByProject?: Record<string, WorkbenchFrame>;
+	frameProjectId?: string | null;
 	viewsByWorkspace: Record<string, WorkspaceViewState>;
 	documentsByWorkspace: Record<string, WorkspaceLayoutDocument>;
 	attentionByWorkspace: Record<string, LayoutAttention>;
@@ -843,6 +846,8 @@ interface AppState {
 	routeChatTarget: RouteChatTarget | null;
 	routeChatTargetGeneration: number;
 	workbenchFrame: WorkbenchFrame | null;
+	workbenchFramesByProject: Record<string, WorkbenchFrame>;
+	workbenchFrameProjectId: string | null;
 	workspaceViewsByWorkspace: Record<string, WorkspaceViewState>;
 	layoutStateReady: boolean;
 	localLayoutPreferences: LocalLayoutPreferences;
@@ -1852,6 +1857,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 	routeChatTarget: null,
 	routeChatTargetGeneration: 0,
 	workbenchFrame: null,
+	workbenchFramesByProject: {},
+	workbenchFrameProjectId: null,
 	workspaceViewsByWorkspace: {},
 	layoutStateReady: false,
 	localLayoutPreferences: { ...DEFAULT_LOCAL_LAYOUT_PREFERENCES },
@@ -2148,6 +2155,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 				? {}
 				: {
 						workbenchFrame: payload.frame,
+						workbenchFramesByProject: payload.framesByProject ?? {},
+						workbenchFrameProjectId: payload.frameProjectId ?? null,
 						workspaceViewsByWorkspace: payload.viewsByWorkspace,
 						layoutDocumentsByWorkspace: payload.documentsByWorkspace,
 						layoutAttentionByWorkspace: payload.attentionByWorkspace,
@@ -2166,6 +2175,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 			}
 			return {
 				workbenchFrame: payload.frame,
+				workbenchFramesByProject: payload.framesByProject ?? state.workbenchFramesByProject,
+				workbenchFrameProjectId: payload.frameProjectId ?? state.workbenchFrameProjectId,
 				workspaceViewsByWorkspace: payload.viewsByWorkspace,
 				layoutDocumentsByWorkspace: payload.documentsByWorkspace,
 				layoutAttentionByWorkspace: payload.attentionByWorkspace,

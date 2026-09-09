@@ -55,7 +55,10 @@ function resetStore(): void {
 		status: "connected",
 		connectionGeneration: 1,
 		removedWorkspaceIds: {},
+		selectedProjectId: null,
 		workbenchFrame: null,
+		workbenchFramesByProject: {},
+		workbenchFrameProjectId: null,
 		workspaceViewsByWorkspace: {},
 		layoutStateReady: false,
 		localLayoutPreferences: { ...DEFAULT_LOCAL_LAYOUT_PREFERENCES },
@@ -114,6 +117,81 @@ describe("frontend-local layout state", () => {
 			maxBottomGroups: 4,
 			verticalCenterTabs: true,
 		});
+	});
+
+	test("a project's stashed frame survives the reload that restores the live one", async () => {
+		const local = new MemoryStorage();
+		const session = new MemoryStorage();
+		session.setItem("thinkrail:layout-surface-id", "surface-a");
+		setLayoutStateStorageForTests({ local, session }, endpoint);
+		await initializeLocalLayoutState();
+		const frame = useAppStore.getState().workbenchFrame;
+		if (!frame) throw new Error("no frame");
+		// The stashed frame is the interesting one: a project you left mid-split.
+		const split = {
+			...frame,
+			center: {
+				kind: "split" as const,
+				id: "split-test",
+				direction: "horizontal" as const,
+				weights: [0.5, 0.5] as [number, number],
+				children: [
+					{ kind: "group" as const, id: "center-one" },
+					{ kind: "group" as const, id: "center-two" },
+				],
+			},
+		};
+		useAppStore.getState().applyLocalLayoutState(
+			{
+				frame,
+				framesByProject: { "project-a": split },
+				frameProjectId: "project-b",
+				viewsByWorkspace: useAppStore.getState().workspaceViewsByWorkspace,
+				documentsByWorkspace: useAppStore.getState().layoutDocumentsByWorkspace,
+				attentionByWorkspace: useAppStore.getState().layoutAttentionByWorkspace,
+				preferences: useAppStore.getState().localLayoutPreferences,
+			},
+			[],
+		);
+
+		const key = localLayoutStorageKey(endpoint, "surface-a");
+		const written = JSON.parse(local.getItem(key) ?? "{}");
+		expect(Object.keys(written.framesByProject ?? {})).toEqual(["project-a"]);
+
+		resetLayoutStateForTests();
+		resetStore();
+		setLayoutStateStorageForTests({ local, session }, endpoint);
+		await initializeLocalLayoutState();
+		expect(Object.keys(useAppStore.getState().workbenchFramesByProject)).toEqual(["project-a"]);
+		expect(useAppStore.getState().workbenchFrameProjectId).toBe("project-b");
+	});
+
+	test("a project with no frame of its own never inherits the live one", async () => {
+		const local = new MemoryStorage();
+		const session = new MemoryStorage();
+		session.setItem("thinkrail:layout-surface-id", "surface-a");
+		setLayoutStateStorageForTests({ local, session }, endpoint);
+		await initializeLocalLayoutState();
+		const frame = useAppStore.getState().workbenchFrame;
+		if (!frame) throw new Error("no frame");
+		// The shape a surface lands in when it has stashed frames but nothing has claimed the live one.
+		useAppStore.getState().applyLocalLayoutState(
+			{
+				frame,
+				framesByProject: { "project-a": frame },
+				frameProjectId: null,
+				viewsByWorkspace: useAppStore.getState().workspaceViewsByWorkspace,
+				documentsByWorkspace: useAppStore.getState().layoutDocumentsByWorkspace,
+				attentionByWorkspace: useAppStore.getState().layoutAttentionByWorkspace,
+				preferences: useAppStore.getState().localLayoutPreferences,
+			},
+			[],
+		);
+
+		useAppStore.getState().selectProject("project-b");
+		expect(useAppStore.getState().workbenchFrameProjectId).toBe("project-b");
+		expect(useAppStore.getState().workbenchFrame).not.toBe(frame);
+		expect(useAppStore.getState().workbenchFramesByProject["project-a"]).toBe(frame);
 	});
 
 	test("a pristine surface initializes a Balanced workspace locally without transport", async () => {
