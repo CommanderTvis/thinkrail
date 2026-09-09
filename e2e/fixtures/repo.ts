@@ -69,7 +69,11 @@ export function seedFixtureRepo(): void {
 			"# Diagram demo",
 			"",
 			"```mermaid",
-			"flowchart TD; Start --> Finish",
+			[
+				"flowchart TD; Start --> Finish",
+				"Finish --> Step0",
+				...Array.from({ length: 12 }, (_, i) => `Step${i} --> Step${i + 1}`),
+			].join("; "),
 			"```",
 			"",
 			"```mermaid",

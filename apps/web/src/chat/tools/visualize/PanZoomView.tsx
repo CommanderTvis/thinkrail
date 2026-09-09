@@ -11,7 +11,16 @@ import { clampZoomScale, isZoomGesture, ZOOM_SCALE_STEP, zoomScaleForWheel } fro
  * A diagram you can get around in: ⌘/Ctrl+wheel and trackpad pinch zoom, drag pans, plain wheel scrolls.
  * The same gesture vocabulary the PDF preview uses, from the same shared module. See chat/SPEC.md.
  */
-export function PanZoomView({ svg, testid }: { svg: string; testid?: string }) {
+export function PanZoomView({
+	svg,
+	testid,
+	capped = false,
+}: {
+	svg: string;
+	testid?: string;
+	/** Size to the diagram, up to a cap, instead of filling the parent — inline in a document. */
+	capped?: boolean;
+}) {
 	const [scale, setScale] = useState(1);
 	const scrollRef = useRef<HTMLDivElement>(null);
 	const drag = useRef<{ x: number; y: number; left: number; top: number } | null>(null);
@@ -62,19 +71,27 @@ export function PanZoomView({ svg, testid }: { svg: string; testid?: string }) {
 		"rounded-[var(--radius-sm)] p-4 text-text-muted outline-none transition-colors hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary";
 
 	return (
-		<div className="relative min-h-0 flex-1">
+		<div className={capped ? "relative" : "relative min-h-0 flex-1"}>
 			<div
 				ref={scrollRef}
 				data-testid={testid ?? "mermaid-fullscreen-svg"}
-				className="h-full w-full cursor-grab select-none overflow-auto active:cursor-grabbing [&_svg]:!h-auto [&_svg]:!w-[var(--zoom)] [&_svg]:!max-w-none"
-				style={{ "--zoom": `${scale * 100}%` } as React.CSSProperties}
+				className={`w-full cursor-grab select-none overflow-auto active:cursor-grabbing ${
+					capped
+						? "max-h-[min(60vh,480px)] [&_svg]:!h-auto [&_svg]:!max-w-full"
+						: "h-full [&_svg]:!h-auto [&_svg]:!w-[calc(var(--zoom)*100%)] [&_svg]:!max-w-none"
+				}`}
+				style={{ "--zoom": `${scale}` } as React.CSSProperties}
 				onPointerDown={onPointerDown}
 				onPointerMove={onPointerMove}
 				onPointerUp={endDrag}
 				onPointerCancel={endDrag}
-				// biome-ignore lint/security/noDangerouslySetInnerHtml: mermaid renders agent-provided source with securityLevel "strict"
-				dangerouslySetInnerHTML={{ __html: svg }}
-			/>
+			>
+				<div
+					className={capped ? "w-fit [zoom:var(--zoom)]" : "contents"}
+					// biome-ignore lint/security/noDangerouslySetInnerHtml: mermaid renders agent-provided source with securityLevel "strict"
+					dangerouslySetInnerHTML={{ __html: svg }}
+				/>
+			</div>
 			<div className="absolute right-8 bottom-8 flex items-center gap-4 rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg p-4 tr-text-metadata shadow-[var(--shadow-lg)]">
 				<button
 					type="button"

@@ -106,9 +106,10 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   anchor activation cannot escape into the SPA fallback. That override keeps a stable component identity
   while its workspace inputs are unchanged: workbench focus can rerender a chat row between pointer-down and
   click, and replacing the control in that interval cancels activation. A fenced
-  ```mermaid block renders as a themed diagram via `tools/visualize`'s `MermaidView` (fullscreen
-  pan-zoom, error → source fallback) — uniform across every `Markdown` surface (chat, file/specs
-  preview); until mounted it renders as highlighted source, so static contexts (`RenderedDiff`'s
+  ```mermaid block renders as a themed diagram via `tools/visualize`'s `MermaidView` (**inline
+  pan-zoom under a height cap**, fullscreen pan-zoom, error → source fallback) — uniform across every
+  `Markdown` surface (chat, file/specs preview); until mounted it renders as highlighted source, so
+  static contexts (`RenderedDiff`'s
   `renderToStaticMarkup`) degrade to code exactly like shiki blocks do.
 - **Configurable transcript measure** — the host-synchronized `chatLineWidth` (40–240, default 120)
   is an approximate CSS `ch` text measure because chat retains its proportional reading font. `ChatView`,

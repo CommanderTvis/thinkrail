@@ -187,7 +187,13 @@ registration runs once when the chat module mounts. Unregistered tools fall back
   SVG via the **lazy-loaded** `mermaid`, source fallback on parse error) and `ComparisonCard` (option
   cards with pros/cons + `recommended` highlight); shared `MermaidView` re-renders on `[data-theme]`
   change, offers a full-screen pan/zoom Dialog, and takes an optional `fallback` node shown while the
-  SVG is pending (default: a "Rendering…" line). It is also consumed by the **parent `Markdown`
+  SVG is pending (default: a "Rendering…" line). **Inline it is the same `PanZoomView`, `capped`:** a
+  diagram drawn at its natural size is unbounded, and a tall one pushed the document it sits in out of
+  reach, so the inline view stops at `min(60vh, 480px)` and scrolls, carrying the zoom controls and the
+  pinch/⌘-wheel/drag vocabulary the fullscreen Dialog already had. `capped` is what separates the two
+  sizings: it sizes to the diagram up to that cap and zooms the content through CSS `zoom` (natural
+  size at 100%), while the fill mode keeps stretching the SVG to the pane's width. It is also consumed
+  by the **parent `Markdown`
   primitive** for fenced ```mermaid blocks — the `mermaid` *package* import stays lazy and confined to
   `visualize/mermaid.ts`. Registered **primary + `defaultExpanded`** — a
   visualization is output *for the user*, not plumbing: it escapes the activity fold and renders open on
