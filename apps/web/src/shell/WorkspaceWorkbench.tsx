@@ -1,9 +1,11 @@
 import {
+	RiFileTransferLine as FileSymlink,
 	RiGitBranchLine as GitBranch,
 	RiLoader4Line as Loader2,
 	RiChatNewLine as MessageSquarePlus,
 	RiTerminalBoxLine as SquareTerminal,
 } from "@remixicon/react";
+import { DropdownMenuItem } from "@thinkrail/ui/dropdown-menu";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
 import {
 	Fragment,
@@ -13,6 +15,7 @@ import {
 	useCallback,
 	useEffect,
 	useMemo,
+	useRef,
 	useState,
 } from "react";
 import { prepareChatTitle } from "../chat/chatTitle";
@@ -20,12 +23,13 @@ import { useAutoPlanSummary } from "../chat/useChatTodos";
 import { ErrorBoundary } from "../components/ErrorBoundary";
 import { QuietScrollArea } from "../components/QuietScrollArea";
 import { LoadingRegion } from "../components/Skeleton";
-import { type LayoutAttention, layoutResourceIdentity } from "../lib";
+import { type LayoutAttention, layoutResourceIdentity, readLayoutSelection } from "../lib";
 import { ChangesPanel } from "../panels/ChangesPanel";
+import { ConfirmDialog } from "../panels/ConfirmDialog";
 import { DiffPane } from "../panels/DiffPane";
 import { FilePane } from "../panels/FilePane";
 import { FileTree } from "../panels/FileTree";
-import { startChatInTab } from "../panels/openChat";
+import { isFileTabDirty } from "../panels/fileSave";
 import { openFileInTab } from "../panels/openTabs";
 import { ProjectTree } from "../panels/ProjectTree";
 import "../panels/resources/register";
@@ -35,15 +39,14 @@ import { SpecsPanel } from "../panels/SpecsPanel";
 import { TerminalWorkbenchBody, useTerminalClose } from "../panels/TerminalWorkbench";
 import { useWorkspaceReview } from "../panels/useWorkspaceReview";
 import { useWorkspaceSpecs } from "../panels/useWorkspaceSpecs";
-import { useLoadWorkspaceTurns } from "../panels/useWorkspaceTurns";
 import {
-	createChangesTab,
 	type EditorTab,
 	editorSessionId,
 	isConnectedGeneration,
 	isDefaultWorkspace,
 	isExternalWorkspace,
 	type LayoutIntent,
+	layoutOpenOptionsForNavigation,
 	selectCanRenameChat,
 	selectContextProject,
 	selectDiffTabTargetRef,
@@ -55,7 +58,8 @@ import {
 	toast,
 	useAppStore,
 } from "../store";
-import { errorText, getTransport } from "../transport";
+import { createSessionWithSkillBaseline, errorText, getTransport } from "../transport";
+import { ChatHost } from "./ChatHost";
 import {
 	currentChatDestination,
 	hydrateChatResource,
@@ -65,13 +69,17 @@ import {
 } from "./chatReconciliation";
 import { subscribeCloseRequest } from "./closeRequestChannel";
 import {
+	buildLayoutToolCatalog,
 	collectAllGroups,
 	findPlacedResource,
 	findTabLocation,
 	type LayoutCenterTab,
 	type LayoutTab,
 	type LayoutTabFocusRequest,
+	type LayoutToolCatalog,
 	type LayoutToolId,
+	type PreparedLayoutClose,
+	selectTab,
 	Workbench,
 	type WorkspaceLayoutDocument,
 } from "./layout";
@@ -85,6 +93,7 @@ import {
 } from "./layoutState";
 import { syncLegacySelectionFromAttention, useLegacySelectionAdapter } from "./legacySelection";
 import { useTerminalPlacementReconciliation } from "./terminalReconciliation";
+import { useReportedActiveFile } from "./useReportedActiveFile";
 import { WorkspaceChatHistory } from "./WorkspaceChatHistory";
 
 function PlanSummaryAutoDraft({
@@ -107,56 +116,28 @@ const PlanRailPane = lazy(() => import("../panels/PlanRailPane"));
 
 const NO_EDITOR_TABS: EditorTab[] = [];
 
+// Changes and Review are both windows onto git history; without a repository, or before the first
+// commit, neither has anything to answer with — see SPEC.md.
+const GIT_TOOLS: readonly LayoutToolId[] = ["changes", "review"];
+const NO_UNOFFERED_TOOLS: readonly LayoutToolId[] = [];
+
+function gitlessNotice(vcs: "none" | "unborn"): ReactNode {
+	return (
+		<div
+			data-testid="tool-needs-git"
+			data-vcs={vcs}
+			className="flex h-full items-center justify-center px-16 text-center tr-text-ui text-text-muted"
+		>
+			{vcs === "none"
+				? "This project folder is not a git repository, so there is nothing to compare."
+				: "This repository has no commits yet, so there is nothing to compare against."}
+		</div>
+	);
+}
+
 function MissingResource({ label }: { label: string }) {
 	return (
 		<LoadingRegion rows={12} label={`Restoring ${label}`} className="h-full overflow-hidden p-16" />
-	);
-}
-
-type EditorResourceTab = Extract<LayoutCenterTab, { kind: "file" | "diff" | "changes" }>;
-type EditorResource = Extract<EditorTab, { kind: "file" | "diff" | "changes" }>;
-
-function isEditorResource(tab: EditorTab): tab is EditorResource {
-	return tab.kind === "file" || tab.kind === "diff" || tab.kind === "changes";
-}
-
-function findEditorResource(
-	tabs: readonly EditorTab[],
-	id: string,
-	identity: string,
-): EditorResource | undefined {
-	const exact = tabs.find((candidate) => candidate.id === id);
-	if (exact && isEditorResource(exact) && layoutResourceIdentity(exact) === identity) return exact;
-	return tabs.find(
-		(candidate): candidate is EditorResource =>
-			isEditorResource(candidate) && layoutResourceIdentity(candidate) === identity,
-	);
-}
-
-function EditorResourceBody({ workspaceId, tab }: { workspaceId: string; tab: EditorResourceTab }) {
-	const identity = layoutResourceIdentity(tab);
-	const editor = useAppStore((state) =>
-		findEditorResource(state.tabsByWorkspace[workspaceId] ?? NO_EDITOR_TABS, tab.id, identity),
-	);
-	if (!editor) {
-		return (
-			<MissingResource
-				label={tab.kind === "file" ? "file" : tab.kind === "changes" ? "changes" : "diff"}
-			/>
-		);
-	}
-	return (
-		<ErrorBoundary label="editor" resetKeys={[workspaceId, tab.id]}>
-			<Suspense fallback={<MissingResource label="editor" />}>
-				{editor.kind === "file" ? (
-					<FilePane tab={editor} />
-				) : editor.kind === "diff" ? (
-					<DiffPane tab={editor} />
-				) : (
-					<ChangesReviewPane tab={editor} />
-				)}
-			</Suspense>
-		</ErrorBoundary>
 	);
 }
 
@@ -183,7 +164,7 @@ function ChatResourceBody({
 		return (
 			<ErrorBoundary label="chat" resetKeys={[workspaceId, tab.id]}>
 				<Suspense fallback={<MissingResource label="chat" />}>
-					<ChatView sessionId={tab.sessionId} workspaceId={workspaceId} onOpenFile={onOpenFile} />
+					<ChatHost sessionId={tab.sessionId} workspaceId={workspaceId} onOpenFile={onOpenFile} />
 				</Suspense>
 			</ErrorBoundary>
 		);
@@ -219,7 +200,7 @@ function ChatResourceBody({
 			<button
 				type="button"
 				onClick={retry}
-				className="rounded-sm border border-border-default px-8 py-4 tr-text-ui hover:bg-control-bg-hovered"
+				className="rounded-[var(--radius-sm)] border border-border-default px-8 py-4 tr-text-ui hover:bg-control-bg-hovered"
 			>
 				Retry
 			</button>
@@ -283,16 +264,52 @@ function useTerminalReservation(workspaceId: string): void {
 	}, [connectionGeneration, pendingIntent, status, workspaceId]);
 }
 
+/**
+ * A project whose spec graph is empty opens its rail on the next tool instead of on Specs — the default
+ * selection is seeded before the graph is read, so it is corrected once, when the answer arrives. The
+ * same "seeded before the answer is known, corrected once it arrives" shape applies to a plugin tool
+ * whose plugin is inactive or whose `SideToolRegistration.railDefault` refuses this workspace. See
+ * shell/SPEC.md.
+ */
+function useRailDefault(
+	workspaceId: string,
+	document: WorkspaceLayoutDocument | undefined,
+	attention: LayoutAttention | undefined,
+	changeAttention: (next: LayoutAttention) => void,
+): void {
+	const specless = useAppStore((state) => state.specsByWorkspace[workspaceId]?.length === 0);
+	const specsAnswered = useRef<string | null>(null);
+	useEffect(() => {
+		if (!specless || !document || !attention || specsAnswered.current === workspaceId) return;
+		specsAnswered.current = workspaceId;
+		let next = attention;
+		for (const group of collectAllGroups(document)) {
+			if (group.location.area === "center") continue;
+			const selectedId = readLayoutSelection(next, group.location.groupId);
+			const selected = group.tabs.find((tab) => tab.id === selectedId);
+			if (selected?.kind !== "tool" || selected.tool !== "specs") continue;
+			const other = group.tabs.find((tab) => tab.id !== selected.id);
+			if (other) next = selectTab(next, group.location, other.id, false);
+		}
+		if (next !== attention) changeAttention(next);
+	}, [specless, workspaceId, document, attention, changeAttention]);
+}
+
 export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
+	const catalog: LayoutToolCatalog = useMemo(() => buildLayoutToolCatalog(), []);
 	const status = useAppStore((state) => state.status);
 	const connectionGeneration = useAppStore((state) => state.connectionGeneration);
 	const canRenameChat = useAppStore(selectCanRenameChat);
 	const document = useAppStore((state) => state.layoutDocumentsByWorkspace[workspaceId]);
 	const attention = useAppStore((state) => state.layoutAttentionByWorkspace[workspaceId]);
 	const frame = useAppStore((state) => state.workbenchFrame);
-	const projectionEpoch = useAppStore((state) => state.layoutProjectionEpoch);
+	const projectionEpoch = useAppStore(
+		(state) => state.layoutProjectionEpochByWorkspace[workspaceId] ?? 0,
+	);
 	const layoutPreferences = useAppStore((state) => state.localLayoutPreferences);
 	const workspace = useAppStore((state) => selectWorkspaceById(state, workspaceId));
+	const vcsGap = workspace?.vcs;
+	const unofferedTools = vcsGap ? GIT_TOOLS : NO_UNOFFERED_TOOLS;
 	const contextProject = useAppStore(selectContextProject);
 	const editorTabs = useAppStore((state) => state.tabsByWorkspace[workspaceId] ?? NO_EDITOR_TABS);
 	const planSessionIds = useMemo(() => {
@@ -308,7 +325,6 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 	const terminalClose = useTerminalClose();
 	const specs = useWorkspaceSpecs(workspaceId);
 	const review = useWorkspaceReview(workspaceId);
-	useLoadWorkspaceTurns(workspaceId);
 	const reviewComments = useAppStore((state) => state.reviewsByWorkspace[workspaceId]?.comments);
 	const railPlanSessionId = useAppStore((state) => selectRailPlanSessionId(state, workspaceId));
 	const reviewDraftCount = useAppStore((state) => selectReviewDraftCount(state, workspaceId));
@@ -391,11 +407,8 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 	);
 
 	const commit = useCallback(
-		(next: WorkspaceLayoutDocument, nextAttention?: LayoutAttention) => {
-			void commitWorkspaceLayout(workspaceId, next, {
-				...(document ? { baseDocument: document } : {}),
-				...(nextAttention ? { attention: nextAttention } : {}),
-			}).catch(() => {});
+		(next: WorkspaceLayoutDocument) => {
+			void commitWorkspaceLayout(workspaceId, next, document).catch(() => {});
 		},
 		[document, workspaceId],
 	);
@@ -407,6 +420,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 	useWorkspaceChatCatalogReconciliation(workspaceId, commit);
 	const { terminals } = useTerminalPlacementReconciliation(workspaceId, commit);
 	useChatLocationReconciliation(workspaceId, changeAttention);
+	useRailDefault(workspaceId, document, attention, changeAttention);
 
 	useEffect(() => {
 		if (!document || status !== "connected") return;
@@ -417,23 +431,17 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 			cache.flatMap((item) => {
 				const resource = toLayoutTab(item);
 				return resource &&
-					(resource.kind === "file" || resource.kind === "diff" || resource.kind === "changes")
+					(resource.kind === "file" ||
+						resource.kind === "external-file" ||
+						resource.kind === "diff")
 					? [layoutResourceIdentity(resource)]
 					: [];
 			}),
 		);
 		for (const tab of collectAllGroups(document).flatMap((group) => group.tabs)) {
-			if (tab.kind !== "file" && tab.kind !== "diff" && tab.kind !== "changes") continue;
+			if (tab.kind !== "file" && tab.kind !== "external-file" && tab.kind !== "diff") continue;
 			const identity = layoutResourceIdentity(tab);
 			if (cachedResources.has(identity)) continue;
-			if (tab.kind === "changes") {
-				useAppStore
-					.getState()
-					.openTab(createChangesTab(workspaceId, tab.id, tab.name, tab.scope), "keep", false, {
-						activate: false,
-					});
-				continue;
-			}
 			const cacheArrived = () =>
 				(useAppStore.getState().tabsByWorkspace[workspaceId] ?? []).some((item) => {
 					const resource = toLayoutTab(item);
@@ -444,17 +452,17 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 				return latest ? findPlacedResource(latest, tab) : null;
 			};
 			const loadedTick = selectWorkspaceTick(useAppStore.getState(), workspaceId);
-			if (tab.kind === "file") {
+			if (tab.kind === "file" || tab.kind === "external-file") {
 				void getTransport()
 					.request("fs.readFile", { workspaceId, path: tab.path })
 					.then(({ content, meta }) => {
 						const latest = useAppStore.getState();
 						if (!current || !isConnectedGeneration(latest, connectionGeneration)) return;
 						const placed = currentPlacement();
-						if (placed?.kind !== "file" || cacheArrived()) return;
+						if (placed?.kind !== tab.kind || cacheArrived()) return;
 						useAppStore.getState().openTab(
 							{
-								kind: "file",
+								kind: tab.kind,
 								id: placed.id,
 								workspaceId,
 								path: placed.path,
@@ -509,6 +517,19 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 		};
 	}, [connectionGeneration, document, status, workspaceId]);
 
+	const editorById = useMemo(() => new Map(editorTabs.map((tab) => [tab.id, tab])), [editorTabs]);
+	const editorByResource = useMemo(() => {
+		const resources = new Map<
+			string,
+			Extract<EditorTab, { kind: "file" }> | Extract<EditorTab, { kind: "diff" }>
+		>();
+		for (const tab of editorTabs) {
+			if (tab.kind !== "file" && tab.kind !== "diff") continue;
+			const identity = layoutResourceIdentity(tab);
+			if (!resources.has(identity)) resources.set(identity, tab);
+		}
+		return resources;
+	}, [editorTabs]);
 	const terminalByKey = useMemo(
 		() => new Map(terminals.map((tab) => [tab.tabKey, tab])),
 		[terminals],
@@ -557,9 +578,36 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 					</ErrorBoundary>
 				);
 			}
-			return <EditorResourceBody workspaceId={workspaceId} tab={tab} />;
+			const identity = layoutResourceIdentity(tab);
+			const exact = editorById.get(tab.id);
+			const editor =
+				exact &&
+				(exact.kind === "file" || exact.kind === "external-file" || exact.kind === "diff") &&
+				layoutResourceIdentity(exact) === identity
+					? exact
+					: editorByResource.get(identity);
+			if (!editor) return <MissingResource label={tab.kind === "diff" ? "diff" : "file"} />;
+			return (
+				<ErrorBoundary label="editor" resetKeys={[workspaceId, tab.id]}>
+					<Suspense fallback={<MissingResource label="editor" />}>
+						{editor.kind === "file" || editor.kind === "external-file" ? (
+							<FilePane tab={editor} />
+						) : editor.kind === "diff" ? (
+							<DiffPane tab={editor} />
+						) : null}
+					</Suspense>
+				</ErrorBoundary>
+			);
 		},
-		[deletedSessions, document, openToolFile, terminalByKey, workspaceId],
+		[
+			deletedSessions,
+			document,
+			editorById,
+			editorByResource,
+			openToolFile,
+			terminalByKey,
+			workspaceId,
+		],
 	);
 	const renderTabBody = useCallback(
 		(tab: LayoutCenterTab | Extract<LayoutTab, { kind: "terminal" }>) => (
@@ -589,8 +637,8 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 					<FileTree key={workspaceId} workspaceId={workspaceId} />
 				</QuietScrollArea>
 			),
-			changes: <ChangesPanel key={workspaceId} workspaceId={workspaceId} />,
-			review: <ReviewPanel key={workspaceId} workspaceId={workspaceId} failed={review.failed} />,
+			changes: vcsGap ? gitlessNotice(vcsGap) : <ChangesPanel key={workspaceId} workspaceId={workspaceId} />,
+			review: vcsGap ? gitlessNotice(vcsGap) : <ReviewPanel key={workspaceId} workspaceId={workspaceId} failed={review.failed} />,
 			plan: railPlanSessionId ? (
 				<ErrorBoundary label="plan rail" resetKeys={[workspaceId, railPlanSessionId]}>
 					<Suspense fallback={<MissingResource label="plan" />}>
@@ -614,7 +662,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 			);
 		}
 		return bodies;
-	}, [railPlanSessionId, review.failed, specs.failed, specs.reload, workspaceId]);
+	}, [railPlanSessionId, review.failed, specs.failed, specs.reload, vcsGap, workspaceId]);
 	const renderToolBody = useCallback((tool: LayoutToolId) => toolBodies[tool], [toolBodies]);
 
 	const isDefault = workspace != null && isDefaultWorkspace(workspace);
@@ -625,120 +673,91 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 			const currentAttention = useAppStore.getState().layoutAttentionByWorkspace[workspaceId];
 			if (!currentAttention) return;
 			changeAttention({ ...currentAttention, lastFocusedCenterGroupId: groupId });
-			void startChatInTab(workspaceId, groupId);
+			const navigation = useAppStore.getState().beginCenterNavigation(workspaceId, groupId);
+			useAppStore.getState().beginChatStart(workspaceId);
+			void createSessionWithSkillBaseline({ workspaceId })
+				.then(({ result: { sessionId, model, thinkingLevel }, syncedTick }) => {
+					const store = useAppStore.getState();
+					store.openChatSession(
+						workspaceId,
+						sessionId,
+						model,
+						thinkingLevel,
+						syncedTick,
+						layoutOpenOptionsForNavigation(store, workspaceId, navigation),
+					);
+				})
+				.catch((cause: unknown) => {
+					const state = useAppStore.getState();
+					if (
+						layoutOpenOptionsForNavigation(state, workspaceId, navigation).activate !== false &&
+						!state.removedWorkspaceIds[workspaceId]
+					) {
+						// The host says why — a missing extension, an unauthenticated provider — and a fixed
+						// string threw that away, leaving nothing to act on.
+						toast.error(errorText(cause), "Couldn't start the chat");
+					}
+				})
+				.finally(() => useAppStore.getState().endChatStart(workspaceId));
 		},
 		[changeAttention, workspaceId],
 	);
 
-	const renderTabAdornment = useCallback(
-		(tab: LayoutTab): ReactNode => {
-			if (tab.kind === "tool" && tab.tool === "review" && reviewDraftCount > 0) {
-				return (
-					<span
-						data-testid="review-pending-badge"
-						className="inline-flex min-w-16 items-center justify-center rounded-full bg-primary px-2 tr-text-label-pill text-text-on-primary"
-					>
-						{reviewDraftCount}
-					</span>
-				);
-			}
-			if (tab.kind !== "file" && tab.kind !== "diff") return null;
-			const flag = reviewFlagByPath.get(tab.path);
-			return flag ? (
-				<span
-					data-testid="review-tab-flag"
-					data-flag={flag}
-					className={
-						flag === "draft"
-							? "shrink-0 tr-text-eyebrow text-primary"
-							: "shrink-0 tr-text-eyebrow text-text-subtle"
+	const dirtyTabPaths = useAppStore((state) => {
+		const paths = (state.tabsByWorkspace[workspaceId] ?? [])
+			.filter(isFileTabDirty)
+			.map((tab) => (tab as { path: string }).path);
+		return paths.length > 0 ? paths.join("\u0000") : "";
+	});
+	const dirtyPaths = useMemo(
+		() => new Set(dirtyTabPaths ? dirtyTabPaths.split("\u0000") : []),
+		[dirtyTabPaths],
+	);
+	const [discardTarget, setDiscardTarget] = useState<{ name: string; close: () => void } | null>(
+		null,
+	);
+
+	const closeResourceTab = useCallback(
+		(tab: LayoutTab, prepare: (document?: WorkspaceLayoutDocument) => PreparedLayoutClose) => {
+			const prepared = prepare();
+			const closedIdentity = layoutResourceIdentity(tab);
+			void commitWorkspaceLayout(workspaceId, prepared.document, document)
+				.then(() => {
+					const state = useAppStore.getState();
+					const current = state.layoutDocumentsByWorkspace[workspaceId];
+					if (
+						current &&
+						collectAllGroups(current)
+							.flatMap((group) => group.tabs)
+							.some((candidate) => layoutResourceIdentity(candidate) === closedIdentity)
+					) {
+						return;
 					}
-				>
-					Review
-				</span>
-			) : null;
+					const currentAttention = state.layoutAttentionByWorkspace[workspaceId];
+					prepared.onAccepted(
+						current && currentAttention
+							? { document: current, attention: currentAttention }
+							: undefined,
+					);
+					if (tab.kind === "chat") {
+						state.closeChatToHistory(tab.sessionId, false, workspaceId, false);
+					} else if (
+						tab.kind === "file" ||
+						tab.kind === "external-file" ||
+						tab.kind === "diff" ||
+						tab.kind === "document"
+					) {
+						for (const cache of state.tabsByWorkspace[workspaceId] ?? []) {
+							const resource = toLayoutTab(cache);
+							if (resource && layoutResourceIdentity(resource) === closedIdentity) {
+								state.closeTab(cache.id, false, false, workspaceId);
+							}
+						}
+					}
+				})
+				.catch(() => {});
 		},
-		[reviewDraftCount, reviewFlagByPath],
-	);
-
-	const renderEmptyCenter = useCallback(
-		(groupId: string): ReactNode => (
-			<div
-				data-testid="workspace-ready"
-				className="flex h-full flex-col items-center justify-center gap-4 px-16 text-center"
-			>
-				<span className="tr-text-eyebrow text-text-muted">
-					{isDefault ? "Default workspace" : isExternal ? "Existing worktree" : "Workspace ready"}
-				</span>
-				{workspace ? (
-					<>
-						<h2 className="max-w-full truncate tr-title-entity text-text-default">
-							{isDefault ? (contextProject?.name ?? workspace.name) : workspace.name}
-						</h2>
-						<p className="flex max-w-full items-center gap-4 tr-text-metadata text-text-muted">
-							<GitBranch className="size-14 shrink-0" />
-							{isDefault || isExternal ? (
-								<span className="truncate">on {workspace.branch}</span>
-							) : (
-								<>
-									<span className="truncate">{workspace.branch}</span>
-									<span className="shrink-0 text-text-muted">· from {workspace.baseBranch}</span>
-								</>
-							)}
-						</p>
-					</>
-				) : null}
-				<p className="mt-4 tr-text-ui text-text-muted">
-					{isDefault
-						? "Chats, changes, and terminals run directly in your project folder."
-						: "Files, chats, changes, and terminals are scoped to this workspace."}
-				</p>
-				<button
-					type="button"
-					data-testid="start-chat"
-					data-starting={chatStarting || undefined}
-					disabled={chatStarting}
-					onClick={() => startChat(groupId)}
-					className="mt-4 flex items-center gap-4 rounded-sm border border-border-default bg-container-elevated-bg px-12 py-4 tr-text-ui text-text-default hover:bg-control-bg-hovered disabled:text-text-muted disabled:hover:bg-container-elevated-bg"
-				>
-					{chatStarting ? (
-						<>
-							<Loader2 className="size-14 animate-spin motion-reduce:animate-none" /> Starting chat…
-						</>
-					) : (
-						<>
-							<MessageSquarePlus className="size-14" /> New chat
-						</>
-					)}
-				</button>
-			</div>
-		),
-		[chatStarting, contextProject, isDefault, isExternal, startChat, workspace],
-	);
-
-	const renderCenterActions = useCallback(
-		(groupId: string): ReactNode => (
-			<>
-				<WorkspaceChatHistory
-					key={workspaceId}
-					workspaceId={workspaceId}
-					targetGroupId={groupId}
-					{...(canRenameChat ? { onRenameChat: requestRenameChat } : {})}
-				/>
-				<IconTooltip label="New terminal in this group">
-					<button
-						type="button"
-						data-testid="new-terminal"
-						aria-label="New terminal in this group"
-						onClick={() => useAppStore.getState().addTerminal(workspaceId, undefined, groupId)}
-						className="flex w-panel-header-row shrink-0 items-center justify-center border-border-default border-l text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
-					>
-						<SquareTerminal className="size-14" />
-					</button>
-				</IconTooltip>
-			</>
-		),
-		[canRenameChat, requestRenameChat, workspaceId],
+		[workspaceId, document],
 	);
 
 	if (!rendered) {
@@ -759,8 +778,9 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 				/>
 			))}
 			<Workbench
-				workspaceId={workspaceId}
 				document={rendered.document}
+				catalog={catalog}
+				unofferedTools={unofferedTools}
 				attention={rendered.attention}
 				maxSideGroups={layoutPreferences.maxSideGroups}
 				maxBottomGroups={layoutPreferences.maxBottomGroups}
@@ -768,16 +788,165 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 				{...(focusRequest ? { focusRequest } : {})}
 				subscribeCloseRequest={subscribeCloseRequest}
 				renderTabBody={renderTabBody}
-				renderTabAdornment={renderTabAdornment}
+				renderTabIcon={(tab, _active) => {
+					if (tab.kind === "external-file") {
+						return (
+							<FileSymlink
+								aria-label={`Outside the worktree: ${tab.path}`}
+								className="size-14 shrink-0 text-agent-claude"
+							/>
+						);
+					}
+					return null;
+				}}
+				renderTabAdornment={(tab) => {
+					if ((tab.kind === "file" || tab.kind === "external-file") && dirtyPaths.has(tab.path)) {
+						return (
+							<span
+								data-testid="file-unsaved-dot"
+								role="img"
+								aria-label="Unsaved changes"
+								className="size-6 shrink-0 rounded-full bg-feedback-warning"
+							/>
+						);
+					}
+					if (tab.kind === "tool" && tab.tool === "review" && reviewDraftCount > 0) {
+						return (
+							<span
+								data-testid="review-pending-badge"
+								className="inline-flex min-w-16 items-center justify-center rounded-full bg-primary px-2 tr-text-label-pill text-text-on-primary"
+							>
+								{reviewDraftCount}
+							</span>
+						);
+					}
+					if (tab.kind === "file" || tab.kind === "diff") {
+						const flag = reviewFlagByPath.get(tab.path);
+						if (flag) {
+							return (
+								<span
+									data-testid="review-tab-flag"
+									data-flag={flag}
+									className={
+										flag === "draft"
+											? "shrink-0 tr-text-eyebrow text-primary"
+											: "shrink-0 tr-text-eyebrow text-text-subtle"
+									}
+								>
+									Review
+								</span>
+							);
+						}
+					}
+					return null;
+				}}
 				renderToolBody={renderToolBody}
-				renderEmptyCenter={renderEmptyCenter}
-				renderCenterActions={renderCenterActions}
+				renderEmptyCenter={(groupId) => (
+					<div
+						data-testid="workspace-ready"
+						className="flex h-full flex-col items-center justify-center gap-4 px-16 text-center"
+					>
+						<span className="tr-text-eyebrow text-text-muted">
+							{isDefault
+								? "Default workspace"
+								: isExternal
+									? "Existing worktree"
+									: "Workspace ready"}
+						</span>
+						{workspace ? (
+							<>
+								<h2 className="max-w-full truncate tr-title-entity text-text-default">
+									{isDefault ? (contextProject?.name ?? workspace.name) : workspace.name}
+								</h2>
+								<p className="flex max-w-full items-center gap-4 tr-text-metadata text-text-muted">
+									<GitBranch className="size-14 shrink-0" />
+									{isDefault || isExternal ? (
+										<span className="truncate">on {workspace.branch}</span>
+									) : (
+										<>
+											<span className="truncate">{workspace.branch}</span>
+											<span className="shrink-0 text-text-muted">
+												· from {workspace.baseBranch}
+											</span>
+										</>
+									)}
+								</p>
+							</>
+						) : null}
+						<p className="mt-4 tr-text-ui text-text-muted">
+							{isDefault
+								? "Chats, changes, and terminals run directly in your project folder."
+								: "Files, chats, changes, and terminals are scoped to this workspace."}
+						</p>
+						<button
+							type="button"
+							data-testid="start-chat"
+							data-starting={chatStarting || undefined}
+							disabled={chatStarting}
+							onClick={() => startChat(groupId)}
+							className="mt-4 flex items-center gap-4 rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg px-12 py-4 tr-text-ui text-text-default hover:bg-control-bg-hovered disabled:text-text-muted disabled:hover:bg-container-elevated-bg"
+						>
+							{chatStarting ? (
+								<>
+									<Loader2 className="size-14 animate-spin motion-reduce:animate-none" /> Starting
+									chat…
+								</>
+							) : (
+								<>
+									<MessageSquarePlus className="size-14" /> New chat
+								</>
+							)}
+						</button>
+					</div>
+				)}
+				renderCenterActions={(groupId) => (
+					<>
+						<WorkspaceChatHistory
+							key={workspaceId}
+							workspaceId={workspaceId}
+							targetGroupId={groupId}
+							{...(canRenameChat ? { onRenameChat: requestRenameChat } : {})}
+						/>
+						<IconTooltip label="New terminal in this group">
+							<button
+								type="button"
+								data-testid="new-terminal"
+								aria-label="New terminal in this group"
+								onClick={() => useAppStore.getState().addTerminal(workspaceId, undefined, groupId)}
+								className="flex w-32 shrink-0 items-center justify-center border-border-default border-l text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
+							>
+								<SquareTerminal className="size-14" />
+							</button>
+						</IconTooltip>
+					</>
+				)}
+				renderSideMenuActions={(side, groupId) =>
+					side === "right" ? (
+						<DropdownMenuItem
+							data-testid="side-new-terminal"
+							onSelect={() =>
+								useAppStore.getState().addTerminal(workspaceId, undefined, groupId, side)
+							}
+						>
+							New terminal
+						</DropdownMenuItem>
+					) : null
+				}
 				onCommit={commit}
 				onAttentionChange={changeAttention}
 				onUserNavigation={() => useAppStore.getState().noteNavigation(workspaceId)}
+				onDirectTabActivation={(tab) => {
+					if (tab.kind === "chat") {
+						useAppStore.getState().noteDirectChatActivation(tab.sessionId);
+					}
+				}}
 				readNavigationTick={() => selectWorkspaceNavTick(useAppStore.getState(), workspaceId)}
 				{...(canRenameChat ? { onRenameChat: requestRenameChat } : {})}
 				onRequestClose={(tab, prepare) => {
+					if ((tab.kind === "file" || tab.kind === "external-file") && dirtyPaths.has(tab.path)) {
+						setDiscardTarget({ name: tab.name, close: () => closeResourceTab(tab, prepare) });
+						return;
+					}
 					if (tab.kind === "terminal") {
 						const close = () => {
 							const state = useAppStore.getState();
@@ -785,11 +954,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 							const latest = state.layoutDocumentsByWorkspace[workspaceId];
 							const prepared = prepare(latest);
 							if (!latest || prepared.document !== latest) {
-								void commitWorkspaceLayout(
-									workspaceId,
-									prepared.document,
-									latest ? { baseDocument: latest } : {},
-								).catch(() => {});
+								void commitWorkspaceLayout(workspaceId, prepared.document, latest).catch(() => {});
 							}
 							const finalState = useAppStore.getState();
 							const finalDocument = finalState.layoutDocumentsByWorkspace[workspaceId];
@@ -805,65 +970,30 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 						else close();
 						return;
 					}
-					const prepared = prepare();
-					const closedIdentity = layoutResourceIdentity(tab);
-					void commitWorkspaceLayout(
-						workspaceId,
-						prepared.document,
-						document ? { baseDocument: document } : {},
-					)
-						.then(() => {
-							const state = useAppStore.getState();
-							const current = state.layoutDocumentsByWorkspace[workspaceId];
-							if (
-								current &&
-								collectAllGroups(current)
-									.flatMap((group) => group.tabs)
-									.some((candidate) => layoutResourceIdentity(candidate) === closedIdentity)
-							) {
-								return;
-							}
-							const currentAttention = state.layoutAttentionByWorkspace[workspaceId];
-							prepared.onAccepted(
-								current && currentAttention
-									? { document: current, attention: currentAttention }
-									: undefined,
-							);
-							if (tab.kind === "chat") {
-								state.closeChatToHistory(tab.sessionId, false, workspaceId, false);
-							} else if (
-								tab.kind === "file" ||
-								tab.kind === "diff" ||
-								tab.kind === "changes" ||
-								tab.kind === "document"
-							) {
-								for (const cache of state.tabsByWorkspace[workspaceId] ?? []) {
-									const resource = toLayoutTab(cache);
-									if (resource && layoutResourceIdentity(resource) === closedIdentity) {
-										state.closeTab(cache.id, false, false, workspaceId);
-									}
-								}
-							}
-						})
-						.catch(() => {});
+					closeResourceTab(tab, prepare);
 				}}
 				onNewChat={startChat}
-				onNewTerminal={(groupId, area, options) =>
-					useAppStore
-						.getState()
-						.addTerminal(
-							workspaceId,
-							undefined,
-							groupId,
-							area,
-							true,
-							undefined,
-							options?.newPaneBelow === true,
-						)
+				onNewTerminal={(groupId, area) =>
+					useAppStore.getState().addTerminal(workspaceId, undefined, groupId, area)
 				}
 				onGestureCanceled={() => toast.info("The layout changed. Your drag was canceled.")}
 			/>
 			{terminalClose.confirmation}
+			<ConfirmDialog
+				open={discardTarget !== null}
+				onOpenChange={(open) => {
+					if (!open) setDiscardTarget(null);
+				}}
+				title="Unsaved changes"
+				description={`“${discardTarget?.name ?? "This file"}” has edits that were never written to disk. Closing the tab throws them away.`}
+				confirmLabel="Discard and close"
+				confirmTestId="file-discard-confirm"
+				destructive
+				onConfirm={() => {
+					discardTarget?.close();
+					setDiscardTarget(null);
+				}}
+			/>
 		</div>
 	);
 }

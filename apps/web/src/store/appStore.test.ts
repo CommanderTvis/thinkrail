@@ -17,6 +17,7 @@ import {
 } from "@thinkrail/contracts";
 import type { ChatTurn, FailureRecovery } from "../chat/types";
 import { userText } from "../lib";
+import { onEditorEvent } from "../panels/editorEvents";
 import {
 	BUILTIN_LAYOUT_PRESETS,
 	emptyWorkspaceView,
@@ -36,12 +37,12 @@ import {
 	useAppStore,
 } from "./appStore";
 import {
-	selectChatAttended,
+	selectAttachedEditorSelection,
 	selectCompactionTurnIds,
 	selectCurrentRouteChatTarget,
 	selectDiffScope,
 	selectLastOpenChatSession,
-	selectReadyCompletionAck,
+	selectReadyCompletionActivation,
 	selectSkillsStale,
 	selectWorkspaceNavTick,
 	selectWorkspaceSessionIds,
@@ -144,7 +145,11 @@ beforeEach(() => {
 		sessions: {},
 		sessionStateByWorkspace: {},
 		sessionStateClock: 0,
+		sessionStateTickBySession: {},
 		sessionStateSnapshotInstalled: false,
+		directChatActivationTickBySession: {},
+		directActivatedCompletionBySession: {},
+		pendingDirectChatActivationBySession: {},
 		renderedCompletionBySession: {},
 		obscuredChatSessions: {},
 		extUiOrphans: [],
@@ -153,7 +158,7 @@ beforeEach(() => {
 		layoutStateReady: false,
 		layoutDocumentsByWorkspace: {},
 		layoutAttentionByWorkspace: {},
-		layoutProjectionEpoch: 0,
+		layoutProjectionEpochByWorkspace: {},
 		layoutIntents: [],
 		tabsByWorkspace: {},
 		terminalsByWorkspace: {},
@@ -174,6 +179,7 @@ beforeEach(() => {
 		selectedProjectId: null,
 		activeWorkspaceId: null,
 		workspaceSelectionHistory: [],
+		pendingWorkspaceChatActivation: null,
 		activeLogin: null,
 		settingsOpen: false,
 		settingsSection: "providers",
@@ -202,11 +208,11 @@ test("layout projection epoch advances only when projection invalidation is requ
 	};
 	const store = useAppStore.getState();
 	store.applyLocalLayoutState(payload);
-	expect(useAppStore.getState().layoutProjectionEpoch).toBe(0);
-	useAppStore.getState().applyLocalLayoutState(payload, true);
-	expect(useAppStore.getState().layoutProjectionEpoch).toBe(1);
+	expect(useAppStore.getState().layoutProjectionEpochByWorkspace.workspace).toBeUndefined();
+	useAppStore.getState().applyLocalLayoutState(payload, ["workspace"], true);
+	expect(useAppStore.getState().layoutProjectionEpochByWorkspace.workspace).toBe(1);
 	useAppStore.getState().applyLocalLayoutState(payload);
-	expect(useAppStore.getState().layoutProjectionEpoch).toBe(1);
+	expect(useAppStore.getState().layoutProjectionEpochByWorkspace.workspace).toBe(1);
 });
 
 function rt(sessionId: string): SessionRuntime {
@@ -254,6 +260,49 @@ test("selectLastOpenChatSession: active chat tab first, then the most recent cha
 	expect(selectLastOpenChatSession(useAppStore.getState(), "ws1")).toBe("s2");
 	useAppStore.getState().openTab(fileTab("ws1", "a.ts"), "keep");
 	expect(selectLastOpenChatSession(useAppStore.getState(), "ws1")).toBe("s2");
+});
+
+test("an editor selection is offered to the chat until it is taken off, and a new one offers again", () => {
+	const store = useAppStore.getState();
+	const selection = {
+		path: "src/a.ts",
+		text: "const a = 1;",
+		startLine: 1,
+		endLine: 1,
+		language: "typescript",
+	};
+	expect(selectAttachedEditorSelection(useAppStore.getState(), "ws1")).toBeNull();
+
+	store.setEditorSelection("ws1", selection);
+	expect(selectAttachedEditorSelection(useAppStore.getState(), "ws1")).toEqual(selection);
+
+	store.detachEditorSelection("ws1");
+	expect(selectAttachedEditorSelection(useAppStore.getState(), "ws1")).toBeNull();
+
+	store.setEditorSelection("ws1", { ...selection, endLine: 2 });
+	expect(selectAttachedEditorSelection(useAppStore.getState(), "ws1")?.endLine).toBe(2);
+
+	// An empty selection is the editor saying there is nothing to carry.
+	store.setEditorSelection("ws1", null);
+	expect(selectAttachedEditorSelection(useAppStore.getState(), "ws1")).toBeNull();
+});
+
+test("addToChatDraft: the added text leads, what was typed follows, and the composer is called for", () => {
+	const store = useAppStore.getState();
+	store.openChatSession("ws1", "s1", null, "medium");
+	store.setChatDraft("s1", "explain this");
+
+	store.addToChatDraft("s1", "src/a.ts:1-2\n```typescript\nconst a = 1;\n```");
+	expect(useAppStore.getState().sessions.s1?.draft).toBe(
+		"src/a.ts:1-2\n```typescript\nconst a = 1;\n```\n\nexplain this",
+	);
+	expect(useAppStore.getState().composerFocusRequest?.sessionId).toBe("s1");
+
+	useAppStore.getState().clearComposerFocus();
+	store.addToChatDraft("s1", "   ");
+	expect(useAppStore.getState().composerFocusRequest).toBeNull();
+	store.addToChatDraft("nobody", "text");
+	expect(useAppStore.getState().composerFocusRequest).toBeNull();
 });
 
 test("pi events route to the right session runtime; chats stay independent", () => {
@@ -393,23 +442,6 @@ test("a host-fired USER message folds into the transcript; the composer's optimi
 	expect(rt("a").turns.filter((t) => t.kind === "user")).toHaveLength(2);
 });
 
-test("a matching user echo adopts the host clock while retaining optimistic identity and attachment labels", () => {
-	const store = useAppStore.getState();
-	store.openChatSession("ws1", "clock", null, "medium");
-	store.appendUserMessage("clock", "fix the tests", [
-		{ name: "screen.png", content: { type: "image", data: "test", mimeType: "image/png" } },
-	]);
-	const optimistic = rt("clock").turns[0];
-	const message = {
-		role: "user" as const,
-		content: [{ type: "text" as const, text: "fix the tests" }],
-		timestamp: 1_000,
-	};
-	store.handlePiEvent({ type: "message_start", message }, "clock");
-	expect(rt("clock").turns).toEqual([{ ...optimistic, message }]);
-	expect(rt("clock").turns[0]).toMatchObject({ attachmentNames: ["screen.png"] });
-});
-
 test("queue_update folds pi's queue into the runtime; the canonical echo lands the turn at its true position", () => {
 	const queueUpdate = (steering: string[], followUp: string[], hasImages = false) =>
 		({
@@ -442,7 +474,7 @@ test("queue_update folds pi's queue into the runtime; the canonical echo lands t
 	expect(rt("a").queue).toEqual({ steering: [], followUp: [] });
 });
 
-test("normalized session snapshots and pushes gate acknowledgement on the exact rendered result", () => {
+test("normalized session snapshots, pushes, and direct activation keep one exact receipt projection", () => {
 	const record = (completionId: string): SessionStateRecord => ({
 		sessionId: "state-session",
 		workspaceId: "state-workspace",
@@ -454,11 +486,8 @@ test("normalized session snapshots and pushes gate acknowledgement on the exact 
 			completion: { completionId, outcome: "succeeded" },
 			completionUnread: true,
 			queuedCount: 0,
-			backgroundWork: false,
 		},
 	});
-	const ready = () =>
-		selectReadyCompletionAck(useAppStore.getState(), "state-workspace", "state-session");
 	const store = useAppStore.getState();
 	store.setStatus("connected");
 	store.openChatSession("state-workspace", "state-session", null, "medium");
@@ -466,26 +495,120 @@ test("normalized session snapshots and pushes gate acknowledgement on the exact 
 	expect(useAppStore.getState().sessions["state-session"]?.hostState).toEqual(
 		record("completion:one").state,
 	);
-	expect(ready()).toBeNull();
 	store.noteRenderedCompletion("state-session", "completion:one");
-	expect(ready()).toBe("completion:one");
+	expect(
+		selectReadyCompletionActivation(useAppStore.getState(), "state-workspace", "state-session"),
+	).toBeNull();
+	store.noteDirectChatActivation("state-session");
+	expect(
+		selectReadyCompletionActivation(useAppStore.getState(), "state-workspace", "state-session"),
+	).toBe("completion:one");
 
 	store.applySessionState(record("completion:two"));
-	expect(ready()).toBeNull();
-	store.noteRenderedCompletion("state-session", "completion:one");
-	expect(ready()).toBeNull();
+	store.setChatObscured("state-session", true);
+	store.noteDirectChatActivation("state-session");
+	expect(useAppStore.getState().directActivatedCompletionBySession["state-session"]).toBe(
+		"completion:one",
+	);
+	store.setChatObscured("state-session", false);
 	store.noteRenderedCompletion("state-session", "completion:two");
-	expect(ready()).toBe("completion:two");
+	expect(
+		selectReadyCompletionActivation(useAppStore.getState(), "state-workspace", "state-session"),
+	).toBeNull();
 
-	store.setStatus("disconnected");
-	store.setStatus("connected");
-	expect(ready()).toBeNull();
-
+	store.applySessionState(record("completion:three"));
+	store.noteDirectChatActivation("state-session");
+	expect(
+		selectReadyCompletionActivation(useAppStore.getState(), "state-workspace", "state-session"),
+	).toBeNull();
+	store.noteRenderedCompletion("state-session", "completion:three");
+	expect(
+		selectReadyCompletionActivation(useAppStore.getState(), "state-workspace", "state-session"),
+	).toBe("completion:three");
+	store.applySessionState({
+		...record("completion:three"),
+		state: { ...record("completion:three").state, queuedCount: 1 },
+	});
+	expect(useAppStore.getState().sessionStateTickBySession["state-session"]).toBeGreaterThan(
+		useAppStore.getState().directChatActivationTickBySession["state-session"] ?? 0,
+	);
+	expect(
+		selectReadyCompletionActivation(useAppStore.getState(), "state-workspace", "state-session"),
+	).toBe("completion:three");
 	store.deleteChat("state-workspace", "state-session");
 	expect(
 		useAppStore.getState().sessionStateByWorkspace["state-workspace"]?.["state-session"],
 	).toBeUndefined();
-	expect(ready()).toBeNull();
+	expect(useAppStore.getState().sessionStateTickBySession["state-session"]).toBeUndefined();
+});
+
+test("a cold direct open binds the first snapshot completion without a second click", () => {
+	const record = (sessionId: string, completionId: string): SessionStateRecord => ({
+		sessionId,
+		workspaceId: "cold-workspace",
+		projectId: "cold-project",
+		state: {
+			execution: "idle",
+			runId: `run:${sessionId}`,
+			needsInput: null,
+			completion: { completionId, outcome: "succeeded" },
+			completionUnread: true,
+			queuedCount: 0,
+		},
+	});
+	const store = useAppStore.getState();
+	store.setStatus("connected");
+	store.openChatSession("cold-workspace", "cold-session", null, "medium");
+	store.noteDirectChatActivation("cold-session");
+	expect(useAppStore.getState().pendingDirectChatActivationBySession).toEqual({
+		"cold-session": true,
+	});
+
+	store.installSessionStateSnapshot([record("cold-session", "completion:cold")]);
+	expect(useAppStore.getState().pendingDirectChatActivationBySession).toEqual({});
+	expect(useAppStore.getState().directActivatedCompletionBySession["cold-session"]).toBe(
+		"completion:cold",
+	);
+	store.noteRenderedCompletion("cold-session", "completion:cold");
+	expect(
+		selectReadyCompletionActivation(useAppStore.getState(), "cold-workspace", "cold-session"),
+	).toBe("completion:cold");
+
+	store.setStatus("disconnected");
+	store.setStatus("connected");
+	store.noteDirectChatActivation("cold-session");
+	expect(useAppStore.getState().pendingDirectChatActivationBySession).toEqual({
+		"cold-session": true,
+	});
+	store.installSessionStateSnapshot([record("cold-session", "completion:reconnected")]);
+	expect(useAppStore.getState().directActivatedCompletionBySession["cold-session"]).toBe(
+		"completion:reconnected",
+	);
+	const reconnected = useAppStore.getState();
+	const runtime = reconnected.sessions["cold-session"];
+	if (!runtime) throw new Error("cold session runtime is missing");
+	useAppStore.setState({
+		sessions: {
+			...reconnected.sessions,
+			"cold-session": {
+				...runtime,
+				syncedConnectionGeneration: reconnected.connectionGeneration,
+			},
+		},
+	});
+	store.noteRenderedCompletion("cold-session", "completion:reconnected");
+	expect(
+		selectReadyCompletionActivation(useAppStore.getState(), "cold-workspace", "cold-session"),
+	).toBe("completion:reconnected");
+
+	store.openChatSession("cold-workspace", "future-session", null, "medium");
+	store.noteDirectChatActivation("future-session");
+	expect(useAppStore.getState().pendingDirectChatActivationBySession).toEqual({});
+	store.applySessionState(record("future-session", "completion:future"));
+	store.noteRenderedCompletion("future-session", "completion:future");
+	expect(
+		selectReadyCompletionActivation(useAppStore.getState(), "cold-workspace", "future-session"),
+	).toBeNull();
 });
 
 test("hydrateSession seeds the queue from the summary snapshot", () => {
@@ -2401,6 +2524,7 @@ test("applyProjectUpdated closes the current project to the next Home and preser
 		workspaces: { p1: [workspace] },
 		selectedProjectId: "p1",
 		activeWorkspaceId: "w1",
+		pendingWorkspaceChatActivation: "w1",
 		tabsByWorkspace: tabs,
 	});
 
@@ -2410,6 +2534,7 @@ test("applyProjectUpdated closes the current project to the next Home and preser
 	expect(state.projects.map((candidate) => candidate.id)).toEqual(["p2"]);
 	expect(state.selectedProjectId).toBe("p2");
 	expect(state.activeWorkspaceId).toBeNull();
+	expect(state.pendingWorkspaceChatActivation).toBeNull();
 	expect(state.workspaces.p1).toEqual([workspace]);
 	expect(state.tabsByWorkspace).toBe(tabs);
 });
@@ -2497,29 +2622,101 @@ test("project and workspace navigation update both scope ids atomically", () => 
 	unsubscribe();
 });
 
-test("the selected chat of an entered workspace is attended once layout attention converges", () => {
+test("deliberate workspace entry activates its selected chat after layout convergence", () => {
 	const workspace = pushedWorkspace();
 	const sessionId = "workspace-entry-chat";
+	const completionId = "completion:workspace-entry";
+	const record: SessionStateRecord = {
+		workspaceId: workspace.id,
+		projectId: workspace.projectId,
+		sessionId,
+		state: {
+			execution: "idle",
+			runId: "run",
+			needsInput: null,
+			completion: { completionId, outcome: "succeeded" },
+			completionUnread: true,
+			queuedCount: 0,
+		},
+	};
 	useAppStore.setState({
+		status: "connected",
+		sessionStateByWorkspace: { [workspace.id]: { [sessionId]: record } },
 		layoutDocumentsByWorkspace: { [workspace.id]: selectedChatLayout(sessionId) },
 	});
-	const attended = () => selectChatAttended(useAppStore.getState(), workspace.id, sessionId);
 
 	const store = useAppStore.getState();
 	store.activateWorkspace(workspace);
-	expect(attended()).toBe(false);
+	expect(useAppStore.getState().pendingWorkspaceChatActivation).toBe(workspace.id);
+	expect(useAppStore.getState().directActivatedCompletionBySession[sessionId]).toBeUndefined();
+
 	store.setLayoutAttention(workspace.id, {
 		selectedByGroup: { center: `chat:${sessionId}` },
 		lastFocusedCenterGroupId: "center",
 		lastFocusedSideGroupId: {},
 		navigationClockByGroup: { center: 0 },
 	});
-	expect(attended()).toBe(true);
-	store.setChatObscured(sessionId, true);
-	expect(attended()).toBe(false);
-	store.setChatObscured(sessionId, false);
-	store.selectMain();
-	expect(attended()).toBe(false);
+	expect(useAppStore.getState().pendingWorkspaceChatActivation).toBeNull();
+	expect(useAppStore.getState().directActivatedCompletionBySession[sessionId]).toBe(completionId);
+});
+
+test("connection transitions expire a pending workspace-entry receipt", () => {
+	const workspace = pushedWorkspace();
+	const sessionId = "post-reconnect-chat";
+	useAppStore.setState({
+		layoutDocumentsByWorkspace: { [workspace.id]: selectedChatLayout(sessionId) },
+	});
+
+	const store = useAppStore.getState();
+	store.activateWorkspace(workspace);
+	expect(useAppStore.getState().pendingWorkspaceChatActivation).toBe(workspace.id);
+	store.setStatus("connected");
+	expect(useAppStore.getState().pendingWorkspaceChatActivation).toBeNull();
+
+	store.setLayoutAttention(workspace.id, {
+		selectedByGroup: { center: `chat:${sessionId}` },
+		lastFocusedCenterGroupId: "center",
+		lastFocusedSideGroupId: {},
+		navigationClockByGroup: { center: 0 },
+	});
+	expect(useAppStore.getState().directActivatedCompletionBySession[sessionId]).toBeUndefined();
+});
+
+test("route restoration never turns a selected visible chat into a read receipt", () => {
+	const workspace = pushedWorkspace();
+	const sessionId = "restored-chat";
+	useAppStore.setState({
+		sessionStateByWorkspace: {
+			[workspace.id]: {
+				[sessionId]: {
+					workspaceId: workspace.id,
+					projectId: workspace.projectId,
+					sessionId,
+					state: {
+						execution: "idle",
+						runId: "run",
+						needsInput: null,
+						completion: { completionId: "completion:restored", outcome: "succeeded" },
+						completionUnread: true,
+						queuedCount: 0,
+					},
+				},
+			},
+		},
+		layoutDocumentsByWorkspace: { [workspace.id]: selectedChatLayout(sessionId) },
+		layoutAttentionByWorkspace: {
+			[workspace.id]: {
+				selectedByGroup: { center: `chat:${sessionId}` },
+				lastFocusedCenterGroupId: "center",
+				lastFocusedSideGroupId: {},
+				navigationClockByGroup: { center: 0 },
+			},
+		},
+	});
+
+	useAppStore.getState().activateWorkspaceFromRoute(workspace);
+	expect(useAppStore.getState().pendingWorkspaceChatActivation).toBeNull();
+	expect(useAppStore.getState().directActivatedCompletionBySession[sessionId]).toBeUndefined();
 });
 
 test("workspace selection history tracks ordinary, route, and history-search activation", () => {
@@ -2824,6 +3021,8 @@ test("applyWorkspaceRemoved restores the most-recent workspace across projects",
 	expect(state.activeWorkspaceId).toBe("w2");
 	expect(state.selectedProjectId).toBe("p2");
 	expect(state.workspaceSelectionHistory).toEqual(["w2"]);
+	expect(state.pendingWorkspaceChatActivation).toBeNull();
+	expect(state.directActivatedCompletionBySession[previousSessionId]).toBeUndefined();
 	expect(state.toasts).toHaveLength(1);
 });
 
@@ -3598,21 +3797,6 @@ test("applyConfig projects the host-wide subagent default", () => {
 	expect(useAppStore.getState()).toHaveProperty("subagentsEnabled", true);
 });
 
-test("applyConfig projects the per-chat subagent limit and rejects a malformed one", () => {
-	useAppStore.getState().applyConfig({ ...DEFAULT_CONFIG, subagentMaxConcurrent: 9 });
-	expect(useAppStore.getState()).toHaveProperty("subagentMaxConcurrent", 9);
-	useAppStore.getState().applyConfig({ ...DEFAULT_CONFIG, subagentMaxConcurrent: 99 });
-	expect(useAppStore.getState()).toHaveProperty("subagentMaxConcurrent", 4);
-});
-
-test("applyConfig projects disabled extensions and an older host's missing list as none", () => {
-	useAppStore.getState().applyConfig({ ...DEFAULT_CONFIG, disabledExtensions: ["visualize"] });
-	expect(useAppStore.getState().disabledExtensions).toEqual(["visualize"]);
-	const { disabledExtensions: _omitted, ...olderHost } = DEFAULT_CONFIG;
-	useAppStore.getState().applyConfig(olderHost as typeof DEFAULT_CONFIG);
-	expect(useAppStore.getState().disabledExtensions).toEqual([]);
-});
-
 test("applyConfig projects JetBrains quota display and cadence", () => {
 	expect(useAppStore.getState()).toMatchObject({
 		jbcentralQuotaEnabled: true,
@@ -3640,133 +3824,6 @@ test("chat presentation preferences are client-local and cannot be overwritten b
 	useAppStore.getState().applyConfig(legacyConfig);
 	expect(useAppStore.getState().chatMessageOrder).toBe("newest-first");
 	expect(useAppStore.getState().streamingResponseMovement).toEqual({ settle: 60, trigger: 90 });
-});
-
-test("changes tabs: one per scope, preview-eligible, and review progress survives a re-open", () => {
-	const s = () => useAppStore.getState();
-	useAppStore.setState({ activeWorkspaceId: "ws1" });
-	expect(s().changesView).toBe("tree");
-	expect(s().changesLayout).toBe("stacked");
-	const tab = {
-		kind: "changes" as const,
-		id: "ws1:changes:branch",
-		workspaceId: "ws1",
-		name: "Changes",
-		scope: { kind: "branch" } as const,
-		viewed: [],
-		activePath: null,
-		collapsed: {},
-		reveal: null,
-		sections: {},
-		kept: {},
-	};
-	s().openTab(tab, "preview");
-	expect(s().previewTabByWorkspace.ws1).toBe(tab.id);
-	expect(s().activeTabByWorkspace.ws1).toBe(tab.id);
-
-	s().setChangesTabViewed("ws1", tab.id, "src/a.ts", true);
-	// the first piece of review progress keeps the tab: a later single-click preview must not evict it
-	expect(s().previewTabByWorkspace.ws1).toBeUndefined();
-	expect(s().layoutIntents.at(-1)).toMatchObject({
-		kind: "select",
-		tabId: tab.id,
-		keep: true,
-		focus: false,
-	});
-	s().setChangesTabViewed("ws1", tab.id, "src/a.ts", true);
-	s().setChangesTabViewed("ws1", tab.id, "src/b.ts", true);
-	s().setChangesTabViewed("ws1", tab.id, "src/b.ts", false);
-	s().setChangesTabActivePath("ws1", tab.id, "src/a.ts");
-	s().setChangesTabCollapsed("ws1", tab.id, { "bun.lock": false, "src/a.ts": true });
-	s().setChangesTabCollapsed("ws1", tab.id, { "src/a.ts": null });
-	s().requestChangesTabReveal("ws1", tab.id, "src/b.ts");
-	s().requestChangesTabReveal("ws1", tab.id, "src/b.ts");
-	s().setChangesTabSectionRenderer("ws1", tab.id, "README.md", "thinkrail/markdown");
-	s().setChangesTabSectionViewState("ws1", tab.id, "README.md", { scrollTop: 7 });
-	s().setChangesTabView("ws1", tab.id, "inline");
-	s().setChangesTabIgnoreWhitespace("ws1", tab.id, true);
-	s().setChangesTabHunkKept("ws1", tab.id, "src/a.ts", "h1", true, ["h1", "h2"]);
-	s().setChangesTabHunkKept("ws1", tab.id, "src/a.ts", "h2", true, ["h1", "h2"]);
-	s().setChangesTabHunkKept("ws1", tab.id, "src/a.ts", "h1", false, ["h1", "h2"]);
-	s().setChangesTabHunkKept("ws1", tab.id, "src/a.ts", "h1", false, ["h1", "h2"]);
-
-	const after = s().tabsByWorkspace.ws1?.[0];
-	if (after?.kind !== "changes") throw new Error("expected a changes tab");
-	expect(after.viewed).toEqual(["src/a.ts"]);
-	expect(after.activePath).toBe("src/a.ts");
-	expect(after.collapsed).toEqual({ "bun.lock": false });
-	expect(after.reveal).toEqual({ path: "src/b.ts", tick: 2 });
-	expect(after.sections["README.md"]).toEqual({
-		rendererId: "thinkrail/markdown",
-		viewState: { scrollTop: 7 },
-	});
-	// a renderer switch drops the view state saved for the previous renderer, like setTabRenderer
-	s().setChangesTabSectionRenderer("ws1", tab.id, "README.md", "thinkrail/code");
-	const switched = s().tabsByWorkspace.ws1?.[0];
-	expect(switched?.kind === "changes" && switched.sections["README.md"]).toEqual({
-		rendererId: "thinkrail/code",
-	});
-	expect(after.view).toBe("inline");
-	expect(after.ignoreWhitespace).toBe(true);
-	expect(after.kept).toEqual({ "src/a.ts": ["h2"] });
-
-	s().consumeChangesTabReveal("ws1", tab.id, null);
-	const cleared = s().tabsByWorkspace.ws1?.[0];
-	expect(cleared?.kind === "changes" && cleared.reveal).toBeNull();
-
-	s().openTab(cleared as typeof tab, "keep");
-	expect(s().tabsByWorkspace.ws1).toHaveLength(1);
-	expect(s().previewTabByWorkspace.ws1).toBeUndefined();
-	const kept = s().tabsByWorkspace.ws1?.[0];
-	expect(kept?.kind === "changes" && kept.viewed).toEqual(["src/a.ts"]);
-
-	// a different scope is a different tab
-	s().openTab({ ...tab, id: "ws1:changes:uncommitted", scope: { kind: "uncommitted" } }, "preview");
-	expect(s().tabsByWorkspace.ws1).toHaveLength(2);
-	// actions against a foreign workspace or an unknown id are no-ops
-	const before = s().tabsByWorkspace;
-	s().setChangesTabViewed("ws2", tab.id, "x", true);
-	s().setChangesTabActivePath("ws1", "missing", "x");
-	expect(s().tabsByWorkspace).toBe(before);
-});
-
-test("consuming a changes-tab reveal lands active path, expansion and focus in one write", () => {
-	const s = () => useAppStore.getState();
-	useAppStore.setState({ activeWorkspaceId: "ws1" });
-	const tab = {
-		kind: "changes" as const,
-		id: "ws1:changes:branch",
-		workspaceId: "ws1",
-		name: "Changes",
-		scope: { kind: "branch" } as const,
-		viewed: [],
-		activePath: null,
-		collapsed: { "src/a.ts": true },
-		reveal: null,
-		sections: {},
-		kept: {},
-	};
-	s().openTab(tab, "keep");
-	s().requestChangesTabReveal("ws1", tab.id, "src/a.ts", "c1");
-	let writes = 0;
-	const unsubscribe = useAppStore.subscribe(() => {
-		writes += 1;
-	});
-	s().consumeChangesTabReveal("ws1", tab.id, { path: "src/a.ts", commentId: "c1" });
-	unsubscribe();
-	expect(writes).toBe(1);
-	const after = s().tabsByWorkspace.ws1?.[0];
-	expect(after).toMatchObject({
-		activePath: "src/a.ts",
-		collapsed: { "src/a.ts": false },
-		reveal: null,
-	});
-	expect(s().reviewFocusRequest).toEqual({ workspaceId: "ws1", commentId: "c1" });
-
-	s().setChangesTabSectionViewState("ws1", tab.id, "src/a.ts", { scrollTop: 3 });
-	const saved = s().tabsByWorkspace;
-	s().setChangesTabSectionViewState("ws1", tab.id, "src/a.ts", { scrollTop: 3 });
-	expect(s().tabsByWorkspace).toBe(saved);
 });
 
 test("diff tabs: openTab dedupes by id + activates; renderer, view state, and contents update in place", () => {
@@ -4088,6 +4145,25 @@ test("explicitly passive hydration never becomes navigation just because the cac
 function fileTab(workspaceId: string, name: string): FileTab {
 	return { kind: "file", id: `${workspaceId}:${name}`, workspaceId, name, path: name, content: "" };
 }
+
+test("closeTab and setActiveTab emit editor lifecycle events for plugins to observe", () => {
+	useAppStore.setState({ activeWorkspaceId: "ws1" });
+	const store = useAppStore.getState();
+	store.openTab(fileTab("ws1", "a.ts"), "keep");
+	store.openTab(fileTab("ws1", "b.ts"), "keep");
+
+	const seen: { kind: string; path: string }[] = [];
+	const off = onEditorEvent((event) => seen.push({ kind: event.kind, path: event.editor.path }));
+
+	useAppStore.getState().setActiveTab("ws1:a.ts");
+	useAppStore.getState().closeTab("ws1:a.ts");
+
+	off();
+	expect(seen).toEqual([
+		{ kind: "activated", path: "a.ts" },
+		{ kind: "closed", path: "a.ts" },
+	]);
+});
 
 test("a preview open replaces the previous preview tab at its index (the strip never reshuffles)", () => {
 	const store = useAppStore.getState();

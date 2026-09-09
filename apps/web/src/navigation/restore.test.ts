@@ -149,7 +149,7 @@ beforeEach(() => {
 		layoutStateReady: false,
 		layoutDocumentsByWorkspace: {},
 		layoutAttentionByWorkspace: {},
-		layoutProjectionEpoch: 0,
+		layoutProjectionEpochByWorkspace: {},
 		tabsByWorkspace: {},
 		activeTabByWorkspace: {},
 		previewTabByWorkspace: {},
