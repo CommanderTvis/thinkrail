@@ -214,8 +214,12 @@ configuration selects Bun as package manager, retaining the workspace catalog an
 Hutch owns the generated `.hutch/devkit` projection and download cache. The projection and transient
 `.cottontail-tmp` loaders are ignored and excluded from repository source-boundary scans, never edited
 or committed. Framework builds prepare it
-implicitly; typecheck runs the standard `electrobun prepare` command before TypeScript. Preparation errors
-propagate normally, and a fresh machine needs network access. Ordinary install, web-only development/
+implicitly; typecheck prepares it through `scripts/prepare-devkit.ts`, which runs the standard
+`electrobun prepare` command only when `.hutch/devkit/.complete` does not already record the pinned
+Electrobun version. `prepare` waits on the project build lock even when the projection is already valid,
+so an unguarded call blocks for as long as `electrobun dev` runs in the worktree — the guard is what lets
+a developer typecheck (and so commit, through the pre-commit hook) with the dev host up. Preparation
+errors propagate normally, and a fresh machine needs network access. Ordinary install, web-only development/
 builds, and unit tests do not prepare the native SDK.
 
 Desktop typechecking consumes the official SDK's `.ts` sources through the same baseUrl-free paths used
