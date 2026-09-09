@@ -1,7 +1,12 @@
 import { RiFullscreenLine as Maximize2 } from "@remixicon/react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
+import { CodeBlock } from "@/chat/tools/CodeBlock";
+import { renderMermaid } from "@/chat/tools/visualize/mermaid";
+import { PanZoomView } from "@/chat/tools/visualize/PanZoomView";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { useThemeSwap as onThemeSwap } from "@/themes/useThemeSwap";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@thinkrail/ui/dialog";
 import { onThemeSwap } from "@thinkrail/ui/theme";
-import { type ReactNode, useEffect, useState } from "react";
 import { renderMermaid } from "./mermaid";
 import { PanZoomView } from "./PanZoomView";
 
@@ -9,11 +14,19 @@ export function MermaidView({
 	source,
 	title,
 	fallback,
+	interactive = false,
+	onRender,
 }: {
 	source: string;
 	title?: string;
 	fallback?: ReactNode;
+	/** Fill the space and be navigable in place — a pane, rather than a card in a transcript. */
+	interactive?: boolean;
+	/** What the renderer made of this source: `null` when it drew, the parse error when it did not. */
+	onRender?: (error: string | null) => void;
 }) {
+	const onRenderRef = useRef(onRender);
+	onRenderRef.current = onRender;
 	const [svg, setSvg] = useState<string | null>(null);
 	const [error, setError] = useState<string | null>(null);
 	const [open, setOpen] = useState(false);
@@ -26,8 +39,11 @@ export function MermaidView({
 				if (res.svg !== undefined) {
 					setSvg(res.svg);
 					setError(null);
+					onRenderRef.current?.(null);
 				} else {
-					setError(res.error ?? "Failed to render diagram");
+					const message = res.error ?? "Failed to render diagram";
+					setError(message);
+					onRenderRef.current?.(message);
 				}
 			});
 		};
@@ -56,13 +72,16 @@ export function MermaidView({
 	if (svg === null) {
 		return fallback ?? <span className="text-text-muted tr-text-metadata">Rendering diagram…</span>;
 	}
+	if (interactive) {
+		return (
+			<div data-testid="mermaid-svg" className="flex h-full min-h-0 flex-col">
+				<PanZoomView svg={svg} testid="mermaid-pan-zoom" />
+			</div>
+		);
+	}
 	return (
 		<div className="relative">
-			<div
-				data-testid="mermaid-svg"
-				className="overflow-auto [&_svg]:h-auto [&_svg]:max-w-full"
-				dangerouslySetInnerHTML={{ __html: svg }}
-			/>
+			<PanZoomView svg={svg} testid="mermaid-svg" capped />
 			<button
 				type="button"
 				data-testid="mermaid-fullscreen"
