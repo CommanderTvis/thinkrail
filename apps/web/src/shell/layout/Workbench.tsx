@@ -1289,7 +1289,14 @@ function WorkbenchTab({
 							data-layout-tab-id={tab.id}
 							tabIndex={active ? 0 : -1}
 							{...drag.listeners}
-							title={preview ? "Preview — double-click to keep" : name}
+							onMouseDown={(event) => {
+								if (event.button === 1) event.preventDefault();
+							}}
+							onAuxClick={(event) => {
+								if (event.button !== 1) return;
+								event.preventDefault();
+								onClose();
+							}}
 							onClick={selectFromClick}
 							onDoubleClick={selectFromDoubleClick}
 							onKeyDown={onKeyDown}
