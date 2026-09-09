@@ -439,6 +439,23 @@ test("renameWorkspace with renameBranch:false changes only the display name", as
 	expect(listed.find((workspace) => workspace.id === sibling.id)?.baseBranch).toBe(ws.branch);
 });
 
+test("renameWorkspace leaves a published branch alone and renames the label only", async () => {
+	const ws = await createWorkspace("p1");
+	const dependent = await createWorkspace("p1", "on top", ws.branch);
+	git(repo, "update-ref", `refs/remotes/origin/${ws.branch}`, "HEAD");
+
+	const renamed = renameWorkspace(ws.id, "add login flow");
+
+	expect(renamed.name).toBe("add login flow");
+	expect(renamed.branch).toBe(ws.branch);
+	expect(renamed.renamed).toBe(true);
+	expect(gitOut(ws.worktreePath, "rev-parse", "--abbrev-ref", "HEAD")).toBe(ws.branch);
+	expect(gitOut(repo, "for-each-ref", "--format=%(refname:short)", "refs/heads")).toContain(
+		ws.branch,
+	);
+	expect((await worktrees()).find((w) => w.id === dependent.id)?.baseBranch).toBe(ws.branch);
+});
+
 test("renameWorkspace with lock:false renames name + branch but leaves renamed unset (provisional)", async () => {
 	const ws = await createWorkspace("p1");
 	const renamed = renameWorkspace(ws.id, "add login flow", { lock: false });
