@@ -287,7 +287,32 @@ used to rehome every workspace view. Only custom definitions cross the wire thro
 
 Applying a preset creates one replacement frame, raises this surface's local side/bottom limits if required, and remaps all retained workspace views atomically. Center resources preserve visual order and distribute across destination leaves; terminals map into compatible slots; singleton tool placement ids survive where possible. Omitted tools receive deterministic restore targets, so a sparse preset cannot strand Projects or another tool. The local default preset is the target of the explicit Reset frame command; ordinary workspace switches retain the current frame. Default selection and limits persist locally, not in host settings.
 
-`layoutState` validates and persists the normalized frame/views/attention document under browser endpoint + frontend-surface identity or the native stable adapter's profile/window scope. Reload and supported session restoration reuse it; simultaneous windows never consume each other's storage events. Persistence contains references only. Failure leaves live state intact; unknown schema falls back to the Balanced safe frame.
+**A frame belongs to a project.** Entering a project stashes the leaving project's frame under its id and
+restores the entering one's, minting Balanced the first time — except for a live frame **nothing has
+claimed**, which the first project entered adopts, since that is how a layout saved before per-project
+frames becomes that project's. **Adoption is only ever that migration.** Once any project owns a frame, an
+unknown project starts from Balanced: adopting whatever happened to be live is precisely how one project's
+split reached every other one, and a restored layout always has something live; only that project's workspace views are
+reflowed into it, since a view names groups of the frame it was arranged in. **A reflow is the migration
+step, not the switch.** It reads a view through the frame it is given, so a view already expressed in the
+destination frame — every re-entry after the first — must be left alone: reflowing it through the leaving
+project's frame reads as an empty workspace and drops every open tab. A view that fits neither frame is
+also left alone rather than emptied. Pinned by the round-trip case in `e2e/project-layout.spec.ts`. Workspaces of one project keep
+sharing a frame, which is what "ordinary workspace switches retain the current frame" has always meant. The
+alternative — one frame for the window — meant a split made in one repo greeted you in every other one,
+with the extra column empty.
+
+`layoutState` validates and persists the normalized frame/views/attention document under browser endpoint + frontend-surface identity or the native stable adapter's profile/window scope. Reload and supported session restoration reuse it; simultaneous windows never consume each other's storage events. Persistence carries the per-project frames beside the live one; a stored frame that no longer validates is
+dropped so that project falls back to Balanced, and a payload written before per-project frames existed still
+loads, with the frame it holds becoming the first project's. **A view nobody can place is that workspace's loss, not the surface's** — it is skipped and reopens empty,
+because discarding the payload takes the frames with it and hands the next project an adoption it should
+never have had. **Every persisted view is validated against the
+frame it belongs to, not against the live one.** A surface that has visited two projects holds views from
+both, each naming the groups of its own project's frame; checking them all against whichever frame happened
+to be live discarded the entire payload as unreadable, so a reload started from Balanced and the first
+project entered then adopted that — which is how a split appeared to follow you into a project that never
+had one. The per-project frames are also part of what a write is triggered by: a stash that changes them
+without changing the live frame is still a change worth saving. Persistence contains references only. Failure leaves live state intact; unknown schema falls back to the Balanced safe frame.
 
 The complete current-layout grammar, including the derived `WorkspaceLayoutDocument` projection consumed by existing shell renderers, is web-local. A pristine surface instantiates Balanced; no host snapshot or prior layout schema is imported.
 
