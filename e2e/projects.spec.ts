@@ -123,6 +123,18 @@ test("opens a git repo as a project via the directory picker", async ({ page }) 
 	).toBeVisible();
 });
 
+test("the rail's add control names itself on hover and still opens its menu", async ({ page }) => {
+	await page.goto("/");
+	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
+
+	const add = page.getByTestId("add-project-menu");
+	await add.hover();
+	await expect(page.getByRole("tooltip")).toContainText("Add project");
+
+	await add.click();
+	await expect(page.getByTestId("menu-open-project")).toBeVisible();
+});
+
 test("opens a project from an explicit host path", async ({ page }) => {
 	await page.goto("/");
 	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");

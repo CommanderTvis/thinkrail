@@ -284,7 +284,10 @@ dropdown), so Welcome stays the *work-in-this-project* surface. That card hangs 
 path… / New project / Clone repository… / Recents). Recents is the store's `recentProjects`: one last-opened path list
 containing open + closed records with no status badge; selecting either runs the shared open flow and lands at Project Home, with a
 closed record retaining its id and workspace state. `Card` is a `forwardRef` usable as a Radix `asChild`
-trigger. **"Work in project folder"**
+trigger. **`AddProjectMenu` takes its own `tooltip` and renders it around the trigger, not around the
+control**, which is why the rail's bare "+" can name itself: a Radix `asChild` slot clones exactly one
+child, so a tooltip wrapper placed between the trigger and the button swallows the trigger's props and the
+menu stops opening. The Welcome card passes no tooltip — it is already labelled. **"Work in project folder"**
 (`House` icon, matching the rail's Default row) **direct-enters** the Default workspace — no dialog: the
 shared `enterDefaultWorkspace` helper lists the project's workspaces, stores them, and activates the
 `kind === "default"` row; an older host with no Default row degrades to an error toast. **"Start building"** is the
