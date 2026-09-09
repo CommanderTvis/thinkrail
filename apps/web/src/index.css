@@ -379,6 +379,25 @@
 	margin-left: -10px;
 }
 
+/* Where a search hit landed in a rendered document. A flash, not a mark: it has to survive long enough
+   to be found on a screen that just scrolled, then get out of the way — a wash that stayed would read
+   as a selection, which is the mistake `.review-region` above exists to avoid. */
+.source-landing {
+	animation: source-landing 2.4s ease-out;
+	border-radius: var(--radius-sm);
+}
+@keyframes source-landing {
+	0%,
+	40% {
+		background-color: var(--color-primary-subtle);
+		box-shadow: 0 0 0 6px var(--color-primary-subtle);
+	}
+	100% {
+		background-color: transparent;
+		box-shadow: 0 0 0 6px transparent;
+	}
+}
+
 .custom-icon {
 	display: inline-block;
 	background-color: currentColor;

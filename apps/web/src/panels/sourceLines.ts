@@ -99,16 +99,33 @@ export function stampedSelectionLines(container: HTMLElement): LineSelection | n
 
 const REGION_BLOCKS = "p, li, h1, h2, h3, h4, h5, h6, pre, blockquote, td, th";
 
-export function markReviewRegions(container: HTMLElement, ranges: LineSelection[]): void {
-	for (const el of container.querySelectorAll(".review-region"))
-		el.classList.remove("review-region");
-	if (ranges.length === 0) return;
+function leafBlocks(container: HTMLElement): { el: HTMLElement; span: LineSpan }[] {
+	const blocks: { el: HTMLElement; span: LineSpan }[] = [];
 	for (const el of container.querySelectorAll<HTMLElement>(REGION_BLOCKS)) {
 		const start = Number(el.getAttribute("data-md-line-start")) || 0;
 		const end = Number(el.getAttribute("data-md-line-end")) || 0;
 		if (start < 1 || end < 1) continue;
 		if (el.querySelector(REGION_BLOCKS)) continue;
-		if (ranges.some((r) => start <= r.endLine && end >= r.startLine))
-			el.classList.add("review-region");
+		blocks.push({ el, span: { start, end } });
 	}
+	return blocks;
+}
+
+export function markReviewRegions(container: HTMLElement, ranges: LineSelection[]): void {
+	for (const el of container.querySelectorAll(".review-region"))
+		el.classList.remove("review-region");
+	if (ranges.length === 0) return;
+	for (const { el, span } of leafBlocks(container))
+		if (ranges.some((r) => span.start <= r.endLine && span.end >= r.startLine))
+			el.classList.add("review-region");
+}
+
+/** The rendered block a source line fell in, the narrowest one when blocks share the line. */
+export function blockAtLine(container: HTMLElement, line: number): HTMLElement | null {
+	let best: { el: HTMLElement; span: LineSpan } | null = null;
+	for (const block of leafBlocks(container)) {
+		if (line < block.span.start || line > block.span.end) continue;
+		if (!best || block.span.end - block.span.start < best.span.end - best.span.start) best = block;
+	}
+	return best?.el ?? null;
 }

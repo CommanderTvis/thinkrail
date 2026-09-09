@@ -10,7 +10,8 @@ tags: [v1, public-surface-checked]
 
 ## Responsibility
 
-Read and write directories and UTF-8 files inside a workspace's worktree, path-contained.
+Read and write directories and UTF-8 files inside a workspace's worktree, path-contained, and sweep them
+for a substring.
 
 ## Boundary
 
@@ -34,7 +35,14 @@ Read and write directories and UTF-8 files inside a workspace's worktree, path-c
   inside one filesystem timestamp tick are. `contentHash` is the one definition of that hash and
   `claudeConfig`'s consented-edit flow uses it too, so a hash handed out by one read is comparable by any
   write. A path with nothing on disk hashes as empty, which is what lets a first write create the file.
+- **`searchWorktree(workspaceId, query)` is a plain substring sweep, deliberately.** It walks the
+  worktree from the root, reuses the same `git check-ignore` batch per directory that `readDir` uses (so a
+  project with no git simply has nothing ignored and everything is walked), skips `.git`, skips a file over
+  512 KB or containing a NUL byte, and matches case-insensitively. It stops at 200 hits and says so
+  (`truncated`), which is what keeps a sweep of a large tree bounded without a query language, an index, or
+  a ripgrep the user may not have installed. Line text is capped at 400 characters per hit — a minified
+  bundle must not travel over the wire as one match.
 - **Public surface (barrel):** `readDir`, `readFile`, `readFileAt`, `writeFile`, `writeFileAt`,
-  `contentHash`, `resolveWorktreeFile`.
+  `contentHash`, `resolveWorktreeFile`, `searchWorktree`.
 - **Allowed deps:** `persistence` (workspace lookup); `contracts` (`FileNode`, `FileWriteResult`); Node `fs`/`crypto`/`path`.
 - **Forbidden:** `host`; sibling features.

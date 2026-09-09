@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { Components } from "react-markdown";
 import { stripFrontmatter } from "@/lib/utils";
 import { Markdown, type MarkdownRehypePlugins } from "../chat/Markdown";
@@ -9,6 +9,7 @@ import { documentComponents, remarkHeadingIds } from "./markdownLinks";
 import { type ComposerInsert, PreviewCommenting } from "./PreviewCommenting";
 import { ReviewThreadCard } from "./ReviewThreadCard";
 import {
+	blockAtLine,
 	frontmatterOffset,
 	indivisibleSpans,
 	snapSplitLine,
@@ -149,22 +150,56 @@ function useReportedPreviewSelection(
 	}, [container, workspaceId, path]);
 }
 
+/**
+ * Landing on a source line with nothing but a rendered document to land in: the block that line fell in
+ * is scrolled to and flashed, so a search hit says *where* it was and not only *which file*. The stamps
+ * are the review path's own `data-md-line-*`. See panels/SPEC.md.
+ */
+function useSourceLineLanding(
+	container: React.RefObject<HTMLElement | null>,
+	focusLine: number | undefined,
+	content: string,
+	onFocusHandled: (() => void) | undefined,
+): void {
+	const [landing, setLanding] = useState<number | null>(null);
+	useEffect(() => {
+		if (focusLine === undefined) return;
+		setLanding(focusLine);
+		onFocusHandled?.();
+	}, [focusLine, onFocusHandled]);
+
+	useEffect(() => {
+		const root = container.current;
+		if (!root || landing === null) return;
+		const target = blockAtLine(root, landing);
+		if (!target) return;
+		target.classList.add("source-landing");
+		target.scrollIntoView({ behavior: "smooth", block: "center" });
+		return () => target.classList.remove("source-landing");
+	}, [container, landing, content]);
+}
+
 export default function MarkdownPreview({
 	content,
 	workspaceId,
 	path,
 	review,
+	focusLine,
+	onFocusHandled,
 	onContentEdit,
 }: {
 	content: string;
 	workspaceId: string;
 	path: string;
 	review?: EditorReview;
+	focusLine?: number | undefined;
+	onFocusHandled?: (() => void) | undefined;
 	onContentEdit?: ((next: string) => void) | undefined;
 }) {
 	const components = useMemo(() => documentComponents({ workspaceId, path }), [path, workspaceId]);
 	const documentRef = useRef<HTMLDivElement>(null);
 	useReportedPreviewSelection(documentRef, workspaceId, path);
+	useSourceLineLanding(documentRef, focusLine, content, onFocusHandled);
 
 	const properties = onContentEdit ? (
 		<FrontmatterProperties content={content} onEdit={onContentEdit} />

@@ -130,7 +130,7 @@ import {
 	revealPathInFileManager,
 } from "../editors";
 import { recordAcceptedMessage, respondToInterview } from "../feedback";
-import { readDir, readFile, resolveWorktreeFile, writeFile } from "../fs";
+import { readDir, readFile, resolveWorktreeFile, searchWorktree, writeFile } from "../fs";
 import {
 	countUnpushedCommits,
 	gitDiffFile,
@@ -514,6 +514,10 @@ const handlers: Record<string, Handler> = {
 		const p = params as { workspaceId: string; path: string };
 		void ensureWatch(p.workspaceId);
 		return readDir(p.workspaceId, p.path);
+	},
+	"fs.search": (params) => {
+		const p = params as { workspaceId: string; query: string };
+		return searchWorktree(p.workspaceId, p.query);
 	},
 	"fs.revealPath": (params) => {
 		const p = params as { workspaceId: string; path: string };

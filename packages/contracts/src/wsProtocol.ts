@@ -53,6 +53,7 @@ import type {
 	ReviewCommentKind,
 	ReviewCommentStatus,
 	ReviewSnapshot,
+	SearchHits,
 	SessionActivity,
 	SpecGraphSnapshot,
 	SubagentOverride,
@@ -494,6 +495,7 @@ export interface WsMethodMap {
 		result: OpenPrResult;
 	};
 	"fs.readDir": { params: { workspaceId: string; path: string }; result: FileNode[] };
+	"fs.search": { params: { workspaceId: string; query: string }; result: SearchHits };
 	"fs.readFile": {
 		params: { workspaceId: string; path: string };
 		result: { content: string; hash: string };
