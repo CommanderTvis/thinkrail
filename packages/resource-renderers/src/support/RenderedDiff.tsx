@@ -5,7 +5,7 @@ import { createElement, type ReactNode, useEffect, useMemo, useState } from "rea
 import { renderToStaticMarkup } from "react-dom/server";
 import { useResourceHost } from "../host";
 import type { ResourceDiffProps } from "../registry";
-import { FrontmatterProperties } from "./FrontmatterPropertiesTable";
+import { FrontmatterDiff, frontmatterDiff } from "./FrontmatterDiff";
 import { MarkdownDocument } from "./MarkdownPreview";
 import { focusSegments } from "./renderedDiffFocus";
 import { type DoneMerge, mergeKey, peekMerge, rememberMerge } from "./renderedDiffMerges";
@@ -66,16 +66,6 @@ function hasMark(element: Element): boolean {
 function parseRoot(html: string): Element {
 	const body = new DOMParser().parseFromString(html, "text/html").body;
 	return (body.children.length === 1 ? body.firstElementChild : null) ?? body;
-}
-
-const PROPERTIES_BLOCK = ':scope > [data-testid="frontmatter-properties"]';
-
-function splitDocument(root: Element): { properties: Element | null; body: Element } {
-	const properties = root.querySelector(PROPERTIES_BLOCK);
-	const body = properties
-		? Array.from(root.children).find((child) => child !== properties)
-		: undefined;
-	return { properties, body: body ?? root };
 }
 
 function* units(root: Element): Generator<Element> {
@@ -270,15 +260,6 @@ function Placeholder({ testid, children }: { testid: string; children: string })
 	);
 }
 
-function renderSide(content: string, document: ReactNode): string {
-	return renderToStaticMarkup(
-		<>
-			<FrontmatterProperties content={content} />
-			{document}
-		</>,
-	);
-}
-
 export default function RenderedDiff({
 	resource,
 	originalResource = resource,
@@ -293,8 +274,7 @@ export default function RenderedDiff({
 	const { markdown: Markdown, bytesUrl, openFile } = useResourceHost();
 	const [before, after] = useMemo(
 		() => [
-			renderSide(
-				originalText,
+			renderToStaticMarkup(
 				<MarkdownDocument
 					content={originalText}
 					workspaceId={originalResource.workspaceId}
@@ -303,8 +283,7 @@ export default function RenderedDiff({
 					links={{ bytesUrl, openFile }}
 				/>,
 			),
-			renderSide(
-				modifiedText,
+			renderToStaticMarkup(
 				<MarkdownDocument
 					content={modifiedText}
 					workspaceId={resource.workspaceId}
@@ -329,19 +308,15 @@ export default function RenderedDiff({
 	const { merge, cached } = useHtmldiffMerge(before, after);
 	const view = useMemo(() => {
 		if (merge.state !== "done") return null;
-		const merged = splitDocument(parseRoot(merge.html));
-		const before = splitDocument(parseRoot(merge.before));
-		const root = merged.body;
-		const changedSet = changedUnits(root, before.body);
+		const root = parseRoot(merge.html);
+		const changedSet = changedUnits(root, parseRoot(merge.before));
 		const changed: Changed = (element) => changedSet.has(element);
-		const propertiesChanged = merged.properties?.outerHTML !== before.properties?.outerHTML;
-		return {
-			root,
-			properties: merged.properties,
-			changed,
-			empty: !propertiesChanged && !Array.from(root.children).some(changed),
-		};
+		return { root, changed, bodyUnchanged: !Array.from(root.children).some(changed) };
 	}, [merge]);
+	const properties = useMemo(
+		() => frontmatterDiff(originalText, modifiedText),
+		[originalText, modifiedText],
+	);
 	const { attach: attachScroller } = useScrollViewState<HTMLDivElement>(viewState, onViewState);
 
 	if (merge.state === "failed") {
@@ -361,15 +336,13 @@ export default function RenderedDiff({
 			data-testid="rendered-diff"
 			className={`h-full overflow-auto bg-container-content-bg ${cached ? "" : "motion-safe:animate-reveal"}`}
 		>
-			{view.empty ? (
+			{view.bodyUnchanged && !properties?.changed ? (
 				<p data-testid="rendered-diff-empty" className="px-12 py-8 tr-text-ui text-text-muted">
 					{t("panels.renderedDiff.identical")}
 				</p>
 			) : null}
 			<article className={`mx-auto max-w-[78ch] px-24 py-16 ${DIFF_MARKS}`}>
-				{view.properties ? (
-					<Block element={view.properties} ordinal={undefined} changed={view.changed} />
-				) : null}
+				{properties ? <FrontmatterDiff model={properties} /> : null}
 				<div className={view.root.getAttribute("class") ?? undefined}>
 					<FocusedChildren parent={view.root} unit="blocks" changed={view.changed} />
 				</div>
