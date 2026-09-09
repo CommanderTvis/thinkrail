@@ -18,7 +18,13 @@ import {
 import type { ChatTurn, FailureRecovery } from "../chat/types";
 import { userText } from "../lib";
 import { onEditorEvent } from "../panels/editorEvents";
-import type { WorkspaceLayoutDocument } from "../shell/layout";
+import {
+	BUILTIN_LAYOUT_PRESETS,
+	emptyWorkspaceView,
+	instantiateWorkbenchFrame,
+	projectWorkspaceLayout,
+	type WorkspaceLayoutDocument,
+} from "../shell/layout";
 import {
 	captureCenterNavigation,
 	chatTabId,
@@ -152,7 +158,7 @@ beforeEach(() => {
 		layoutStateReady: false,
 		layoutDocumentsByWorkspace: {},
 		layoutAttentionByWorkspace: {},
-		layoutProjectionEpoch: 0,
+		layoutProjectionEpochByWorkspace: {},
 		layoutIntents: [],
 		tabsByWorkspace: {},
 		terminalsByWorkspace: {},
@@ -202,11 +208,11 @@ test("layout projection epoch advances only when projection invalidation is requ
 	};
 	const store = useAppStore.getState();
 	store.applyLocalLayoutState(payload);
-	expect(useAppStore.getState().layoutProjectionEpoch).toBe(0);
-	useAppStore.getState().applyLocalLayoutState(payload, true);
-	expect(useAppStore.getState().layoutProjectionEpoch).toBe(1);
+	expect(useAppStore.getState().layoutProjectionEpochByWorkspace.workspace).toBeUndefined();
+	useAppStore.getState().applyLocalLayoutState(payload, ["workspace"], true);
+	expect(useAppStore.getState().layoutProjectionEpochByWorkspace.workspace).toBe(1);
 	useAppStore.getState().applyLocalLayoutState(payload);
-	expect(useAppStore.getState().layoutProjectionEpoch).toBe(1);
+	expect(useAppStore.getState().layoutProjectionEpochByWorkspace.workspace).toBe(1);
 });
 
 function rt(sessionId: string): SessionRuntime {

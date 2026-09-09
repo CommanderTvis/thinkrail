@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type { LayoutAttention } from "../../lib";
 import {
+	adoptToolSelections,
 	BUILTIN_LAYOUT_TOOL_CATALOG,
 	buildLayoutToolCatalog,
 	canShowSide,
@@ -905,6 +906,11 @@ describe("workspace layout model", () => {
 		expect(changedToolSelections(previous, next, document)).toEqual(new Set(["right-a"]));
 		expect(changedToolSelections(previous, previous, document)).toEqual(new Set());
 		expect(changedToolSelections(undefined, next, document)).toEqual(new Set(["right-a"]));
+		const beforeMove = baseDocument();
+		const priorRight = beforeMove.right.groups[0];
+		if (!priorRight) throw new Error("missing right group");
+		priorRight.tabs = [toolTab("specs")];
+		expect(changedToolSelections(next, next, document, beforeMove)).toEqual(new Set(["right-a"]));
 	});
 
 	test("attention tracks bottom selection and last focus without affecting center navigation", () => {

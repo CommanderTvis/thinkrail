@@ -6,6 +6,7 @@ import {
 	DEFAULT_LOCAL_LAYOUT_PREFERENCES,
 	type LocalLayoutPreferences,
 	type LocalLayoutStatePayload,
+	selectWorkspaceById,
 	toast,
 	useAppStore,
 } from "../../store";
@@ -16,6 +17,7 @@ import {
 	applyWorkbenchPreset,
 	BUILTIN_LAYOUT_PRESETS,
 	BUILTIN_LAYOUT_TOOL_CATALOG,
+	changedToolSelections,
 	DEFAULT_LAYOUT_PRESET_ID,
 	emptyWorkspaceView,
 	ensureWorkbenchToolPlacementIds,
@@ -615,6 +617,20 @@ function balancedFrame(): WorkbenchFrame {
 	return instantiateWorkbenchFrame(preset);
 }
 
+function activeFrameViews(
+	state: ReturnType<typeof useAppStore.getState>,
+): Record<string, WorkspaceViewState> {
+	const ids = state.workbenchFrame ? frameGroupIds(state.workbenchFrame) : new Set<string>();
+	return Object.fromEntries(
+		Object.entries(state.workspaceViewsByWorkspace).filter(([workspaceId, view]) => {
+			const workspace = selectWorkspaceById(state, workspaceId);
+			return workspace && state.workbenchFrameProjectId
+				? workspace.projectId === state.workbenchFrameProjectId
+				: Object.keys(view.groups).every((id) => ids.has(id));
+		}),
+	);
+}
+
 function documentsForViews(
 	frame: WorkbenchFrame,
 	views: Record<string, WorkspaceViewState>,
@@ -815,12 +831,13 @@ export function applyLayoutPresetLocally(preset: LayoutPreset): void {
 	const state = useAppStore.getState();
 	if (!state.workbenchFrame) throw new Error("The local workbench frame is not ready");
 	const next = applyWorkbenchPreset(
-		{ frame: state.workbenchFrame, viewsByWorkspace: state.workspaceViewsByWorkspace },
+		{ frame: state.workbenchFrame, viewsByWorkspace: activeFrameViews(state) },
 		preset,
 	);
-	const documentsByWorkspace = documentsForViews(next.frame, next.viewsByWorkspace);
-	const attentionByWorkspace: Record<string, LayoutAttention> = {};
-	for (const [workspaceId, document] of Object.entries(documentsByWorkspace)) {
+	const changedDocuments = documentsForViews(next.frame, next.viewsByWorkspace);
+	const documentsByWorkspace = { ...state.layoutDocumentsByWorkspace, ...changedDocuments };
+	const attentionByWorkspace = { ...state.layoutAttentionByWorkspace };
+	for (const [workspaceId, document] of Object.entries(changedDocuments)) {
 		attentionByWorkspace[workspaceId] = reconcileAttention(
 			document,
 			state.layoutAttentionByWorkspace[workspaceId],
@@ -830,7 +847,7 @@ export function applyLayoutPresetLocally(preset: LayoutPreset): void {
 	state.applyLocalLayoutState(
 		{
 			frame: next.frame,
-			viewsByWorkspace: next.viewsByWorkspace,
+			viewsByWorkspace: { ...state.workspaceViewsByWorkspace, ...next.viewsByWorkspace },
 			documentsByWorkspace,
 			attentionByWorkspace,
 			preferences: {
@@ -845,6 +862,7 @@ export function applyLayoutPresetLocally(preset: LayoutPreset): void {
 				),
 			},
 		},
+		Object.keys(changedDocuments),
 		true,
 	);
 }
@@ -920,16 +938,21 @@ export async function commitWorkspaceLayout(
 	const validationErrors = validateLayoutDocument(effectiveDocument, 32, 32);
 	if (validationErrors.length > 0) throw new Error(validationErrors.join(" "));
 	const projected = applyProjectedLayoutDocument(
-		{ frame: state.workbenchFrame, viewsByWorkspace: state.workspaceViewsByWorkspace },
+		{ frame: state.workbenchFrame, viewsByWorkspace: activeFrameViews(state) },
 		workspaceId,
 		effectiveDocument,
 	);
 	const frame = ensureWorkbenchToolPlacementIds(projected.frame, projected.viewsByWorkspace);
 	const frameChanged = frame !== state.workbenchFrame;
 	const documentsByWorkspace = frameChanged
-		? documentsForViews(frame, projected.viewsByWorkspace)
+		? {
+				...state.layoutDocumentsByWorkspace,
+				...documentsForViews(frame, projected.viewsByWorkspace),
+			}
 		: { ...state.layoutDocumentsByWorkspace, [workspaceId]: effectiveDocument };
-	const changedWorkspaceIds = frameChanged ? Object.keys(documentsByWorkspace) : [workspaceId];
+	const changedWorkspaceIds = frameChanged
+		? Object.keys(projected.viewsByWorkspace)
+		: [workspaceId];
 	const attentionByWorkspace = { ...state.layoutAttentionByWorkspace };
 	for (const id of changedWorkspaceIds) {
 		const nextDocument = documentsByWorkspace[id];
@@ -940,6 +963,30 @@ export async function commitWorkspaceLayout(
 			state.layoutDocumentsByWorkspace[id],
 		);
 	}
+	const sourceDocument = documentsByWorkspace[workspaceId];
+	const sourceAttention = attentionByWorkspace[workspaceId];
+	if (sourceDocument && sourceAttention) {
+		const groups = changedToolSelections(
+			state.layoutAttentionByWorkspace[workspaceId],
+			sourceAttention,
+			sourceDocument,
+			state.layoutDocumentsByWorkspace[workspaceId],
+		);
+		for (const id of changedWorkspaceIds) {
+			if (id === workspaceId) continue;
+			const otherDocument = documentsByWorkspace[id];
+			const otherAttention = attentionByWorkspace[id];
+			if (otherDocument && otherAttention) {
+				attentionByWorkspace[id] = adoptToolSelections(
+					otherAttention,
+					otherDocument,
+					sourceAttention,
+					sourceDocument,
+					groups,
+				);
+			}
+		}
+	}
 	// Only a *structural* frame change invalidates the projection: a resize writes weights, and rebuilding
 	// the projection on that flashes every panel group at the end of a drag. See layout/SPEC.md.
 	const structureChanged =
@@ -948,7 +995,7 @@ export async function commitWorkspaceLayout(
 	state.applyLocalLayoutState(
 		{
 			frame,
-			viewsByWorkspace: projected.viewsByWorkspace,
+			viewsByWorkspace: { ...state.workspaceViewsByWorkspace, ...projected.viewsByWorkspace },
 			documentsByWorkspace,
 			attentionByWorkspace,
 			preferences: state.localLayoutPreferences,
