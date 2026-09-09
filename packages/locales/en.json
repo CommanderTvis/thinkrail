@@ -2001,6 +2001,8 @@
 	"shell.workbench.chatRestoreFailedTitle": "Couldn't restore the chat",
 	"shell.workbench.chatRestoreSlow": "The chat is taking longer than usual to restore.",
 	"shell.workbench.gestureCanceled": "The layout changed. Your drag was canceled.",
+	"shell.workbench.gitless.none": "This project folder is not a git repository, so there is nothing to compare.",
+	"shell.workbench.gitless.unborn": "This repository has no commits yet, so there is nothing to compare against.",
 	"shell.workbench.newTerminal": "New terminal in this group",
 	"shell.workbench.panel.chat": "chat",
 	"shell.workbench.panel.editor": "editor",
