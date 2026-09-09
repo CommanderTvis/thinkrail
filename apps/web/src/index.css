@@ -138,10 +138,12 @@
 .review-add-icon:hover {
 	background: var(--control-bg-hovered);
 }
-/* The rendered preview's ::selection: translucent (the muted alpha step of the theme's selection),
-   because Chrome paints a multi-block selection wall-to-wall — with the theme's OPAQUE selection over
-   the near-black canvas, the unselected remainder of the focus line read as a black hole punched in
-   the wash. Monaco never shows this (it paints its own selection), so only the preview needs it. */
+/* The rendered preview's ::selection: the muted alpha step of the theme's selection, because Chrome
+   paints a multi-block selection wall-to-wall and the full-strength selection over the near-black canvas
+   left the unselected remainder of the focus line reading as a black hole punched in the wash. The step
+   is applied on top of whatever alpha the palette already carries, so a theme owes it enough opacity to
+   survive that (styles/selectionVisibility.test.ts). Monaco never shows this — it paints its own
+   selection — so only the preview needs it. */
 [data-testid="markdown-preview"] ::selection {
 	background: var(--selection-bg-muted);
 }

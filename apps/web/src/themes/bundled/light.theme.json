@@ -25,7 +25,7 @@
 		"text": "#27272a",
 		"muted": "#52525b",
 		"hint": "#71717a",
-		"selection": "#6b57ff38",
+		"selection": "#6b57ff5c",
 		"selectionForeground": null,
 		"editorSelection": "#cfe0fb",
 		"editorSelectionForeground": null,
