@@ -39,10 +39,18 @@ engine architecture.
 ## V1 profile and topology
 
 V1 ships only the local-host profile. One Electrobun Bun process owns the native shell and server on the
-same event loop; the accepted in-process crash trade-off is unchanged. The host binds loopback port `0`
-and its actual port forms the window origin. The packaged `web/dist`, `/ws`, `/files`, and SPA fallback
-therefore remain same-origin and the web client has no desktop branch. A dynamic loopback port is never
-persisted.
+same event loop; the accepted in-process crash trade-off is unchanged. The host's actual port forms the
+window origin. The packaged `web/dist`, `/ws`, `/files`, and SPA fallback therefore remain same-origin and
+the web client has no desktop branch.
+
+**The port a profile listened on is remembered** (`host-ports.json`, beside the route and preference
+stores) and asked for again on the next launch, taking the next free one when it is occupied. A loopback
+port used to be picked fresh every launch, and the origin it forms is the webview's *storage identity*:
+a new port is an empty `localStorage`, so the whole frontend-local workbench — open tabs, panes, widths,
+attention — started over on every restart. The route and the bounded preference map survive a changing
+port by riding the preload instead, but the workbench document is far past what that channel carries, and
+a browser profile that lasts one run is the wrong shape for anything else the client stores. A remembered
+port is best-effort: an occupied one is not an error, it is a search.
 
 Desktop, CLI, and source hosts do not exclude one another by data directory. Every launcher binds an
 independent serving port and initializes its own in-process services. If multiple hosts use the same mutable
@@ -58,17 +66,25 @@ another.
    runtime contract: PI then selects its TypeScript source-runtime Jiti path and supplies bundled virtual
    modules to external extensions. Flattening PI into Electrobun's normal `.js` entry makes it select
    built-Node aliases that are absent from a self-contained app and breaks Central/external extensions.
-3. The runtime value-imports the five bundled extension factories and calls `registerBundledRuntime()`
+3. The runtime value-imports the four bundled extension factories and calls `registerBundledRuntime()`
    with those factories, the named `pi-web-access` factory needed by delegation children, the staged skills,
-   and macOS/Windows trash helpers. The generator's key map must satisfy every key of the server-owned
-   `BundledExtensions` contract, so adding a required launcher field fails desktop typecheck instead of
-   producing a packaged-only `undefined`. It then calls `bootHost()` on loopback port `0` with the staged web
-   directory, baked version, and `desktop` analytics provenance.
+   macOS/Windows trash helpers, and — per builtin plugin — its pi extensions value-imported as count-driven
+   factories plus its skills/assets staged under `runtimeDir/plugins/<id>/{skills,assets}` next to the
+   fixed extensions' own skills staging (`preBuild.ts`, mirroring `apps/cli/scripts/build-binary.ts`). The
+   generator's key map must satisfy every key of the server-owned `BundledExtensions` contract, so adding a
+   required launcher field fails desktop typecheck instead of producing a packaged-only `undefined`. It
+   then calls `bootHost()` with this profile's remembered
+   loopback port (`portMode: "free"`, so an occupied one searches upward; `0` on a first run), the staged
+   web directory, baked version, and `desktop` analytics provenance. `bootHost()` acquires ownership before its
+   mutable initialization.
 4. Restore the valid route fragment and bounded client-preference map for
-   `{ backendProfileId: "local", windowId: "main" }`. The route is appended to the fresh origin; the
+   `{ backendProfileId: "local", windowId: "main" }`, and record the port the host actually took. The
+   route is appended to the origin; the
    preference map is serialized as data and prepended to the preload source so the web client can hydrate
    before React mounts despite the changing port. Open one normal native `BrowserWindow` with the system
-   renderer.
+   renderer, `hiddenInset` so the web header is the title bar. Its `trafficLightOffset` is not an origin:
+   Electrobun records where macOS put the close button and *adds* the offset to that, so `{ x: 20, y: 8 }`
+   is what centres Tahoe's 14px lights in the 49px header beside them.
 
 The Electrobun entry bundle contains native-shell code only. A static server import there is forbidden:
 it can load `bun-pty` before `BUN_PTY_LIB` and flatten PI into the wrong extension-loader mode. Startup
@@ -78,6 +94,20 @@ a hidden host.
 Packaged resources remain physical and unpacked: web assets and skills are read through filesystem paths,
 the PTY uses FFI, trash helpers are executable sidecars, and the preload is read as source text. ASAR is
 not part of this design.
+
+**The Claude Code marketplace no longer needs a desktop staging step.** Before the plugin-api migration,
+Claude Code loaded a plugin from a marketplace *directory* whose manifest names the plugin by a
+path relative to itself, so the build staged both into a matching layout and handed the host the result
+through `THINKRAIL_CLAUDE_PLUGIN_DIR` (`stagedClaudePlugin()`, `@thinkrail/shared/claudePlugin`) — without
+it the host's own module-relative derivation resolved to a path that does not exist inside the bundle.
+`@thinkrail/plugin-claude-code` now ships both the hook plugin and a self-contained marketplace manifest
+inside its own `assets/` tree (`packages/plugin-claude-code/assets/{claude-plugin,marketplace}`). Its host
+code resolves them through `PluginHostContext.assetsDir` — dev reads the package's own `assets/` dir
+directly (`packages/server/src/plugins/piResources.ts`'s `devBuiltinAssetsDir()`), and this desktop bundle
+resolves the dir `preBuild.ts` staged under `runtimeDir/plugins/claude-code/assets`
+(`packages/server/src/plugins/activation.ts`'s `assetsDir` getter, fed by `bundledPluginRuntime("claude-code")`
+— the same seam a compiled `apps/cli` binary uses). No environment variable and no plugin-specific desktop
+code path remain.
 
 ## Native application menu
 
@@ -92,10 +122,27 @@ there; WebKitGTK keeps its renderer-native editing behavior. The policy is platf
 ready seam reports whether registration ran, so unit tests pin menu composition while expanded-app smoke
 pins production wiring.
 
+## Context menu
+
+WKWebView's own right-click menu on macOS is the system text menu: Look Up, Translate, web search,
+Speech, Services, and on editable text the whole Font / Spelling / Substitutions tree. Electrobun 2.0.1
+exposes no way to trim it, only `ContextMenu.showContextMenu` for a native menu of the same role items the
+application menu uses. So on macOS the preload cancels every `contextmenu` event the page itself did not
+already handle (Radix context menus and Monaco call `preventDefault` first and keep their own menus) and
+sends one typed `contextMenu { editable }` message; the main process shows Copy over plain text and
+Cut / Copy / Paste / Select All over inputs, textareas, and contenteditable, all as responder-chain roles
+so they reach xterm and Monaco exactly as the Edit menu does. The preload gates on the WebKit user agent
+because `showContextMenu` is a no-op on Linux and only partially role-aware on Windows, where the native
+menus are not the problem; the menu composition is a pure, unit-tested function of the payload, and a
+malformed payload degrades to the plain-text menu.
+
 ## Navigation and window security
 
-The native window permits navigation only within its exact loopback origin. User-requested external URLs
-open through the OS instead of replacing the app surface. Navigation listeners use the SDK emitter's
+The native window permits navigation only within its own loopback origin. User-requested external URLs
+open through the OS instead of replacing the app surface. "Its own" spans the host's other loopback names:
+the window loads `http://127.0.0.1:<port>`, so a link written as `localhost` or `[::1]` on that same port
+and scheme is the app talking to itself, and handing it to the OS is how the desktop app ends up opening
+browser tabs onto itself. Any other port, host or scheme stays external. Navigation listeners use the SDK emitter's
 webview-scoped `will-navigate-<id>` and `new-window-open-<id>` channels; the unscoped payload has no
 webview id, and the instance listener's typed event list omits popups. Payload types are derived from
 SDK event factories, not copied into local declarations. Detail can be a raw URL, a popup object, or
@@ -185,8 +232,12 @@ configuration selects Bun as package manager, retaining the workspace catalog an
 Hutch owns the generated `.hutch/devkit` projection and download cache. The projection and transient
 `.cottontail-tmp` loaders are ignored and excluded from repository source-boundary scans, never edited
 or committed. Framework builds prepare it
-implicitly; typecheck runs the standard `electrobun prepare` command before TypeScript. Preparation errors
-propagate normally, and a fresh machine needs network access. Ordinary install, web-only development/
+implicitly; typecheck prepares it through `scripts/prepare-devkit.ts`, which runs the standard
+`electrobun prepare` command only when `.hutch/devkit/.complete` does not already record the pinned
+Electrobun version. `prepare` waits on the project build lock even when the projection is already valid,
+so an unguarded call blocks for as long as `electrobun dev` runs in the worktree — the guard is what lets
+a developer typecheck (and so commit, through the pre-commit hook) with the dev host up. Preparation
+errors propagate normally, and a fresh machine needs network access. Ordinary install, web-only development/
 builds, and unit tests do not prepare the native SDK.
 
 Desktop typechecking consumes the official SDK's `.ts` sources through the same baseUrl-free paths used
