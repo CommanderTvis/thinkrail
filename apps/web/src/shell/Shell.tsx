@@ -11,6 +11,7 @@ import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "../compone
 import { IconTooltip } from "../components/ui/tooltip";
 import { InterviewPromptDialog } from "../panels/InterviewPromptDialog";
 import { ProjectTree } from "../panels/ProjectTree";
+import { SearchOverlay } from "../panels/SearchOverlay";
 import { SettingsDialog } from "../panels/SettingsDialog";
 import { Toaster } from "../panels/Toaster";
 import { openReviewLabel, useOpenBranchReview } from "../panels/useOpenBranchReview";
@@ -89,6 +90,7 @@ export function Shell() {
 
 	const [themeHint] = useState(readThemeHint);
 	const [findRequest, setFindRequest] = useState(0);
+	const [searchOpen, setSearchOpen] = useState(false);
 	const welcomeGeneration = useAppStore((s) => s.welcomeGeneration);
 	const theme = useAppStore((s) => s.theme);
 	const themeMode = useAppStore((s) => s.themeMode);
@@ -105,6 +107,7 @@ export function Shell() {
 	}, [themeHint, welcomeGeneration, theme, themeMode, systemThemePair]);
 	useGlobalHotkeys({
 		onFind: () => setFindRequest((current) => current + 1),
+		...(activeWorkspaceId ? { onSearch: () => setSearchOpen(true) } : {}),
 		onProjects: hasActiveWorkspace
 			? () => {
 					if (!activeWorkspaceId) return;
@@ -137,6 +140,9 @@ export function Shell() {
 	});
 	return (
 		<div data-testid="shell" className="grid h-full grid-rows-[auto_1fr]">
+			{searchOpen && activeWorkspaceId ? (
+				<SearchOverlay workspaceId={activeWorkspaceId} onClose={() => setSearchOpen(false)} />
+			) : null}
 			<header
 				ref={titleBarRef}
 				className={`flex items-center justify-between border-b border-border-default bg-container-header-bg py-8 pr-16 ${

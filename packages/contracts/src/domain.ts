@@ -118,6 +118,17 @@ export interface FileNode {
 	children?: FileNode[];
 }
 
+export interface SearchHit {
+	path: string;
+	line: number;
+	text: string;
+}
+
+export interface SearchHits {
+	hits: SearchHit[];
+	truncated: boolean;
+}
+
 export interface SpecGraphNode {
 	id: string;
 	type: string;

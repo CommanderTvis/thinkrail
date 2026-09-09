@@ -39,12 +39,16 @@ function FilePaneBody({ tab }: { tab: FileTab | ExternalFileTab }) {
 	const clearFocus = useCallback(() => useAppStore.getState().clearFileFocus(tab.path), [tab.path]);
 
 	// Resolved against the text the editor holds, never sent as a line by the host — see panels/SPEC.md.
-	const focusKeyPath = useAppStore((s) =>
-		s.fileFocusRequest?.path === tab.path ? s.fileFocusRequest.keyPath : undefined,
+	const focusRequest = useAppStore((s) =>
+		s.fileFocusRequest?.path === tab.path ? s.fileFocusRequest : undefined,
 	);
+	const focusKeyPath = focusRequest && "keyPath" in focusRequest ? focusRequest.keyPath : undefined;
+	const requestedLine = focusRequest && "line" in focusRequest ? focusRequest.line : undefined;
 	const focusLine = useMemo(
-		() => (focusKeyPath ? (jsonKeyLine(tab.content, focusKeyPath) ?? undefined) : undefined),
-		[focusKeyPath, tab.content],
+		() =>
+			requestedLine ??
+			(focusKeyPath ? (jsonKeyLine(tab.content, focusKeyPath) ?? undefined) : undefined),
+		[requestedLine, focusKeyPath, tab.content],
 	);
 	const [outlineLine, setOutlineLine] = useState<number | undefined>(undefined);
 
@@ -217,6 +221,9 @@ function FilePaneBody({ tab }: { tab: FileTab | ExternalFileTab }) {
 					workspaceId={tab.workspaceId}
 					path={tab.path}
 					review={review}
+					{...(view === "rendered" && focusLine !== undefined
+						? { focusLine, onFocusHandled: clearFocus }
+						: {})}
 				/>
 			</div>
 		</Suspense>

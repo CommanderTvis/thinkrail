@@ -10,6 +10,7 @@ type GlobalHotkeyActions = {
 	onWorkspace?: () => void;
 	onBottom?: () => void;
 	onFind: () => void;
+	onSearch?: () => void;
 };
 
 export function isFindChord(event: PanelHotkeyEvent, platform?: string): boolean {
@@ -18,6 +19,12 @@ export function isFindChord(event: PanelHotkeyEvent, platform?: string): boolean
 		!event.altKey &&
 		!event.shiftKey &&
 		hasPlatformModifier(event, platform)
+	);
+}
+
+export function isSearchChord(event: PanelHotkeyEvent, platform?: string): boolean {
+	return (
+		event.code === "KeyF" && !event.altKey && event.shiftKey && hasPlatformModifier(event, platform)
 	);
 }
 
@@ -78,6 +85,13 @@ export function useGlobalHotkeys(actions: GlobalHotkeyActions): void {
 					else if (command === "workspace") actionsRef.current.onWorkspace?.();
 					else actionsRef.current.onBottom?.();
 				}
+				return;
+			}
+
+			if (isSearchChord(event) && actionsRef.current.onSearch && !hasOpenModal()) {
+				event.preventDefault();
+				event.stopPropagation();
+				if (!event.repeat) actionsRef.current.onSearch();
 				return;
 			}
 

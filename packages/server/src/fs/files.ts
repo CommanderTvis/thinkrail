@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
-import { readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { isAbsolute, join, relative, resolve } from "node:path";
-import type { FileNode, FileWriteResult } from "@thinkrail/contracts";
+import type { FileNode, FileWriteResult, SearchHit, SearchHits } from "@thinkrail/contracts";
 import { loadWorkspaces } from "../persistence";
 
 function resolveInWorktree(workspaceId: string, path: string): { root: string; abs: string } {
@@ -91,4 +91,50 @@ export function writeFile(
 
 export function resolveWorktreeFile(workspaceId: string, path: string): string {
 	return resolveInWorktree(workspaceId, path).abs;
+}
+
+const SEARCH_MATCH_LIMIT = 200;
+const SEARCH_FILE_BYTE_LIMIT = 512 * 1024;
+
+function searchDir(root: string, dir: string, needle: string, hits: SearchHit[]): void {
+	if (hits.length >= SEARCH_MATCH_LIMIT) return;
+	const entries = readdirSync(dir, { withFileTypes: true }).filter((e) => e.name !== ".git");
+	const ignored = ignoredPaths(
+		root,
+		entries.map((entry) => relative(root, join(dir, entry.name))),
+	);
+	for (const entry of entries) {
+		if (hits.length >= SEARCH_MATCH_LIMIT) return;
+		const abs = join(dir, entry.name);
+		const rel = relative(root, abs);
+		if (ignored.has(rel)) continue;
+		if (entry.isDirectory()) {
+			searchDir(root, abs, needle, hits);
+			continue;
+		}
+		if (!entry.isFile()) continue;
+		let text: string;
+		try {
+			if (statSync(abs).size > SEARCH_FILE_BYTE_LIMIT) continue;
+			text = readFileSync(abs, "utf8");
+		} catch {
+			continue;
+		}
+		if (text.includes("\0")) continue;
+		const lines = text.split("\n");
+		for (const [index, line] of lines.entries()) {
+			if (!line.toLowerCase().includes(needle)) continue;
+			hits.push({ path: rel, line: index + 1, text: line.slice(0, 400) });
+			if (hits.length >= SEARCH_MATCH_LIMIT) return;
+		}
+	}
+}
+
+export function searchWorktree(workspaceId: string, query: string): SearchHits {
+	const needle = query.toLowerCase();
+	if (needle.length === 0) return { hits: [], truncated: false };
+	const { root } = resolveInWorktree(workspaceId, ".");
+	const hits: SearchHit[] = [];
+	searchDir(root, root, needle, hits);
+	return { hits, truncated: hits.length >= SEARCH_MATCH_LIMIT };
 }

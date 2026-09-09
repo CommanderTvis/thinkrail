@@ -892,7 +892,10 @@ interface AppState {
 	embeddedPanes: Record<string, Record<string, EmbeddedPaneEntry>>;
 	terminalInputByWorkspace: Record<string, string>;
 	reviewFocusRequest: { workspaceId: string; commentId: string } | null;
-	fileFocusRequest: { workspaceId: string; path: string; keyPath: readonly string[] } | null;
+	fileFocusRequest:
+		| { workspaceId: string; path: string; keyPath: readonly string[] }
+		| { workspaceId: string; path: string; line: number }
+		| null;
 	fsChangesByWorkspace: Record<string, { tick: number; paths: string[]; truncated: boolean }>;
 	skillChangeTickByWorkspace: Record<string, number>;
 	skillsSyncedTickBySession: Record<string, number>;
@@ -1154,6 +1157,7 @@ interface AppState {
 	requestReviewFocus: (workspaceId: string, commentId: string) => void;
 	clearReviewFocus: (commentId?: string) => void;
 	requestFileFocus: (workspaceId: string, path: string, keyPath: readonly string[]) => void;
+	requestFileLineFocus: (workspaceId: string, path: string, line: number) => void;
 	clearFileFocus: (path?: string) => void;
 	applyReviewChanged: (payload: ReviewChangedPayload) => void;
 	setWorkspaceBlueprint: (state: BlueprintState) => void;
@@ -3608,6 +3612,12 @@ export const useAppStore = create<AppState>((set, get) => ({
 			state.removedWorkspaceIds[workspaceId]
 				? {}
 				: { fileFocusRequest: { workspaceId, path, keyPath } },
+		),
+	requestFileLineFocus: (workspaceId, path, line) =>
+		set((state) =>
+			state.removedWorkspaceIds[workspaceId]
+				? {}
+				: { fileFocusRequest: { workspaceId, path, line } },
 		),
 	clearFileFocus: (path) =>
 		set((state) =>

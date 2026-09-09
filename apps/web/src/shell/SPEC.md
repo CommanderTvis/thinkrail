@@ -172,4 +172,10 @@ genuinely-stuck case it exists for.
   never reaches a Monaco-rendered file anyway. Ceilings: the whole document is searched, not the active
   pane, and a match spanning two text nodes is not found.
 
+- `Mod+Shift+F` opens the **`SearchOverlay`** popup: one query over the whole active worktree, results
+  grouped by file, a click opening that file at that line (`requestFileLineFocus`, the same focus channel
+  the JSON key jump uses — see [[submodule-web-panels]]). It takes the chord before `Mod+F` does and works
+  inside a Monaco editor too, because searching the workspace is not the same request as searching the
+  buffer you are in. With no active workspace the chord neither acts nor swallows the browser's.
+
 Letter chords match physical `KeyboardEvent.code`, never layout-dependent `key`. The three layout chords remain app-owned inside xterm, do not repeat, and are suppressed while a modal dialog is open. With no active workspace, right/bottom chords neither act nor swallow the browser chord; Projects remains available. Terminal `Ctrl+R` still belongs to xterm; `Ctrl+Shift+R`, macOS `Cmd+R`, F5, and browser reload remain untouched. All other arrangement operations are exposed by the layout command/menu system in [[submodule-web-shell-layout]].

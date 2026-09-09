@@ -1393,12 +1393,28 @@ tab — `external-file` when the path escaped the worktree, which is most of Cla
   measured against the file as it stood when the snapshot was built, and would be wrong for every row
   below an edit made since. Resolving here also costs one lookup per click instead of a scan per
   resolved key, and adds no round trip.
+- **A markdown file has no editor to land in, so the block lands instead.** Markdown opens rendered, and
+  the request carries a source line — a line nothing on screen is numbered by. The preview resolves it
+  through the same `data-md-line-*` stamps the review path already puts on every block, scrolls the block
+  that line fell in into view, and flashes it. The flash fades on purpose: a mark that stayed would be
+  read as a selection, the mistake `.review-region` is shaped around. In split and source view the request
+  is left to the editor, which can put a caret on the exact line. The narrowest block wins when several
+  contain the line, so landing inside a table cell marks the cell, not the table.
 - **The request is ephemeral, not part of the tab.** `store.fileFocusRequest` carries
-  `{ workspaceId, path, keyPath }`, and the editor clears it once it has revealed the line — the same
+  `{ workspaceId, path, keyPath }` — or `{ workspaceId, path, line }` when the caller already knows the
+  line, which is what a search hit hands over (`requestFileLineFocus`); the resolver runs only for the key
+  path — and the editor clears it once it has revealed the line — the same
   request/consume/clear shape as `reviewFocusRequest`. It deliberately does *not* ride on the tab or the
   layout document: those hold durable source identity, an already-open tab is reused rather than rebuilt
   (so a line baked in at build time would be ignored on the second click), and a caret position is not
   something a restored layout should re-assert.
+- **`SearchOverlay` is a popup, not a panel.** `Mod+Shift+F` (shell/SPEC.md) opens one query box over the
+  active worktree; the host answers with `fs.search` (fs/SPEC.md: a bounded substring sweep, 200 hits max),
+  and the overlay groups the hits by file, one row per line, each opening that file at that line. It is a
+  dialog rather than a tool tab deliberately: a search is a question you ask and dismiss, and giving it a
+  rail slot would cost a panel that stays whether or not you are searching. The query is debounced and each
+  request carries a generation, so a slow answer for an abandoned query never overwrites a newer one.
+  Ceilings, all deliberate for a first version: no regex, no case toggle, no glob filter, no replace.
 - **A key path that does not resolve opens the file at the top.** `jsonKeyLine.ts` — a scanner, because
   `JSON.parse` discards exactly the positions this needs — returns `null` for
   anything it cannot walk exactly, so a malformed or restructured file degrades to the old behaviour
