@@ -38,9 +38,29 @@ function parseInlineList(text: string): string[] | null {
 	return inner.split(",").map(parseScalar);
 }
 
+/** A flow sequence spread across lines; saved back as a block list — see SPEC.md. */
+function readFlowSequence(
+	body: readonly string[],
+	start: number,
+	head: string,
+): { items: string[]; next: number } | null {
+	let text = head.trim();
+	let cursor = start;
+	while (!text.endsWith("]")) {
+		const line = (body[cursor] ?? "").trim();
+		if (cursor >= body.length || line === "" || line.startsWith("#")) return null;
+		text = text === "" ? line : `${text} ${line}`;
+		cursor += 1;
+	}
+	if (!text.startsWith("[")) return null;
+	const items = parseInlineList(text.replace(/,[ \t]*\]$/, "]"));
+	return items ? { items, next: cursor } : null;
+}
+
 /**
  * The properties a document opens with, or null when it has no frontmatter at all. Only the shapes the
- * editor can round-trip parse as editable — top-level `key: scalar`, `key: [a, b]`, a block list of
+ * editor can round-trip parse as editable — top-level `key: scalar`, `key: [a, b]` (inline or spread
+ * across lines), a block list of
  * scalars, and a one-level mapping of scalars; anything else (deeper nesting, multiline strings,
  * anchors) keeps the whole block read-only rather than risking a rewrite that drops what it did not
  * understand. See SPEC.md.
@@ -64,6 +84,12 @@ export function parseFrontmatter(content: string): FrontmatterBlock | null {
 		const key = (match[1] ?? "").trim();
 		const after = match[2] ?? "";
 		if (after.trim() === "") {
+			const flow = readFlowSequence(body, index + 1, "");
+			if (flow) {
+				properties.push({ key, value: flow.items });
+				index = flow.next - 1;
+				continue;
+			}
 			const items: string[] = [];
 			let cursor = index + 1;
 			while (cursor < body.length) {
@@ -108,6 +134,13 @@ export function parseFrontmatter(content: string): FrontmatterBlock | null {
 		const inline = parseInlineList(after);
 		if (inline) {
 			properties.push({ key, value: inline });
+			continue;
+		}
+		if (after.trim().startsWith("[")) {
+			const flow = readFlowSequence(body, index + 1, after);
+			if (!flow) return { properties: [], raw, editable: false };
+			properties.push({ key, value: flow.items });
+			index = flow.next - 1;
 			continue;
 		}
 		const scalar = after.trim();

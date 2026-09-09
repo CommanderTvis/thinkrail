@@ -1974,7 +1974,11 @@ tab — `external-file` when the path escaped the worktree, which is most of Cla
   reviewed path — so it scrolls away with the prose instead of holding a frozen band of the pane. Metadata
   is what a reader passes on the way in, not something worth the height on every screen of a long spec.
   Text, sequences, and one-level mappings — `frontmatter.ts` parses top-level `key: scalar`,
-  `key: [a, b]`, block lists of scalars, and one level of `sub: scalar` entries; any other YAML shape
+  `key: [a, b]`, block lists of scalars, and one level of `sub: scalar` entries; **a flow sequence spread
+  across lines** (`key:`, then `[`, its items, `]`) reads as the same list, because the spec files this
+  table exists for are generated in exactly that shape and treating it as unreadable turned every one of
+  them into a raw block. It is saved back as a block list, the canonical form the serializer already
+  writes; an unclosed one is still refused. Any other YAML shape
   (deeper nesting, duplicate sub-keys, anchors, multiline) keeps the **whole block read-only** rather
   than risking a rewrite that drops what it did not understand; a duplicate-key rename is refused for
   the same reason. An edit rebuilds the frontmatter through `withFrontmatter` and lands as
