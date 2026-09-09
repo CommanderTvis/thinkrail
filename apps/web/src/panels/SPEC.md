@@ -1817,7 +1817,10 @@ tab — `external-file` when the path escaped the worktree, which is most of Cla
   `e2e/changes.spec.ts`)). **A markdown diff has exactly two
   views** instead, via a **Source | Rendered** toggle (`diff-toggle-source`/`diff-toggle-rendered`,
   per-tab `DiffTab.rendered` via `store.setDiffTabRendered`, gated on `lib.isMarkdownPath`; Source is
-  the default — no Split|Inline segment for markdown). **Source** = the basic Monaco split diff.
+  the default — no Split|Inline segment for markdown). **Source** = the same Monaco diff, and it obeys the
+  same `narrowForSplit` default as every other file: the segment is what markdown lacks, not the fallback.
+  It used to be pinned to `split`, which is the one combination with no way out — a narrow pane wrapped both
+  halves to a few characters each and carried no Split|Inline segment to escape with.
   **Rendered** is a **real rich diff**, not plain previews (see [[task-rendered-markdown-diff]]): the
   lazy `RenderedDiff` renders **both sides** through the same document pipeline as `MarkdownPreview`
   (the shared `MarkdownDocument` — prose skin, alerts, heading ids, frontmatter stripped) to static

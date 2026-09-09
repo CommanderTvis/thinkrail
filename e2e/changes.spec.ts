@@ -528,6 +528,28 @@ test("The diff header keeps its controls on a narrow pane, however long the file
 	await expect(page.getByTestId("diff-toggle-split")).toHaveAttribute("data-active", "true");
 });
 
+test("A markdown diff drops to one column on a narrow pane like every other file", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	await createWorkspaceViaDialog(page);
+
+	const worktree = join(E2E_DATA_DIR, "worktrees", "sample-project", "workspace-1");
+	writeFileSync(join(worktree, "README.md"), "# sample-project\n\nedited by e2e\n");
+
+	await page.getByTestId("tab-changes").click();
+	await page.getByTestId("change-item").filter({ hasText: "README.md" }).click();
+	const diff = page.locator(".monaco-diff-editor");
+	await expect(diff).toHaveClass(/side-by-side/);
+
+	await page.setViewportSize({ width: 620, height: 800 });
+	await expect(diff).not.toHaveClass(/side-by-side/);
+	await expect(page.getByTestId("diff-toggle-split")).toHaveCount(0);
+
+	await page.setViewportSize({ width: 1280, height: 800 });
+	await expect(diff).toHaveClass(/side-by-side/);
+});
+
 test("A commit scope keeps the header readable: short sha on the pill, subject in its tooltip", async ({
 	page,
 }) => {
