@@ -28,7 +28,8 @@ treatment.
 ## Boundary
 
 - **Owns:** `ProjectTree`. Each top-level project row is a compact 28px IDE-tree row:
-  **always-visible chevron** + folder/name + a collapsed-only plain workspace count + an **always-visible Create
+  **always-visible chevron** + folder/name + a collapsed-only plain workspace count (a bare digit, so its
+  tooltip says what it counts: "3 workspaces") + an **always-visible Create
   workspace `+` in a fixed right-edge column**. That `+` is the **same control as the Projects-header Add
   project `+`** — both are `Button variant="ghost" size="icon"`, so they render identically and their glyphs
   line up on one vertical axis (both sit at the row's `pr-xs` right edge).

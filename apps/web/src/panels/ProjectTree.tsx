@@ -467,12 +467,16 @@ function ProjectRow({
 			</button>
 			{activity && <ActivityGlyph status={activity.status} counts={activity.counts} />}
 			{!isExpanded && workspaceCount > 0 && (
-				<span
-					data-testid="project-workspace-count"
-					className="shrink-0 tr-text-metadata text-text-muted"
+				<IconTooltip
+					label={`${workspaceCount} ${workspaceCount === 1 ? "workspace" : "workspaces"}`}
 				>
-					{workspaceCount}
-				</span>
+					<span
+						data-testid="project-workspace-count"
+						className="shrink-0 tr-text-metadata text-text-muted"
+					>
+						{workspaceCount}
+					</span>
+				</IconTooltip>
 			)}
 			<IconTooltip label="Start work">
 				<Button
