@@ -118,7 +118,11 @@ Native scrollbars stay hidden; pointer-transparent edge fades appear only where 
 changing the fixed 32 px strip. Full-height strip actions share that width. A control renders only when it can
 act: overflow search only while clipped, and fold only while a side has multiple groups or is already folded.
 Singleton tool tabs have no inline close glyph; Close/Hide stays in their menu and on Delete, while terminals
-and center resources retain their direct control.
+and center resources retain their direct control. **A middle click on a tab closes it**, the same action the
+Delete key runs and over the same set — tool tabs included, since the gesture is aimed at one tab and carries
+no other meaning here. It is taken on the tab control itself rather than the row, so the browser's
+middle-button autoscroll is suppressed where the gesture lands and the drag sensor, which only arms on the
+primary button, never sees it.
 
 Each auxiliary strip trails an add-to-this-group menu. It offers shell-injected actions plus unplaced tools valid for that region; two rails never offer the same singleton. Center tab menus offer no singleton tools. A terminal created from an auxiliary group lands in that workspace's matching group; a vanished target reroutes through the current local focus rule. **A tool shown from a group's own menu lands in that group** — `revealTool` takes the asking group as its target and appends the tool there, ahead of the tool's remembered restore target and the region's default placement (which only apply to reveals with no asking group: the rail chips, a `requestToolView` from a feature). Before this the menu's "Show X" answered from the restore target, so a tool last closed from another row reappeared in a new group beneath the one whose "+" was pressed.
 

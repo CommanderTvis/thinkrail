@@ -320,6 +320,22 @@ test("ARIA tabs use roving keyboard focus, recover after close, and expose keybo
 	await expect(bottomSeparator).toHaveAttribute("aria-valuenow", /\d+/);
 });
 
+test("a middle click closes the tab under the pointer, tool tabs included", async ({ page }) => {
+	await openDefaultWorkbench(page);
+	await openKeptFiles(page, ["README.md", "notes.txt", "LINKS.md"]);
+	const center = page.getByTestId("center-tab-strip");
+
+	await center.getByRole("tab", { name: /notes\.txt/ }).click({ button: "middle" });
+	await expect(page.getByTestId("editor-tab")).toHaveCount(2);
+	await expect(center.getByRole("tab", { name: /notes\.txt/ })).toHaveCount(0);
+	await expect(center.getByRole("tab", { name: /README\.md/ })).toBeVisible();
+	await expect(center.getByRole("tab", { name: /LINKS\.md/ })).toBeVisible();
+
+	const files = page.getByTestId("tab-files");
+	await files.click({ button: "middle" });
+	await expect(files).toHaveCount(0);
+});
+
 test("outer side widths publish on pointer-up and restore after reload", async ({ page }) => {
 	await openDefaultWorkbench(page);
 	const right = page.getByTestId("right-stack");
