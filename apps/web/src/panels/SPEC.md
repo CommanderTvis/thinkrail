@@ -1399,9 +1399,22 @@ menu. A compacted folder copies the deepest represented directory for the absolu
   Clicking expands the run in place, one-way; expansion is component-local and positional, so a live
   refresh keeps an expansion whose run still starts at the same position and resets the rest. Nothing
   offers the whole merged document at once: Source and the file preview already do. A merge in which no
-  block changed — front matter is stripped before rendering, and whitespace or HTML comments don't
-  render — shows the `rendered-diff-empty` notice pointing at Source and collapses the document to a
-  single expander rather than presenting an unmarked full document as a diff. Visible blocks are
+  block changed and no property did either — whitespace, HTML comments, and a frontmatter block that was
+  only reordered or reformatted don't render — shows the `rendered-diff-empty` notice pointing at Source
+  and collapses the document to a single expander rather than presenting an unmarked full document as a
+  diff.
+
+  **Frontmatter is compared as data, above the prose, not merged as rendered text.** `FrontmatterDiff`
+  parses both sides with the properties table's own parser and draws one `frontmatter-property` row per
+  key, its `data-state` saying what happened: `same`, `added`, `removed` or `changed`. Keys are aligned
+  in document order, a key that only moved is drawn once where the new side has it, and a renamed key
+  reads as one key leaving and another arriving, since nothing ties the two names together. A changed
+  scalar is marked by word; a list and a one-level mapping are marked by item, so the brackets and the
+  items that stayed carry no mark; a value that changed shape is replaced whole. A block the table
+  cannot speak (multiline strings, deeper nesting) on either side falls back to a line diff of the YAML
+  as written. The table has no controls: nothing in a diff is editable, and a toggle that folds a
+  static table would be the only thing in the pane that is not about the change. The prose goes through
+  htmldiff on its own, so a frontmatter-only change still folds the untouched body. Visible blocks are
   re-created from the parsed elements (tag, attributes, `innerHTML`), never wrapped, so the DOM the
   prose styles target is unchanged; the boolean attributes the sanitizer lets through (`details[open]`, a
   standalone checkbox's `checked`/`disabled`) are mapped to `true` because React drops an empty-string
