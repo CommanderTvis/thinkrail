@@ -8,7 +8,7 @@
 		"dev": "electrobun dev",
 		"package:canary": "electrobun build --env=canary",
 		"package:stable": "electrobun build --env=stable",
-		"typecheck": "electrobun prepare && tsc --noEmit",
+		"typecheck": "bun scripts/prepare-devkit.ts && tsc --noEmit",
 		"test": "bun test",
 		"generate-icons": "bun scripts/generate-icons.ts"
 	},
