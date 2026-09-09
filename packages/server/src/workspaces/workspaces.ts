@@ -67,6 +67,11 @@ function branchExists(repoPath: string, branch: string): boolean {
 	return git(repoPath, ["show-ref", "--verify", "--quiet", `refs/heads/${branch}`]).ok;
 }
 
+function branchIsPublished(repoPath: string, branch: string): boolean {
+	const refs = git(repoPath, ["for-each-ref", "--format=%(refname)", `refs/remotes/*/${branch}`]);
+	return refs.ok && refs.out.trim().length > 0;
+}
+
 function nameTaken(project: Project, candidate: string): boolean {
 	return (
 		branchExists(project.path, candidate) ||
@@ -407,7 +412,8 @@ export function renameWorkspace(
 		throw new Error("An existing worktree cannot be renamed by ThinkRail");
 	const displayName = toDisplayName(requestedName);
 	if (!displayName) throw new Error(`Invalid workspace name: ${requestedName}`);
-	const wanted = renameBranch ? toBranch(displayName) : ws.branch;
+	const movable = renameBranch && !branchIsPublished(project.path, ws.branch);
+	const wanted = movable ? toBranch(displayName) : ws.branch;
 	const branch = wanted === ws.branch ? ws.branch : uniqueBranch(project, wanted);
 	const branchChanged = branch !== ws.branch;
 	if (branchChanged) {

@@ -83,7 +83,15 @@ place as `kind: "external"` — outside the data dir, never created or mutated h
   `true` and sets `renamed: true`, marking the choice deliberate so auto-naming never touches it again.
   **`opts.renameBranch` defaults `true`** for the existing provisional + agentic auto-rename callers: the
   branch is derived via `toBranch`, uniqued against refs + worktree dirs, and moved with `git branch -m` while
-  the **worktree dir never moves** (pi keys sessions and terminals/tabs by that exact cwd). The branch-moving
+  the **worktree dir never moves** (pi keys sessions and terminals/tabs by that exact cwd).
+  **A published branch is never moved, whatever `renameBranch` says**: if any remote-tracking ref carries
+  the branch's name (`branchIsPublished`, a `refs/remotes/*/<branch>` glob rather than a
+  `branch.<name>.remote` lookup, since `git push origin HEAD` writes the tracking ref but no config) the
+  rename degrades to the label and the record's `branch` stands. `git branch -m` moves the branch's config
+  section but keeps the old `merge` refspec, so the next push refuses with "The upstream branch of your
+  current branch does not match the name of your current branch" and the PR is left pointing at a branch no
+  local ref is named any more — an auto-name firing on a settled turn is not something a reviewed branch
+  should feel (JetBrains/thinkrail#457). The branch-moving
   path re-points sibling records whose `baseBranch` or `diffBase` named the old branch, re-loads the registry
   after the Git subprocess so a concurrent removal is not resurrected, saves once, and emits `updated` for
   every changed record. The host's provisional naive pass combines `lock: false` with this default so the
