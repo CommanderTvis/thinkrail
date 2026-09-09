@@ -160,7 +160,7 @@ export function DiffPane({ tab }: { tab: DiffTab }) {
 							path={tab.path}
 							original={tab.original}
 							modified={tab.modified}
-							view={markdown ? "split" : view}
+							view={view}
 							ignoreWhitespace={ignoreWhitespace}
 							{...(reviewable ? { review } : {})}
 						/>
