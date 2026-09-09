@@ -141,7 +141,7 @@
 			"from": "selection",
 			"alpha": "muted",
 			"publish": false,
-			"note": "the content canvas's ::selection (markdown preview): translucent, so the unselected remainder of a line box reads as a soft edge, not a black hole punched in an opaque wash"
+			"note": "the content canvas's ::selection (markdown preview): translucent, so the unselected remainder of a line box reads as a soft edge, not a black hole punched in an opaque wash. This step MULTIPLIES the palette alpha, so a theme whose selection is itself translucent must carry enough of it to stay visible here — pinned by styles/selectionVisibility.test.ts"
 		},
 
 		"editor-selection-bg": { "from": "editorSelection", "publish": false },
