@@ -1839,7 +1839,8 @@ tab — `external-file` when the path escaped the worktree, which is most of Cla
   halves to a few characters each and carried no Split|Inline segment to escape with.
   **Rendered** is a **real rich diff**, not plain previews (see [[task-rendered-markdown-diff]]): the
   lazy `RenderedDiff` renders **both sides** through the same document pipeline as `MarkdownPreview`
-  (the shared `MarkdownDocument` — prose skin, alerts, heading ids, frontmatter stripped) to static
+  (the shared `MarkdownDocument` — prose skin, alerts, heading ids, frontmatter stripped) plus the same
+  `FrontmatterProperties` block the file viewer shows above it, to static
   HTML (`renderToStaticMarkup`; effects don't run, so code blocks show the plain fallback and link
   handlers are inert — accepted for a diff view), then merges them with **`node-htmldiff`** into ONE
   document carrying `<ins>`/`<del>` markers (`del` red + strikethrough, `ins` green — token colors),
@@ -1853,7 +1854,17 @@ tab — `external-file` when the path escaped the worktree, which is most of Cla
   static-markup render of both sides is linear and stays on the main thread. Pinned by e2e in
   `e2e/changes.spec.ts`: the long-task test (seeded `LARGE.md`, 800 identical rows), the
   worker-failure test (worker asset blocked → `rendered-diff-error`), and the live-edit test (fs
-  tick re-reads both sides → stale merge cancelled, fresh one lands). This mirrors VS Code's opt-in "markdown preview in the diff view" — a feature of
+  tick re-reads both sides → stale merge cancelled, fresh one lands).
+  **The properties block goes *through* the merge, not beside it.** Rendering it into each side's static
+  markup means a changed `status:` wears the same `ins`/`del` marks the prose does, for no machinery at
+  all — a diff that showed only the new frontmatter would hide exactly the edits a spec review is looking
+  for. `FrontmatterProperties` takes `onEdit` as optional and renders a read-only key/value list without
+  it, which is also what makes it safe here: `renderToStaticMarkup` runs no effects, so an editable
+  control in a diff would be a widget that silently does nothing.
+  **The rendered view carries the outline too** (`diff-toggle-outline`, per-tab `DiffTab.outlineOpen`),
+  the same `OutlineColumn` the markdown file viewer uses, read from the **modified** side's source and
+  scrolling by heading id. It renders only in the rendered view: the Source view is a Monaco diff with its
+  own navigation, and a control renders only where it can act. This mirrors VS Code's opt-in "markdown preview in the diff view" — a feature of
   VS Code's webview layer, absent from standalone Monaco, hence built here. A row is shown selected when its
   diff resource is locally selected in a center group (or it is the deep-link highlight). A failed
   `git.diffFile` leaves placement unchanged (the row stays for a retry).

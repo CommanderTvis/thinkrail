@@ -172,6 +172,7 @@ export interface DiffTab {
 	modified: string;
 	view?: DiffTabView;
 	rendered?: boolean;
+	outlineOpen?: boolean;
 	ignoreWhitespace?: boolean;
 	loadedTick?: number;
 }
@@ -994,6 +995,7 @@ interface AppState {
 	setFileTabOutline: (id: string, open: boolean) => void;
 	setDiffTabView: (id: string, view: DiffTabView) => void;
 	setDiffTabRendered: (id: string, rendered: boolean) => void;
+	setDiffTabOutline: (id: string, open: boolean) => void;
 	setDiffTabIgnoreWhitespace: (id: string, ignoreWhitespace: boolean) => void;
 	changesView: "list" | "tree";
 	setChangesView: (view: "list" | "tree") => void;
@@ -2467,6 +2469,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 		}),
 	setDiffTabView: (id, view) => set((s) => patchDiffTab(s, id, { view })),
 	setDiffTabRendered: (id, rendered) => set((s) => patchDiffTab(s, id, { rendered })),
+	setDiffTabOutline: (id, open) => set((s) => patchDiffTab(s, id, { outlineOpen: open })),
 	setDiffTabIgnoreWhitespace: (id, ignoreWhitespace) =>
 		set((s) => patchDiffTab(s, id, { ignoreWhitespace })),
 	setChangesView: (view) => set({ changesView: view }),
