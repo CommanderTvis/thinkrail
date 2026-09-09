@@ -71,6 +71,18 @@ export function seedFixtureRepo(): void {
 		'<!doctype html><html><body><h1>HTML fixture</h1><script>document.body.textContent="script-ran"</script></body></html>',
 	);
 	writeFileSync(join(E2E_FIXTURE_REPO, "LONG_LINE.txt"), LONG_LINE);
+	writeFileSync(join(E2E_FIXTURE_REPO, "sample.pdf"), minimalPdf(), "latin1");
+	writeFileSync(
+		join(E2E_FIXTURE_REPO, "WIDE.md"),
+		[
+			"# Wide document",
+			"",
+			`| ${Array.from({ length: 14 }, (_, i) => `column-heading-${i}`).join(" | ")} |`,
+			`| ${Array.from({ length: 14 }, () => "---").join(" | ")} |`,
+			`| ${Array.from({ length: 14 }, (_, i) => `a-fairly-long-cell-${i}`).join(" | ")} |`,
+			"",
+		].join("\n"),
+	);
 	writeFileSync(
 		join(E2E_FIXTURE_REPO, "ALERTS.md"),
 		[
@@ -101,7 +113,11 @@ export function seedFixtureRepo(): void {
 			"# Diagram demo",
 			"",
 			"```mermaid",
-			"flowchart TD; Start --> Finish",
+			[
+				"flowchart TD; Start --> Finish",
+				"Finish --> Step0",
+				...Array.from({ length: 12 }, (_, i) => `Step${i} --> Step${i + 1}`),
+			].join("; "),
 			"```",
 			"",
 			"```mermaid",
@@ -221,4 +237,32 @@ export function asciiPdf(text: string): string {
 export function lfsPointer(oidPrefix: string, size: number): string {
 	const oid = `${oidPrefix}${"0".repeat(64 - oidPrefix.length)}`;
 	return `version https://git-lfs.github.com/spec/v1\noid sha256:${oid}\nsize ${size}\n`;
+}
+
+/**
+ * A hand-built one-page PDF, written rather than committed as a binary blob so the fixture stays
+ * readable and diffable. Byte offsets in the xref table are computed, since a wrong offset is exactly
+ * what a real parser rejects.
+ */
+export function minimalPdf(): string {
+	const objects = [
+		"<< /Type /Catalog /Pages 2 0 R >>",
+		"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+		"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 120] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>",
+		"<< /Length 52 >>\nstream\nBT /F1 18 Tf 20 60 Td (ThinkRail PDF) Tj ET\nendstream",
+		"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+	];
+
+	let pdf = "%PDF-1.4\n";
+	const offsets: number[] = [];
+	objects.forEach((body, index) => {
+		offsets.push(pdf.length);
+		pdf += `${index + 1} 0 obj\n${body}\nendobj\n`;
+	});
+
+	const xrefStart = pdf.length;
+	pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+	for (const offset of offsets) pdf += `${String(offset).padStart(10, "0")} 00000 n \n`;
+	pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefStart}\n%%EOF\n`;
+	return pdf;
 }
