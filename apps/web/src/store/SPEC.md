@@ -114,8 +114,9 @@ selected-log state belong to chat integration, not domain persistence. See
   resource-only result updates one workspace view and attention. A frame result replaces the singular frame
   together with every retained workspace-view remap, so an explicit group removal or preset application can
   never leave a hidden workspace referencing a dead group. Components never splice group/tab arrays. Empty
-  groups are valid frame state and closing a final resource does not delete them. `layoutProjectionEpoch`
-  advances only when a local transition invalidates an uncontrolled pointer/resize draft.
+  groups are valid frame state and closing a final resource does not delete them.
+  `layoutProjectionEpochByWorkspace` advances only for the workspaces whose local transition invalidates
+  an uncontrolled pointer/resize draft.
 
   The store owns values and actions, never persistence. `shell/layoutState` validates and hydrates one
   browser-endpoint/surface- or native-profile/window-qualified local document, subscribes to relevant state
@@ -142,7 +143,8 @@ selected-log state belong to chat integration, not domain persistence. See
   tool or absent, and a newly materialized view inherits the tool selections of the most recently active
   workspace. A selected workspace *resource* (a terminal in a mixed auxiliary group) stays local and is
   never overridden. `shell/layoutState` owns this fan-out in the same transaction as the local write.
-  Frame replacement reconciles each workspace's attention to a surviving group/tab. Navigation clocks advance
+  Frame replacement reconciles each workspace's attention to a surviving group/tab and shares a tool selected
+  by the move with other workspaces. Navigation clocks advance
   at request time for local focus-changing opens and explicit re-selection; the stamp travels with the intent
   so acceptance does not count twice. A slow completion is discarded when newer navigation overtakes it.
   Preview identity is workspace-local per center group: `preview` replaces that group's slot and `keep`

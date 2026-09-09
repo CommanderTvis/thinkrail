@@ -1448,12 +1448,19 @@ export function changedToolSelections(
 	previous: LayoutAttention | undefined,
 	next: LayoutAttention,
 	document: WorkspaceLayoutDocument,
+	previousDocument: WorkspaceLayoutDocument = document,
 ): Set<string> {
 	const changed = new Set<string>();
+	const previousGroups = collectAllGroups(previousDocument);
 	for (const group of collectAllGroups(document)) {
 		const groupId = group.location.groupId;
 		const nextId = readLayoutSelection(next, groupId);
-		if (previous && nextId === readLayoutSelection(previous, groupId)) continue;
+		const selectedBefore = previousGroups.some(
+			(candidate) =>
+				candidate.location.groupId === groupId &&
+				candidate.tabs.some((tab) => tab.id === nextId && tab.kind === "tool"),
+		);
+		if (previous && nextId === readLayoutSelection(previous, groupId) && selectedBefore) continue;
 		if (group.tabs.some((tab) => tab.id === nextId && tab.kind === "tool")) {
 			changed.add(groupId);
 		}

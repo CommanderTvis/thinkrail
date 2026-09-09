@@ -879,7 +879,7 @@ interface AppState {
 	localLayoutPreferences: LocalLayoutPreferences;
 	layoutDocumentsByWorkspace: Record<string, WorkspaceLayoutDocument>;
 	layoutAttentionByWorkspace: Record<string, LayoutAttention>;
-	layoutProjectionEpoch: number;
+	layoutProjectionEpochByWorkspace: Record<string, number>;
 	layoutIntents: LayoutIntent[];
 	tabsByWorkspace: Record<string, EditorTab[]>;
 	activeTabByWorkspace: Record<string, string | null>;
@@ -999,7 +999,11 @@ interface AppState {
 	validateRouteChatTarget: (sessionId: string) => void;
 	clearRouteChatTarget: () => void;
 	hydrateLocalLayoutState: (payload: LocalLayoutStatePayload) => void;
-	applyLocalLayoutState: (payload: LocalLayoutStatePayload, invalidateProjection?: boolean) => void;
+	applyLocalLayoutState: (
+		payload: LocalLayoutStatePayload,
+		changedWorkspaceIds?: string[],
+		invalidateProjection?: boolean,
+	) => void;
 	setLocalLayoutPreferences: (preferences: LocalLayoutPreferences) => void;
 	setLayoutAttention: (workspaceId: string, attention: LayoutAttention) => void;
 	syncLegacySelection: (
@@ -1980,7 +1984,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	localLayoutPreferences: { ...DEFAULT_LOCAL_LAYOUT_PREFERENCES },
 	layoutDocumentsByWorkspace: {},
 	layoutAttentionByWorkspace: {},
-	layoutProjectionEpoch: 0,
+	layoutProjectionEpochByWorkspace: {},
 	layoutIntents: [],
 	tabsByWorkspace: {},
 	activeTabByWorkspace: {},
@@ -2394,7 +2398,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 		const pending = get().pendingWorkspaceChatActivation;
 		if (pending) get().consumeWorkspaceChatActivation(pending);
 	},
-	applyLocalLayoutState: (payload, changedWorkspaceIds, invalidateProjection = false) => {
+	applyLocalLayoutState: (payload, changedWorkspaceIds = [], invalidateProjection = false) => {
 		set((state) => {
 			const layoutProjectionEpochByWorkspace = { ...state.layoutProjectionEpochByWorkspace };
 			if (invalidateProjection) {

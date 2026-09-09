@@ -6,6 +6,7 @@ import {
 	RiTerminalBoxLine as SquareTerminal,
 } from "@remixicon/react";
 import {
+	Fragment,
 	lazy,
 	type ReactNode,
 	Suspense,
@@ -282,7 +283,9 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 	const document = useAppStore((state) => state.layoutDocumentsByWorkspace[workspaceId]);
 	const attention = useAppStore((state) => state.layoutAttentionByWorkspace[workspaceId]);
 	const frame = useAppStore((state) => state.workbenchFrame);
-	const projectionEpoch = useAppStore((state) => state.layoutProjectionEpoch);
+	const projectionEpoch = useAppStore(
+		(state) => state.layoutProjectionEpochByWorkspace[workspaceId] ?? 0,
+	);
 	const layoutPreferences = useAppStore((state) => state.localLayoutPreferences);
 	const workspace = useAppStore((state) => selectWorkspaceById(state, workspaceId));
 	const vcsGap = workspace?.vcs;
@@ -704,7 +707,12 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 					) {
 						return;
 					}
-					prepared.onAccepted(current);
+					const currentAttention = state.layoutAttentionByWorkspace[workspaceId];
+					prepared.onAccepted(
+						current && currentAttention
+							? { document: current, attention: currentAttention }
+							: undefined,
+					);
 					if (tab.kind === "chat") {
 						state.closeChatToHistory(tab.sessionId, false, workspaceId, false);
 					} else if (
@@ -726,7 +734,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 		[workspaceId, document],
 	);
 
-	if (!document || !attention) {
+	if (!rendered) {
 		return (
 			<div className="flex h-full items-center justify-center bg-container-content-bg tr-text-ui text-text-muted">
 				Restoring workspace layout…
@@ -737,10 +745,10 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 	return (
 		<div data-testid="workspace-workbench" data-layout-status="settled" className="contents">
 			<Workbench
-				document={document}
+				document={rendered.document}
 				catalog={catalog}
 				unofferedTools={unofferedTools}
-				attention={attention}
+				attention={rendered.attention}
 				maxSideGroups={layoutPreferences.maxSideGroups}
 				maxBottomGroups={layoutPreferences.maxBottomGroups}
 				projectionEpoch={projectionEpoch}
