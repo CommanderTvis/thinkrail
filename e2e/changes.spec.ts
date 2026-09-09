@@ -528,6 +528,42 @@ test("The diff header keeps its controls on a narrow pane, however long the file
 	await expect(page.getByTestId("diff-toggle-split")).toHaveAttribute("data-active", "true");
 });
 
+test("The rendered markdown diff carries the outline and the properties block", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	await createWorkspaceViaDialog(page);
+
+	const worktree = join(E2E_DATA_DIR, "worktrees", "sample-project", "workspace-1");
+	writeFileSync(
+		join(worktree, "SPEC.md"),
+		["---", "id: sample-root", "status: active", "---", "", "## Goal", "", "shipped", ""].join(
+			"\n",
+		),
+	);
+
+	await page.getByTestId("tab-changes").click();
+	await page.getByTestId("change-item").filter({ hasText: "SPEC.md" }).click();
+	await expect(page.getByTestId("diff-toggle-outline")).toHaveCount(0);
+
+	await page.getByTestId("diff-toggle-rendered").click();
+	const rendered = page.getByTestId("rendered-diff");
+	await expect(rendered.getByTestId("frontmatter-properties")).toBeVisible();
+	await expect(rendered.getByTestId("frontmatter-property").first()).toContainText("id");
+	await expect(rendered).toContainText("sample-root");
+	// The properties travel through the same merge as the prose, so a changed value is marked.
+	const properties = rendered.getByTestId("frontmatter-properties");
+	await expect(properties.locator("ins").filter({ hasText: "active" })).toHaveCount(1);
+
+	const outline = page.getByTestId("diff-toggle-outline");
+	await expect(outline).toBeVisible();
+	await outline.click();
+	await expect(page.getByRole("button", { name: "Goal", exact: true })).toBeVisible();
+
+	await page.getByTestId("diff-toggle-source").click();
+	await expect(page.getByTestId("diff-toggle-outline")).toHaveCount(0);
+});
+
 test("A markdown diff drops to one column on a narrow pane like every other file", async ({
 	page,
 }) => {

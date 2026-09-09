@@ -229,19 +229,30 @@ function ListValue({ items, onCommit }: { items: string[]; onCommit: (next: stri
  * The document's frontmatter as an Obsidian-style properties table above the rendered view. Text and
  * lists only; a block using shapes this editor does not speak renders read-only. See SPEC.md.
  */
+function inlineValue(value: FrontmatterProperty["value"]): string {
+	if (Array.isArray(value)) return `[${value.join(", ")}]`;
+	if (typeof value === "object") {
+		return `{${Object.entries(value)
+			.map(([key, item]) => `${key}: ${item}`)
+			.join(", ")}}`;
+	}
+	return value;
+}
+
 export function FrontmatterProperties({
 	content,
 	onEdit,
 }: {
 	content: string;
-	onEdit: (next: string) => void;
+	onEdit?: (next: string) => void;
 }) {
 	const [open, setOpen] = useState(true);
 	const block = parseFrontmatter(content);
 	if (!block) return null;
-	const { properties, editable } = block;
+	const { properties } = block;
+	const editable = block.editable && onEdit !== undefined;
 
-	const commit = (next: FrontmatterProperty[]) => onEdit(withFrontmatter(content, next));
+	const commit = (next: FrontmatterProperty[]) => onEdit?.(withFrontmatter(content, next));
 	const setValue = (index: number, value: FrontmatterProperty["value"]) =>
 		commit(properties.map((property, at) => (at === index ? { ...property, value } : property)));
 	// Picking the shape a row already has changes nothing — not even the block's formatting.
@@ -286,10 +297,26 @@ export function FrontmatterProperties({
 					<Chevron className="size-14" />
 					Properties
 				</button>
-				{open && !editable ? (
+				{open && !editable && !block.editable ? (
 					<pre className="mt-4 overflow-x-auto rounded-[var(--radius-sm)] bg-container-content-bg p-8 tr-code-text text-text-muted">
 						{block.raw}
 					</pre>
+				) : null}
+				{open && !editable && block.editable ? (
+					<div className="mt-4 flex flex-col">
+						{properties.map((property) => (
+							<div
+								key={property.key}
+								data-testid="frontmatter-property"
+								className="flex min-h-28 items-start gap-8 tr-code-text"
+							>
+								<span className="w-160 shrink-0 truncate text-text-muted">{property.key}</span>
+								<span className="min-w-0 flex-1 text-text-default">
+									{inlineValue(property.value)}
+								</span>
+							</div>
+						))}
+					</div>
 				) : null}
 				{open && editable ? (
 					<div className="mt-4 flex flex-col">
