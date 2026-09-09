@@ -91,3 +91,38 @@ test("removing the last property removes the fence; adding to a bare doc creates
 	const created = withFrontmatter("# Doc\n", [{ key: "title", value: "x" }]);
 	expect(created).toBe("---\ntitle: x\n---\n\n# Doc\n");
 });
+
+test("a flow sequence written across lines is a list, not an unreadable block", () => {
+	const doc = [
+		"---",
+		"id: module-plugin-api",
+		"references:",
+		"  [",
+		"    module-server,",
+		"    module-web,",
+		"    module-repo-scripts,",
+		"  ]",
+		"tags: [v1, plugins]",
+		"---",
+		"",
+		"# Body",
+		"",
+	].join("\n");
+	const block = parseFrontmatter(doc);
+	expect(block?.editable).toBe(true);
+	expect(block?.properties).toEqual([
+		{ key: "id", value: "module-plugin-api" },
+		{ key: "references", value: ["module-server", "module-web", "module-repo-scripts"] },
+		{ key: "tags", value: ["v1", "plugins"] },
+	]);
+	expect(parseFrontmatter(withFrontmatter(doc, block?.properties ?? []))?.properties).toEqual(
+		block?.properties ?? [],
+	);
+});
+
+test("a flow sequence that never closes keeps the block read-only", () => {
+	const doc = ["---", "references:", "  [", "    module-server,", "---", "", "# Body", ""].join(
+		"\n",
+	);
+	expect(parseFrontmatter(doc)?.editable).toBe(false);
+});
