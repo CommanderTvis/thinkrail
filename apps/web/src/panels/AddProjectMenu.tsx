@@ -15,6 +15,7 @@ import {
 	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { IconTooltip } from "@/components/ui/tooltip";
 import { hostWording } from "@/lib/desktopShell";
 
 export function AddProjectMenu({
@@ -25,6 +26,7 @@ export function AddProjectMenu({
 	onClone,
 	onOpenRecent,
 	align = "end",
+	tooltip,
 	children,
 }: {
 	recentProjects: Project[];
@@ -34,11 +36,14 @@ export function AddProjectMenu({
 	onClone: () => void;
 	onOpenRecent: (path: string) => void;
 	align?: "start" | "center" | "end";
+	/** Rendered around the trigger, never between it and the button — see panels/SPEC.md. */
+	tooltip?: string;
 	children: ReactNode;
 }) {
+	const trigger = <DropdownMenuTrigger asChild>{children}</DropdownMenuTrigger>;
 	return (
 		<DropdownMenu>
-			<DropdownMenuTrigger asChild>{children}</DropdownMenuTrigger>
+			{tooltip ? <IconTooltip label={tooltip}>{trigger}</IconTooltip> : trigger}
 			<DropdownMenuContent align={align}>
 				<DropdownMenuItem data-testid="menu-open-project" onSelect={() => onOpen()}>
 					<Folder />
