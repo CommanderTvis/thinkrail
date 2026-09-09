@@ -55,6 +55,7 @@ function resetStore(): void {
 		status: "connected",
 		connectionGeneration: 1,
 		removedWorkspaceIds: {},
+		workspaces: {},
 		selectedProjectId: null,
 		workbenchFrame: null,
 		workbenchFramesByProject: {},
@@ -75,6 +76,90 @@ beforeEach(() => {
 });
 
 describe("frontend-local layout state", () => {
+	test("project ownership isolates legacy frames with identical group ids", async () => {
+		setLayoutStateStorageForTests(
+			{ local: new MemoryStorage(), session: new MemoryStorage() },
+			endpoint,
+		);
+		await initializeLocalLayoutState();
+		for (const id of ["a", "b"]) {
+			useAppStore.getState().setWorkspaces(id, [
+				{
+					id,
+					projectId: id,
+					name: id,
+					branch: "main",
+					baseBranch: "main",
+					worktreePath: `/${id}`,
+				},
+			]);
+		}
+		useAppStore.getState().selectProject("a");
+		const original = structuredClone(await ensureWorkspaceLayoutState("a"));
+		if (original.center.kind !== "group") throw new Error("missing center group");
+		original.center.tabs = [
+			{ kind: "terminal", id: "terminal:codex", tabKey: "codex", name: "Codex" },
+		];
+		await commitWorkspaceLayout("a", original);
+		const before = useAppStore.getState();
+		if (!before.workbenchFrame) throw new Error("missing frame");
+		useAppStore.setState({ workbenchFramesByProject: { b: before.workbenchFrame } });
+		useAppStore.getState().selectProject("b");
+		const other = await ensureWorkspaceLayoutState("b");
+		expect(other.center.id).toBe(original.center.id);
+		await commitWorkspaceLayout("b", resizeBottomRegion(other, 0.45));
+		expect(useAppStore.getState().workspaceViewsByWorkspace.a).toBe(
+			before.workspaceViewsByWorkspace.a,
+		);
+		expect(useAppStore.getState().layoutDocumentsByWorkspace.a).toBe(
+			before.layoutDocumentsByWorkspace.a,
+		);
+		useAppStore.getState().selectProject("a");
+		expect(
+			collectAllGroups(await ensureWorkspaceLayoutState("a")).flatMap((group) => group.tabs),
+		).toContainEqual(original.center.tabs[0]);
+	});
+
+	for (const change of ["resize", "preset"] as const) {
+		test(`${change} in another project preserves terminal placements on return`, async () => {
+			setLayoutStateStorageForTests(
+				{ local: new MemoryStorage(), session: new MemoryStorage() },
+				endpoint,
+			);
+			await initializeLocalLayoutState();
+			useAppStore.getState().selectProject("project-a");
+			const original = structuredClone(await ensureWorkspaceLayoutState("workspace-a"));
+			if (original.center.kind !== "group") throw new Error("missing center group");
+			original.center.tabs = [
+				{ kind: "terminal", id: "terminal:codex", tabKey: "codex", name: "Codex" },
+			];
+			await commitWorkspaceLayout("workspace-a", original);
+			const before = useAppStore.getState();
+			const view = before.workspaceViewsByWorkspace["workspace-a"];
+			const document = before.layoutDocumentsByWorkspace["workspace-a"];
+			const attention = before.layoutAttentionByWorkspace["workspace-a"];
+			useAppStore.getState().selectProject("project-b");
+			const other = await ensureWorkspaceLayoutState("workspace-b");
+			if (change === "resize") {
+				await commitWorkspaceLayout("workspace-b", resizeBottomRegion(other, 0.45));
+			} else {
+				const preset = BUILTIN_LAYOUT_PRESETS.find((candidate) => candidate.id === "focus");
+				if (!preset) throw new Error("missing preset");
+				applyLayoutPresetLocally(preset);
+			}
+			const after = useAppStore.getState();
+			expect(after.workspaceViewsByWorkspace["workspace-a"]).toBe(view);
+			expect(after.layoutDocumentsByWorkspace["workspace-a"]).toBe(document);
+			expect(after.layoutAttentionByWorkspace["workspace-a"]).toBe(attention);
+			useAppStore.getState().selectProject("project-a");
+			expect(
+				collectAllGroups(await ensureWorkspaceLayoutState("workspace-a")).flatMap(
+					(group) => group.tabs,
+				),
+			).toContainEqual(original.center.tabs[0]);
+		});
+	}
+
 	test("a copied live surface id is reminted while an available reload id is retained", async () => {
 		const copied = new MemoryStorage();
 		copied.setItem("thinkrail:layout-surface-id", "surface-a");

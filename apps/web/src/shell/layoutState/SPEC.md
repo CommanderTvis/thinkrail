@@ -12,6 +12,8 @@ tags: [layout, local-state, persistence]
 
 Own one frontend surface's current workbench state: initialize the singular resource-free frame, hydrate and persist its per-workspace views/attention and local layout preferences, and commit atomic frame-plus-view mutations into Zustand.
 
+Frame edits and presets affect only views owned by the active project. Other projects retain their views, projected documents, and attention unchanged. Before workspace catalogs hydrate, group membership identifies which saved views belong to the current frame. Passing all projects' views through one project's frame can discard terminal placements while their host processes remain alive; cross-project resize and preset regressions pin this boundary.
+
 ## Boundary
 
 - **Owns:** the versioned local document and validation boundary; browser endpoint/surface-qualified identity and native stable-key selection; pristine Balanced initialization; hydration and best-effort persistence lifecycle; local default/limit preferences; atomic commit helpers that install pure `layout/` results; and workspace cleanup.
