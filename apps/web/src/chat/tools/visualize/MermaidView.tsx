@@ -75,12 +75,7 @@ export function MermaidView({
 	}
 	return (
 		<div className="relative">
-			<div
-				data-testid="mermaid-svg"
-				className="overflow-auto [&_svg]:h-auto [&_svg]:max-w-full"
-				// biome-ignore lint/security/noDangerouslySetInnerHtml: mermaid renders agent-provided source with securityLevel "strict"
-				dangerouslySetInnerHTML={{ __html: svg }}
-			/>
+			<PanZoomView svg={svg} testid="mermaid-svg" capped />
 			<button
 				type="button"
 				data-testid="mermaid-fullscreen"
