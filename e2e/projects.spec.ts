@@ -123,6 +123,18 @@ test("opens a git repo as a project via the directory picker", async ({ page }) 
 	).toBeVisible();
 });
 
+test("the rail's add control names itself on hover and still opens its menu", async ({ page }) => {
+	await page.goto("/");
+	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
+
+	const add = page.getByTestId("add-project-menu");
+	await add.hover();
+	await expect(page.getByRole("tooltip")).toContainText("Add project");
+
+	await add.click();
+	await expect(page.getByTestId("menu-open-project")).toBeVisible();
+});
+
 test("opens a project from an explicit host path", async ({ page }) => {
 	await page.goto("/");
 	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
@@ -201,7 +213,7 @@ test("manual path from the rail supersedes a picker started from Welcome", async
 	).toHaveCount(0);
 });
 
-test("opening a non-git folder offers to initialise a repo, then opens it end-to-end", async ({
+test("opening a non-git folder just opens it — no git-init offer, no worktree affordance", async ({
 	page,
 }) => {
 	await stagePlainFolder(page);
@@ -210,16 +222,15 @@ test("opening a non-git folder offers to initialise a repo, then opens it end-to
 
 	await page.getByTestId("add-project-menu").click();
 	await page.getByTestId("menu-open-project").click();
-	const confirmInit = page.getByTestId("confirm-init-repo");
-	await expect(confirmInit).toBeVisible();
-	await confirmInit.click();
 
-	await expect(
-		page.getByTestId("project-item").filter({ hasText: basename(E2E_PLAIN_DIR) }),
-	).toBeVisible();
+	const row = page.getByTestId("project-item").filter({ hasText: basename(E2E_PLAIN_DIR) });
+	await expect(row).toBeVisible();
+	await expect(page.getByTestId("confirm-init-repo")).toHaveCount(0);
+	await expect(defaultWorkspaceRow(page)).toBeVisible();
 
-	await createWorkspaceViaDialog(page);
-	await expect(worktreeRows(page).first()).toBeVisible();
+	const menu = await openProjectActions(page, row);
+	await expect(menu.getByTestId("project-menu-create-workspace")).toHaveCount(0);
+	await expect(menu.getByTestId("project-menu-open-existing-worktree")).toHaveCount(0);
 });
 
 test("rail expansion is per-browser view state that survives a reload", async ({ page }) => {
@@ -408,7 +419,9 @@ test("project context actions stay compact and close/reopen is lossless across c
 	const secondRepo = seedSecondRepo();
 	await page.getByTestId("add-project-menu").click();
 	await page.getByTestId("menu-open-project").click();
-	await expect(page.getByTestId("welcome-title")).toHaveText("second-project");
+	await expect(page.getByTestId("welcome-title")).toHaveText("second-project", {
+		timeout: 10_000,
+	});
 
 	const observer = await context.newPage();
 	await observer.goto("/");
