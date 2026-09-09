@@ -1779,7 +1779,11 @@ tab — `external-file` when the path escaped the worktree, which is most of Cla
   on the host side: a non-zero `git diff` exit **throws** instead of yielding an empty change set (see
   `server/src/git/SPEC.md`). The **target branch lives beside the scope menu, not inside it**
   (as first designed): a searchable list belongs in a combobox, and a nested Radix submenu closes itself when
-  the menu re-renders as those lazy reads land.
+  the menu re-renders as those lazy reads land. **A narrow pane drops the target pill before it drops
+  legibility.** Both pills are `min-w-0` so their labels truncate, which also lets them shrink below their
+  own icons — and icons that no longer fit spill onto the neighbour. The header is a `@container`: under
+  `16rem` the target pill is `hidden` (the scope pill keeps its icon and the widest label the room allows),
+  and the left cluster is `overflow-hidden` so whatever still overflows clips instead of overlapping.
 - **The diff is a center resource tab, not an inset inside the Changes tool.** Clicking a Changes row fetches `git.diffFile` (both sides of
   the row's scope) and opens a **`DiffTab`** (`${workspaceId}:diff:${scopeKey}:${path}` — one tab per *file and
   scope*, carrying its own `scope`: a re-click in the same scope focuses the existing tab, while the same file

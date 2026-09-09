@@ -137,9 +137,9 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 				data-testid="changes-view-toggle"
 				role="toolbar"
 				aria-label="Changes scope and view"
-				className="flex h-panel-header-row shrink-0 items-center gap-4 overflow-clip border-border-default border-b px-12"
+				className="@container flex h-panel-header-row shrink-0 items-center gap-4 overflow-clip border-border-default border-b px-12"
 			>
-				<div className="mr-auto flex min-w-0 items-center gap-4">
+				<div className="mr-auto flex min-w-0 items-center gap-4 overflow-hidden">
 					<ChangesScopeMenu
 						key={`${workspaceId}:${baseRef}`}
 						workspaceId={workspaceId}
@@ -153,7 +153,7 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 							refreshing={branchesRefreshing}
 							label="vs"
 							testid="changes-target-picker"
-							triggerClassName="flex h-24 min-w-0 max-w-[200px] items-center gap-4 rounded-[var(--radius-sm)] px-4 outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary data-[open=true]:bg-control-bg-selected"
+							triggerClassName="hidden h-24 min-w-0 max-w-[200px] items-center @min-[16rem]:flex gap-4 rounded-[var(--radius-sm)] px-4 outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary data-[open=true]:bg-control-bg-selected"
 							onSelect={(ref) => void pointAt(ref)}
 							onRefresh={refreshBranches}
 						/>
