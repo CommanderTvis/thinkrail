@@ -3,7 +3,7 @@ import { useT } from "@thinkrail/locales/react";
 import { IconButton } from "@thinkrail/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@thinkrail/ui/dialog";
 import { onThemeSwap } from "@thinkrail/ui/theme";
-import { type ReactNode, useEffect, useState } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import { renderMermaid } from "./mermaid";
 import { PanZoomView } from "./PanZoomView";
 
@@ -11,12 +11,20 @@ export function MermaidView({
 	source,
 	title,
 	fallback,
+	interactive = false,
+	onRender,
 }: {
 	source: string;
 	title?: string;
 	fallback?: ReactNode;
+	/** Fill the space and be navigable in place — a pane, rather than a card in a transcript. */
+	interactive?: boolean;
+	/** What the renderer made of this source: `null` when it drew, the parse error when it did not. */
+	onRender?: (error: string | null) => void;
 }) {
 	const t = useT();
+	const onRenderRef = useRef(onRender);
+	onRenderRef.current = onRender;
 	const [svg, setSvg] = useState<string | null>(null);
 	const [error, setError] = useState<string | null>(null);
 	const [open, setOpen] = useState(false);
@@ -29,8 +37,11 @@ export function MermaidView({
 				if (res.svg !== undefined) {
 					setSvg(res.svg);
 					setError(null);
+					onRenderRef.current?.(null);
 				} else {
-					setError(res.error ?? "");
+					const message = res.error ?? "";
+					setError(message);
+					onRenderRef.current?.(message);
 				}
 			});
 		};
@@ -65,13 +76,16 @@ export function MermaidView({
 			)
 		);
 	}
+	if (interactive) {
+		return (
+			<div data-testid="mermaid-svg" className="flex h-full min-h-0 flex-col">
+				<PanZoomView svg={svg} testid="mermaid-pan-zoom" />
+			</div>
+		);
+	}
 	return (
 		<div className="relative">
-			<div
-				data-testid="mermaid-svg"
-				className="overflow-auto [&_svg]:h-auto [&_svg]:max-w-full"
-				dangerouslySetInnerHTML={{ __html: svg }}
-			/>
+			<PanZoomView svg={svg} testid="mermaid-svg" capped />
 			<IconButton
 				icon={Maximize2}
 				label={t("visualize.mermaid.fullScreenLabel")}
