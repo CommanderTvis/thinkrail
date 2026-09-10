@@ -329,6 +329,7 @@ export interface SessionRuntime {
 	attemptAssistantId: string | null;
 	isStreaming: boolean;
 	settlementTick: number;
+	statsRefreshTick: number;
 	queue: SessionQueueState;
 	model: WireModel | null;
 	thinkingLevel: ThinkingLevel;
@@ -358,6 +359,7 @@ function newRuntime(
 		attemptAssistantId: null,
 		isStreaming: false,
 		settlementTick: 0,
+		statsRefreshTick: 0,
 		queue: EMPTY_QUEUE,
 		model,
 		thinkingLevel,
@@ -490,6 +492,14 @@ function clearRetryTurns(rt: SessionRuntime, source: RetrySource): SessionRuntim
 	return rt.turns.some((t) => t.kind === "retry" && t.source === source)
 		? { ...rt, turns: rt.turns.filter((t) => !(t.kind === "retry" && t.source === source)) }
 		: rt;
+}
+
+function invalidatesSessionStats(event: PiEvent): boolean {
+	return (
+		event.type === "message_end" ||
+		event.type === "compaction_end" ||
+		event.type === "agent_settled"
+	);
 }
 
 export function reduceSessionEvent(rt: SessionRuntime, event: PiEvent): SessionRuntime {
@@ -2972,6 +2982,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 				sessions[sessionId] = {
 					...next,
 					eventRevision: runtime.eventRevision + 1,
+					statsRefreshTick: runtime.statsRefreshTick + (invalidatesSessionStats(event) ? 1 : 0),
 				};
 			}
 			return sessions === s.sessions ? s : { sessions };
