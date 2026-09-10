@@ -75,10 +75,8 @@ export function PanZoomView({
 			<div
 				ref={scrollRef}
 				data-testid={testid ?? "mermaid-fullscreen-svg"}
-				className={`w-full cursor-grab select-none overflow-auto active:cursor-grabbing ${
-					capped
-						? "max-h-[min(60vh,480px)] [&_svg]:!h-auto [&_svg]:!max-w-full"
-						: "h-full [&_svg]:!h-auto [&_svg]:!w-[calc(var(--zoom)*100%)] [&_svg]:!max-w-none"
+				className={`w-full cursor-grab select-none active:cursor-grabbing [&_svg]:!h-auto [&_svg]:!w-[calc(var(--zoom)*100%)] [&_svg]:!max-w-none ${
+					capped ? "max-h-[min(60vh,480px)] overflow-hidden" : "h-full overflow-auto"
 				}`}
 				style={{ "--zoom": `${scale}` } as React.CSSProperties}
 				onPointerDown={onPointerDown}
@@ -87,7 +85,7 @@ export function PanZoomView({
 				onPointerCancel={endDrag}
 			>
 				<div
-					className={capped ? "w-fit [zoom:var(--zoom)]" : "contents"}
+					className="contents"
 					// biome-ignore lint/security/noDangerouslySetInnerHtml: mermaid renders agent-provided source with securityLevel "strict"
 					dangerouslySetInnerHTML={{ __html: svg }}
 				/>
