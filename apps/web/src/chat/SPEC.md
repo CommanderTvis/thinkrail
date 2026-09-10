@@ -107,7 +107,12 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   while its workspace inputs are unchanged: workbench focus can rerender a chat row between pointer-down and
   click, and replacing the control in that interval cancels activation. A fenced
   ```mermaid block renders as a themed diagram via `tools/visualize`'s `MermaidView` (**inline
-  pan-zoom under a height cap**, fullscreen pan-zoom, error → source fallback) — uniform across every
+  pan-zoom under a height cap**, fullscreen pan-zoom, error → source fallback). **Inline and fullscreen
+  zoom the same way** — the drawing's own width follows the zoom and the box keeps its size — because the
+  inline view used CSS `zoom` on a wrapper while capping the SVG to the container width, and those two
+  fight: `zoom` recomputes the child's layout box, so the cap re-fitted the drawing and past a point
+  turning the percentage up changed nothing. The capped box now **clips** rather than scrolling, so a plain
+  wheel carries on down the document it is embedded in and the drag pan is what gets you around inside it — uniform across every
   `Markdown` surface (chat, file/specs preview); until mounted it renders as highlighted source, so
   static contexts (`RenderedDiff`'s
   `renderToStaticMarkup`) degrade to code exactly like shiki blocks do.
