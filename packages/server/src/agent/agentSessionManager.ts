@@ -19,6 +19,7 @@ import type {
 	AskUserQuestionResult,
 	ImageContent,
 	Model,
+	PiEvent,
 	QueuedMessageContent,
 	QueueLane,
 	RefreshedModels,
@@ -91,6 +92,7 @@ interface Entry {
 	workspaceId: string;
 	lastSettlement: AgentSettlement | null | undefined;
 	queuedMessages: Record<QueueLane, TrackedQueuedMessage[]>;
+	stuckEmptyDeliveries: Record<QueueLane, number>;
 	nextQueuedMessageId: number;
 	manualCompactionInProgress: boolean;
 	piCompactionInProgress: boolean;
@@ -143,10 +145,15 @@ export function setSessionActivityPublisher(fn: (payload: SessionActivityPayload
 	publishActivity = fn;
 }
 
+function effectivePendingCount(entry: Entry): number {
+	const stuck = entry.stuckEmptyDeliveries.steering + entry.stuckEmptyDeliveries.followUp;
+	return Math.max(0, entry.session.pendingMessageCount - stuck);
+}
+
 function activityOf(entry: Entry): ActivityStatus | null {
 	return deriveActivityStatus({
 		isStreaming: entry.session.isStreaming,
-		pendingMessageCount: entry.session.pendingMessageCount,
+		pendingMessageCount: effectivePendingCount(entry),
 		messages: entry.session.messages,
 		lastSettlement: entry.lastSettlement,
 		hasPendingDialog: hasPendingExtUiDialog(entry.session.sessionId),
@@ -480,6 +487,7 @@ async function prepareSessionEntry(
 		workspaceId,
 		lastSettlement,
 		queuedMessages: { steering: [], followUp: [] },
+		stuckEmptyDeliveries: { steering: 0, followUp: 0 },
 		nextQueuedMessageId: 1,
 		manualCompactionInProgress: false,
 		piCompactionInProgress: false,
@@ -493,9 +501,18 @@ async function prepareSessionEntry(
 	const seededRecencyMs = messagesActivityMs(session.messages);
 	if (seededRecencyMs !== null) entry.lastActivityMs = seededRecencyMs;
 	entry.unsubscribe = session.subscribe((event) => {
+		if (event.type === "message_start" && event.message.role === "user") {
+			const lane = deliveredStuckEmptyLane(entry, event.message.content);
+			if (lane) {
+				entry.stuckEmptyDeliveries[lane]++;
+				synchronizeQueueFromSession(entry);
+				if (sessions.get(sessionId) === entry)
+					publish({ sessionId, event: queueUpdateEventOf(entry) });
+			}
+		}
 		if (event.type === "queue_update") {
-			synchronizeQueuedLane(entry, "steering", event.steering);
-			synchronizeQueuedLane(entry, "followUp", event.followUp);
+			synchronizeQueuedLane(entry, "steering", displayedLane(entry, "steering", event.steering));
+			synchronizeQueuedLane(entry, "followUp", displayedLane(entry, "followUp", event.followUp));
 		}
 		if (event.type === "compaction_start") entry.piCompactionInProgress = true;
 		if (event.type === "compaction_end") entry.piCompactionInProgress = false;
@@ -517,8 +534,13 @@ async function prepareSessionEntry(
 		}
 		const baseEvent = projectSessionEvent(event, terminal);
 		const projected =
-			baseEvent.type === "queue_update" && hasQueuedImages(entry)
-				? { ...baseEvent, hasImages: true as const }
+			baseEvent.type === "queue_update"
+				? {
+						type: "queue_update" as const,
+						steering: displayedLane(entry, "steering", baseEvent.steering),
+						followUp: displayedLane(entry, "followUp", baseEvent.followUp),
+						...(hasQueuedImages(entry) ? { hasImages: true as const } : {}),
+					}
 				: baseEvent;
 		if (event.type === "agent_settled") {
 			entry.lastSettlement = terminal;
@@ -624,7 +646,7 @@ function summaryOf(sessionId: string, entry: Entry): SessionSummary {
 		updatedAt: Date.now(),
 		live: true,
 		...(entry.lastSettlement !== undefined ? { lastSettlement: entry.lastSettlement } : {}),
-		...(session.pendingMessageCount > 0 ? { queue: queueStateOf(entry) } : {}),
+		...(effectivePendingCount(entry) > 0 ? { queue: queueStateOf(entry) } : {}),
 	};
 }
 
@@ -924,8 +946,62 @@ function synchronizeQueuedLane(entry: Entry, kind: QueueLane, texts: readonly st
 }
 
 function synchronizeQueueFromSession(entry: Entry): void {
-	synchronizeQueuedLane(entry, "steering", entry.session.getSteeringMessages());
-	synchronizeQueuedLane(entry, "followUp", entry.session.getFollowUpMessages());
+	synchronizeQueuedLane(entry, "steering", displayedLane(entry, "steering"));
+	synchronizeQueuedLane(entry, "followUp", displayedLane(entry, "followUp"));
+}
+
+function laneMessages(entry: Entry, kind: QueueLane): readonly string[] {
+	return kind === "steering"
+		? entry.session.getSteeringMessages()
+		: entry.session.getFollowUpMessages();
+}
+
+function displayedLane(entry: Entry, kind: QueueLane, texts?: readonly string[]): string[] {
+	let toDrop = entry.stuckEmptyDeliveries[kind];
+	const result: string[] = [];
+	for (const text of texts ?? laneMessages(entry, kind)) {
+		if (text === "" && toDrop > 0) {
+			toDrop--;
+			continue;
+		}
+		result.push(text);
+	}
+	return result;
+}
+
+function queueUpdateEventOf(entry: Entry): PiEvent {
+	return {
+		type: "queue_update",
+		steering: displayedLane(entry, "steering"),
+		followUp: displayedLane(entry, "followUp"),
+		...(hasQueuedImages(entry) ? { hasImages: true as const } : {}),
+	};
+}
+
+function deliveredStuckEmptyLane(entry: Entry, content: unknown): QueueLane | null {
+	if (userContentText(content).trim() !== "") return null;
+	if (!userContentHasImage(content)) return null;
+	for (const kind of ["steering", "followUp"] as const) {
+		const pendingEmpties = laneMessages(entry, kind).filter((text) => text === "").length;
+		if (pendingEmpties > entry.stuckEmptyDeliveries[kind]) return kind;
+	}
+	return null;
+}
+
+function userContentBlocks(content: unknown): { type: string; text?: string }[] {
+	return Array.isArray(content) ? (content as { type: string; text?: string }[]) : [];
+}
+
+function userContentText(content: unknown): string {
+	if (typeof content === "string") return content;
+	return userContentBlocks(content)
+		.filter((block) => block.type === "text")
+		.map((block) => block.text ?? "")
+		.join("");
+}
+
+function userContentHasImage(content: unknown): boolean {
+	return userContentBlocks(content).some((block) => block.type === "image");
 }
 
 function hasQueuedImages(entry: Entry): boolean {
@@ -1027,8 +1103,8 @@ export async function compactSession(sessionId: string, instructions?: string): 
 function queueStateOf(entry: Entry): SessionQueueState {
 	synchronizeQueueFromSession(entry);
 	return {
-		steering: [...entry.session.getSteeringMessages()],
-		followUp: [...entry.session.getFollowUpMessages()],
+		steering: displayedLane(entry, "steering"),
+		followUp: displayedLane(entry, "followUp"),
 		...(hasQueuedImages(entry) ? { hasImages: true as const } : {}),
 	};
 }
@@ -1040,6 +1116,7 @@ export function clearQueueSession(sessionId: string, requireTextOnly = false): S
 		throw new Error("Cannot restore queued image messages as text");
 	}
 	entry.session.clearQueue();
+	entry.stuckEmptyDeliveries = { steering: 0, followUp: 0 };
 	syncSessionActivity(sessionId);
 	return content;
 }
