@@ -304,15 +304,17 @@ describe("frameTopology", () => {
 		expect(frameTopology(after)).toBe(frameTopology(before));
 	});
 
-	it("sees the shape: groups, nesting, folds, visibility, alignment", () => {
+	it("leaves folding out: a stack re-keys on its own folds, the workbench must not", () => {
+		const folded = frame();
+		folded.left = { ...folded.left, groups: [{ ...leftGroup, folded: true }] };
+		expect(frameTopology(folded)).toBe(frameTopology(frame()));
+	});
+
+	it("sees the shape: groups, nesting, visibility, alignment", () => {
 		const base = frameTopology(frame());
 		const split = frame();
 		split.center = { kind: "group", id: "a" };
 		expect(frameTopology(split)).not.toBe(base);
-
-		const folded = frame();
-		folded.left = { ...folded.left, groups: [{ ...leftGroup, folded: true }] };
-		expect(frameTopology(folded)).not.toBe(base);
 
 		const hidden = frame();
 		hidden.left = { ...hidden.left, visible: false };
