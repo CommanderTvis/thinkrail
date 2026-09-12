@@ -24,6 +24,8 @@
 	--panel-header-row-height: 32px;
 	/* Clearance for macOS traffic lights over our own titlebar — a platform measurement, not a scale step. */
 	--native-titlebar-inset: 104px;
+	/* The window's own rounded corner, which clips whatever the bottom row puts against it. */
+	--window-corner: 10px;
 }
 
 /*

@@ -39,6 +39,8 @@ const VARIANT = String.raw`(?:[a-z-]+(?:\[[^\]]*\])?:)*`;
 const ARBITRARY_SPACING_EXEMPT = new Set([
 	// The native titlebar inset is measured by the shell at runtime, so it has no step on the scale.
 	"pl-[var(--native-titlebar-inset)]",
+	// The window's rounded corner is a platform measurement too, not a step on the scale.
+	"pr-[var(--spacing-window-corner)]",
 	"pr-[2rem]",
 	"pl-[1.6em]",
 	"pl-[calc(0.875rem+var(--space-8))]",
