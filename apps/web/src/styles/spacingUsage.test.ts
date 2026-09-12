@@ -11,7 +11,7 @@ const sourceWithoutComments = (p: string) =>
 		.replace(/\/\*[\s\S]*?\*\//g, "")
 		.replace(/^[ \t]*\/\/.*$/gm, "");
 
-function sourceFiles(dir = SRC): string[] {
+function sourceFiles(dir: string): string[] {
 	const out: string[] = [];
 	for (const entry of readdirSync(dir)) {
 		const path = join(dir, entry);
@@ -25,7 +25,7 @@ function sourceFiles(dir = SRC): string[] {
 	return out;
 }
 
-const FILES = sourceFiles();
+const FILES = [...sourceFiles(SRC)];
 const TS_FILES = FILES.filter((f) => /\.tsx?$/.test(f));
 const TOKENS = join(SRC, "styles/tokens.css");
 const SPACING_JSON = join(SRC, "styles/spacing.json");
@@ -37,6 +37,8 @@ const SPACING_PREFIX =
 	"px|py|pt|pb|pl|pr|ps|pe|p|mx|my|mt|mb|ml|mr|ms|me|m|gap-x|gap-y|gap|space-x|space-y";
 const VARIANT = String.raw`(?:[a-z-]+(?:\[[^\]]*\])?:)*`;
 const ARBITRARY_SPACING_EXEMPT = new Set([
+	// The window's rounded corner is a platform measurement, not a step on the scale.
+	"pr-[var(--spacing-window-corner)]",
 	"pr-[2rem]",
 	"pl-[1.6em]",
 	"pl-[calc(0.875rem+var(--space-8))]",
