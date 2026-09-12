@@ -103,7 +103,11 @@ hook, alongside `check:spec-surface`.
 
 The report is produced by extending the tooling that already exists here. `scripts/specSurface.ts` resolves
 a barrel's effective exports through the TypeScript compiler, including type-only, default, and transitive
-re-exports, so it already does the hard part and needs a signature printer rather than a new dependency. If
+re-exports, so it already does the hard part and needs a signature printer rather than a new dependency. It
+is worth noting that this file is being rewritten against TypeScript 7's compiler API on the fork, so the
+report should be built on whichever API upstream settles on rather than the one in `main` today. Either way
+the printer stays feasible: TypeScript 7 ships no JavaScript checker, but its `typescript/unstable/async`
+client still exposes `typeToString` and signature lookups. If
 printing signatures turns out to be fiddly, `@microsoft/api-extractor` produces this kind of report off the
 shelf and is the fallback.
 
@@ -269,9 +273,9 @@ eleven shadcn primitives that `apps/web` copies today, and the app imports them 
 of those would drift. The kit holds components only; theme tokens stay generated in `apps/web` and the kit
 consumes the variable names, which makes the token names a contract documented in the kit's own spec.
 
-Extracting the heavy pieces is cheaper than it looks. The editor reads exactly two values from the store,
-`fileLineWidth` and `fileLineWidthBounded`, which become props, and the visualization card already takes a
-props object and two small helpers. Neither needs a rewrite.
+Extracting the heavy pieces is cheaper than it looks. The editor reads only a handful of display settings
+from the store, such as line width, which become props, and the visualization card already takes a props
+object and two small helpers. Neither needs a rewrite.
 
 ### Trust
 
@@ -666,7 +670,7 @@ that never witnessed a toggle still has to be able to read it.
 
 The host context is passed to activate, which may return a disposer. Every registration is recorded by the
 loader and torn down on dispose, so a plugin keeps no cleanup bookkeeping of its own. The set is closed at
-sixteen.
+seventeen.
 
 | # | capability | seam it replaces |
 | --- | --- | --- |
@@ -681,11 +685,18 @@ sixteen.
 | H9 | offer a prefill when a terminal revives, returned by `terminal.attach` | none |
 | H10 | write into a terminal host-side, bypassing client attachment | `writeTerminal` is client-gated |
 | H11 | send text to a pi session, steering while streaming | `promptSession` throws while streaming |
-| H12 | read workspaces, start a watch, observe lifecycle and fs-change batches, feed auto-naming | `getWorkspace`, two publishers, `autoRename.ts` |
+| H12 | read projects and workspaces, start a watch, observe lifecycle and fs-change batches, feed auto-naming | `getWorkspace`, two publishers, `autoRename.ts`; nothing resolves a project id for a feature |
 | H13 | read its own settings namespace and observe changes | `AppConfig` is closed; `loadConfig` spreads unknown keys untyped |
 | H14 | read and write namespaced JSON state under the data dir | `readJson`/`writeJson` are module-private |
 | H15 | a logger, its own asset path, activate and a disposer that may be async on a toggle | `logger(name)`; five hand-ordered install/teardown pairs |
 | H16 | contribute pi extensions and skill directories, optionally to sub-agent sessions | the bundled extension list and skill roots are a fixed five |
+| H17 | run git in a project or workspace through the host's bounded runner | `git(cwd, args)` is a server module a plugin may not import |
+
+Git is a capability rather than something a plugin spawns for itself, which is the one exception to the
+rule below that a host half is ordinary Bun code. The host's runner already has to disable terminal
+prompts and run every child bounded and without a console window, and #438 shows that host git reads must
+also set `GIT_OPTIONAL_LOCKS=0`, or the watcher sees them as repository changes and feeds a loop. A plugin
+re-deriving those would reintroduce that loop.
 
 Several things are deliberately absent. There is no whole-`AppConfig` read, since no feature reads core or
 a sibling's namespace once settings are namespaced, and reading a sibling's namespace directly would bypass
@@ -727,8 +738,11 @@ module.
 | W13 | open a terminal or chat, enter a project's default workspace, ask the host for a file picker | store actions plus `panels/defaultWorkspace.ts`, reachable only inside `panels` |
 | W14 | build a byte URL for a worktree file, observe its revision, keep the workspace watched | the `/files` URL builder is private to one panel |
 | W15 | observe reconnection and workspace removal | the connection generation and the removal reducer |
-| W16 | contribute a file-icon resolver, mapping a path and kind to a glyph, consulted wherever core renders a file | four independent Remix imports, in `Workbench.tsx`, `TreeRow.tsx`, `FileChip.tsx`, and `Composer.tsx`; changes rows carry no icon at all today |
-| W17 | reveal a tool by id | the chat names specific tools when it offers to reveal one |
+| W16 | reveal a tool by id | the chat names specific tools when it offers to reveal one |
+| W17 | contribute a file-icon resolver, mapping a path and kind to a glyph, consulted wherever core renders a file | four independent Remix imports, in `Workbench.tsx`, `TreeRow.tsx`, `FileChip.tsx`, and `Composer.tsx`; changes rows carry no icon at all today |
+
+W17 is provisional. It exists because file-type icons are being prototyped as a plugin, and it goes away if
+core adopts them instead, as #411 asks.
 
 Some contributions are excluded. There is no store-slice contribution, since a plugin owns its own state.
 There are no plugin centre-tab kinds, which cost seven files. There are no layout-mode, drop-target,
