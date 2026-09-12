@@ -177,6 +177,10 @@ export function loadConfig(): AppConfig {
 			typeof value.claudeDisableAgentView === "boolean"
 				? value.claudeDisableAgentView
 				: DEFAULT_CONFIG.claudeDisableAgentView,
+		editorGpuRendering:
+			typeof value.editorGpuRendering === "boolean"
+				? value.editorGpuRendering
+				: DEFAULT_CONFIG.editorGpuRendering,
 		jbcentralQuotaEnabled:
 			typeof value.jbcentralQuotaEnabled === "boolean"
 				? value.jbcentralQuotaEnabled

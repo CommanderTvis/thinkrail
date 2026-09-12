@@ -7,6 +7,7 @@ import htmlWorker from "monaco-editor/esm/vs/language/html/html.worker?worker";
 import jsonWorker from "monaco-editor/esm/vs/language/json/json.worker?worker";
 import tsWorker from "monaco-editor/esm/vs/language/typescript/ts.worker?worker";
 import { cssColorToHex } from "@/lib";
+import { supportsDevicePixelBox } from "@/lib/utils";
 import { onThemeSwap } from "../themes";
 import { cssVar, editorFontSize } from "./editorFont";
 import { editorWrappingOptions } from "./editorWrapping";
@@ -46,7 +47,31 @@ export function languageForPath(path: string): string {
 	return id;
 }
 
-export function sharedEditorOptions(lineWidth: number, bounded: boolean) {
+interface WebGpu {
+	requestAdapter(): Promise<unknown>;
+}
+
+let webgpuUsable = false;
+void (async () => {
+	const gpu = (navigator as Navigator & { gpu?: WebGpu }).gpu;
+	if (!gpu) return;
+	try {
+		webgpuUsable = (await gpu.requestAdapter()) !== null;
+	} catch {
+		webgpuUsable = false;
+	}
+})();
+
+const devicePixelBoxUsable = supportsDevicePixelBox((options) =>
+	new ResizeObserver(() => {}).observe(document.createElement("div"), options),
+);
+
+/** Monaco's GPU renderer, only where everything it needs answers — see panels/SPEC.md. */
+export function gpuAcceleration(requested: boolean): "on" | "off" {
+	return requested && webgpuUsable && devicePixelBoxUsable ? "on" : "off";
+}
+
+export function sharedEditorOptions(lineWidth: number, bounded: boolean, gpu = false) {
 	const fontSize = editorFontSize();
 	const lineHeight = Number.parseFloat(cssVar("--tr-line-height-default") ?? "") || undefined;
 	return {
@@ -62,6 +87,7 @@ export function sharedEditorOptions(lineWidth: number, bounded: boolean) {
 		unicodeHighlight: { ambiguousCharacters: false },
 		// `#130` in a comment is an issue number, not a colour swatch. See panels/SPEC.md.
 		colorDecorators: false,
+		experimentalGpuAcceleration: gpuAcceleration(gpu),
 		...(lineHeight && lineHeight > 0 ? { lineHeight } : {}),
 	} as const;
 }

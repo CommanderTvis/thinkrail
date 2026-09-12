@@ -616,6 +616,8 @@ export interface AppConfig extends ThemePreference {
 	 * managed here. Off leaves the CLI to its own devices — see shell/SPEC.md.
 	 */
 	claudeDisableAgentView: boolean;
+	/** Monaco's experimental GPU renderer. Off unless asked for — see panels/SPEC.md. */
+	editorGpuRendering: boolean;
 }
 
 /** The `settings.update` payload: `null` clears an optional override back to unset (⇒ the default). */
@@ -656,6 +658,7 @@ export const DEFAULT_CONFIG: AppConfig = {
 	analyticsEnabled: true,
 	terminalReplayKb: TERMINAL_REPLAY_KB.default,
 	terminalWindowsShell: "auto",
+	editorGpuRendering: false,
 	composerGrowthLimit: "half-chat",
 	chatLineWidth: LINE_WIDTH_COLUMNS.default,
 	fileLineWidth: LINE_WIDTH_COLUMNS.default,

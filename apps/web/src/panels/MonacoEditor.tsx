@@ -66,6 +66,7 @@ export default function MonacoEditor({
 }) {
 	const fileLineWidth = useAppStore((state) => state.fileLineWidth);
 	const fileLineWidthBounded = useAppStore((state) => state.fileLineWidthBounded);
+	const editorGpu = useAppStore((state) => state.editorGpuRendering);
 	const stopThemeWatchRef = useRef<(() => void) | null>(null);
 	const menuIconsRef = useRef<{ dispose(): void } | null>(null);
 	const detachRef = useRef<(() => void) | null>(null);
@@ -231,7 +232,10 @@ export default function MonacoEditor({
 			onMount={onMount}
 			loading={<LoadingRegion rows={12} className="h-full w-full p-12" />}
 			onChange={(value) => onChange?.(value ?? "")}
-			options={{ ...sharedEditorOptions(fileLineWidth, fileLineWidthBounded), readOnly: !editable }}
+			options={{
+				...sharedEditorOptions(fileLineWidth, fileLineWidthBounded, editorGpu),
+				readOnly: !editable,
+			}}
 		/>
 	);
 }

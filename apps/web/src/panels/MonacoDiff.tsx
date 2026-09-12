@@ -47,6 +47,7 @@ export default function MonacoDiff({
 }) {
 	const fileLineWidth = useAppStore((state) => state.fileLineWidth);
 	const fileLineWidthBounded = useAppStore((state) => state.fileLineWidthBounded);
+	const editorGpu = useAppStore((state) => state.editorGpuRendering);
 	const stopThemeWatchRef = useRef<(() => void) | null>(null);
 	const menuIconsRef = useRef<{ dispose(): void }[]>([]);
 	const editorRef = useRef<MonacoDiffEditor | null>(null);
@@ -153,7 +154,7 @@ export default function MonacoDiff({
 			onMount={onMount}
 			loading={<LoadingRegion rows={12} className="h-full w-full p-12" />}
 			options={{
-				...sharedEditorOptions(fileLineWidth, fileLineWidthBounded),
+				...sharedEditorOptions(fileLineWidth, fileLineWidthBounded, editorGpu),
 				renderSideBySide: view === "split",
 				useInlineViewWhenSpaceIsLimited: false,
 				hideUnchangedRegions: { enabled: true },

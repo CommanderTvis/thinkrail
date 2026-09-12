@@ -12,6 +12,7 @@ import {
 	projectRelativePath,
 	shallowEqualArrays,
 	stripFrontmatter,
+	supportsDevicePixelBox,
 	tupleKey,
 } from "./utils";
 
@@ -158,4 +159,14 @@ test("shallowEqualArrays compares element-wise and treats absent as unequal", ()
 	expect(shallowEqualArrays([Number.NaN], [Number.NaN])).toBe(true);
 	expect(shallowEqualArrays(undefined, [])).toBe(false);
 	expect(shallowEqualArrays(undefined, undefined)).toBe(true);
+});
+
+test("the device-pixel box is a feature to ask about, not to assume", () => {
+	expect(supportsDevicePixelBox(() => undefined)).toBe(true);
+	// WebKit throws on the box value rather than ignoring it, which is the whole point of asking.
+	expect(
+		supportsDevicePixelBox(() => {
+			throw new TypeError("device-pixel-content-box");
+		}),
+	).toBe(false);
 });

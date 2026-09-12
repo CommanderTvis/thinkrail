@@ -110,3 +110,23 @@ test("closing a tab with unsaved edits asks first", async ({ page }) => {
 	await expect(tab).toHaveCount(0);
 	expect(readFileSync(NOTES, "utf8")).not.toContain("unsaved");
 });
+
+test("the editor's GPU renderer is a setting, and a browser without WebGPU is not left blank", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	await enterDefaultWorkspace(page);
+	await page.getByTestId("open-settings").click();
+	await page.getByTestId("settings-nav-appearance").click();
+	// Off by default: it is experimental upstream, with gaps around ligatures and some decorations.
+	await expect(page.getByTestId("editor-gpu")).not.toBeChecked();
+	await page.getByTestId("editor-gpu").click();
+	await expect(page.getByTestId("editor-gpu")).toBeChecked();
+	await page.getByRole("dialog").getByRole("button", { name: "Close" }).click();
+
+	// Whether this browser has WebGPU or not, the file is readable — the option degrades, never blanks.
+	await page.getByTestId("tab-files").click();
+	const notes = page.getByTestId("file-node").filter({ hasText: "notes.txt" });
+	await notes.dblclick();
+	await expect(page.getByTestId("editor-pane")).toContainText("plain-text-fixture");
+});

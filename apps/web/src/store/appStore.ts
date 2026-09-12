@@ -923,6 +923,7 @@ interface AppState {
 	terminalReplayKb: number;
 	terminalWindowsShell: TerminalWindowsShell;
 	claudeDisableAgentView: boolean;
+	editorGpuRendering: boolean;
 	composerGrowthLimit: ComposerGrowthLimit;
 	chatLineWidth: number;
 	fileLineWidth: number;
@@ -1210,6 +1211,7 @@ function configPatch(config: AppConfig) {
 			config.jbcentralQuotaRefreshSeconds ?? DEFAULT_CONFIG.jbcentralQuotaRefreshSeconds,
 		terminalReplayKb: config.terminalReplayKb,
 		claudeDisableAgentView: config.claudeDisableAgentView !== false,
+		editorGpuRendering: config.editorGpuRendering === true,
 		terminalWindowsShell: isTerminalWindowsShell(config.terminalWindowsShell)
 			? config.terminalWindowsShell
 			: DEFAULT_CONFIG.terminalWindowsShell,
@@ -1923,6 +1925,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	terminalReplayKb: DEFAULT_CONFIG.terminalReplayKb,
 	terminalWindowsShell: DEFAULT_CONFIG.terminalWindowsShell,
 	claudeDisableAgentView: DEFAULT_CONFIG.claudeDisableAgentView,
+	editorGpuRendering: DEFAULT_CONFIG.editorGpuRendering,
 	composerGrowthLimit: DEFAULT_CONFIG.composerGrowthLimit,
 	chatLineWidth: DEFAULT_CONFIG.chatLineWidth,
 	fileLineWidth: DEFAULT_CONFIG.fileLineWidth,

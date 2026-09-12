@@ -257,3 +257,16 @@ export async function copyText(text: string): Promise<boolean> {
 		return false;
 	}
 }
+
+/**
+ * Whether a `ResizeObserver` here accepts `device-pixel-content-box`. Monaco's GPU renderer needs it and
+ * throws without it, and WebKit — which the desktop app runs on — does not have it. See panels/SPEC.md.
+ */
+export function supportsDevicePixelBox(observe: (options: ResizeObserverOptions) => void): boolean {
+	try {
+		observe({ box: "device-pixel-content-box" });
+		return true;
+	} catch {
+		return false;
+	}
+}
