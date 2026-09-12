@@ -20,7 +20,18 @@ const key = (
 
 const all = { projects: true, workspace: true, bottom: true, newWorkspace: true } as const;
 
-describe("global hotkey routing", () => {
+describe("find chord", () => {
+	test("is the platform modifier plus F, physical key, no other modifier", () => {
+		expect(isFindChord(key("KeyF"), "Linux")).toBe(true);
+		expect(isFindChord(key("KeyF", { ctrlKey: false, metaKey: true }), "MacIntel")).toBe(true);
+		expect(isFindChord(key("KeyF", { ctrlKey: false, metaKey: true }), "Linux")).toBe(false);
+		expect(isFindChord(key("KeyF", { shiftKey: true }), "Linux")).toBe(false);
+		expect(isFindChord(key("KeyF", { altKey: true }), "Linux")).toBe(false);
+		expect(isFindChord(key("KeyG"), "Linux")).toBe(false);
+	});
+});
+
+describe("panel hotkey routing", () => {
 	test("keeps the existing physical-key chords and adds Mod+Shift+J for bottom", () => {
 		expect(globalHotkeyCommand(key("KeyB"), all, false, "Linux")).toBe("projects");
 		expect(globalHotkeyCommand(key("KeyJ"), all, false, "Linux")).toBe("workspace");
@@ -75,5 +86,22 @@ describe("global hotkey routing", () => {
 		expect(globalHotkeyCommand(key("KeyB"), all, true, "Linux")).toBeNull();
 		expect(globalHotkeyCommand(key("KeyJ"), all, true, "Linux")).toBeNull();
 		expect(globalHotkeyCommand(key("KeyJ", { shiftKey: true }), all, true, "Linux")).toBeNull();
+	});
+});
+
+describe("settings chord", () => {
+	test("is macOS's own Preferences chord, and exists nowhere else", () => {
+		const comma = (over: Partial<ReturnType<typeof key>> = {}) => ({
+			...key("Comma", { ctrlKey: false, metaKey: true }),
+			...over,
+		});
+		expect(isSettingsChord(comma(), "MacIntel")).toBe(true);
+		expect(isSettingsChord(comma(), "Linux")).toBe(false);
+		expect(isSettingsChord(comma(), "Win32")).toBe(false);
+		// Control is not the modifier even on a Mac, and no other modifier may ride along.
+		expect(isSettingsChord(key("Comma"), "MacIntel")).toBe(false);
+		expect(isSettingsChord(comma({ shiftKey: true }), "MacIntel")).toBe(false);
+		expect(isSettingsChord(comma({ altKey: true }), "MacIntel")).toBe(false);
+		expect(isSettingsChord(key("KeyK", { ctrlKey: false, metaKey: true }), "MacIntel")).toBe(false);
 	});
 });
