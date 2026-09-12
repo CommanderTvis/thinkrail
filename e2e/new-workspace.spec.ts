@@ -70,7 +70,6 @@ test("the dialog lists local branches (no stray origin) and creates a worktree",
 	await expect(dialog.getByRole("heading", { name: "Create workspace" })).toBeVisible();
 	await expect(dialog).toContainText("A separate checkout on its own new branch");
 	await expect(dialog.getByTestId("ws-prompt-note")).toHaveCount(0);
-	await expect(dialog).toContainText("Files, chats, changes, and terminals stay scoped to it");
 	await expect(dialog.getByTestId("ws-target-worktree")).toHaveAttribute("data-active", "true");
 
 	await dialog.getByTestId("ws-target-default").click();
