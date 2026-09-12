@@ -324,8 +324,13 @@ split collapsed, a side folded — and wrong for a resize: a drag writes new wei
 rebuilding on that flashed every column at the moment the drag ended, at the size it already had.
 
 So the epoch is bumped only when **`frameTopology`** changes: which groups exist, how they nest, which
-tools they hold, what is folded, which regions are visible, and the bottom alignment — every size left
-out by construction. A resize therefore commits its weights, persists, and re-renders in place. This is
+tools they hold, which regions are visible, and the bottom alignment — every size left out by
+construction. **Folding is not one of them**, though it once was: a side stack and the bottom stack
+already carry their own groups' folded flags in their keys, so they rebuild on a fold without being told
+to, while the shared epoch dragged the *centre* along with them — folding a rail unmounted the open
+editor and every live terminal and cost about a second on a real project. A fold changes one region's
+sizes; the rest of the workbench has no business hearing about it. Pinned by `e2e/fold-perf.spec.ts`,
+which holds the centre and terminal nodes across a fold and checks they are still the same elements. A resize therefore commits its weights, persists, and re-renders in place. This is
 pinned by unit tests over `frameTopology` rather than by watching for flicker.
 
 ## Embedded panes

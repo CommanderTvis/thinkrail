@@ -87,8 +87,10 @@ function centerTopology(node: WorkbenchCenterNode): string {
 }
 
 function auxiliaryTopology(groups: readonly WorkbenchAuxiliaryGroup[]): string {
+	// Folding is left out on purpose: each stack already re-keys on its own groups' folded flags, and
+	// making it structural here rebuilt every panel in the workspace instead. See SPEC.md.
 	return groups
-		.map((group) => `${group.id}:${group.folded}:${group.tools.map((tool) => tool.tool).join("+")}`)
+		.map((group) => `${group.id}:${group.tools.map((tool) => tool.tool).join("+")}`)
 		.join("|");
 }
 
