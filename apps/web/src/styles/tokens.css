@@ -34,6 +34,8 @@
 	--panel-inset: var(--space-8);
 	--tree-indent: var(--space-8);
 	--chat-gutter: var(--space-8);
+	/* The window's own rounded corner, which clips whatever the bottom row puts against it. */
+	--window-corner: 10px;
 }
 
 /*
