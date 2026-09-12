@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { hasPlatformModifier } from "../lib";
+import { hasPlatformModifier, isMacOS } from "../lib";
 import { selectHistoryTarget, useAppStore } from "../store";
 
 const TERMINAL_ROOT_SELECTOR = ".xterm";
@@ -25,6 +25,18 @@ export function isFindChord(event: PanelHotkeyEvent, platform?: string): boolean
 export function isSearchChord(event: PanelHotkeyEvent, platform?: string): boolean {
 	return (
 		event.code === "KeyF" && !event.altKey && event.shiftKey && hasPlatformModifier(event, platform)
+	);
+}
+
+/** ⌘, is macOS's own Preferences chord, so it exists there and nowhere else — see shell/SPEC.md. */
+export function isSettingsChord(event: PanelHotkeyEvent, platform?: string): boolean {
+	return (
+		event.code === "Comma" &&
+		event.metaKey &&
+		!event.ctrlKey &&
+		!event.altKey &&
+		!event.shiftKey &&
+		isMacOS(platform)
 	);
 }
 
@@ -84,6 +96,17 @@ export function useGlobalHotkeys(actions: GlobalHotkeyActions): void {
 					if (command === "projects") actionsRef.current.onProjects();
 					else if (command === "workspace") actionsRef.current.onWorkspace?.();
 					else actionsRef.current.onBottom?.();
+				}
+				return;
+			}
+
+			if (isSettingsChord(event) && !hasOpenModal()) {
+				event.preventDefault();
+				event.stopPropagation();
+				// The pane it last showed, the way a Preferences window comes back where it was left.
+				if (!event.repeat) {
+					const state = useAppStore.getState();
+					state.openSettings(state.settingsSection);
 				}
 				return;
 			}

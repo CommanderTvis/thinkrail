@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { isFindChord, panelHotkeyCommand } from "./useGlobalHotkeys";
+import { isFindChord, isSettingsChord, panelHotkeyCommand } from "./useGlobalHotkeys";
 
 const key = (
 	code: string,
@@ -59,5 +59,22 @@ describe("panel hotkey routing", () => {
 		expect(panelHotkeyCommand(key("KeyB"), all, true, "Linux")).toBeNull();
 		expect(panelHotkeyCommand(key("KeyJ"), all, true, "Linux")).toBeNull();
 		expect(panelHotkeyCommand(key("KeyJ", { shiftKey: true }), all, true, "Linux")).toBeNull();
+	});
+});
+
+describe("settings chord", () => {
+	test("is macOS's own Preferences chord, and exists nowhere else", () => {
+		const comma = (over: Partial<ReturnType<typeof key>> = {}) => ({
+			...key("Comma", { ctrlKey: false, metaKey: true }),
+			...over,
+		});
+		expect(isSettingsChord(comma(), "MacIntel")).toBe(true);
+		expect(isSettingsChord(comma(), "Linux")).toBe(false);
+		expect(isSettingsChord(comma(), "Win32")).toBe(false);
+		// Control is not the modifier even on a Mac, and no other modifier may ride along.
+		expect(isSettingsChord(key("Comma"), "MacIntel")).toBe(false);
+		expect(isSettingsChord(comma({ shiftKey: true }), "MacIntel")).toBe(false);
+		expect(isSettingsChord(comma({ altKey: true }), "MacIntel")).toBe(false);
+		expect(isSettingsChord(key("KeyK", { ctrlKey: false, metaKey: true }), "MacIntel")).toBe(false);
 	});
 });

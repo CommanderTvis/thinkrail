@@ -221,4 +221,10 @@ does — every remote brought up to date, nothing local moved, no pruning — be
 branch still the one upstream has" is asked here, and the answer was previously only obtainable outside
 the app.
 
+**Settings answer to ⌘, on macOS, and to nothing anywhere else.** It is the Preferences chord every Mac
+app has, so a Mac user presses it before looking for a button; on Windows and Linux there is no equivalent
+convention, and inventing `Ctrl+,` would take a chord the browser and the terminal may want for a shortcut
+nobody there is reaching for. It opens the pane the dialog last showed, the way a Preferences window comes
+back where it was left, and it does nothing while another dialog is open.
+
 Letter chords match physical `KeyboardEvent.code`, never layout-dependent `key`. The three layout chords remain app-owned inside xterm, do not repeat, and are suppressed while a modal dialog is open. With no active workspace, right/bottom chords neither act nor swallow the browser chord; Projects remains available. Terminal `Ctrl+R` still belongs to xterm; `Ctrl+Shift+R`, macOS `Cmd+R`, F5, and browser reload remain untouched. All other arrangement operations are exposed by the layout command/menu system in [[submodule-web-shell-layout]].
