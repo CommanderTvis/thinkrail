@@ -23,7 +23,7 @@ import { QuietScrollArea } from "../components/QuietScrollArea";
 import { LoadingRegion } from "../components/Skeleton";
 import { DropdownMenuItem } from "../components/ui/dropdown-menu";
 import { IconTooltip } from "../components/ui/tooltip";
-import { cn, type LayoutAttention, layoutResourceIdentity } from "../lib";
+import { cn, type LayoutAttention, layoutResourceIdentity, readLayoutSelection } from "../lib";
 import { ChangesPanel } from "../panels/ChangesPanel";
 import { ClaudeConfigPanel } from "../panels/ClaudeConfigPanel";
 import { ConfirmDialog } from "../panels/ConfirmDialog";
@@ -76,6 +76,7 @@ import {
 	type LayoutTabFocusRequest,
 	type LayoutToolId,
 	type PreparedLayoutClose,
+	selectTab,
 	VERTICAL_TABS_WIDTH,
 	Workbench,
 	type WorkspaceLayoutDocument,
@@ -240,6 +241,35 @@ function useTerminalReservation(workspaceId: string): void {
 	}, [connectionGeneration, pendingIntent, status, workspaceId]);
 }
 
+/**
+ * A project whose spec graph is empty opens its rail on the next tool instead of on Specs — the default
+ * selection is seeded before the graph is read, so it is corrected once, when the answer arrives. See
+ * shell/SPEC.md.
+ */
+function useSpeclessRailDefault(
+	workspaceId: string,
+	document: WorkspaceLayoutDocument | undefined,
+	attention: LayoutAttention | undefined,
+	changeAttention: (next: LayoutAttention) => void,
+): void {
+	const specless = useAppStore((state) => state.specsByWorkspace[workspaceId]?.length === 0);
+	const answered = useRef<string | null>(null);
+	useEffect(() => {
+		if (!specless || !document || !attention || answered.current === workspaceId) return;
+		answered.current = workspaceId;
+		let next = attention;
+		for (const group of collectAllGroups(document)) {
+			if (group.location.area === "center") continue;
+			const selectedId = readLayoutSelection(next, group.location.groupId);
+			const selected = group.tabs.find((tab) => tab.id === selectedId);
+			if (selected?.kind !== "tool" || selected.tool !== "specs") continue;
+			const other = group.tabs.find((tab) => tab.id !== selected.id);
+			if (other) next = selectTab(next, group.location, other.id, false);
+		}
+		if (next !== attention) changeAttention(next);
+	}, [specless, workspaceId, document, attention, changeAttention]);
+}
+
 export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 	const status = useAppStore((state) => state.status);
 	const connectionGeneration = useAppStore((state) => state.connectionGeneration);
@@ -389,6 +419,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 	useWorkspaceChatCatalogReconciliation(workspaceId, commit);
 	const { terminals } = useTerminalPlacementReconciliation(workspaceId, commit);
 	useChatLocationReconciliation(workspaceId, changeAttention);
+	useSpeclessRailDefault(workspaceId, document, attention, changeAttention);
 
 	useEffect(() => {
 		if (!document || status !== "connected") return;
