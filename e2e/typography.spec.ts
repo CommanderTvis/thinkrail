@@ -337,4 +337,17 @@ test("the code font is the user's to choose, and its ligatures are a setting", a
 			),
 		)
 		.toContain("Courier New");
+
+	// The font is the host's and outlives this test: every later spec in this lane measures code text.
+	await page.getByTestId("code-font-family").fill("");
+	await page.getByTestId("code-font-family").blur();
+	await page.getByTestId("code-font-ligatures").click();
+	await expect(page.getByTestId("code-font-ligatures")).not.toBeChecked();
+	await expect
+		.poll(() =>
+			page.evaluate(() =>
+				getComputedStyle(document.documentElement).getPropertyValue("--tr-font-family-code").trim(),
+			),
+		)
+		.not.toContain("Courier New");
 });

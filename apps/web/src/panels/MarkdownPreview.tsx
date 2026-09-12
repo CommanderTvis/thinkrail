@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { type ComponentProps, memo, useEffect, useMemo, useRef, useState } from "react";
 import type { Components } from "react-markdown";
 import { stripFrontmatter } from "@/lib/utils";
 import { Markdown, type MarkdownRehypePlugins } from "../chat/Markdown";
@@ -41,6 +41,7 @@ const DOCUMENT_PROSE = [
 	"[&_tbody_tr:nth-child(2n)]:bg-sunken",
 	"[&_pre]:my-12",
 	"[&_img]:my-12 [&_img]:max-w-full [&_img]:rounded-[var(--radius-sm)]",
+	"[&>*]:[content-visibility:auto] [&>*]:[contain-intrinsic-size:auto_2rem]",
 ].join(" ");
 
 /** A spec's prose with its `[[links]]` rewritten; ordinary markdown is returned untouched. */
@@ -48,6 +49,18 @@ export function specProse(content: string): string {
 	const stripped = stripFrontmatter(content);
 	return readSpecDocument(content) ? linkifyWikiLinks(stripped) : stripped;
 }
+
+const DOCUMENT_REMARK = [remarkGithubAlerts, remarkHeadingIds];
+
+/**
+ * The document's own memo. Re-rendering a preview is a full re-parse, and the pane around it re-renders
+ * for reasons that have nothing to do with the text — but the chat renders the same primitive against a
+ * transcript whose scroll anchoring measures what each render produces, so the memo lives on this side
+ * of it. Its props must hold still to be worth anything: see panels/SPEC.md.
+ */
+const DocumentMarkdown = memo(function DocumentMarkdown(props: ComponentProps<typeof Markdown>) {
+	return <Markdown {...props} />;
+});
 
 export function MarkdownDocument({
 	content,
@@ -58,16 +71,19 @@ export function MarkdownDocument({
 	workspaceId: string;
 	path: string;
 }) {
-	const components = useMemo(() => documentComponents({ workspaceId, path }), [path, workspaceId]);
+	const components = useMemo(
+		() => ({ ...alertComponents, ...documentComponents({ workspaceId, path }) }),
+		[path, workspaceId],
+	);
 	// `[[id]]` is spec-graph vocabulary, so it only means anything in a spec — see panels/SPEC.md.
 	const body = useMemo(() => specProse(content), [content]);
 	return (
-		<Markdown
+		<DocumentMarkdown
 			text={body}
 			className={DOCUMENT_PROSE}
 			urlTransform={specUrlTransform}
-			remarkPlugins={[remarkGithubAlerts, remarkHeadingIds]}
-			components={{ ...alertComponents, ...components }}
+			remarkPlugins={DOCUMENT_REMARK}
+			components={components}
 		/>
 	);
 }
@@ -266,15 +282,24 @@ function ReviewedDocument({
 	documentRef: React.RefObject<HTMLDivElement | null>;
 	properties: React.ReactNode;
 }) {
-	const stripped = specProse(content);
-	const rawOffset = frontmatterOffset(content, stripFrontmatter(content));
-	const mdProps = (stampOffset: number) => ({
-		className: DOCUMENT_PROSE,
-		urlTransform: specUrlTransform,
-		remarkPlugins: [remarkGithubAlerts, remarkHeadingIds],
-		rehypePlugins: [[sourceLineRehype, { offset: stampOffset }]] as MarkdownRehypePlugins,
-		components: { ...alertComponents, ...components },
-	});
+	const stripped = useMemo(() => specProse(content), [content]);
+	const rawOffset = useMemo(() => frontmatterOffset(content, stripFrontmatter(content)), [content]);
+	const merged = useMemo(() => ({ ...alertComponents, ...components }), [components]);
+	// The stamp offset is part of the plugin's identity, so each offset keeps one array to be memo-stable.
+	const rehypeByOffset = useRef(new Map<number, MarkdownRehypePlugins>());
+	const mdProps = (stampOffset: number) => {
+		const known = rehypeByOffset.current.get(stampOffset);
+		const rehypePlugins =
+			known ?? ([[sourceLineRehype, { offset: stampOffset }]] as MarkdownRehypePlugins);
+		if (!known) rehypeByOffset.current.set(stampOffset, rehypePlugins);
+		return {
+			className: DOCUMENT_PROSE,
+			urlTransform: specUrlTransform,
+			remarkPlugins: DOCUMENT_REMARK,
+			rehypePlugins,
+			components: merged,
+		};
+	};
 	const threadInserts: FlowInsert[] = review.threads.map((thread) => ({
 		key: thread.id,
 		line: thread.endLine,
@@ -294,7 +319,7 @@ function ReviewedDocument({
 							{segments.map((segment) => (
 								<div key={segment.key}>
 									{segment.text && (
-										<Markdown text={segment.text} {...mdProps(segment.stampOffset)} />
+										<DocumentMarkdown text={segment.text} {...mdProps(segment.stampOffset)} />
 									)}
 									{segment.nodes}
 								</div>

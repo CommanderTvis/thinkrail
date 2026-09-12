@@ -129,4 +129,10 @@ test("the editor's GPU renderer is a setting, and a browser without WebGPU is no
 	const notes = page.getByTestId("file-node").filter({ hasText: "notes.txt" });
 	await notes.dblclick();
 	await expect(page.getByTestId("editor-pane")).toContainText("plain-text-fixture");
+
+	// The setting is the host's and outlives this test.
+	await page.getByTestId("open-settings").click();
+	await page.getByTestId("settings-nav-appearance").click();
+	await page.getByTestId("editor-gpu").click();
+	await expect(page.getByTestId("editor-gpu")).not.toBeChecked();
 });

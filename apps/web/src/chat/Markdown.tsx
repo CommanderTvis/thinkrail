@@ -9,6 +9,19 @@ const CHAT_PROSE =
 
 export type MarkdownRehypePlugins = ComponentProps<typeof ReactMarkdown>["rehypePlugins"];
 
+type MarkdownRemarkPlugins = ComponentProps<typeof ReactMarkdown>["remarkPlugins"];
+
+const GFM_ONLY = [remarkGfm];
+const withGfmCache = new WeakMap<object, MarkdownRemarkPlugins>();
+function withGfm(plugins: MarkdownRemarkPlugins): MarkdownRemarkPlugins {
+	if (!plugins) return GFM_ONLY;
+	const known = withGfmCache.get(plugins);
+	if (known) return known;
+	const merged = [remarkGfm, ...plugins];
+	withGfmCache.set(plugins, merged);
+	return merged;
+}
+
 export function Markdown({
 	text,
 	className = CHAT_PROSE,
@@ -27,7 +40,7 @@ export function Markdown({
 	return (
 		<div className={className}>
 			<ReactMarkdown
-				remarkPlugins={remarkPlugins ? [remarkGfm, ...remarkPlugins] : [remarkGfm]}
+				remarkPlugins={withGfm(remarkPlugins)}
 				rehypePlugins={rehypePlugins}
 				urlTransform={urlTransform}
 				components={{ code: CodeBlock, a: Anchor, table: Table, ...components }}
@@ -98,6 +111,8 @@ function MermaidBlock({ code }: { code: string }) {
 }
 
 function ShikiBlock({ code, lang }: { code: string; lang: string }) {
+	// Deliberately not seeded from the cache, though it could be: a block that arrives at its final
+	// height in the same frame as its container moves the chat's reading anchor. See chat/SPEC.md.
 	const [html, setHtml] = useState<string | null>(null);
 
 	useEffect(() => {
