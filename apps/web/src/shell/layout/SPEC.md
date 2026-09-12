@@ -46,6 +46,11 @@ Frame groups may remain empty in any workspace. Closing a final resource therefo
 ## Layout grammar
 
 - **Center:** a recursive horizontal/vertical binary tree, maximum four leaves. A split replaces one leaf with equal halves. User creation/resize requires each child to remain at least 320 px wide and 180 px high. Empty leaves are valid frame slots and render the shell-provided empty surface. Remove/Merge promotes a sibling and rehomes every affected workspace's tabs deterministically.
+- **The bottom group's row clears the window's own corner.** The desktop window is rounded, and the
+  bottom region's header is the last row in it, so its right-hand controls — add, fold — sat inside the
+  arc and were clipped by it. The row reserves the corner's width (`--window-corner`, a platform
+  measurement like the titlebar inset, not a step on the spacing scale). The gutter is harmless in a
+  browser tab, where a control jammed against the window edge was never right either.
 - **A terminal nobody is looking at keeps its box and stops rendering.** An inactive terminal stays
   mounted — closing and rebuilding one would lose the live attachment — and it keeps occupying real
   layout space rather than being `display: none`, so the grid it wraps against is the one it will be

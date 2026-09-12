@@ -2421,7 +2421,7 @@ function BottomGroupView({
 				});
 			}}
 		>
-			<div className="flex h-panel-header-row shrink-0 items-stretch">
+			<div className="flex h-panel-header-row shrink-0 items-stretch pr-[var(--spacing-window-corner)]">
 				<div className="min-w-0 flex-1">
 					<TabStrip
 						document={shared.document}
