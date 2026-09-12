@@ -744,3 +744,22 @@ test("a shell that dies during a reclaim is not presented as alive", async ({ pa
 
 	await page2.close();
 });
+
+test("a terminal that was hidden while it printed keeps its width", async ({ page }) => {
+	await openFixtureProject(page);
+	await createWorkspaceViaDialog(page);
+	await waitTerminalReady(page);
+
+	// Printed while this tab is in the background: the grid it wraps against must still be the real one.
+	await runInTerminal(page, "(sleep 2; printf 'X%.0s' {1..200}; echo) &");
+	await openTerminal(page);
+	await page.getByTestId("terminal-tab").first().click();
+	await waitTerminalReady(page);
+
+	const wrapped = visibleTerminalScreen(page)
+		.locator("div")
+		.filter({ hasText: /XXXXXXXXXX/ });
+	await expect.poll(() => wrapped.count(), { timeout: 20_000 }).toBeGreaterThan(0);
+	// 200 columns of X wrap into a couple of rows at a real width, and into 200 at a collapsed one.
+	expect(await wrapped.count()).toBeLessThan(10);
+});

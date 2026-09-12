@@ -46,6 +46,15 @@ Frame groups may remain empty in any workspace. Closing a final resource therefo
 ## Layout grammar
 
 - **Center:** a recursive horizontal/vertical binary tree, maximum four leaves. A split replaces one leaf with equal halves. User creation/resize requires each child to remain at least 320 px wide and 180 px high. Empty leaves are valid frame slots and render the shell-provided empty surface. Remove/Merge promotes a sibling and rehomes every affected workspace's tabs deterministically.
+- **A terminal nobody is looking at keeps its box and stops rendering.** An inactive terminal stays
+  mounted — closing and rebuilding one would lose the live attachment — and it keeps occupying real
+  layout space rather than being `display: none`, so the grid it wraps against is the one it will be
+  shown at. What it does not need to keep doing is laying out and painting a screen nobody can see, so
+  its subtree is skipped with `content-visibility: hidden`. The measurements that grid depends on are
+  safe inside a skipped subtree because both of them refuse a zero: `TerminalInstance`'s fit returns
+  early on a zero-sized host, and xterm keeps its last good character measurement rather than taking a
+  zero. `terminals.spec.ts` pins the outcome — a terminal that printed while hidden still wraps at its
+  real width.
 - **A tool the workspace cannot serve is not offered.** `Workbench` takes `unofferedTools`, and every
   reveal menu — the side group's and the tab context menu's — leaves those out, so nothing in the shell can
   open one. The engine stays ignorant of *why*: the shell decides, this module only withholds. It reaches
