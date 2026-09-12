@@ -173,6 +173,10 @@ export function loadConfig(): AppConfig {
 			typeof value.subagentsEnabled === "boolean"
 				? value.subagentsEnabled
 				: DEFAULT_CONFIG.subagentsEnabled,
+		editorGpuRendering:
+			typeof value.editorGpuRendering === "boolean"
+				? value.editorGpuRendering
+				: DEFAULT_CONFIG.editorGpuRendering,
 		jbcentralQuotaEnabled:
 			typeof value.jbcentralQuotaEnabled === "boolean"
 				? value.jbcentralQuotaEnabled

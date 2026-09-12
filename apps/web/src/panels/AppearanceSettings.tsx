@@ -122,6 +122,7 @@ export function AppearanceSettings() {
 	useEffect(() => onThemeSwap(() => setThemeRevision((revision) => revision + 1)), []);
 
 	const themes = getThemes();
+	const editorGpu = useAppStore((state) => state.editorGpuRendering);
 	const systemSupported = (protocolVersion ?? 0) >= THEME_SYSTEM_PROTOCOL_VERSION;
 	const activeMode = systemSupported ? themeMode : "fixed";
 	const activeThemeId = resolveTheme(theme).id;
@@ -131,6 +132,12 @@ export function AppearanceSettings() {
 	const current = resolveThemePreference(preference, systemAppearance);
 	const light = resolveThemePreference(preference, "light");
 	const dark = resolveThemePreference(preference, "dark");
+
+	const setEditorGpu = (on: boolean) => {
+		getTransport()
+			.request("settings.update", { config: { editorGpuRendering: on } })
+			.catch(() => toast.error("Couldn’t change the editor renderer"));
+	};
 
 	const update = (config: AppConfigUpdate) => {
 		if (pending) return;
@@ -158,6 +165,23 @@ export function AppearanceSettings() {
 
 	return (
 		<section data-testid="settings-appearance" className="flex flex-col gap-8">
+			<label className="flex w-full items-start gap-8 tr-text-ui text-text-default">
+				<input
+					type="checkbox"
+					data-testid="editor-gpu"
+					checked={editorGpu}
+					onChange={(event) => setEditorGpu(event.target.checked)}
+					className="mt-2 size-16 shrink-0 accent-primary"
+				/>
+				<span className="min-w-0 flex-1">
+					Draw the editor on the GPU
+					<span className="block tr-text-metadata text-text-muted">
+						Monaco's own renderer, still experimental upstream: fast for scrolling a large file,
+						with known gaps around ligatures and some decorations. Ignored where the browser has no
+						WebGPU. Applies to files opened from now on.
+					</span>
+				</span>
+			</label>
 			<div className="flex flex-col gap-4">
 				<h3 className="tr-title-section text-text-default">Theme</h3>
 				<p className="text-text-muted tr-text-metadata">

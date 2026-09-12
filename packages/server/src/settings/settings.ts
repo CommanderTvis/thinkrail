@@ -77,6 +77,12 @@ export function updateConfig(partial: AppConfigUpdate): AppConfig {
 		throw new Error("jbcentralQuotaEnabled must be a boolean");
 	}
 	if (
+		runtimeUpdate.editorGpuRendering !== undefined &&
+		typeof runtimeUpdate.editorGpuRendering !== "boolean"
+	) {
+		throw new Error("editorGpuRendering must be a boolean");
+	}
+	if (
 		runtimeUpdate.terminalWindowsShell !== undefined &&
 		!isTerminalWindowsShell(runtimeUpdate.terminalWindowsShell)
 	) {

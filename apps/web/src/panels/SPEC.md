@@ -339,6 +339,18 @@ with the id in its title rather than opening nothing. In ordinary markdown `[[te
 written, because there it is text, not a reference. The rewrite happens within a line, so the reviewed
 path keeps its anchors.
 
+**The editor's GPU renderer is asked for, and then asked about.** Monaco ships
+`experimentalGpuAcceleration` off, and it stays off here unless someone turns it on: it is experimental
+upstream, with gaps around ligatures and some decoration rendering, and the payoff is narrow — scrolling a
+large file. Turning it on is not enough to use it. `navigator.gpu` merely
+*existing* is not the question: headless Chromium has the object and no adapter behind it, and Monaco's
+GPU renderer draws an editor with line numbers and no text there, which is how this was caught. So the
+gate is an adapter that actually answers — `requestAdapter()` once at startup, cached — **and** a
+`ResizeObserver` that accepts `device-pixel-content-box`, which Monaco's GPU path needs and throws
+without: WebKit, which the desktop app runs on, has the adapter and not the observer, so the editor came
+up as an error panel there. Everything that fails either check falls back to the renderer that works. A file opened before that probe settles gets the ordinary
+renderer, which is the safe direction to be wrong in.
+
 **The Graph panel draws the project's branches, and only reads.** `git.graph` answers for the project;
 `graphLanes.layoutGraph` turns the commit list into lanes the way `git log --graph` does — a lane is
 claimed by the sha it waits for, a commit takes the leftmost lane waiting for it, its first parent
@@ -682,7 +694,8 @@ a project picker, the prompt hero, and the reused
   Off disables (but retains) the interval. The field edits locally, commits on blur/Enter, reports invalid
   range inline, and waits for `settings.changed` rather than installing optimistic authority. Older hosts get
   neither control. **`GithubSettings`** (the "Local GitHub" block — `github.authStatus()`
-  Connected + login / Not connected + Refresh); **`AppearanceSettings`** (the catalog-driven theme
+  Connected + login / Not connected + Refresh); **`AppearanceSettings`** (a **Draw the editor on the GPU**
+  switch — `editorGpuRendering`, off — above the catalog-driven theme
   settings, gated to fixed-only behavior below `THEME_SYSTEM_PROTOCOL_VERSION`. Current hosts explain that
   the mode/pair follow the user while each device reads its own system setting, then show one accessible
   radio group with top-level `Fixed — Use one theme everywhere` / `Match system — Follow this device`
