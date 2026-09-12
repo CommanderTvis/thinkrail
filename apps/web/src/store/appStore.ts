@@ -47,6 +47,7 @@ import {
 	customMessageText,
 	DEFAULT_CONFIG,
 	isAskUserAnswersMessage,
+	isCodeFontFamily,
 	isControlMessage,
 	isLineWidth,
 	isSubagentCompletionMessage,
@@ -923,6 +924,8 @@ interface AppState {
 	terminalReplayKb: number;
 	terminalWindowsShell: TerminalWindowsShell;
 	editorGpuRendering: boolean;
+	codeFontFamily: string;
+	codeFontLigatures: boolean;
 	composerGrowthLimit: ComposerGrowthLimit;
 	chatLineWidth: number;
 	fileLineWidth: number;
@@ -1210,6 +1213,8 @@ function configPatch(config: AppConfig) {
 			config.jbcentralQuotaRefreshSeconds ?? DEFAULT_CONFIG.jbcentralQuotaRefreshSeconds,
 		terminalReplayKb: config.terminalReplayKb,
 		editorGpuRendering: config.editorGpuRendering === true,
+		codeFontFamily: isCodeFontFamily(config.codeFontFamily) ? config.codeFontFamily : "",
+		codeFontLigatures: config.codeFontLigatures === true,
 		terminalWindowsShell: isTerminalWindowsShell(config.terminalWindowsShell)
 			? config.terminalWindowsShell
 			: DEFAULT_CONFIG.terminalWindowsShell,
@@ -1923,6 +1928,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 	terminalReplayKb: DEFAULT_CONFIG.terminalReplayKb,
 	terminalWindowsShell: DEFAULT_CONFIG.terminalWindowsShell,
 	editorGpuRendering: DEFAULT_CONFIG.editorGpuRendering,
+	codeFontFamily: DEFAULT_CONFIG.codeFontFamily,
+	codeFontLigatures: DEFAULT_CONFIG.codeFontLigatures,
 	composerGrowthLimit: DEFAULT_CONFIG.composerGrowthLimit,
 	chatLineWidth: DEFAULT_CONFIG.chatLineWidth,
 	fileLineWidth: DEFAULT_CONFIG.fileLineWidth,

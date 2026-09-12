@@ -71,7 +71,12 @@ export function gpuAcceleration(requested: boolean): "on" | "off" {
 	return requested && webgpuUsable && devicePixelBoxUsable ? "on" : "off";
 }
 
-export function sharedEditorOptions(lineWidth: number, bounded: boolean, gpu = false) {
+export function sharedEditorOptions(
+	lineWidth: number,
+	bounded: boolean,
+	gpu = false,
+	ligatures = false,
+) {
 	const fontSize = editorFontSize();
 	const lineHeight = Number.parseFloat(cssVar("--tr-line-height-default") ?? "") || undefined;
 	return {
@@ -88,6 +93,7 @@ export function sharedEditorOptions(lineWidth: number, bounded: boolean, gpu = f
 		// `#130` in a comment is an issue number, not a colour swatch. See panels/SPEC.md.
 		colorDecorators: false,
 		experimentalGpuAcceleration: gpuAcceleration(gpu),
+		fontLigatures: ligatures,
 		...(lineHeight && lineHeight > 0 ? { lineHeight } : {}),
 	} as const;
 }

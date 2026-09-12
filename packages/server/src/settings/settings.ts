@@ -1,6 +1,7 @@
 import {
 	type AppConfig,
 	type AppConfigUpdate,
+	isCodeFontFamily,
 	isJbcentralQuotaRefreshSeconds,
 	isLineWidth,
 	isSystemThemePair,
@@ -81,6 +82,18 @@ export function updateConfig(partial: AppConfigUpdate): AppConfig {
 		typeof runtimeUpdate.editorGpuRendering !== "boolean"
 	) {
 		throw new Error("editorGpuRendering must be a boolean");
+	}
+	if (
+		runtimeUpdate.codeFontFamily !== undefined &&
+		!isCodeFontFamily(runtimeUpdate.codeFontFamily)
+	) {
+		throw new Error("codeFontFamily must be a font family name, at most 120 characters");
+	}
+	if (
+		runtimeUpdate.codeFontLigatures !== undefined &&
+		typeof runtimeUpdate.codeFontLigatures !== "boolean"
+	) {
+		throw new Error("codeFontLigatures must be a boolean");
 	}
 	if (
 		runtimeUpdate.terminalWindowsShell !== undefined &&

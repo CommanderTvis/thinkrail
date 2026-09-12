@@ -7,6 +7,7 @@ import {
 } from "@remixicon/react";
 import {
 	type AppConfigUpdate,
+	isCodeFontFamily,
 	type SystemThemePair,
 	THEME_SYSTEM_PROTOCOL_VERSION,
 	type ThemeId,
@@ -123,6 +124,8 @@ export function AppearanceSettings() {
 
 	const themes = getThemes();
 	const editorGpu = useAppStore((state) => state.editorGpuRendering);
+	const codeFont = useAppStore((state) => state.codeFontFamily);
+	const ligatures = useAppStore((state) => state.codeFontLigatures);
 	const systemSupported = (protocolVersion ?? 0) >= THEME_SYSTEM_PROTOCOL_VERSION;
 	const activeMode = systemSupported ? themeMode : "fixed";
 	const activeThemeId = resolveTheme(theme).id;
@@ -132,6 +135,22 @@ export function AppearanceSettings() {
 	const current = resolveThemePreference(preference, systemAppearance);
 	const light = resolveThemePreference(preference, "light");
 	const dark = resolveThemePreference(preference, "dark");
+
+	const setCodeFont = (family: string) => {
+		if (!isCodeFontFamily(family)) {
+			toast.error("A font family is letters, digits, spaces, commas, dots and dashes");
+			return;
+		}
+		getTransport()
+			.request("settings.update", { config: { codeFontFamily: family } })
+			.catch(() => toast.error("Couldn’t change the code font"));
+	};
+
+	const setLigatures = (on: boolean) => {
+		getTransport()
+			.request("settings.update", { config: { codeFontLigatures: on } })
+			.catch(() => toast.error("Couldn’t change the ligature setting"));
+	};
 
 	const setEditorGpu = (on: boolean) => {
 		getTransport()
@@ -165,23 +184,6 @@ export function AppearanceSettings() {
 
 	return (
 		<section data-testid="settings-appearance" className="flex flex-col gap-8">
-			<label className="flex w-full items-start gap-8 tr-text-ui text-text-default">
-				<input
-					type="checkbox"
-					data-testid="editor-gpu"
-					checked={editorGpu}
-					onChange={(event) => setEditorGpu(event.target.checked)}
-					className="mt-2 size-16 shrink-0 accent-primary"
-				/>
-				<span className="min-w-0 flex-1">
-					Draw the editor on the GPU
-					<span className="block tr-text-metadata text-text-muted">
-						Monaco's own renderer, still experimental upstream: fast for scrolling a large file,
-						with known gaps around ligatures and some decorations. Ignored where the browser has no
-						WebGPU. Applies to files opened from now on.
-					</span>
-				</span>
-			</label>
 			<div className="flex flex-col gap-4">
 				<h3 className="tr-title-section text-text-default">Theme</h3>
 				<p className="text-text-muted tr-text-metadata">
@@ -260,6 +262,57 @@ export function AppearanceSettings() {
 					/>
 				</div>
 			)}
+			<div className="flex flex-col gap-4">
+				<h3 className="tr-title-section text-text-default">Code font</h3>
+				<p className="text-text-muted tr-text-metadata">
+					One family for every code surface — the editor, terminals, diagrams and code blocks. Leave
+					it empty for the bundled JetBrains Mono. A family the machine does not have falls back to
+					its monospace default.
+				</p>
+				<input
+					data-testid="code-font-family"
+					aria-label="Code font family"
+					defaultValue={codeFont}
+					placeholder="JetBrains Mono"
+					onBlur={(event) => {
+						if (event.target.value !== codeFont) setCodeFont(event.target.value);
+					}}
+					className="w-full rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg px-8 py-4 tr-code-text text-text-default outline-none focus-visible:ring-2 focus-visible:ring-primary"
+				/>
+			</div>
+			<label className="flex w-full items-start gap-8 tr-text-ui text-text-default">
+				<input
+					type="checkbox"
+					data-testid="code-font-ligatures"
+					checked={ligatures}
+					onChange={(event) => setLigatures(event.target.checked)}
+					className="mt-2 size-16 shrink-0 accent-primary"
+				/>
+				<span className="min-w-0 flex-1">
+					Use the code font's ligatures
+					<span className="block tr-text-metadata text-text-muted">
+						Draws an arrow or a not-equals as the font designed them, in the editor and in
+						terminals.
+					</span>
+				</span>
+			</label>
+			<label className="flex w-full items-start gap-8 tr-text-ui text-text-default">
+				<input
+					type="checkbox"
+					data-testid="editor-gpu"
+					checked={editorGpu}
+					onChange={(event) => setEditorGpu(event.target.checked)}
+					className="mt-2 size-16 shrink-0 accent-primary"
+				/>
+				<span className="min-w-0 flex-1">
+					Draw the editor on the GPU
+					<span className="block tr-text-metadata text-text-muted">
+						The editor's own graphics-card rendering, still experimental: quicker to scroll a large
+						file, with known gaps around ligatures and some highlighting. Ignored on a machine that
+						cannot run it. Applies to files opened from now on.
+					</span>
+				</span>
+			</label>
 		</section>
 	);
 }

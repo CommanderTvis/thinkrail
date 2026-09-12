@@ -177,6 +177,14 @@ export function loadConfig(): AppConfig {
 			typeof value.editorGpuRendering === "boolean"
 				? value.editorGpuRendering
 				: DEFAULT_CONFIG.editorGpuRendering,
+		codeFontFamily:
+			typeof value.codeFontFamily === "string"
+				? value.codeFontFamily
+				: DEFAULT_CONFIG.codeFontFamily,
+		codeFontLigatures:
+			typeof value.codeFontLigatures === "boolean"
+				? value.codeFontLigatures
+				: DEFAULT_CONFIG.codeFontLigatures,
 		jbcentralQuotaEnabled:
 			typeof value.jbcentralQuotaEnabled === "boolean"
 				? value.jbcentralQuotaEnabled

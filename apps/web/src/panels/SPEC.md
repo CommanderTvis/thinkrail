@@ -339,6 +339,21 @@ with the id in its title rather than opening nothing. In ordinary markdown `[[te
 written, because there it is text, not a reference. The rewrite happens within a line, so the reviewed
 path keeps its anchors.
 
+**The code font is one family, chosen once.** Upstream #431: the code face was fixed, and its ligatures
+were off with no way to turn them on. Both are now settings, and the family is *one* family for every code
+surface — editor, terminals, diagrams, code blocks — because that is how a developer configures a machine,
+and because per-surface fonts are three settings to keep in step for a difference almost nobody wants. It
+is applied where they all already read it: the generated `--tr-font-family-code` custom property, overridden
+on the root and removed again when the setting is emptied, so the bundled face comes back rather than being
+copied into the setting. A family the machine does not have falls through to its own monospace default,
+which is the browser's job and not ours to check.
+
+The name is validated, not escaped: letters, digits, spaces, commas, dots and dashes, at most 120
+characters. A value that could close the declaration it lands in is refused by the host and by the field,
+because this string is written into CSS rather than compared to a list. Ligatures reach both surfaces that draw code:
+Monaco takes `fontLigatures`, and a terminal gets them from xterm's DOM renderer, which draws a row as
+text rather than a glyph per cell — one of the reasons `architecture.md` Decision #11 keeps that renderer.
+
 **The editor's GPU renderer is asked for, and then asked about.** Monaco ships
 `experimentalGpuAcceleration` off, and it stays off here unless someone turns it on: it is experimental
 upstream, with gaps around ligatures and some decoration rendering, and the payoff is narrow — scrolling a
