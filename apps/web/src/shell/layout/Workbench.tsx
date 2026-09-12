@@ -1696,12 +1696,11 @@ function CenterGroupView({
 				.map((terminal) => (
 					<div
 						key={terminal.id}
-						// `invisible` rather than `hidden`: a terminal measured at zero size re-fits to a 1x1 grid
-						// and loses its wrap, so an inactive one has to keep occupying real layout space.
+						// `invisible` keeps the box; `content-visibility` skips what is inside it. See layout/SPEC.md.
 						className={
 							terminal.id === selected?.id && !showPanes
 								? "absolute inset-0"
-								: "pointer-events-none invisible absolute inset-0"
+								: "pointer-events-none invisible absolute inset-0 [content-visibility:hidden]"
 						}
 						aria-hidden={terminal.id !== selected?.id || showPanes}
 					>
