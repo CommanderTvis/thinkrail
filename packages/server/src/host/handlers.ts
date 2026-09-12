@@ -132,6 +132,7 @@ import {
 import { recordAcceptedMessage, respondToInterview } from "../feedback";
 import { readDir, readFile, resolveWorktreeFile, searchWorktree, writeFile } from "../fs";
 import {
+	commitGraph,
 	countUnpushedCommits,
 	gitDiffFile,
 	gitStatus,
@@ -736,6 +737,10 @@ const handlers: Record<string, Handler> = {
 		const p = params as { workspaceId: string; path: string; scope?: GitDiffScope };
 		void ensureWatch(p.workspaceId);
 		return gitDiffFile(p.workspaceId, p.path, p.scope);
+	},
+	"git.graph": (params) => {
+		const p = params as { projectId: string; skip?: number };
+		return commitGraph(p.projectId, p.skip);
 	},
 	"git.listCommits": (params) => listCommits((params as { workspaceId: string }).workspaceId),
 	"terminal.reserve": (params) => {

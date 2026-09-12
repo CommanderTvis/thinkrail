@@ -15,6 +15,18 @@ Git plumbing: the low-level `git` runner (sync + async) plus a worktree's change
 branch pickers, the workspace branch's own commit list, and a background prefetch that warms a remote base
 ref off the workspace-create critical path.
 
+- **`commitGraph(projectId)` reads the project, not a worktree.** The graph's whole point here is how a
+  project's branches relate, and in this app a branch is usually somebody's worktree — so the log is
+  `--branches --date-order` over the project root, read a page at a time, with `%P` for the edges and
+  `%D` for the labels. Remote-tracking refs are left out: a rail-width graph full of stale `origin/*`
+  answers a question nobody asked. `git worktree list --porcelain` says which commit each checkout sits
+  on, matched back to this host's workspaces by path so the graph can name them; a worktree ThinkRail
+  does not own still appears, under its folder name. **History is paged, not cropped.** A cap the client
+  could not get past made the oldest rows dangle into nothing and said so — which answers "there is more"
+  without ever letting anyone read it. Each call takes a `skip` and reads one commit past its page, so
+  `hasMore` is answered by the same read rather than by a second one, and the client walks back through a
+  repository of any size by asking again.
+
 ## Boundary
 
 - **Owns:** `git(cwd, args)` (spawn git *sync*, capture trimmed stdout/stderr + ok; `opts.raw` keeps
@@ -231,7 +243,7 @@ ref off the workspace-create critical path.
 - **Public surface (barrel):** `git`, `gitAsync`, `nonInteractiveGitEnv`, `remoteRefOid`, `remoteTrackingRef`, `gitStatus`,
   `gitUncommittedPaths`, `gitDiffFile`,
   `readBlobAt`,
-  `gitCommitPaths`, `gitHeadSha`, `listCommits`,
+  `gitCommitPaths`, `gitHeadSha`, `listCommits`, `commitGraph`,
   `resolveDiffRange`, `changedFileArgs`, `diffBaseRef`, `resolveCommitOid`, `DiffRange`, `isSafeRef`,
   `assertSafeRef`, `listBranches`, `resolveDefaultBranch`, `tryCurrentBranch`, `currentBranch`,
   `canonicalPath`, `prefetchBranch`, `countUnpushedCommits`, `listRemotes`, `remoteNameOf`.

@@ -6,6 +6,9 @@ import type {
 	GitDiffScope,
 	GitFileChange,
 	GitFileStatus,
+	GitGraph,
+	GitGraphCommit,
+	GitGraphWorktree,
 	GitStatus,
 	RemoteBranchGroup,
 	Workspace,
@@ -453,4 +456,88 @@ export async function countUnpushedCommits(
 	}
 	const count = Number(counted.out);
 	return Number.isSafeInteger(count) && count >= 0 ? count : null;
+}
+
+const GRAPH_PAGE = 400;
+const GRAPH_FIELDS = 6;
+
+function project(projectId: string): { path: string } {
+	const found = loadProjects().find((entry) => entry.id === projectId);
+	if (!found) throw new Error(`Unknown project: ${projectId}`);
+	return { path: found.path };
+}
+
+/** `%D`'s decoration list, minus the `HEAD -> ` prefix git writes on the checked-out one. */
+function parseRefs(decoration: string): string[] {
+	return decoration
+		.split(",")
+		.map((ref) => ref.trim().replace(/^HEAD -> /, ""))
+		.filter((ref) => ref !== "" && ref !== "HEAD");
+}
+
+/** Every local branch of a project, with its worktree marks — see SPEC.md. */
+export async function commitGraph(projectId: string, skip = 0): Promise<GitGraph> {
+	const root = project(projectId).path;
+	const log = await gitAsync(root, [
+		"log",
+		"--branches",
+		"--date-order",
+		`--skip=${Math.max(0, Math.trunc(skip))}`,
+		// One past the page, so "is there more" is answered by the same read.
+		`--max-count=${GRAPH_PAGE + 1}`,
+		"--format=%H%x00%h%x00%P%x00%cI%x00%an%x00%D%x00%s",
+		"--end-of-options",
+		"--",
+	]);
+	if (log.failure) throw new Error(`Could not read the history: ${log.err || "git failed"}`);
+	if (!log.ok || !log.out) return { commits: [], worktrees: [], hasMore: false };
+
+	const commits: GitGraphCommit[] = [];
+	for (const line of log.out.split("\n")) {
+		const parts = line.split(LOG_SEP);
+		const [sha, shortSha, parents, committedAt, author, decoration] = parts;
+		if (!sha || !shortSha) continue;
+		commits.push({
+			sha,
+			shortSha,
+			parents: (parents ?? "").split(" ").filter((value) => value !== ""),
+			refs: parseRefs(decoration ?? ""),
+			subject: plainText(parts.slice(GRAPH_FIELDS).join(LOG_SEP)),
+			author: plainText(author ?? ""),
+			committedAt: committedAt ?? "",
+		});
+	}
+
+	const known = new Map(
+		loadWorkspaces()
+			.filter((ws) => ws.projectId === projectId)
+			.map((ws) => [resolve(ws.worktreePath), ws]),
+	);
+	const worktrees: GitGraphWorktree[] = [];
+	const listed = await gitAsync(root, ["worktree", "list", "--porcelain"]);
+	if (listed.ok) {
+		let path = "";
+		let head = "";
+		const flush = () => {
+			if (path === "" || head === "") return;
+			const ws = known.get(resolve(path));
+			worktrees.push({
+				sha: head,
+				name: ws?.name ?? path.slice(path.lastIndexOf("/") + 1),
+				...(ws ? { workspaceId: ws.id } : {}),
+			});
+			path = "";
+			head = "";
+		};
+		for (const line of listed.out.split("\n")) {
+			if (line.startsWith("worktree ")) {
+				flush();
+				path = line.slice("worktree ".length).trim();
+			} else if (line.startsWith("HEAD ")) head = line.slice("HEAD ".length).trim();
+		}
+		flush();
+	}
+
+	const hasMore = commits.length > GRAPH_PAGE;
+	return { commits: hasMore ? commits.slice(0, GRAPH_PAGE) : commits, worktrees, hasMore };
 }

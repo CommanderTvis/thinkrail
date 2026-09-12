@@ -31,6 +31,7 @@ import { DiffPane } from "../panels/DiffPane";
 import { FilePane } from "../panels/FilePane";
 import { FileTree } from "../panels/FileTree";
 import { isFileTabDirty } from "../panels/fileSave";
+import { GraphPanel } from "../panels/GraphPanel";
 import { openFileInTab } from "../panels/openTabs";
 import { ProjectTree } from "../panels/ProjectTree";
 import { ReviewPanel, selectActiveReviewedPath } from "../panels/ReviewPanel";
@@ -93,7 +94,7 @@ const NO_CLAUDE_CODE_STATUS: Record<string, ClaudeCodeSessionState> = {};
 
 // Changes and Review are both windows onto git history; without a repository, or before the first
 // commit, neither has anything to answer with — see SPEC.md.
-const GIT_TOOLS: readonly LayoutToolId[] = ["changes", "review"];
+const GIT_TOOLS: readonly LayoutToolId[] = ["changes", "review", "graph"];
 const NO_UNOFFERED_TOOLS: readonly LayoutToolId[] = [];
 
 function gitlessNotice(vcs: "none" | "unborn"): ReactNode {
@@ -604,6 +605,9 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 					) : (
 						<ReviewPanel workspaceId={workspaceId} failed={review.failed} />
 					);
+					break;
+				case "graph":
+					body = vcsGap ? gitlessNotice(vcsGap) : <GraphPanel workspaceId={workspaceId} />;
 					break;
 				case "claude":
 					body = claudeCodeEnabled ? (

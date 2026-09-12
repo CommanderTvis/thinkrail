@@ -321,6 +321,46 @@ provider is "connected" iff any `configured`) on mount and re-checks whenever th
 it disappears the moment the user connects one; a transport error degrades to *not* nagging (offline ≠ "no
 provider"). All provider **management** lives in Settings, not here (the always-on strip is gone).
 
+**The Graph panel draws the project's branches, and only reads.** `git.graph` answers for the project;
+`graphLanes.layoutGraph` turns the commit list into lanes the way `git log --graph` does — a lane is
+claimed by the sha it waits for, a commit takes the leftmost lane waiting for it, its first parent
+inherits that lane and the rest open new ones. Lanes stop at eight and the ninth shares the last, because
+this lives in the **right rail** and a rail cannot widen to fit a busy repository; the layout is a pure
+function with its own unit tests, so the drawing stays a matter of SVG. Each row is a button: clicking a
+commit points the Changes panel at that commit's scope, which is the app's existing way of showing what a
+commit did. Nothing here mutates a repository — no checkout, no merge, no reset — so the panel cannot
+lose work, and the actions that could live where they already do.
+
+**The graph draws the rows you are looking at, and keeps the ones you are not.** A commit row is a fixed
+height, so the scroller is sized by counting rows rather than by building them: only the window around the
+viewport plus a dozen rows of overscan exist in the DOM, and scrolling recycles them. Older history is
+fetched a page at a time as the scroll approaches the end (a refresh re-reads in place rather than
+tearing the list down, which would throw the reader back to the top mid-scroll), which is what makes sliding to any point of a
+long history possible at all — the previous shape capped the read and printed "older history not drawn",
+which is an apology, not a feature. The lane layout is the part that cannot simply restart per page: a
+lane's meaning comes from every commit above it, so `layoutGraph` hands back the lanes it left open and
+the next page carries them in. A unit test pins that a split read and a single read assign the same lanes.
+
+**The lane art is measured across the rows on screen, never per row.** Two numbers have to agree or every
+line in the drawing breaks: every row shares one gutter width, so a lane sits at the same x on every row
+rather than stepping sideways where the graph narrows; and a row is exactly as tall as the
+SVG it holds, so consecutive rows' lines meet instead of leaving a gap at each boundary — which reads as
+a dashed line, not a branch. The commit's own text is therefore two fixed rows: the subject alone, then
+sha, author, refs and worktree marks. Refs used to sit beside the subject and, on a commit carrying two
+long branch names, pushed it out of the row entirely. A lane is also drawn in halves around its own
+dot — above it only when a child above really continues into it, below it only when the commit has a
+first parent — because the lane is claimed as the row is laid out, and drawing it whole gave every
+branch tip a line rising out of it into nothing. The shared width is the widest row *in view*, not in the
+whole history: a repository that branches five ways somewhere in its past was otherwise pushing every row
+at the tip five lanes to the right for a single line of history. It slides between widths instead of
+jumping, because all the rows change together and a jump reads as the list twitching. The gutter is drawn
+at the full width the read can need and clipped to the width in use, so widening is a slide rather than a
+redraw.
+
+The panel does not own a scroller. Its group's body is already one, and a second would have put a
+scrollbar inside a scrollbar; the row window and the paging both follow that element's scroll. A scroll
+event does not bubble, so the listener is bound to the element itself rather than to an ancestor.
+
 **The Start work dialog phrases its own refusals.** The Isolated option a plain folder cannot offer wore a
 native `title`, so the reason arrived on the OS's schedule, in the OS's styling, over a themed dialog. It is
 an `IconTooltip` like every other explanation in the app — the label is a `<label>` around an `sr-only`

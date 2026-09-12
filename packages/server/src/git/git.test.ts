@@ -5,6 +5,7 @@ import { join } from "node:path";
 import type { Workspace } from "@thinkrail/contracts";
 import { changedFileArgs, diffBaseRef, resolveDiffRange } from "./diffScope";
 import {
+	commitGraph,
 	countUnpushedCommits,
 	gitCommitPaths,
 	gitDiffFile,
@@ -920,3 +921,24 @@ test("countUnpushedCommits counts what origin/<branch> lacks; null without the r
 	git(repo, "commit", "-m", "next");
 	expect(await countUnpushedCommits(repo, "main")).toBe(1);
 });
+
+test("the graph pages through history instead of cropping it", async () => {
+	// One shell, not 402 spawns: the page boundary is the point, and the history is just setup.
+	const built = Bun.spawnSync(
+		["sh", "-c", 'for i in $(seq 1 402); do git commit --allow-empty -q -m "c$i" || exit 1; done'],
+		{ cwd: repo, stdout: "ignore", stderr: "ignore" },
+	);
+	expect(built.success).toBe(true);
+
+	const first = await commitGraph("p1");
+	expect(first.commits).toHaveLength(400);
+	expect(first.hasMore).toBe(true);
+
+	const second = await commitGraph("p1", 400);
+	// 403 commits in all: the page before it took 400, and nothing follows these three.
+	expect(second.commits).toHaveLength(3);
+	expect(second.hasMore).toBe(false);
+	// The page picks up where the one before it stopped, with no commit read twice.
+	expect(second.commits[0]?.sha).not.toBe(first.commits[399]?.sha);
+	expect(first.commits.map((c) => c.sha)).not.toContain(second.commits[0]?.sha);
+}, 30_000);

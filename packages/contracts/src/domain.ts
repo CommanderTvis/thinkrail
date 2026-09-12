@@ -302,6 +302,32 @@ export interface GitCommit {
 	committedAt: string;
 }
 
+/** One commit as the graph draws it: its parents are the edges, its refs the labels. */
+export interface GitGraphCommit {
+	sha: string;
+	shortSha: string;
+	parents: string[];
+	/** Ref names pointing here, as `%D` reports them, already split. */
+	refs: string[];
+	subject: string;
+	author: string;
+	committedAt: string;
+}
+
+/** A worktree sitting on a commit — the workspace is absent for one ThinkRail does not own. */
+export interface GitGraphWorktree {
+	sha: string;
+	name: string;
+	workspaceId?: string;
+}
+
+export interface GitGraph {
+	commits: GitGraphCommit[];
+	worktrees: GitGraphWorktree[];
+	/** True when older commits follow this page — see server/src/git/SPEC.md. */
+	hasMore: boolean;
+}
+
 export interface RemoteBranchGroup {
 	remote: string | null;
 	branches: { ref: string; branch: string }[];
@@ -462,7 +488,14 @@ export function isSystemThemePair(value: unknown): value is SystemThemePair {
 	);
 }
 
-export type LayoutToolId = "projects" | "specs" | "files" | "changes" | "review" | "claude";
+export type LayoutToolId =
+	| "projects"
+	| "specs"
+	| "files"
+	| "changes"
+	| "review"
+	| "claude"
+	| "graph";
 
 export type LayoutBottomAlignment = "center" | "center-left" | "center-right" | "full";
 
