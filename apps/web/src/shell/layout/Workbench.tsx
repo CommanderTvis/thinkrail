@@ -48,6 +48,7 @@ import {
 	type ReactNode,
 	useCallback,
 	useContext,
+	useDeferredValue,
 	useEffect,
 	useMemo,
 	useRef,
@@ -731,9 +732,14 @@ function TabStrip({
 		disabled: !acceptsAppend,
 	});
 
+	// After the frame, not during it: scrolling reads geometry, and reading it here made every tab click
+	// lay out the whole document before the strip could paint. See layout/SPEC.md.
 	useEffect(() => {
-		if (selectedId)
-			tabRefs.current.get(selectedId)?.scrollIntoView({ block: "nearest", inline: "nearest" });
+		if (!selectedId) return;
+		const frame = requestAnimationFrame(() =>
+			tabRefs.current.get(selectedId)?.scrollIntoView({ block: "nearest", inline: "nearest" }),
+		);
+		return () => cancelAnimationFrame(frame);
 	}, [selectedId]);
 
 	useEffect(() => {
@@ -1590,6 +1596,9 @@ function CenterGroupView({
 					),
 		);
 	}, [selectedTerminalId]);
+	// The strip answers the click; the document follows when it is ready — see layout/SPEC.md.
+	const bodyTabId = useDeferredValue(selected?.id);
+	const bodyTab = group.tabs.find((tab) => tab.id === bodyTabId) ?? selected;
 	// Creation is a vertical-strip gesture, but a pane that EXISTS renders in either orientation: the
 	// blueprint pair is made by intent, and horizontal tabs must not quietly unsplit it. See SPEC.md.
 	const activePane = selected ? paneForTab(group, selected.id) : undefined;
@@ -1742,8 +1751,8 @@ function CenterGroupView({
 					))}
 				</ResizablePanelGroup>
 			) : null}
-			{!showPanes && selected && selected.kind !== "terminal" ? (
-				<Fragment key={selected.id}>{shared.renderTabBody(selected)}</Fragment>
+			{!showPanes && bodyTab && bodyTab.kind !== "terminal" ? (
+				<Fragment key={bodyTab.id}>{shared.renderTabBody(bodyTab)}</Fragment>
 			) : null}
 			{selected ? null : renderEmptyCenter(group.id)}
 		</div>

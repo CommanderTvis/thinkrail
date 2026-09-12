@@ -339,6 +339,32 @@ with the id in its title rather than opening nothing. In ordinary markdown `[[te
 written, because there it is text, not a reference. The rewrite happens within a line, so the reviewed
 path keeps its anchors.
 
+**The strip answers the click; the document follows.** A group's tab strip renders from the selection,
+its body from a deferred copy of it, so the new tab paints as selected in the next frame and the document
+it names is built after. Measured from the click event to the painted frame, on a document large enough
+to take ~100ms to build: **5ms to the tab, ~100ms to the text**. Without the deferral both land together
+at ~90ms, which is the lag this exists to remove — `e2e/tab-switch-latency.spec.ts` pins the gap.
+
+An optimistic selection in the strip plus a transition around the store write was tried on top and made
+no difference at all (5ms either way), so it is not here: React already paints the strip first once the
+expensive half is out of the urgent render. The tab's own scroll-into-view did matter and moved behind a
+frame — it reads geometry, and reading it during the click forced the whole document to lay out before
+anything could paint.
+
+**The markdown render is memoized, because the pane around it is not.** `FilePane` re-renders for
+reasons that have nothing to do with the text, and every such render was a full re-parse of the
+document. `Markdown` is a memo component now, which only works if its props hold still: the plugin
+arrays are module constants, the component map is memoized, and the review path keeps one array per
+stamp offset. The heading scan behind the outline is memoized on the same grounds.
+
+**A long document lays out the part you are looking at.** Switching between two large previews was
+visibly slow, and the profile said why: every fence was tokenized from scratch (fixed in `lib`'s
+highlighter cache) and the whole document was laid out, twice over, because anything that reads geometry
+during the switch forces it. The rendered blocks therefore carry `content-visibility: auto` with an
+intrinsic size, so the browser skips layout and paint for what is off screen and the cost follows the
+viewport rather than the file. Find-in-page, anchor scrolling and the review stamps are unaffected —
+skipped content is still found, scrolled to, and queried by attribute.
+
 **The code font is one family, chosen once.** Upstream #431: the code face was fixed, and its ligatures
 were off with no way to turn them on. Both are now settings, and the family is *one* family for every code
 surface — editor, terminals, diagrams, code blocks — because that is how a developer configures a machine,

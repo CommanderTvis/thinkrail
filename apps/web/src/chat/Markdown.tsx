@@ -1,7 +1,7 @@
-import { type ComponentProps, type ReactNode, useEffect, useState } from "react";
+import { type ComponentProps, memo, type ReactNode, useEffect, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { highlightCode } from "@/lib/highlighter";
+import { cachedHighlight, highlightCode } from "@/lib/highlighter";
 import { MermaidView } from "./tools/visualize/MermaidView";
 
 const CHAT_PROSE =
@@ -9,7 +9,24 @@ const CHAT_PROSE =
 
 export type MarkdownRehypePlugins = ComponentProps<typeof ReactMarkdown>["rehypePlugins"];
 
-export function Markdown({
+type MarkdownRemarkPlugins = ComponentProps<typeof ReactMarkdown>["remarkPlugins"];
+
+const GFM_ONLY = [remarkGfm];
+const withGfmCache = new WeakMap<object, MarkdownRemarkPlugins>();
+function withGfm(plugins: MarkdownRemarkPlugins): MarkdownRemarkPlugins {
+	if (!plugins) return GFM_ONLY;
+	const known = withGfmCache.get(plugins);
+	if (known) return known;
+	const merged = [remarkGfm, ...plugins];
+	withGfmCache.set(plugins, merged);
+	return merged;
+}
+
+/**
+ * Memoized: a re-render with the same document is a full re-parse otherwise, and the pane around it
+ * re-renders for reasons that have nothing to do with the text. See chat/SPEC.md.
+ */
+export const Markdown = memo(function Markdown({
 	text,
 	className = CHAT_PROSE,
 	remarkPlugins,
@@ -27,7 +44,7 @@ export function Markdown({
 	return (
 		<div className={className}>
 			<ReactMarkdown
-				remarkPlugins={remarkPlugins ? [remarkGfm, ...remarkPlugins] : [remarkGfm]}
+				remarkPlugins={withGfm(remarkPlugins)}
 				rehypePlugins={rehypePlugins}
 				urlTransform={urlTransform}
 				components={{ code: CodeBlock, a: Anchor, table: Table, ...components }}
@@ -36,7 +53,7 @@ export function Markdown({
 			</ReactMarkdown>
 		</div>
 	);
-}
+});
 
 function Table({ children }: { children?: ReactNode }) {
 	return (
@@ -98,9 +115,11 @@ function MermaidBlock({ code }: { code: string }) {
 }
 
 function ShikiBlock({ code, lang }: { code: string; lang: string }) {
-	const [html, setHtml] = useState<string | null>(null);
+	// Seeded from the cache so a document opened again paints highlighted, without a plain-text frame.
+	const [html, setHtml] = useState<string | null>(() => cachedHighlight(code, lang));
 
 	useEffect(() => {
+		if (cachedHighlight(code, lang) !== null) return;
 		let cancelled = false;
 		highlightCode(code, lang)
 			.then((h) => {

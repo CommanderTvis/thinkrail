@@ -90,7 +90,13 @@ Tiny UI helpers shared across components.
   down a list. The rungs are `low … ultracode`, and a move that changes nothing means the slider
   clamped, so the drive stops instead of pressing into the wall. The io is injected so the loop is pinned by unit test against a scripted
   picker, keystroke for keystroke. Also the shared
-  Shiki highlighter, **kept out of the barrel** so the eager `@/lib` import stays shiki-free:
+  Shiki highlighter, which **remembers what it has already highlighted** (`cachedHighlight`, a bounded
+  map keyed by language and source): a document is highlighted again every time it is opened, and
+  tokenizing a spec's worth of fences was the single largest cost in switching between two large
+  previews. The cache also seeds the first paint, so a document opened again arrives highlighted instead
+  of flashing plain text and re-rendering every block. The theme is deliberately not part of the key —
+  there is one, and it paints through CSS variables. It is **kept out of the barrel** so the eager
+  `@/lib` import stays shiki-free:
   `highlighter.ts` loads the curated grammars + JS regex engine and renders with `themes`' one generic
   CSS-variable registration. It is imported per-file (`@/lib/highlighter`) from lazy chunks only; theme
   identity/palettes never live in `lib`. Collision-safe browser identity composition lives here too:

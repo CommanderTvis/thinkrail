@@ -100,7 +100,10 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   recognized Windows drive-letter anchor paths, including Markdown's percent-encoded backslash form, until
   validation; drive-rooted containment compares case-insensitively while preserving the linked path's casing.
   Every other value delegates to react-markdown's default sanitizer, and a rejected Windows path
-  is re-sanitized before fallback anchor rendering. The generic `Markdown` primitive remains props-driven and
+  is re-sanitized before fallback anchor rendering. **The `Markdown` primitive is memoized**, because re-rendering it is a full re-parse of the text and the
+  panes that mount it re-render for their own reasons: callers pass module-constant plugin arrays and
+  memoized component maps, and a caller that rebuilds either on every render gives the memo up silently.
+  The generic `Markdown` primitive remains props-driven and
   receives this behavior only as an `a` component override at the assistant-turn integration edge;
   accepted workspace targets render as button controls without a raw browser `href`, so alternate native
   anchor activation cannot escape into the SPA fallback. That override keeps a stable component identity

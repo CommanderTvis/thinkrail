@@ -199,7 +199,8 @@ function FilePaneBody({ tab }: { tab: FileTab | ExternalFileTab }) {
 
 	const view = tab.view ?? "rendered";
 	const paneDirection = useAppStore((s) => s.localLayoutPreferences.defaultPaneDirection);
-	const headings = sourceHeadings(buffer);
+	// Scanning a large document for headings is not free, and this runs on every render of the pane.
+	const headings = useMemo(() => sourceHeadings(buffer), [buffer]);
 	// Overleaf-style: one click lands both sides. The preview scrolls to the heading's rendered element
 	// (by slug id, or by line stamp in the review path's segmented render); the editor reveals the line.
 	const jumpToHeading = (entry: HeadingEntry) => {

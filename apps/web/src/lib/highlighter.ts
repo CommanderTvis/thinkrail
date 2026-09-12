@@ -53,13 +53,40 @@ function getHighlighter(): Promise<HighlighterCore> {
 	return highlighterPromise;
 }
 
-export async function highlightCode(code: string, lang: string): Promise<string | null> {
+/**
+ * Tokenizing is the expensive half, and a document is highlighted again every time it is opened — see
+ * lib/SPEC.md. The theme is not part of the key: there is one, and it paints through CSS variables.
+ */
+const MAX_CACHED_BLOCKS = 1000;
+const cache = new Map<string, string>();
+
+function canonicalLang(lang: string): string | null {
 	const key = lang.toLowerCase();
 	const canonical = ALIAS[key] ?? key;
-	if (!CANONICAL.has(canonical)) return null;
+	return CANONICAL.has(canonical) ? canonical : null;
+}
+
+/** What has already been highlighted, for a first paint that does not start as plain text. */
+export function cachedHighlight(code: string, lang: string): string | null {
+	const canonical = canonicalLang(lang);
+	return canonical === null ? null : (cache.get(`${canonical}\u0000${code}`) ?? null);
+}
+
+export async function highlightCode(code: string, lang: string): Promise<string | null> {
+	const canonical = canonicalLang(lang);
+	if (canonical === null) return null;
+	const key = `${canonical}\u0000${code}`;
+	const known = cache.get(key);
+	if (known !== undefined) return known;
 	try {
 		const hl = await getHighlighter();
-		return hl.codeToHtml(code, { lang: canonical, theme: THINKRAIL_SHIKI_THEME_NAME });
+		const html = hl.codeToHtml(code, { lang: canonical, theme: THINKRAIL_SHIKI_THEME_NAME });
+		if (cache.size >= MAX_CACHED_BLOCKS) {
+			const oldest = cache.keys().next();
+			if (!oldest.done) cache.delete(oldest.value);
+		}
+		cache.set(key, html);
+		return html;
 	} catch {
 		return null;
 	}
