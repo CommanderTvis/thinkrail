@@ -25,7 +25,7 @@ The transcript is pi-canonical turns (`ChatTurn` in `types.ts`: user/assistant a
 `error`, `retry` are web-local notices; `compaction` carries both the live lifecycle and the durable summary
 record pi leaves where it replaced earlier messages), but the list renders **derived rows, not raw turns** — folding
 spans assistant-message boundaries (pi emits one assistant message per tool round), so a per-turn item
-model can't group. The pure **`deriveRows(turns, toolResults, isStreaming, isSpec?)`** (`rows.ts`) walks
+model can't group. The pure **`deriveRows(turns, toolResults, isStreaming, groupFor?)`** (`rows.ts`) walks
 blocks in order into rows; `ChatTurnView` dispatches on row kind:
 
 - `user` / `system` / `retry` — 1:1 renderers. A user message that is Pi's canonical expanded skill block (`<skill name="…" location="…">`) renders
@@ -104,15 +104,26 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   recognized Windows drive-letter anchor paths, including Markdown's percent-encoded backslash form, until
   validation; drive-rooted containment compares case-insensitively while preserving the linked path's casing.
   Every other value delegates to react-markdown's default sanitizer, and a rejected Windows path
-  is re-sanitized before fallback anchor rendering. The generic `Markdown` primitive remains props-driven and
+  is re-sanitized before fallback anchor rendering. **The `Markdown` primitive is deliberately *not* memoized**, and its code blocks are deliberately not
+  painted from the highlighter's cache on the first frame, even though both would save real work: the
+  transcript's scroll anchoring measures what each render produces and where content reaches its final
+  height, so a skipped render or a block that stops growing into place is a moved reading anchor. The
+  document preview memoizes its own use of the primitive instead (`panels/MarkdownPreview`), where
+  nothing measures renders. The generic `Markdown` primitive remains props-driven and
   receives this behavior only as an `a` component override at the assistant-turn integration edge;
   accepted workspace targets render as button controls without a raw browser `href`, so alternate native
   anchor activation cannot escape into the SPA fallback. That override keeps a stable component identity
   while its workspace inputs are unchanged: workbench focus can rerender a chat row between pointer-down and
   click, and replacing the control in that interval cancels activation. A fenced
-  ```mermaid block renders as a themed diagram via `tools/visualize`'s `MermaidView` (fullscreen
-  pan-zoom, error → source fallback) — uniform across every `Markdown` surface (chat, file/specs
-  preview); until mounted it renders as highlighted source, so static contexts (`RenderedDiff`'s
+  ```mermaid block renders as a themed diagram via `tools/visualize`'s `MermaidView` (**inline
+  pan-zoom under a height cap**, fullscreen pan-zoom, error → source fallback). **Inline and fullscreen
+  zoom the same way** — the drawing's own width follows the zoom and the box keeps its size — because the
+  inline view used CSS `zoom` on a wrapper while capping the SVG to the container width, and those two
+  fight: `zoom` recomputes the child's layout box, so the cap re-fitted the drawing and past a point
+  turning the percentage up changed nothing. The capped box now **clips** rather than scrolling, so a plain
+  wheel carries on down the document it is embedded in and the drag pan is what gets you around inside it — uniform across every
+  `Markdown` surface (chat, file/specs preview); until mounted it renders as highlighted source, so
+  static contexts (`RenderedDiff`'s
   `renderToStaticMarkup`) degrade to code exactly like shiki blocks do.
 - **Configurable transcript measure** — the host-synchronized `chatLineWidth` (40–240, default 120)
   is an approximate CSS `ch` text measure because chat retains its proportional reading font. `ChatView`,
@@ -181,27 +192,31 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   run, whose `Agent` tool card froze at its ack (why + card anatomy:
   [tools/subagent/SPEC.md](tools/subagent/SPEC.md)). Never folded into activity groups.
 - `divider` — the round-end summary (`TurnDivider` + pure `turnDivider` deriver), anchored the instant a
-  round ends: elapsed time, tool-call count, and the round's written files as **two chips split by owning
-  tool** — “N specs” and “N files changed”. The split is a **partition** (a path lands on exactly
-  one side, never counted twice) computed in the deriver from the injected `isSpec` predicate — the store's
-  `specPathMatcher` over the workspace's spec graph, plus `spec_create`'s target, which is a spec by
-  construction even before the graph snapshot catches up. Why it matters: a spec is often **gitignored**
-  scratch (`.thinkrail/context/`), so counting it as a "changed file" deep-linked the user to a Changes view
-  that structurally cannot show it. Each chip now routes to the panel that owns the artifact.
-  **One artifact → the chip is a direct deep link; several → it is a disclosure** that expands the round's
-  set as a list right here in the transcript (`ArtifactChip` + `ArtifactList`), each row deep-linking one
-  path. The set is kept in the chat rather than framed over the panels on purpose: it belongs to *this
+  round ends: elapsed time, tool-call count, and the round's written files as **N chips, one per owning
+  group** — “N specs”, “N files changed”, and whatever else a plugin's `writtenPathGroup` slot names. Each
+  written path lands in exactly one group (a path lands on exactly one side, never counted twice) —
+  `turnDivider` takes a `groupFor(toolName, path) => { id, label, tool } | null` resolver and buckets a path
+  under `CHANGED_FILES_GROUP` (`id: "files"`, tool `"changes"`) whenever no resolver claims it. `ChatView`
+  composes this resolver: any registered plugin `writtenPathGroup` slot is tried first (first non-null
+  wins — the spec-dialect plugin's own slot is what classifies a spec path as `"specs"` today), then a
+  `toolName === "spec_create"` fallback still claims the path when no slot does, since a `spec_create`
+  write may not yet have reached the plugin's own graph read at the moment the divider renders. Why it matters: a spec is
+  often **gitignored** scratch (`.thinkrail/context/`), so counting it as a "changed file" deep-linked the
+  user to a Changes view that structurally cannot show it. Each chip now routes to the panel that owns the
+  artifact. **One artifact → the chip is a direct deep link; several → it is a disclosure** that expands the
+  round's set as a list right here in the transcript (`ArtifactChip` + `ArtifactList`), each row deep-linking
+  one path. The set is kept in the chat rather than framed over the panels on purpose: it belongs to *this
   round*, while the panels show *now* — a round from days ago would mark rows that have since moved on (or,
   for Changes, are no longer in the diff at all). It also keeps the count honest: clicking "5 files changed"
   can never quietly surface just the first one, and the handlers take exactly ONE path, so nothing
   downstream has to guess which of several the user meant.
-- The two chips are a **switch, not two independent folds**: at most one list is open, choosing the other
-  side replaces it, and re-choosing the open one clears the selection. That invariant is *structural* — the
+- The chips are a **switch, not independent folds**: at most one list is open, choosing another
+  replaces it, and re-choosing the open one clears the selection. That invariant is *structural* — the
   divider stores the **selected key** (`useSelection`, one entry per divider row), so no state exists in
-  which both are expanded. Expanding also **reveals the owning singleton side tool** (`onReveal` → the
-  store's arrangement-agnostic tool-reveal intent) without surfacing any path, which is what makes the pair
-  read as switching between Specs and Changes; closing is “never mind” and leaves the tool where the user
-  last sent it.
+  which two groups are expanded at once. Expanding also **reveals the owning singleton side tool**
+  (`onReveal(tool: LayoutToolId)` → the store's arrangement-agnostic tool-reveal intent) without surfacing
+  any path, which is what makes the set read as switching between panels; closing is “never mind” and
+  leaves the tool where the user last sent it.
 
 Row/step ids are stable across streaming snapshots (the outer run's first atomic-step id, each thinking
 block's message-anchored index, and each tool's own id — pi appends, never reorders), so fold state survives
@@ -456,9 +471,24 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   Newest-first header deltas preserve a detached historical anchor; viewport resize reevaluates the live
   percentages without moving a below-Trigger response. Initial/order placement is direct, and reduced motion
   makes every programmatic destination immediate while preserving identical state and final geometry.
+
+**A file in the chat wears its type.** The composer's chips and its `@`-mention menu draw
+`components/FileTypeIcon` for the path they name. Tool cards deliberately do not: their glyph says what
+happened to the file — read, written, edited, and coloured accordingly — which is the more useful of the
+two, and two icons on one line is a worse card.
+
+**What the editor is holding rides with the message.** While a workspace's editor has something
+highlighted, the composer shows it as a chip (`composer-selection`, `path:lines`) and `ChatView` prefixes
+the quote to the text it sends — the optimistic user turn included, so the transcript shows exactly what
+the agent was given. Sending consumes it, and the chip's `×` declines it; either way a fresh highlight
+offers it again (`store`'s `editorSelectionByWorkspace`, `selectAttachedEditorSelection`). A slash command
+is not a place for it, so `/compact` and friends are handled before the prefix is applied. The chip exists
+because the alternative is an attachment the user cannot see, which is worse than no attachment at all.
 - **Composer & chrome** — `Composer` (prompt field + send/steer/followUp/abort, `@`-mentions, `/`
   commands + template **slot sessions** (Tab-through placeholders — see the Template slots bullet
-  below), image paste/drop — routed through **`imageAttachment.ts`**: `fileToAttachedImage` decodes in
+  below), a Files-tree row dropped on the field (`lib.draggedFile`) inserted as the `@path` mention
+  `@` completion would have produced (`@dir/` for a folder) at the caret — never as raw text — while
+  image paste/drop is routed through **`imageAttachment.ts`**: `fileToAttachedImage` decodes in
   the browser and downscales anything over a **1568px long edge** (`fitWithin`; Claude's standard-tier
   edge — an oversized image in history 400s every later turn once the provider's >20-image 2000px cap
   kicks in, and pi's own resizer is deliberately off server-side). An image passes through
@@ -498,6 +528,8 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   in every connected client), and a
   **zoomed-stage preview pane** + **scope picker** — see the next bullet),
   `ModelSelector` + `ThinkingSelector` (also shared with `NewWorkspaceDialog`;
+  each trigger names what it sets with an eyebrow — **Model** / **Effort** — which `showLabel={false}`
+  drops in the composer, the one place where the row competes with the prompt for width;
   optional `container` prop portals their popovers into a host Dialog; optional
   `defaultOption`/`onSelectDefault` render an explicit use-the-default row above the provider groups
   (checked when `current` is null) for callers whose selection is an *override* — `ReviewSettings` —
@@ -565,7 +597,11 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   sourced from the runtime's `queue`. **Each row carries its own edit and remove actions**
   (`queue-item-edit` / `queue-item-remove`) — both call `session.removeQueued { kind, index }` (rows
   are position-addressed, matching the wire op); edit additionally restores the removed message's text
-  and images to the draft and refocuses. Per-row actions exist because the original all-or-nothing dequeue
+  and images to the draft and refocuses. Every one of these draft handoffs goes through the store's
+  **`addToChatDraft`** (see `store/SPEC.md`): the text leads, what was typed follows, and the
+  `composerFocusRequest` it leaves behind is what `ChatView` turns into `focusDraftEnd()` — the caret sits
+  after the handed-over text, ready for the sentence the user is about to write. That is also the path the
+  editor's "Send selection to chat" arrives on, from outside the chat subtree entirely. Per-row actions exist because the original all-or-nothing dequeue
   (click strip → `clearQueue` → every message merged into one draft blob) proved undiscoverable and lossy
   in use. **Abort atomically restores the complete queue** (`onAbort` →
   `session.abort { restoreQueue: true }`): the host drains both Pi lanes and signals abort as one operation,
@@ -1080,17 +1116,19 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   pass still answers — with a list to render, not a verdict), and dropped by the next `model.list` install
   from *any* consumer. `model.list` answers from *before* the
   detached refresh it triggers, so it is never a basis for concluding a model is gone);
-  `react-markdown` / `remark-gfm` / `shiki` (via `lib/highlighter`); `mermaid`
-  (**lazy, `tools/visualize` only** — `Markdown` consumes the `MermaidView` *component*, never the
-  package); `react-virtuoso`; `@remixicon/react`; `components/ui`; `lib`.
+  `@thinkrail/plugin-ui` (`Markdown`, `CodeBlock`, `highlightCode`, the eleven primitives) and
+  `@thinkrail/plugin-ui/visualization` (the visualization card — `mermaid` itself is a kit-only
+  dependency; chat never imports the package directly); `react-virtuoso`; `@remixicon/react`; `lib`.
 - **Forbidden:** value-importing any `pi` package; a **presentational** renderer importing
   `store`/`transport` (only the app-integration files enumerated above may — keep the renderers reusable).
 - **`ChatView`** is the primary app-integration file: wires this session's runtime
   (`store.sessions[sessionId]`), the transport calls, the `ChatActions` + `AskStates` contexts, the
   divider's deep links (`onOpenChange` → `requestChangesView`, `onOpenSpec` → `requestSpecView`; each
-  receives the single path the user picked) plus its view switch (`onReveal` → the tool-reveal intent), and the
-  `isSpec` classifier it builds from the store's `specsByWorkspace` snapshot (subscribed as the stored array
-  — a stable ref — and memoized into a matcher here, never a fresh Set inside the selector) — together with
+  receives the single path the user picked) plus its view switch (`onReveal` → the tool-reveal intent), and
+  the `groupFor` resolver it composes for `deriveRows` — every plugin `writtenPathGroup` slot
+  (`selectSlot("writtenPathGroup")`), then the core default built from the `isSpec` classifier over the
+  store's `specsByWorkspace` snapshot (subscribed as the stored array — a stable ref — and memoized into a
+  matcher here, never a fresh Set inside the selector) — together with
   **`useHistorySearch.ts`** (the Ctrl+R history-recall overlay's store/transport edge),
   **`useSessionStats.ts`** (the guarded read that keeps telemetry live), **`useTranscriptSync.ts`** (the
   guarded authoritative read that converges an existing runtime), and
@@ -1134,3 +1172,17 @@ the lifecycle assertable.
   is the seam for extracting a standalone `packages/chat-ui` later.
 - Keep this spec at **intent + boundary + invariants**; per-component behavior belongs in the
   components' jsdoc, per-tool detail in [tools/SPEC.md](tools/SPEC.md).
+
+- **A visualization renders two ways from one renderer.** In a transcript it is a card: sized to its
+  content, with a full-screen dialog behind a corner button — and that is the *only* way a chat shows
+  one, since a pane repeating it beside its own card is the same picture twice. Given `interactive` (a
+  terminal's embedded pane, where there is no transcript — `shell/layout/SPEC.md`), the same
+  `VisualizationCard` fills its pane and the
+  diagram becomes navigable in place: ⌘/Ctrl+wheel and trackpad pinch zoom, drag pans, plain wheel
+  scrolls, with a zoom readout and reset. The gesture math is the shared `lib/zoomGesture` the PDF
+  preview uses — one answer to "what is a zoom gesture" for every zoomable surface, rather than a second
+  hand-tuned curve here.
+- **The renderer reports its verdict.** `MermaidView` takes an `onRender(error | null)` that fires with
+  what the parse produced, threaded from the tool-render props. Only the terminal pane wires it — to the
+  host, so an MCP `visualize` call resolves with the real error (`plugin-visualize/SPEC.md`) instead of
+  the agent being told it drew something the user is looking at a red card for.

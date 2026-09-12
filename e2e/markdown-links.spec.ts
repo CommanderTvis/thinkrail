@@ -1,5 +1,12 @@
+import { writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { expect, test } from "@playwright/test";
-import { createWorkspaceViaDialog, openFixtureProject } from "./fixtures/app";
+import {
+	createWorkspaceViaDialog,
+	enterDefaultWorkspace,
+	openFixtureProject,
+} from "./fixtures/app";
+import { E2E_FIXTURE_REPO } from "./fixtures/paths";
 
 test("a parent-relative file link cannot escape into browser navigation", async ({ page }) => {
 	await openFixtureProject(page);
@@ -58,4 +65,33 @@ test("relative links, images, and heading anchors work in the rendered markdown 
 
 	await preview.getByTestId("markdown-file-link").click();
 	await expect(page.getByTestId("editor-tab").filter({ hasText: "SPEC.md" })).toBeVisible();
+});
+
+test("a document opened again comes back highlighted, without re-tokenizing it", async ({
+	page,
+}) => {
+	writeFileSync(
+		join(E2E_FIXTURE_REPO, "highlighted.md"),
+		"# Code\n\n```ts\nexport const marker = 1;\n```\n",
+	);
+	writeFileSync(join(E2E_FIXTURE_REPO, "plain.md"), "# Plain\n\nNothing to highlight here.\n");
+	await openFixtureProject(page);
+	await enterDefaultWorkspace(page);
+	await page.getByTestId("tab-files").click();
+	for (const name of ["highlighted.md", "plain.md"]) {
+		const row = page.getByTestId("file-node").filter({ hasText: name });
+		await expect(row).toBeVisible();
+		await row.dblclick();
+	}
+
+	const highlighted = page.locator(".shiki").first();
+	const back = page.getByTestId("editor-tab").filter({ hasText: "highlighted.md" });
+	await back.click();
+	await expect(highlighted).toBeVisible();
+
+	// Second visit: the block is highlighted in the first frame rather than starting as a plain <pre>.
+	await page.getByTestId("editor-tab").filter({ hasText: "plain.md" }).click();
+	await expect(page.locator(".shiki")).toHaveCount(0);
+	await back.click();
+	expect(await page.evaluate(() => document.querySelectorAll(".shiki").length)).toBeGreaterThan(0);
 });
