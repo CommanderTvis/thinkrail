@@ -1,7 +1,9 @@
 import type { ReactNode } from "react";
 import type { Components } from "react-markdown";
+import { useAppStore } from "../store";
 import { worktreeFileUrl } from "./filesUrl";
 import { openFileInTab } from "./openTabs";
+import { specLinkTarget } from "./specDocument";
 
 export type HrefKind = "empty" | "anchor" | "external" | "relative";
 
@@ -97,6 +99,28 @@ export function documentComponents(ctx: { workspaceId: string; path: string }): 
 				>
 					{children}
 				</a>
+			);
+		}
+		const spec = specLinkTarget(href ?? "");
+		if (spec !== null) {
+			const node = useAppStore
+				.getState()
+				.specsByWorkspace[ctx.workspaceId]?.find((entry) => entry.id === spec);
+			return (
+				<button
+					type="button"
+					data-testid="markdown-spec-link"
+					data-spec-id={spec}
+					data-path={node?.path ?? undefined}
+					disabled={!node}
+					title={node ? undefined : `No spec in this workspace has the id ${spec}`}
+					onClick={() => {
+						if (node) void openFileInTab(ctx.workspaceId, node.path, "preview");
+					}}
+					className="cursor-pointer text-left text-primary underline decoration-primary-muted underline-offset-2 hover:decoration-primary disabled:cursor-default disabled:text-text-subtle disabled:no-underline"
+				>
+					{children}
+				</button>
 			);
 		}
 		if (kind === "relative" && href) {

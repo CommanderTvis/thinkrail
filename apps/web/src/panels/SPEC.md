@@ -321,6 +321,24 @@ provider is "connected" iff any `configured`) on mount and re-checks whenever th
 it disappears the moment the user connects one; a transport error degrades to *not* nagging (offline ≠ "no
 provider"). All provider **management** lives in Settings, not here (the always-on strip is gone).
 
+**A spec and ordinary markdown are told apart by frontmatter, never by filename.** `readSpecDocument`
+calls a document a spec when its frontmatter carries an `id` *and* a `type` the spec graph knows
+(`specTree`'s own vocabulary). A `SPEC.md` with neither is just a file with that name, and a spec living
+under any other name is still a spec — which is what the graph already assumes.
+
+**A spec is titled by its frontmatter.** The `title:` a spec declares is the document's name, so the
+preview draws it above the properties block and the outline opens with it, pointing at the `title:` line
+so the editor jump lands somewhere real. It is an **element**, not a heading injected into the source:
+the reviewed render anchors comments to source lines, and a synthetic line would move every one of them.
+
+**`[[id]]` resolves only inside a spec.** Spec-graph links are rewritten to ordinary markdown links under
+a `spec:` scheme — react-markdown drops a scheme it does not recognise, so `specUrlTransform` passes that
+one through — and the link renderer resolves the id against the workspace's spec graph, which the store
+already holds, so no new wire call. A link naming a node this workspace does not have renders disabled
+with the id in its title rather than opening nothing. In ordinary markdown `[[text]]` is left exactly as
+written, because there it is text, not a reference. The rewrite happens within a line, so the reviewed
+path keeps its anchors.
+
 **The Graph panel draws the project's branches, and only reads.** `git.graph` answers for the project;
 `graphLanes.layoutGraph` turns the commit list into lanes the way `git log --graph` does — a lane is
 claimed by the sha it waits for, a commit takes the leftmost lane waiting for it, its first parent

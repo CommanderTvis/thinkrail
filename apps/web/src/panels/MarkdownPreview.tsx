@@ -16,6 +16,7 @@ import {
 	sourceLineRehype,
 	stampedSelectionLines,
 } from "./sourceLines";
+import { linkifyWikiLinks, readSpecDocument, specUrlTransform } from "./specDocument";
 import type { EditorReview } from "./useReviewCommenting";
 
 const DOCUMENT_PROSE = [
@@ -42,6 +43,12 @@ const DOCUMENT_PROSE = [
 	"[&_img]:my-12 [&_img]:max-w-full [&_img]:rounded-[var(--radius-sm)]",
 ].join(" ");
 
+/** A spec's prose with its `[[links]]` rewritten; ordinary markdown is returned untouched. */
+export function specProse(content: string): string {
+	const stripped = stripFrontmatter(content);
+	return readSpecDocument(content) ? linkifyWikiLinks(stripped) : stripped;
+}
+
 export function MarkdownDocument({
 	content,
 	workspaceId,
@@ -52,10 +59,13 @@ export function MarkdownDocument({
 	path: string;
 }) {
 	const components = useMemo(() => documentComponents({ workspaceId, path }), [path, workspaceId]);
+	// `[[id]]` is spec-graph vocabulary, so it only means anything in a spec — see panels/SPEC.md.
+	const body = useMemo(() => specProse(content), [content]);
 	return (
 		<Markdown
-			text={stripFrontmatter(content)}
+			text={body}
 			className={DOCUMENT_PROSE}
+			urlTransform={specUrlTransform}
 			remarkPlugins={[remarkGithubAlerts, remarkHeadingIds]}
 			components={{ ...alertComponents, ...components }}
 		/>
@@ -201,9 +211,20 @@ export default function MarkdownPreview({
 	useReportedPreviewSelection(documentRef, workspaceId, path);
 	useSourceLineLanding(documentRef, focusLine, content, onFocusHandled);
 
-	const properties = onContentEdit ? (
-		<FrontmatterProperties content={content} onEdit={onContentEdit} />
-	) : null;
+	const spec = readSpecDocument(content);
+	const properties = (
+		<>
+			{spec?.title ? (
+				<h1
+					data-testid="spec-title"
+					className="mx-auto max-w-[78ch] px-24 pt-16 tr-title-entity text-text-default"
+				>
+					{spec.title}
+				</h1>
+			) : null}
+			{onContentEdit ? <FrontmatterProperties content={content} onEdit={onContentEdit} /> : null}
+		</>
+	);
 
 	const body = review ? (
 		<ReviewedDocument
@@ -245,10 +266,11 @@ function ReviewedDocument({
 	documentRef: React.RefObject<HTMLDivElement | null>;
 	properties: React.ReactNode;
 }) {
-	const stripped = stripFrontmatter(content);
-	const rawOffset = frontmatterOffset(content, stripped);
+	const stripped = specProse(content);
+	const rawOffset = frontmatterOffset(content, stripFrontmatter(content));
 	const mdProps = (stampOffset: number) => ({
 		className: DOCUMENT_PROSE,
+		urlTransform: specUrlTransform,
 		remarkPlugins: [remarkGithubAlerts, remarkHeadingIds],
 		rehypePlugins: [[sourceLineRehype, { offset: stampOffset }]] as MarkdownRehypePlugins,
 		components: { ...alertComponents, ...components },

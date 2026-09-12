@@ -1,6 +1,7 @@
 import { stripFrontmatter } from "@/lib/utils";
 import { slugify } from "./markdownLinks";
 import { frontmatterOffset } from "./sourceLines";
+import { readSpecDocument } from "./specDocument";
 
 export interface HeadingEntry {
 	level: number;
@@ -24,6 +25,16 @@ export function sourceHeadings(raw: string): HeadingEntry[] {
 	const offset = frontmatterOffset(raw, stripped);
 	const seen = new Map<string, number>();
 	const found: HeadingEntry[] = [];
+	// A spec's title lives in its frontmatter, so the outline names the document the preview names.
+	const spec = readSpecDocument(raw);
+	if (spec?.title) {
+		const base = slugify(spec.title);
+		if (base) {
+			seen.set(base, 1);
+			const at = raw.split("\n").findIndex((line) => /^title:\s*\S/.test(line));
+			found.push({ level: 1, text: spec.title, id: base, line: at < 0 ? 1 : at + 1 });
+		}
+	}
 	let fence: string | null = null;
 	stripped.split("\n").forEach((lineText, at) => {
 		const fenceMark = FENCE.exec(lineText);
