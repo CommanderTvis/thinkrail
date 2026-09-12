@@ -351,3 +351,17 @@ test("the code font is the user's to choose, and its ligatures are a setting", a
 		)
 		.not.toContain("Courier New");
 });
+
+test("a selection reaches the document but not the chrome around it", async ({ page }) => {
+	await openFixtureProject(page);
+	await createWorkspaceViaDialog(page);
+
+	const selectable = (locator: ReturnType<typeof page.locator>) =>
+		locator.first().evaluate((node) => getComputedStyle(node).userSelect);
+
+	// What holds text a person means to keep is selectable: the composer is on screen from the start.
+	expect(await selectable(page.getByTestId("chat-input"))).toBe("text");
+	// The furniture is not, so one drag cannot carry tabs and toolbars off with the text.
+	expect(await selectable(page.getByTestId("scope-context"))).toBe("none");
+	expect(await selectable(page.getByTestId("editor-tab"))).toBe("none");
+});

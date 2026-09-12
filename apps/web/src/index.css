@@ -92,6 +92,24 @@
 	}
 }
 
+/* Selection belongs to content, not to chrome. A drag that starts in a document used to sweep up tab
+   labels, chips, toolbars and rails on its way, so one copy carried the interface along with the text.
+   The workbench is therefore unselectable by default and content opts back in: the editor, the terminal,
+   both prose skins, form fields, and anything that marks itself `data-selectable`. See shell/SPEC.md. */
+body {
+	user-select: none;
+}
+input,
+textarea,
+[contenteditable="true"],
+[data-selectable],
+.xterm,
+.monaco-editor,
+.tr-prose-doc,
+.tr-prose-chat {
+	user-select: text;
+}
+
 /* Review Monaco surfaces (panels/reviewGutter.ts + reviewWidgets.ts): commented-line decorations, the
    floating comment icon, and the inline composer. Plain-DOM widgets inside Monaco's layers — styled
    here from the live theme tokens, so every theme wears them. */
