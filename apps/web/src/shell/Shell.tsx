@@ -181,12 +181,16 @@ export function Shell() {
 										label={workspaceBranchLabel(activeWorkspace)}
 									/>
 									{isUserOwnedWorkspace(activeWorkspace) ? null : (
-										<span
-											data-testid="scope-base"
-											className="hidden shrink-0 text-text-muted md:inline"
+										<IconTooltip
+											label={`This workspace was cut from ${activeWorkspace.baseBranch}, and its changes are measured against it.`}
 										>
-											· from {activeWorkspace.baseBranch}
-										</span>
+											<span
+												data-testid="scope-base"
+												className="hidden shrink-0 text-text-muted md:inline"
+											>
+												· from {activeWorkspace.baseBranch}
+											</span>
+										</IconTooltip>
 									)}
 									{openReview ? (
 										<span

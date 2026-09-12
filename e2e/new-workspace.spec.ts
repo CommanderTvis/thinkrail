@@ -146,6 +146,10 @@ test("the dialog lists local branches (no stray origin) and creates a worktree",
 	await expect(scope).toContainText("sample-project");
 	await expect(scope).toContainText("workspace-1");
 	await expect(scope).toContainText("from main");
+	// "from main" is a word and a branch name with nothing joining them; hovering says what it means.
+	await page.getByTestId("scope-base").hover();
+	await expect(page.getByRole("tooltip")).toContainText("cut from main");
+	await expect(page.getByRole("tooltip")).toContainText("measured against it");
 
 	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(1);
 	await expect(page.getByTestId("chat-input")).toBeVisible();

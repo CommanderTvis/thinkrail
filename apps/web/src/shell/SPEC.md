@@ -220,6 +220,11 @@ deletion asks first, because a branch is the only copy of whatever only it point
 re-read on every open and whenever the project's workspaces change, since a branch gains and loses its
 worktree behind the popover's back.
 
+**"from main" says what it means on hover.** The scope line reads *workspace · from main*, which is a
+preposition and a branch name with nothing joining them — it is the ref the worktree was cut from *and*
+the ref its changes are measured against, and neither is guessable from three words in a topbar. The
+tooltip says both. The line itself stays short, because it is read far more often than it is asked about.
+
 **Settings answer to ⌘, on macOS, and to nothing anywhere else.** It is the Preferences chord every Mac
 app has, so a Mac user presses it before looking for a button; on Windows and Linux there is no equivalent
 convention, and inventing `Ctrl+,` would take a chord the browser and the terminal may want for a shortcut
