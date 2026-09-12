@@ -166,6 +166,51 @@ describe("frontend-local layout state", () => {
 		expect(useAppStore.getState().workbenchFrameProjectId).toBe("project-b");
 	});
 
+	test("one unreadable workspace view costs that workspace, not every stashed frame", async () => {
+		const local = new MemoryStorage();
+		const session = new MemoryStorage();
+		session.setItem("thinkrail:layout-surface-id", "surface-a");
+		setLayoutStateStorageForTests({ local, session }, endpoint);
+		await initializeLocalLayoutState();
+		const frame = useAppStore.getState().workbenchFrame;
+		if (!frame) throw new Error("no frame");
+		const split = {
+			...frame,
+			center: {
+				kind: "split" as const,
+				id: "split-test",
+				direction: "horizontal" as const,
+				weights: [0.5, 0.5] as [number, number],
+				children: [
+					{ kind: "group" as const, id: "center-one" },
+					{ kind: "group" as const, id: "center-two" },
+				],
+			},
+		};
+		const key = localLayoutStorageKey(endpoint, "surface-a");
+		local.setItem(
+			key,
+			JSON.stringify({
+				version: 1,
+				frame,
+				framesByProject: { "project-a": split },
+				frameProjectId: "project-a",
+				// The second one is nonsense a older build could have written, or a truncated write.
+				viewsByWorkspace: { good: { groups: {} }, bad: { groups: "not a record" } },
+				attentionByWorkspace: {},
+				preferences: useAppStore.getState().localLayoutPreferences,
+			}),
+		);
+
+		resetLayoutStateForTests();
+		resetStore();
+		setLayoutStateStorageForTests({ local, session }, endpoint);
+		await initializeLocalLayoutState();
+		// The split is still there: one bad view does not cost the surface its frames.
+		expect(Object.keys(useAppStore.getState().workbenchFramesByProject)).toEqual(["project-a"]);
+		expect(Object.keys(useAppStore.getState().workspaceViewsByWorkspace)).toEqual(["good"]);
+	});
+
 	test("a project with no frame of its own never inherits the live one", async () => {
 		const local = new MemoryStorage();
 		const session = new MemoryStorage();

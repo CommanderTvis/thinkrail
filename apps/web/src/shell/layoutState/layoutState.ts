@@ -488,7 +488,9 @@ function decodeLocalLayout(raw: string): LocalLayoutStatePayload | undefined {
 		const documentsByWorkspace: Record<string, WorkspaceLayoutDocument> = {};
 		const attentionByWorkspace: Record<string, LayoutAttention> = {};
 		for (const [workspaceId, view] of Object.entries(parsed.viewsByWorkspace)) {
-			if (!isWorkspaceView(view)) return undefined;
+			// A view that cannot be read is that workspace's loss, exactly like one that cannot be placed:
+			// rejecting the payload over it would throw away every frame with it. See SPEC.md.
+			if (!isWorkspaceView(view)) continue;
 			// One view nobody can place is that workspace's loss, never the whole surface's: discarding
 			// the payload drops the frames with it, and the next project adopts whatever is live. It
 			// reopens empty against its project's frame instead. See SPEC.md.
