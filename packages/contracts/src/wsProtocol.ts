@@ -32,6 +32,7 @@ import type {
 	FileWriteResult,
 	GitCommit,
 	GitDiffScope,
+	GitGraph,
 	GithubAuthStatus,
 	GitStatus,
 	HistoryScope,
@@ -243,6 +244,7 @@ export const WS_METHODS = {
 	todoReviewAll: "todo.reviewAll",
 	gitStatus: "git.status",
 	gitDiffFile: "git.diffFile",
+	gitGraph: "git.graph",
 	gitListCommits: "git.listCommits",
 	terminalReserve: "terminal.reserve",
 	terminalAttach: "terminal.attach",
@@ -610,6 +612,7 @@ export interface WsMethodMap {
 		params: { workspaceId: string; path: string; scope?: GitDiffScope };
 		result: { original: string; modified: string };
 	};
+	"git.graph": { params: { projectId: string; skip?: number }; result: GitGraph };
 	"git.listCommits": { params: { workspaceId: string }; result: { commits: GitCommit[] } };
 	"terminal.reserve": {
 		params: { workspaceId: string; tabKey: string; title: string };
