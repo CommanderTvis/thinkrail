@@ -183,8 +183,10 @@ test("typography survives a narrow mobile viewport without clipping or overflow"
 			const style = getComputedStyle(el);
 			if (!/hidden|clip/.test(style.overflowY)) continue;
 			const over = el.scrollHeight - el.clientHeight;
-			if (over > 1 && el.clientHeight > 0)
-				out.push(`${el.tagName}[${el.getAttribute("data-testid") ?? ""}] +${over}px`);
+			// A 1px clipped box is the visually-hidden idiom (Radix renders one inside every open tooltip
+			// for screen readers). Its overflow is the point, and it is not visible text that can clip.
+			if (el.clientHeight <= 1 || el.clientWidth <= 1) continue;
+			if (over > 1) out.push(`${el.tagName}[${el.getAttribute("data-testid") ?? ""}] +${over}px`);
 		}
 		if (document.documentElement.scrollWidth > window.innerWidth + 1)
 			out.push(
@@ -299,4 +301,67 @@ test("a Tailwind utility at a call site overrides the semantic default it names"
 
 	expect(measured.bare.fontSize).toBe("14px");
 	expect(measured.metadata.fontSize).toBe("12px");
+});
+
+test("the code font is the user's to choose, and its ligatures are a setting", async ({ page }) => {
+	await openFixtureProject(page);
+	await createWorkspaceViaDialog(page);
+	await page.getByTestId("open-settings").click();
+	await page.getByTestId("settings-nav-appearance").click();
+
+	// Off by default, and empty means the bundled face.
+	await expect(page.getByTestId("code-font-ligatures")).not.toBeChecked();
+	await page.getByTestId("code-font-family").fill("Courier New");
+	await page.getByTestId("code-font-family").blur();
+
+	// One family for every code surface, so the override is written where they all read it.
+	await expect
+		.poll(() =>
+			page.evaluate(() =>
+				getComputedStyle(document.documentElement).getPropertyValue("--tr-font-family-code").trim(),
+			),
+		)
+		.toContain("Courier New");
+
+	await page.getByTestId("code-font-ligatures").click();
+	await expect(page.getByTestId("code-font-ligatures")).toBeChecked();
+
+	// A name the CSS declaration could not hold is refused rather than written.
+	await page.getByTestId("code-font-family").fill('Evil"; color: red');
+	await page.getByTestId("code-font-family").blur();
+	await expect(page.getByTestId("toast")).toBeVisible();
+	await expect
+		.poll(() =>
+			page.evaluate(() =>
+				getComputedStyle(document.documentElement).getPropertyValue("--tr-font-family-code").trim(),
+			),
+		)
+		.toContain("Courier New");
+
+	// The font is the host's and outlives this test: every later spec in this lane measures code text.
+	await page.getByTestId("code-font-family").fill("");
+	await page.getByTestId("code-font-family").blur();
+	await page.getByTestId("code-font-ligatures").click();
+	await expect(page.getByTestId("code-font-ligatures")).not.toBeChecked();
+	await expect
+		.poll(() =>
+			page.evaluate(() =>
+				getComputedStyle(document.documentElement).getPropertyValue("--tr-font-family-code").trim(),
+			),
+		)
+		.not.toContain("Courier New");
+});
+
+test("a selection reaches the document but not the chrome around it", async ({ page }) => {
+	await openFixtureProject(page);
+	await createWorkspaceViaDialog(page);
+
+	const selectable = (locator: ReturnType<typeof page.locator>) =>
+		locator.first().evaluate((node) => getComputedStyle(node).userSelect);
+
+	// What holds text a person means to keep is selectable: the composer is on screen from the start.
+	expect(await selectable(page.getByTestId("chat-input"))).toBe("text");
+	// The furniture is not, so one drag cannot carry tabs and toolbars off with the text.
+	expect(await selectable(page.getByTestId("scope-context"))).toBe("none");
+	expect(await selectable(page.getByTestId("editor-tab"))).toBe("none");
 });
