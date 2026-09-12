@@ -150,6 +150,20 @@ group still showing what was seeded. Anything the user selects afterwards is the
 The graph is already loaded for every workspace (`useWorkspaceSpecs` sits in the workbench, not in the
 panel), so this costs no extra read.
 
+## Selection belongs to content
+
+A drag that began in a document used to sweep up everything it passed: tab labels, the model and effort
+chips, view toggles, the rails. One copy then carried the interface along with the text. The workbench is
+unselectable by default and the surfaces that hold content opt back in — the editor, the terminal, both
+prose skins, form fields, and anything that marks itself `data-selectable`. It is a default and an
+allowlist rather than a growing list of `select-none` call sites, because the list of chrome only ever
+grows and each addition would have to remember.
+
+What this is not is a lock: everything a user means to copy is still selectable, which is what the
+allowlist is for. A new surface that holds text the user might want gets `data-selectable`, and the e2e
+suite's own selection tests (review commenting, the IDE-bridge selection report) are what catch a
+surface that was left out.
+
 ## Panes that need git
 
 Changes and Review are windows onto git history, and a workspace can have none — a project folder that is
@@ -220,6 +234,13 @@ worktree behind the popover's back. The header carries a **Fetch**, the way an I
 does — every remote brought up to date, nothing local moved, no pruning — because the question "is this
 branch still the one upstream has" is asked here, and the answer was previously only obtainable outside
 the app.
+
+**"from main" says what it means on hover.** The scope line reads *workspace · from main*, which is a
+preposition and a branch name with nothing joining them — it is the ref the worktree was cut from *and*
+the ref its changes are measured against, and neither is guessable from three words in a topbar. The
+tooltip says both. The line itself stays short, because it is read far more often than it is asked
+about, and it takes no selection of its own — it explains the workspace rather than offering a string to
+carry away.
 
 **Settings answer to ⌘, on macOS, and to nothing anywhere else.** It is the Preferences chord every Mac
 app has, so a Mac user presses it before looking for a button; on Windows and Linux there is no equivalent
