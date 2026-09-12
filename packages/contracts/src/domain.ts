@@ -341,6 +341,18 @@ export interface BranchList {
 	current: string;
 }
 
+/** A local branch with whatever is checked out on it, for the branch list. */
+export interface BranchDetail {
+	branch: string;
+	/** The checkout occupying this branch, absent when nothing has it out. */
+	worktreePath?: string;
+	/** Set when that checkout is a ThinkRail workspace, which is what makes the branch undeletable. */
+	workspaceId?: string;
+	workspaceName?: string;
+	isCurrent: boolean;
+	isDefault: boolean;
+}
+
 export type ProviderAuthKind = "oauth" | "api-key" | "env" | "other";
 
 export interface ProviderStatus {

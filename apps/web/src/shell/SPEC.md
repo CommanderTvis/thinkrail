@@ -178,4 +178,16 @@ genuinely-stuck case it exists for.
   inside a Monaco editor too, because searching the workspace is not the same request as searching the
   buffer you are in. With no active workspace the chord neither acts nor swallows the browser's.
 
+**The topbar's branch is a control, not a caption** — and it has to look like one. It carries its own
+branch glyph and a chevron and lights up while open, because sitting in a row of plain scope captions it
+was read as one more label; the affordance is the whole point of moving the branch name here. It opens the
+project's local branches, each showing
+the worktree path occupying it when one does, so "which of these is a live workspace" is answered by
+looking rather than by remembering. A branch can be deleted from there, and two of them cannot: the
+branch a ThinkRail workspace is living on, and the one currently checked out — both refused with the
+reason on the control, and refused again by the host, which is where the knowledge actually is. Every
+deletion asks first, because a branch is the only copy of whatever only it points at. The list is
+re-read on every open and whenever the project's workspaces change, since a branch gains and loses its
+worktree behind the popover's back.
+
 Letter chords match physical `KeyboardEvent.code`, never layout-dependent `key`. The three layout chords remain app-owned inside xterm, do not repeat, and are suppressed while a modal dialog is open. With no active workspace, right/bottom chords neither act nor swallow the browser chord; Projects remains available. Terminal `Ctrl+R` still belongs to xterm; `Ctrl+Shift+R`, macOS `Cmd+R`, F5, and browser reload remain untouched. All other arrangement operations are exposed by the layout command/menu system in [[submodule-web-shell-layout]].

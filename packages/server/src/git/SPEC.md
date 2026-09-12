@@ -15,6 +15,28 @@ Git plumbing: the low-level `git` runner (sync + async) plus a worktree's change
 branch pickers, the workspace branch's own commit list, and a background prefetch that warms a remote base
 ref off the workspace-create critical path.
 
+- **`branchDetails(projectId)` says what is living on each branch, and `deleteBranch` enforces it.** The
+  list is every local branch plus the checkout occupying it, read from `git worktree list --porcelain`
+  and matched back to this host's workspaces. **Paths are compared after `realpath`**: macOS hands out
+  `/var/...` for a `/private/var/...` worktree, so a plain `resolve` silently matched nothing and every
+  branch looked free. A branch a ThinkRail workspace is living on is refused **by the host**, not only by
+  the UI that draws the button disabled — the host is the one that knows, and the answer must not depend
+  on which client asked. So is the branch that is currently checked out. Deletion is `branch -D` on a ref
+  that has already passed `assertSafeRef`.
+- **A worktree this host did not make does not get to veto a deletion.** Git refuses `branch -D` for any
+  branch a worktree holds, and people arrive at ThinkRail with worktrees made by other agents and tools —
+  leaving them a branch list they could look at and not act on. So a checkout that is *not* a ThinkRail
+  workspace is removed first, with a plain `worktree remove`: one holding uncommitted work refuses, and
+  that refusal is passed on in git's own words rather than forced past. A registration whose directory is
+  already gone is pruned instead. A ThinkRail workspace is still refused outright, because the app has its
+  own way to remove one and its own state to keep in step.
+- **A worktree this host did not make does not get to veto a deletion.** Git refuses `branch -D` for any
+  branch a worktree holds, and people arrive at ThinkRail with worktrees made by other agents and tools —
+  which left them with a branch list they could look at and not act on. So a checkout that is *not* a
+  ThinkRail workspace is removed first, with a plain `worktree remove`: one holding uncommitted work
+  refuses, and that refusal is passed on with git's own words rather than forced. A registration whose
+  directory is already gone is pruned instead. A ThinkRail workspace is still refused outright, because
+  the app has its own way to remove one and its own state to keep in step.
 - **`commitGraph(projectId)` reads the project, not a worktree.** The graph's whole point here is how a
   project's branches relate, and in this app a branch is usually somebody's worktree — so the log is
   `--branches --date-order` over the project root, read a page at a time, with `%P` for the edges and
@@ -245,7 +267,7 @@ ref off the workspace-create critical path.
   `readBlobAt`,
   `gitCommitPaths`, `gitHeadSha`, `listCommits`, `commitGraph`,
   `resolveDiffRange`, `changedFileArgs`, `diffBaseRef`, `resolveCommitOid`, `DiffRange`, `isSafeRef`,
-  `assertSafeRef`, `listBranches`, `resolveDefaultBranch`, `tryCurrentBranch`, `currentBranch`,
+  `assertSafeRef`, `listBranches`, `branchDetails`, `deleteBranch`, `resolveDefaultBranch`, `tryCurrentBranch`, `currentBranch`,
   `canonicalPath`, `prefetchBranch`, `countUnpushedCommits`, `listRemotes`, `remoteNameOf`.
 - **Allowed deps:** `persistence` (workspace + project lookup), `log`; `contracts` (`Git*`/`BranchList` types);
   `subprocess` (`runBounded`, the bounded child behind `gitAsync`);

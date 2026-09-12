@@ -1,6 +1,7 @@
-import { readFileSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { isAbsolute, relative, resolve } from "node:path";
 import type {
+	BranchDetail,
 	BranchList,
 	GitCommit,
 	GitDiffScope,
@@ -17,7 +18,7 @@ import { logger } from "../log";
 import { loadProjects, loadWorkspaces } from "../persistence";
 import { changedFileArgs, type DiffRange, diffBaseRef, resolveDiffRange } from "./diffScope";
 import { git, gitAsync, nonInteractiveGitEnv } from "./gitExec";
-import { isSafeRef, remoteNameOf } from "./refs";
+import { assertSafeRef, isSafeRef, remoteNameOf } from "./refs";
 
 const log = logger("git");
 
@@ -511,7 +512,7 @@ export async function commitGraph(projectId: string, skip = 0): Promise<GitGraph
 	const known = new Map(
 		loadWorkspaces()
 			.filter((ws) => ws.projectId === projectId)
-			.map((ws) => [resolve(ws.worktreePath), ws]),
+			.map((ws) => [samePathKey(ws.worktreePath), ws]),
 	);
 	const worktrees: GitGraphWorktree[] = [];
 	const listed = await gitAsync(root, ["worktree", "list", "--porcelain"]);
@@ -520,7 +521,7 @@ export async function commitGraph(projectId: string, skip = 0): Promise<GitGraph
 		let head = "";
 		const flush = () => {
 			if (path === "" || head === "") return;
-			const ws = known.get(resolve(path));
+			const ws = known.get(samePathKey(path));
 			worktrees.push({
 				sha: head,
 				name: ws?.name ?? path.slice(path.lastIndexOf("/") + 1),
@@ -540,4 +541,90 @@ export async function commitGraph(projectId: string, skip = 0): Promise<GitGraph
 
 	const hasMore = commits.length > GRAPH_PAGE;
 	return { commits: hasMore ? commits.slice(0, GRAPH_PAGE) : commits, worktrees, hasMore };
+}
+
+/** macOS hands out `/var/...` for a `/private/var/...` worktree, so paths are matched after resolution. */
+function samePathKey(path: string): string {
+	try {
+		return realpathSync(resolve(path));
+	} catch {
+		return resolve(path);
+	}
+}
+
+/** Every local branch with the checkout occupying it, if any — see SPEC.md. */
+export async function branchDetails(projectId: string): Promise<{ branches: BranchDetail[] }> {
+	const root = project(projectId).path;
+	const list = await listBranches(projectId);
+	const occupied = new Map<
+		string,
+		{ path: string; workspaceId?: string; workspaceName?: string }
+	>();
+	const known = new Map(
+		loadWorkspaces()
+			.filter((ws) => ws.projectId === projectId)
+			.map((ws) => [samePathKey(ws.worktreePath), ws]),
+	);
+	const listed = await gitAsync(root, ["worktree", "list", "--porcelain"]);
+	if (listed.ok) {
+		let path = "";
+		const flush = (branch: string) => {
+			if (path === "" || branch === "") return;
+			const ws = known.get(samePathKey(path));
+			occupied.set(branch, {
+				path,
+				...(ws ? { workspaceId: ws.id, workspaceName: ws.name } : {}),
+			});
+		};
+		for (const line of listed.out.split("\n")) {
+			if (line.startsWith("worktree ")) path = line.slice("worktree ".length).trim();
+			else if (line.startsWith("branch ")) {
+				flush(refWithin(line.slice("branch ".length).trim(), LOCAL_REF_PREFIX) ?? "");
+				path = "";
+			}
+		}
+	}
+	return {
+		branches: list.local.map((branch) => {
+			const at = occupied.get(branch);
+			return {
+				branch,
+				isCurrent: branch === list.current,
+				isDefault: branch === list.defaultBranch,
+				...(at ? { worktreePath: at.path } : {}),
+				...(at?.workspaceId ? { workspaceId: at.workspaceId } : {}),
+				...(at?.workspaceName ? { workspaceName: at.workspaceName } : {}),
+			};
+		}),
+	};
+}
+
+/** Delete a local branch, refusing one a workspace or a checkout is living on — see SPEC.md. */
+/** Frees a branch a checkout this host does not own is holding — see SPEC.md. */
+async function releaseWorktree(root: string, path: string, branch: string): Promise<void> {
+	const removed = await gitAsync(root, ["worktree", "remove", "--end-of-options", path]);
+	if (removed.ok) return;
+	if (existsSync(path)) {
+		throw new Error(
+			`${branch} is checked out at ${path}, which git will not give up: ${removed.err || "git failed"}`,
+		);
+	}
+	await gitAsync(root, ["worktree", "prune"]);
+}
+
+export async function deleteBranch(projectId: string, branch: string): Promise<void> {
+	assertSafeRef(branch);
+	const { branches } = await branchDetails(projectId);
+	const detail = branches.find((entry) => entry.branch === branch);
+	if (!detail) throw new Error(`No local branch named ${branch}`);
+	if (detail.workspaceId) {
+		throw new Error(
+			`${branch} is the branch of the workspace ${detail.workspaceName ?? detail.workspaceId}. Remove the workspace first.`,
+		);
+	}
+	if (detail.isCurrent) throw new Error(`${branch} is checked out and cannot be deleted`);
+	const root = project(projectId).path;
+	if (detail.worktreePath) await releaseWorktree(root, detail.worktreePath, branch);
+	const run = await gitAsync(root, ["branch", "-D", "--end-of-options", branch]);
+	if (!run.ok) throw new Error(`Could not delete ${branch}: ${run.err || "git failed"}`);
 }

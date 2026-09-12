@@ -6,10 +6,12 @@ export {
 	resolveDiffRange,
 } from "./diffScope";
 export {
+	branchDetails,
 	canonicalPath,
 	commitGraph,
 	countUnpushedCommits,
 	currentBranch,
+	deleteBranch,
 	gitCommitPaths,
 	gitDiffFile,
 	gitHeadSha,

@@ -22,6 +22,7 @@ import type {
 	ActivityStatus,
 	AppConfig,
 	AppConfigUpdate,
+	BranchDetail,
 	BranchList,
 	DelegationRunDetails,
 	DelegationRunStatus,
@@ -244,6 +245,8 @@ export const WS_METHODS = {
 	todoReviewAll: "todo.reviewAll",
 	gitStatus: "git.status",
 	gitDiffFile: "git.diffFile",
+	gitBranchDetails: "git.branchDetails",
+	gitDeleteBranch: "git.deleteBranch",
 	gitGraph: "git.graph",
 	gitListCommits: "git.listCommits",
 	terminalReserve: "terminal.reserve",
@@ -611,6 +614,11 @@ export interface WsMethodMap {
 	"git.diffFile": {
 		params: { workspaceId: string; path: string; scope?: GitDiffScope };
 		result: { original: string; modified: string };
+	};
+	"git.branchDetails": { params: { projectId: string }; result: { branches: BranchDetail[] } };
+	"git.deleteBranch": {
+		params: { projectId: string; branch: string };
+		result: Record<string, never>;
 	};
 	"git.graph": { params: { projectId: string; skip?: number }; result: GitGraph };
 	"git.listCommits": { params: { workspaceId: string }; result: { commits: GitCommit[] } };
