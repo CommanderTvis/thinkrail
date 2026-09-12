@@ -23,6 +23,8 @@
 
 	--panel-header-row-height: 32px;
 	--topbar-row-height: 40px;
+	/* The window's own rounded corner, which clips whatever the bottom row puts against it. */
+	--window-corner: 10px;
 }
 
 /*
