@@ -31,6 +31,7 @@ export {
 	COMPOSER_GROWTH_LIMITS,
 	DEFAULT_CONFIG,
 	IMAGE_MAX_BASE64_BYTES,
+	isCodeFontFamily,
 	isComposerGrowthLimit,
 	isControlMessage,
 	isDelegationRunDetails,

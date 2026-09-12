@@ -9,6 +9,7 @@ import { QuietScrollArea } from "../components/QuietScrollArea";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "../components/ui/resizable";
 import { IconTooltip } from "../components/ui/tooltip";
 import { BranchList } from "../panels/BranchList";
+import { applyCodeFont } from "../panels/editorFont";
 import { InterviewPromptDialog } from "../panels/InterviewPromptDialog";
 import { ProjectTree } from "../panels/ProjectTree";
 import { SearchOverlay } from "../panels/SearchOverlay";
@@ -105,6 +106,8 @@ export function Shell() {
 		if (welcomeGeneration > 0) writeThemeHint(preference);
 		return preference.themeMode === "system" ? onSystemAppearanceChange(apply) : undefined;
 	}, [themeHint, welcomeGeneration, theme, themeMode, systemThemePair]);
+	const codeFont = useAppStore((s) => s.codeFontFamily);
+	useEffect(() => applyCodeFont(codeFont), [codeFont]);
 	useGlobalHotkeys({
 		onFind: () => setFindRequest((current) => current + 1),
 		...(activeWorkspaceId ? { onSearch: () => setSearchOpen(true) } : {}),

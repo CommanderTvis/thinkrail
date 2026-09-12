@@ -302,3 +302,39 @@ test("a Tailwind utility at a call site overrides the semantic default it names"
 	expect(measured.bare.fontSize).toBe("14px");
 	expect(measured.metadata.fontSize).toBe("12px");
 });
+
+test("the code font is the user's to choose, and its ligatures are a setting", async ({ page }) => {
+	await openFixtureProject(page);
+	await createWorkspaceViaDialog(page);
+	await page.getByTestId("open-settings").click();
+	await page.getByTestId("settings-nav-appearance").click();
+
+	// Off by default, and empty means the bundled face.
+	await expect(page.getByTestId("code-font-ligatures")).not.toBeChecked();
+	await page.getByTestId("code-font-family").fill("Courier New");
+	await page.getByTestId("code-font-family").blur();
+
+	// One family for every code surface, so the override is written where they all read it.
+	await expect
+		.poll(() =>
+			page.evaluate(() =>
+				getComputedStyle(document.documentElement).getPropertyValue("--tr-font-family-code").trim(),
+			),
+		)
+		.toContain("Courier New");
+
+	await page.getByTestId("code-font-ligatures").click();
+	await expect(page.getByTestId("code-font-ligatures")).toBeChecked();
+
+	// A name the CSS declaration could not hold is refused rather than written.
+	await page.getByTestId("code-font-family").fill('Evil"; color: red');
+	await page.getByTestId("code-font-family").blur();
+	await expect(page.getByTestId("toast")).toBeVisible();
+	await expect
+		.poll(() =>
+			page.evaluate(() =>
+				getComputedStyle(document.documentElement).getPropertyValue("--tr-font-family-code").trim(),
+			),
+		)
+		.toContain("Courier New");
+});

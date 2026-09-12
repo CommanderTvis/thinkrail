@@ -618,6 +618,10 @@ export interface AppConfig extends ThemePreference {
 	claudeDisableAgentView: boolean;
 	/** Monaco's experimental GPU renderer. Off unless asked for — see panels/SPEC.md. */
 	editorGpuRendering: boolean;
+	/** Font family for every code surface. Empty keeps the bundled one — see panels/SPEC.md. */
+	codeFontFamily: string;
+	/** Render the code font's ligatures where the surface can. */
+	codeFontLigatures: boolean;
 }
 
 /** The `settings.update` payload: `null` clears an optional override back to unset (⇒ the default). */
@@ -639,6 +643,14 @@ export function isTerminalWindowsShell(value: unknown): value is TerminalWindows
 
 export const JBCENTRAL_QUOTA_REFRESH_SECONDS = { min: 1, max: 3600, default: 30 } as const;
 
+/**
+ * A font family the browser will accept in a CSS custom property: names and the usual separators only.
+ * Quotes, semicolons and braces are refused so the value cannot close the declaration it lands in.
+ */
+export function isCodeFontFamily(value: unknown): value is string {
+	return typeof value === "string" && value.length <= 120 && /^[\w ,.-]*$/.test(value);
+}
+
 export function isJbcentralQuotaRefreshSeconds(value: unknown): value is number {
 	return (
 		typeof value === "number" &&
@@ -659,6 +671,8 @@ export const DEFAULT_CONFIG: AppConfig = {
 	terminalReplayKb: TERMINAL_REPLAY_KB.default,
 	terminalWindowsShell: "auto",
 	editorGpuRendering: false,
+	codeFontFamily: "",
+	codeFontLigatures: false,
 	composerGrowthLimit: "half-chat",
 	chatLineWidth: LINE_WIDTH_COLUMNS.default,
 	fileLineWidth: LINE_WIDTH_COLUMNS.default,
