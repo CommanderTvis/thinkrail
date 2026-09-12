@@ -1,7 +1,6 @@
 import {
 	RiArrowRightSLine as ChevronRight,
 	RiCircleLine as Circle,
-	RiGitBranchLine as GitBranch,
 	RiCircleFill,
 	RiSettings3Line as Settings,
 } from "@remixicon/react";
@@ -9,6 +8,7 @@ import { useEffect, useRef, useState } from "react";
 import { QuietScrollArea } from "../components/QuietScrollArea";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "../components/ui/resizable";
 import { IconTooltip } from "../components/ui/tooltip";
+import { BranchList } from "../panels/BranchList";
 import { InterviewPromptDialog } from "../panels/InterviewPromptDialog";
 import { ProjectTree } from "../panels/ProjectTree";
 import { SearchOverlay } from "../panels/SearchOverlay";
@@ -173,10 +173,10 @@ export function Shell() {
 							</span>
 							{activeWorkspace ? (
 								<>
-									<GitBranch className="size-14 shrink-0 text-text-muted" />
-									<span data-testid="scope-branch" className="truncate text-text-muted">
-										{workspaceBranchLabel(activeWorkspace)}
-									</span>
+									<BranchList
+										projectId={activeWorkspace.projectId}
+										label={workspaceBranchLabel(activeWorkspace)}
+									/>
 									{isUserOwnedWorkspace(activeWorkspace) ? null : (
 										<span
 											data-testid="scope-base"

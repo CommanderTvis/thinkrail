@@ -132,8 +132,11 @@ import {
 import { recordAcceptedMessage, respondToInterview } from "../feedback";
 import { readDir, readFile, resolveWorktreeFile, searchWorktree, writeFile } from "../fs";
 import {
+	branchDetails,
 	commitGraph,
 	countUnpushedCommits,
+	deleteBranch,
+	fetchRemotes,
 	gitDiffFile,
 	gitStatus,
 	listBranches,
@@ -738,6 +741,16 @@ const handlers: Record<string, Handler> = {
 		const p = params as { workspaceId: string; path: string; scope?: GitDiffScope };
 		void ensureWatch(p.workspaceId);
 		return gitDiffFile(p.workspaceId, p.path, p.scope);
+	},
+	"git.branchDetails": (params) => branchDetails((params as { projectId: string }).projectId),
+	"git.deleteBranch": async (params) => {
+		const p = params as { projectId: string; branch: string };
+		await deleteBranch(p.projectId, p.branch);
+		return {};
+	},
+	"git.fetchRemotes": async (params) => {
+		await fetchRemotes((params as { projectId: string }).projectId);
+		return {};
 	},
 	"git.graph": (params) => {
 		const p = params as { projectId: string; skip?: number };
