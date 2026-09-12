@@ -1,12 +1,15 @@
+import { basename } from "node:path";
 import { expect, type Locator, type Page, test, type WebSocketRoute } from "@playwright/test";
 import {
 	createWorkspaceViaDialog,
 	defaultWorkspaceRow,
 	enterDefaultWorkspace,
+	openAppFresh,
 	openFixtureProject,
 	pressPlatformShortcut,
 	pseudoBackgroundColor,
 	revealFirstProjectWorkspaces,
+	stagePlainFolder,
 	waitTerminalReady,
 } from "./fixtures/app";
 
@@ -1591,4 +1594,24 @@ test("the placement picker draws the workbench: a cell per group, a slot at ever
 	await page.getByRole("menuitem", { name: "Move to left group: Left" }).click();
 	await expect(sideGroups(page, "left").getByTestId("tab-files")).toBeVisible();
 	await expect(sideGroups(page, "right").getByTestId("tab-files")).toHaveCount(0);
+});
+
+test("a project with no specs opens its rail on Files, not on the empty Specs panel", async ({
+	page,
+}) => {
+	await openAppFresh(page);
+	const dir = stagePlainFolder();
+	await page.getByTestId("add-project-menu").click();
+	await page.getByTestId("menu-open-project").click();
+	await expect(page.getByTestId("project-item").filter({ hasText: basename(dir) })).toBeVisible();
+	await page.getByTestId("welcome-action").filter({ hasText: "Work in project folder" }).click();
+	await expect(page.getByTestId("center-tabs")).toBeVisible();
+
+	// Specs is still docked and one click away; it just isn't what the rail opens on.
+	const specs = page.getByTestId("tab-specs").getByRole("tab");
+	await expect(specs).toHaveAttribute("aria-selected", "false");
+	await expect(page.getByTestId("tab-files").getByRole("tab")).toHaveAttribute(
+		"aria-selected",
+		"true",
+	);
 });

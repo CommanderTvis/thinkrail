@@ -135,6 +135,21 @@ what ThinkRail launched and to nothing a person types themselves, and it is visi
 rather than being an invisible difference between running Claude here and running it anywhere else. The
 setting turns it off for anyone who wants the CLI's own view back.
 
+## A rail that opens on something worth reading
+
+The Balanced preset puts Specs first in the right rail, which is right for a repository that has a spec
+graph and wrong for one that has none — the pane opens on its own empty state, and that is the first thing
+a new project shows. So a workspace whose spec graph comes back empty moves the rail's default selection
+on to the next tool in that group. Specs stays docked and one click away; only what opens by default
+changes.
+
+It is a correction rather than a preference because the default is *seeded*: `reconcileAttention` records
+the first tab of every group as its selection when the document is reconciled, well before the spec graph
+has been read. So the answer is applied once per workspace, when the graph first arrives, and only to a
+group still showing what was seeded. Anything the user selects afterwards is theirs and is never touched.
+The graph is already loaded for every workspace (`useWorkspaceSpecs` sits in the workbench, not in the
+panel), so this costs no extra read.
+
 ## Panes that need git
 
 Changes and Review are windows onto git history, and a workspace can have none — a project folder that is
