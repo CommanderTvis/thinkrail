@@ -8,6 +8,7 @@ import {
 } from "@remixicon/react";
 import {
 	type AppConfigUpdate,
+	isCodeFontFamily,
 	type SystemThemePair,
 	THEME_SYSTEM_PROTOCOL_VERSION,
 	type ThemeId,
@@ -248,6 +249,9 @@ export function AppearanceSettings() {
 	const userThemes = useAppStore((state) => state.userThemes);
 	const appVersion = useAppStore((state) => state.hostAppVersion);
 
+	const editorGpu = useAppStore((state) => state.editorGpuRendering);
+	const codeFont = useAppStore((state) => state.codeFontFamily);
+	const ligatures = useAppStore((state) => state.codeFontLigatures);
 	const systemSupported = (protocolVersion ?? 0) >= THEME_SYSTEM_PROTOCOL_VERSION;
 	const activeTheme = resolveTheme(theme);
 	const fixedResolution = resolveThemePreference({ theme, themeMode: "fixed" });
@@ -314,6 +318,28 @@ export function AppearanceSettings() {
 			disabled: !contrastAvailable("high"),
 		},
 	];
+
+	const setCodeFont = (family: string) => {
+		if (!isCodeFontFamily(family)) {
+			toast.error("A font family is letters, digits, spaces, commas, dots and dashes");
+			return;
+		}
+		getTransport()
+			.request("settings.update", { config: { codeFontFamily: family } })
+			.catch(() => toast.error("Couldn’t change the code font"));
+	};
+
+	const setLigatures = (on: boolean) => {
+		getTransport()
+			.request("settings.update", { config: { codeFontLigatures: on } })
+			.catch(() => toast.error("Couldn’t change the ligature setting"));
+	};
+
+	const setEditorGpu = (on: boolean) => {
+		getTransport()
+			.request("settings.update", { config: { editorGpuRendering: on } })
+			.catch(() => toast.error("Couldn’t change the editor renderer"));
+	};
 
 	const update = (config: AppConfigUpdate) => {
 		if (pending) return;
@@ -512,6 +538,45 @@ export function AppearanceSettings() {
 			/>
 			<SettingsGroup title={t("settings.appearance.editorGroup")}>
 				<LineWidthControl kind="file" />
+				<SettingsRow
+					label="Code font"
+					control={
+						<input
+							data-testid="code-font-family"
+							aria-label="Code font family"
+							defaultValue={codeFont}
+							placeholder="JetBrains Mono"
+							onBlur={(event) => {
+								if (event.target.value !== codeFont) setCodeFont(event.target.value);
+							}}
+							className="w-full rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg px-8 py-4 tr-code-text text-text-default outline-none focus-visible:ring-2 focus-visible:ring-primary"
+						/>
+					}
+				/>
+				<SettingsRow
+					label="Use code font ligatures"
+					control={
+						<input
+							type="checkbox"
+							data-testid="code-font-ligatures"
+							checked={ligatures}
+							onChange={(event) => setLigatures(event.target.checked)}
+							className="size-16 shrink-0 accent-primary"
+						/>
+					}
+				/>
+				<SettingsRow
+					label="Draw the editor on the GPU"
+					control={
+						<input
+							type="checkbox"
+							data-testid="editor-gpu"
+							checked={editorGpu}
+							onChange={(event) => setEditorGpu(event.target.checked)}
+							className="size-16 shrink-0 accent-primary"
+						/>
+					}
+				/>
 			</SettingsGroup>
 		</SettingsPageContainer>
 	);
