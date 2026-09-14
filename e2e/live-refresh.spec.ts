@@ -1,7 +1,8 @@
+import { execFileSync } from "node:child_process";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, test } from "@playwright/test";
-import { createWorkspaceViaDialog, openFixtureProject } from "./fixtures/app";
+import { createWorkspaceViaDialog, openFixtureProject, worktreeRows } from "./fixtures/app";
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -51,6 +52,16 @@ test("worktree changes on disk appear live in Specs, Files, Changes, and an open
 	writeFileSync(join(worktree, "README.md"), "# sample-project\n\nlive tab reload\n");
 	await fsExpect(page.getByTestId("editor-pane")).toContainText("live tab reload");
 	await fsExpect(page.getByTestId("editor-pane")).not.toContainText("edited twice by e2e");
+});
+
+test("a branch switch inside a managed worktree converges its rail label", async ({ page }) => {
+	await openFixtureProject(page);
+	const workspace = await createWorkspaceViaDialog(page);
+	const row = worktreeRows(page).filter({ hasText: workspace.name });
+	await expect(row.getByTestId("workspace-branch")).toHaveText(workspace.branch);
+
+	execFileSync("git", ["-C", workspace.worktreePath, "switch", "-c", "checked-out-live"]);
+	await fsExpect(row.getByTestId("workspace-branch")).toHaveText("checked-out-live");
 });
 
 test("churn canary: a write storm coalesces to a few frames and the host stays responsive", async ({

@@ -1,10 +1,11 @@
-export function openUiThenStartAttribution(
+export async function openUiThenStartAttribution(
 	enabled: boolean,
 	url: string,
 	openBrowser: (url: string) => void,
 	startAttributionClaim: () => void,
-): void {
+	hasClient: () => Promise<boolean>,
+): Promise<void> {
 	if (!enabled) return;
-	openBrowser(url);
+	if (!(await hasClient())) openBrowser(url);
 	startAttributionClaim();
 }
