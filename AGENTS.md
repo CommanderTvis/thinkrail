@@ -79,6 +79,7 @@ packages/
   plugin-api/ the plugin contract: manifest, host/web contexts (SPEC.md)
   plugin-ui/  shared plugin UI kit: primitives, markdown, editor (SPEC.md)
   plugin-spec-dialect/ builtin plugin: spec-graph read + Specs panel (SPEC.md)
+  plugin-blueprint/ builtin plugin: interactive-spec format, author, reactor (SPEC.md)
   pi-delegation/ portable pure-pi delegation core: child sessions from sessions (SPEC.md)
   pi-subagents/  portable pure-pi extension: Agent tools over pi-delegation (SPEC.md)
 ```
