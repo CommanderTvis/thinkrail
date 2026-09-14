@@ -85,6 +85,31 @@ test("serveRoute serves an external plugin's declared web file as a static asset
 	expect(response.status).toBe(200);
 });
 
+test("serveRoute serves a manifest-only builtin's declared assets from its resolved assets dir", async () => {
+	const runtime = await installPlugins(fixtureSeams({}, {}));
+	const response = await runtime.serveRoute(
+		new Request("http://localhost/plugin/file-icons/assets/file-icons/typescript.svg"),
+		new URL("http://localhost/plugin/file-icons/assets/file-icons/typescript.svg"),
+	);
+	expect(response.status).toBe(200);
+	expect(await response.text()).toContain("<svg");
+});
+
+test("serveRoute 404s a missing builtin asset and a path-traversal attempt", async () => {
+	const runtime = await installPlugins(fixtureSeams({}, {}));
+	const missing = await runtime.serveRoute(
+		new Request("http://localhost/plugin/file-icons/assets/file-icons/does-not-exist.svg"),
+		new URL("http://localhost/plugin/file-icons/assets/file-icons/does-not-exist.svg"),
+	);
+	expect(missing.status).toBe(404);
+
+	const traversal = await runtime.serveRoute(
+		new Request("http://localhost/plugin/file-icons/assets/../../manifest.ts"),
+		new URL("http://localhost/plugin/file-icons/assets/../../manifest.ts"),
+	);
+	expect(traversal.status).toBe(404);
+});
+
 test("rescan promotes a plugin out of refused once its manifest is fixed on disk", async () => {
 	const root = tempRoot();
 	mkdirSync(join(root, "broken"));
