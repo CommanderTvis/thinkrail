@@ -5,6 +5,7 @@ import {
 	createWorkspaceViaDialog,
 	openFixtureProject,
 	requestOverWire,
+	revealWorkbenchTool,
 	setPluginEnabled,
 } from "../../fixtures/app";
 import { E2E_PLUGIN_DIR } from "../../fixtures/paths";
@@ -35,7 +36,7 @@ test("the roster lists a discovered external plugin as disabled", async ({ page 
 	await expect(row).toHaveAttribute("data-status", "disabled");
 	await expect(row).toContainText("external");
 	await expect(row).toContainText("v0.1.0");
-	await expect(pluginRow(page, "pdf-preview")).not.toContainText(/\bv\d/);
+	await expect(pluginRow(page, "file-icons")).not.toContainText(/\bv\d/);
 	await page.keyboard.press("Escape");
 });
 
@@ -50,10 +51,7 @@ test("enabling mounts its settings section and its side tool, and its method ans
 	await setPluginEnabled(page, FIXTURE_ID, true);
 
 	await page.getByTestId("open-settings").click();
-	const plugins = page.getByRole("navigation", { name: "Settings sections" }).getByRole("group", {
-		name: "Plugins",
-		exact: true,
-	});
+	const plugins = page.getByRole("navigation", { name: "Settings sections" });
 	const parent = plugins.getByTestId("settings-nav-plugins");
 	const child = plugins.getByTestId(`settings-nav-${FIXTURE_ID}`);
 	await expect(parent).toBeVisible();
@@ -73,13 +71,12 @@ test("enabling mounts its settings section and its side tool, and its method ans
 	await page.keyboard.press("Escape");
 	await expect(page.getByTestId("settings-dialog")).toBeHidden();
 
-	const tool = `plugin:${FIXTURE_ID}:panel`;
-	const tab = page.getByTestId(`tab-${tool}`);
-	if ((await tab.count()) === 0) {
-		await page.getByTestId("side-group-menu").first().click();
+	const tool = `plugin:${FIXTURE_ID}:panel` as const;
+	if ((await page.getByTestId(`tool-rail-${tool}`).count()) === 0) {
+		await page.locator('[data-side="right"]').getByTestId("side-group-menu").first().click();
 		await page.getByTestId(`show-tool-${tool}`).click();
 	}
-	await tab.first().click();
+	await revealWorkbenchTool(page, tool);
 	await expect(page.getByTestId("e2e-fixture-panel")).toBeVisible();
 
 	await page.getByTestId("e2e-fixture-echo-button").click();
@@ -104,13 +101,12 @@ test("disabling unmounts the side tool and the method reports disabled", async (
 	await page.keyboard.press("Escape");
 	await setPluginEnabled(page, FIXTURE_ID, true);
 
-	const tool = `plugin:${FIXTURE_ID}:panel`;
-	const tab = page.getByTestId(`tab-${tool}`);
-	if ((await tab.count()) === 0) {
-		await page.getByTestId("side-group-menu").first().click();
+	const tool = `plugin:${FIXTURE_ID}:panel` as const;
+	if ((await page.getByTestId(`tool-rail-${tool}`).count()) === 0) {
+		await page.locator('[data-side="right"]').getByTestId("side-group-menu").first().click();
 		await page.getByTestId(`show-tool-${tool}`).click();
 	}
-	await tab.first().click();
+	await revealWorkbenchTool(page, tool);
 	await expect(page.getByTestId("e2e-fixture-panel")).toBeVisible();
 
 	await setPluginEnabled(page, FIXTURE_ID, false);
