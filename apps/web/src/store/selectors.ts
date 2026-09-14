@@ -11,7 +11,6 @@ import {
 	type SessionResources,
 	type SessionState,
 	type SessionStateRecord,
-	type SpecGraphNode,
 	type SubagentResourceSummary,
 	type WireModel,
 	type Workspace,
@@ -648,11 +647,6 @@ export function matchesWorktreePath(reported: string, rel: string): boolean {
 	const path = normalizePath(reported);
 	if (path === rel) return true;
 	return isAbsolutePath(path) && path.endsWith(`/${rel}`);
-}
-
-export function specPathMatcher(nodes: SpecGraphNode[]): (path: string) => boolean {
-	const paths = nodes.map((node) => node.path);
-	return (reported) => paths.some((rel) => matchesWorktreePath(reported, rel));
 }
 
 export function selectChatTitle(

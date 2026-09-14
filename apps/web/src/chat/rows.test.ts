@@ -451,7 +451,7 @@ const specGroup = (toolName: string, path: string) =>
 		? {
 				id: "specs",
 				label: (n: number) => `${n} spec${n === 1 ? "" : "s"}`,
-				tool: "specs" as const,
+				tool: "plugin:spec-dialect:specs" as const,
 			}
 		: null;
 

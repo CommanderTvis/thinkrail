@@ -8,7 +8,7 @@ const MAX_GROUPS = 32;
 const MAX_DEPTH = 8;
 const MAX_NAME_LENGTH = 200;
 const MAX_BOTTOM_HEIGHT = 0.7;
-const TOOL_IDS = new Set<LayoutToolId>(["projects", "specs", "files", "changes", "review"]);
+const TOOL_IDS = new Set<LayoutToolId>(["projects", "files", "changes", "review"]);
 
 function isKnownToolId(tool: string): boolean {
 	return TOOL_IDS.has(tool as LayoutToolId) || parsePluginToolId(tool) !== null;

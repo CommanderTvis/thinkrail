@@ -1,6 +1,4 @@
 import {
-	RiBookOpenFill,
-	RiBookOpenLine,
 	RiDiscussFill,
 	RiDiscussLine,
 	RiFileFill,
@@ -119,17 +117,6 @@ export const BUILTIN_LAYOUT_TOOL_CATALOG: LayoutToolCatalog = new Map<
 			icon: RiFolder2Line,
 			activeIcon: RiFolder2Fill,
 			defaultSide: "left",
-			dormant: false,
-		},
-	],
-	[
-		"specs",
-		{
-			id: "specs",
-			label: "Specs",
-			icon: RiBookOpenLine,
-			activeIcon: RiBookOpenFill,
-			defaultSide: "right",
 			dormant: false,
 		},
 	],

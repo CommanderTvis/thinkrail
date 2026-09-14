@@ -34,7 +34,6 @@ import {
 	selectSkillsStale,
 	selectWorkspaceIsRunning,
 	selectWorkspaceNeedsAttention,
-	specPathMatcher,
 	workspaceBranchLabel,
 } from "./selectors";
 

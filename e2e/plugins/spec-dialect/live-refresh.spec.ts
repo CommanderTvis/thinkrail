@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, test } from "@playwright/test";
-import { createWorkspaceViaDialog, openFixtureProject, worktreeRows } from "./fixtures/app";
+import { createWorkspaceViaDialog, openFixtureProject, worktreeRows } from "../../fixtures/app";
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 

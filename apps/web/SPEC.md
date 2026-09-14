@@ -18,11 +18,10 @@ event stream as a chat-centric, multi-session IDE shell.
 - **Owns:** the browser UI — client-local navigation and workbench state, transport client, store, panels, the responsive shell, branding tokens.
 - **Public surface:** the built static bundle (`dist/`) — a deployable artifact that dials a host.
 - **Allowed deps:** `@thinkrail/contracts` (types + WS constants), `@thinkrail/plugin-api` (the plugin
+  contract — both the root types and its `/web` runtime, see `plugins/SPEC.md`), `@thinkrail/plugin-ui`
+  (the shared presentational kit — primitives, markdown, editor, visualization card), and each builtin
   plugin package's `./manifest` and `./web` subpaths (today, `@thinkrail/plugin-spec-dialect`,
   `@thinkrail/plugin-pdf-preview` — `plugins/loader/builtin.ts`) ONLY; React / Zustand / Vite / etc.
-  contract — both the root types and its `/web` runtime, see `plugins/SPEC.md`), and `@thinkrail/plugin-ui`
-  (the shared presentational kit — primitives, markdown, editor, visualization card) ONLY; React / Zustand /
-  Vite / etc.
 - **Deployment obligation:** one built client serves every launcher and future deployment. Endpoint selection
   belongs to the transport bootstrap; panels, stores, and feature flows never branch on `cli`, `desktop`, or
   a deployment name.
