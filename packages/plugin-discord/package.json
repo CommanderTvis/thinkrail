@@ -1,0 +1,40 @@
+{
+	"name": "@thinkrail/plugin-discord",
+	"version": "0.1.0",
+	"private": true,
+	"type": "module",
+	"sideEffects": false,
+	"exports": {
+		".": "./manifest.ts",
+		"./manifest": "./manifest.ts",
+		"./contracts": "./contracts.ts",
+		"./host": "./host/index.ts",
+		"./web": "./web/index.ts",
+		"./build-support": "./build-support.ts",
+		"./package.json": "./package.json"
+	},
+	"scripts": {
+		"test": "bun test",
+		"typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.web.json"
+	},
+	"dependencies": {
+		"@remixicon/react": "4.9.0",
+		"@thinkrail/contracts": "workspace:*",
+		"@thinkrail/plugin-api": "workspace:*",
+		"@thinkrail/plugin-ui": "workspace:*",
+		"@thinkrail/shared": "workspace:*",
+		"typebox": "catalog:"
+	},
+	"peerDependencies": {
+		"react": "*",
+		"react-dom": "*"
+	},
+	"devDependencies": {
+		"@types/bun": "catalog:",
+		"@types/react": "catalog:",
+		"@types/react-dom": "catalog:",
+		"react": "catalog:",
+		"react-dom": "catalog:",
+		"typescript": "catalog:"
+	}
+}
