@@ -19,6 +19,7 @@
 		"@earendil-works/pi-coding-agent": "catalog:",
 		"@stroncium/procfs": "1.2.1",
 		"@thinkrail/contracts": "workspace:*",
+		"@thinkrail/plugin-api": "workspace:*",
 		"@thinkrail/shared": "workspace:*",
 		"bun-pty": "0.4.10",
 		"pi-delegation": "workspace:*",

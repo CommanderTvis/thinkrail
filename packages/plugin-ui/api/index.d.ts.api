@@ -1,0 +1,247 @@
+// ---- index.d.ts ----
+export { Button, type ButtonProps, buttonVariants } from "./button";
+export { CHIP, CHIP_DISABLED, CHIP_OFF, CHIP_ON } from "./chips";
+export { cn } from "./cn";
+export { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandSeparator, } from "./command";
+export { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger, } from "./context-menu";
+export { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger, } from "./dialog";
+export { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuSeparator, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger, DropdownMenuTrigger, } from "./dropdown-menu";
+export { Outline, OutlineColumn, OutlineToggle, scrollToHeading } from "./Outline";
+export { buildOutlineTree, type HeadingEntry, type OutlineNode } from "./outlineTree";
+export { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from "./popover";
+export { type ImperativePanelGroupHandle, type ImperativePanelHandle, ResizableHandle, ResizablePanel, ResizablePanelGroup, } from "./resizable";
+export { SvgAsset } from "./SvgAsset";
+export { ToggleSegment } from "./ToggleSegment";
+export { ToolFileLink } from "./ToolFileLink";
+export { Textarea } from "./textarea";
+export { Toast, ToastClose, ToastDescription, ToastProvider, ToastTitle, ToastViewport, toastVariants, } from "./toast";
+export { IconTooltip, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./tooltip";
+export { useThemeSwap } from "./useThemeSwap";
+
+// ---- button.d.ts ----
+import { type VariantProps } from "class-variance-authority";
+import type * as React from "react";
+declare const buttonVariants: (props?: ({
+    variant?: "default" | "destructive" | "ghost" | "outline" | null | undefined;
+    size?: "default" | "icon" | "sm" | null | undefined;
+} & import("class-variance-authority/types").ClassProp) | undefined) => string;
+export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement>, VariantProps<typeof buttonVariants> {
+    ref?: React.Ref<HTMLButtonElement>;
+}
+export declare function Button({ className, variant, size, type, ref, ...props }: ButtonProps): React.JSX.Element;
+export { buttonVariants };
+
+// ---- chips.d.ts ----
+export declare const CHIP = "inline-flex items-center gap-4 rounded-full border px-12 py-4 transition-colors";
+export declare const CHIP_ON = "border-primary-muted bg-primary-subtle text-primary";
+export declare const CHIP_OFF = "border-border-default bg-control-bg text-text-muted hover:bg-control-bg-hovered";
+export declare const CHIP_DISABLED = "border-control-disabled-border bg-control-disabled-bg text-control-disabled-text";
+
+// ---- cn.d.ts ----
+import { type ClassValue } from "clsx";
+export declare function cn(...inputs: ClassValue[]): string;
+
+// ---- command.d.ts ----
+import { Command as CommandPrimitive } from "cmdk";
+import type * as React from "react";
+declare function Command({ className, ...props }: React.ComponentProps<typeof CommandPrimitive>): React.JSX.Element;
+declare function CommandInput({ className, ...props }: React.ComponentProps<typeof CommandPrimitive.Input>): React.JSX.Element;
+declare function CommandList({ className, ...props }: React.ComponentProps<typeof CommandPrimitive.List>): React.JSX.Element;
+declare function CommandEmpty(props: React.ComponentProps<typeof CommandPrimitive.Empty>): React.JSX.Element;
+declare function CommandGroup({ className, ...props }: React.ComponentProps<typeof CommandPrimitive.Group>): React.JSX.Element;
+declare function CommandItem({ className, ...props }: React.ComponentProps<typeof CommandPrimitive.Item>): React.JSX.Element;
+declare function CommandSeparator({ className, ...props }: React.ComponentProps<typeof CommandPrimitive.Separator>): React.JSX.Element;
+export { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandSeparator, };
+
+// ---- context-menu.d.ts ----
+import * as ContextMenuPrimitive from "@radix-ui/react-context-menu";
+import type * as React from "react";
+declare const ContextMenu: React.FC<ContextMenuPrimitive.ContextMenuProps>;
+declare const ContextMenuTrigger: React.ForwardRefExoticComponent<ContextMenuPrimitive.ContextMenuTriggerProps & React.RefAttributes<HTMLSpanElement>>;
+declare function ContextMenuContent({ className, ...props }: React.ComponentProps<typeof ContextMenuPrimitive.Content>): React.JSX.Element;
+declare function ContextMenuItem({ className, ...props }: React.ComponentProps<typeof ContextMenuPrimitive.Item>): React.JSX.Element;
+declare function ContextMenuSeparator({ className, ...props }: React.ComponentProps<typeof ContextMenuPrimitive.Separator>): React.JSX.Element;
+export { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger, };
+
+// ---- dialog.d.ts ----
+import * as DialogPrimitive from "@radix-ui/react-dialog";
+import type * as React from "react";
+declare const Dialog: React.FC<DialogPrimitive.DialogProps>;
+declare const DialogTrigger: React.ForwardRefExoticComponent<DialogPrimitive.DialogTriggerProps & React.RefAttributes<HTMLButtonElement>>;
+declare const DialogClose: React.ForwardRefExoticComponent<DialogPrimitive.DialogCloseProps & React.RefAttributes<HTMLButtonElement>>;
+declare function DialogContent({ className, children, hideClose, ...props }: React.ComponentProps<typeof DialogPrimitive.Content> & {
+    hideClose?: boolean;
+}): React.JSX.Element;
+declare function DialogHeader({ className, ...props }: React.ComponentProps<"div">): React.JSX.Element;
+declare function DialogFooter({ className, ...props }: React.ComponentProps<"div">): React.JSX.Element;
+declare function DialogTitle({ className, ...props }: React.ComponentProps<typeof DialogPrimitive.Title>): React.JSX.Element;
+declare function DialogDescription({ className, ...props }: React.ComponentProps<typeof DialogPrimitive.Description>): React.JSX.Element;
+export { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger, };
+
+// ---- dropdown-menu.d.ts ----
+import * as DropdownMenuPrimitive from "@radix-ui/react-dropdown-menu";
+import type * as React from "react";
+declare const DropdownMenu: React.FC<DropdownMenuPrimitive.DropdownMenuProps>;
+declare const DropdownMenuTrigger: React.ForwardRefExoticComponent<DropdownMenuPrimitive.DropdownMenuTriggerProps & React.RefAttributes<HTMLButtonElement>>;
+declare const DropdownMenuGroup: React.ForwardRefExoticComponent<DropdownMenuPrimitive.DropdownMenuGroupProps & React.RefAttributes<HTMLDivElement>>;
+declare const DropdownMenuRadioGroup: React.ForwardRefExoticComponent<DropdownMenuPrimitive.DropdownMenuRadioGroupProps & React.RefAttributes<HTMLDivElement>>;
+declare const DropdownMenuSub: React.FC<DropdownMenuPrimitive.DropdownMenuSubProps>;
+declare function DropdownMenuContent({ className, sideOffset, ...props }: React.ComponentProps<typeof DropdownMenuPrimitive.Content>): React.JSX.Element;
+declare function DropdownMenuItem({ className, ...props }: React.ComponentProps<typeof DropdownMenuPrimitive.Item>): React.JSX.Element;
+declare function DropdownMenuRadioItem({ className, ...props }: React.ComponentProps<typeof DropdownMenuPrimitive.RadioItem>): React.JSX.Element;
+declare function DropdownMenuSubTrigger({ className, children, ...props }: React.ComponentProps<typeof DropdownMenuPrimitive.SubTrigger>): React.JSX.Element;
+declare function DropdownMenuSubContent({ className, ...props }: React.ComponentProps<typeof DropdownMenuPrimitive.SubContent>): React.JSX.Element;
+declare function DropdownMenuLabel({ className, ...props }: React.ComponentProps<typeof DropdownMenuPrimitive.Label>): React.JSX.Element;
+declare function DropdownMenuSeparator({ className, ...props }: React.ComponentProps<typeof DropdownMenuPrimitive.Separator>): React.JSX.Element;
+export { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuSeparator, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger, DropdownMenuTrigger, };
+
+// ---- Outline.d.ts ----
+import { type HeadingEntry } from "./outlineTree";
+/** Scroll the rendered heading into view — by its slug id, or by the line stamp of the block holding it. */
+export declare function scrollToHeading(entry: HeadingEntry): void;
+export declare function OutlineToggle({ active, onClick, testid, }: {
+    active: boolean;
+    onClick: () => void;
+    testid?: string;
+}): import("react").JSX.Element;
+/** The pane-edge column an outline lives in, the same width wherever a document has one. */
+export declare function OutlineColumn({ headings, onSelect, }: {
+    headings: readonly HeadingEntry[];
+    onSelect: (entry: HeadingEntry) => void;
+}): import("react").JSX.Element;
+export declare function Outline({ headings, onSelect, }: {
+    headings: readonly HeadingEntry[];
+    onSelect: (entry: HeadingEntry) => void;
+}): import("react").JSX.Element;
+
+// ---- outlineTree.d.ts ----
+export interface HeadingEntry {
+    level: number;
+    text: string;
+    id: string;
+    /** 1-based line in the raw document, what the editor jump reveals. */
+    line: number;
+}
+export interface OutlineNode {
+    entry: HeadingEntry;
+    children: OutlineNode[];
+}
+/** Nests a flat, document-order heading list by level — a level-N heading closes every open node at >= N. */
+export declare function buildOutlineTree(entries: readonly HeadingEntry[]): OutlineNode[];
+
+// ---- popover.d.ts ----
+import * as PopoverPrimitive from "@radix-ui/react-popover";
+import type * as React from "react";
+declare const Popover: React.FC<PopoverPrimitive.PopoverProps>;
+declare const PopoverTrigger: React.ForwardRefExoticComponent<PopoverPrimitive.PopoverTriggerProps & React.RefAttributes<HTMLButtonElement>>;
+declare const PopoverAnchor: React.ForwardRefExoticComponent<PopoverPrimitive.PopoverAnchorProps & React.RefAttributes<HTMLDivElement>>;
+declare function PopoverContent({ className, align, sideOffset, container, ...props }: React.ComponentProps<typeof PopoverPrimitive.Content> & {
+    container?: HTMLElement | null | undefined;
+}): React.JSX.Element;
+export { Popover, PopoverAnchor, PopoverContent, PopoverTrigger };
+
+// ---- resizable.d.ts ----
+import type { ComponentProps } from "react";
+import { type ImperativePanelGroupHandle, type ImperativePanelHandle, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
+export declare function ResizablePanelGroup({ className, ...props }: ComponentProps<typeof PanelGroup>): import("react").JSX.Element;
+export type { ImperativePanelGroupHandle, ImperativePanelHandle };
+export declare const ResizablePanel: import("react").ForwardRefExoticComponent<Omit<import("react").HTMLAttributes<HTMLAnchorElement | HTMLAreaElement | HTMLAudioElement | HTMLBRElement | HTMLBaseElement | HTMLBodyElement | HTMLButtonElement | HTMLCanvasElement | HTMLDListElement | HTMLDataElement | HTMLDataListElement | HTMLDetailsElement | HTMLDialogElement | HTMLDivElement | HTMLElement | HTMLEmbedElement | HTMLFieldSetElement | HTMLFormElement | HTMLHRElement | HTMLHeadElement | HTMLHeadingElement | HTMLHtmlElement | HTMLIFrameElement | HTMLImageElement | HTMLInputElement | HTMLLIElement | HTMLLabelElement | HTMLLegendElement | HTMLLinkElement | HTMLMapElement | HTMLMenuElement | HTMLMetaElement | HTMLMeterElement | HTMLModElement | HTMLOListElement | HTMLObjectElement | HTMLOptGroupElement | HTMLOptionElement | HTMLOutputElement | HTMLParagraphElement | HTMLPictureElement | HTMLPreElement | HTMLProgressElement | HTMLQuoteElement | HTMLScriptElement | HTMLSelectElement | HTMLSlotElement | HTMLSourceElement | HTMLSpanElement | HTMLStyleElement | HTMLTableCaptionElement | HTMLTableCellElement | HTMLTableColElement | HTMLTableElement | HTMLTableRowElement | HTMLTableSectionElement | HTMLTemplateElement | HTMLTextAreaElement | HTMLTimeElement | HTMLTitleElement | HTMLTrackElement | HTMLUListElement | HTMLVideoElement>, "id" | "onResize"> & {
+    className?: string | undefined;
+    collapsedSize?: number | undefined;
+    collapsible?: boolean | undefined;
+    defaultSize?: number | undefined;
+    id?: string | undefined;
+    maxSize?: number | undefined;
+    minSize?: number | undefined;
+    onCollapse?: import("react-resizable-panels").PanelOnCollapse | undefined;
+    onExpand?: import("react-resizable-panels").PanelOnExpand | undefined;
+    onResize?: import("react-resizable-panels").PanelOnResize | undefined;
+    order?: number | undefined;
+    style?: object | undefined;
+    tagName?: keyof HTMLElementTagNameMap | undefined;
+} & {
+    children?: import("react").ReactNode;
+} & import("react").RefAttributes<ImperativePanelHandle>>;
+export declare function ResizableHandle({ direction, withHandle, className, ...props }: ComponentProps<typeof PanelResizeHandle> & {
+    direction?: "horizontal" | "vertical";
+    withHandle?: boolean;
+}): import("react").JSX.Element;
+
+// ---- SvgAsset.d.ts ----
+import { type ReactNode } from "react";
+/**
+ * Fetches an SVG asset and inlines it, parsed as `image/svg+xml` and adopted into the DOM rather than
+ * assigned as HTML, so it draws in whatever colour it inherits and needs no
+ * `dangerouslySetInnerHTML` exemption. `fallback` stands in when the asset cannot be fetched.
+ */
+export declare function SvgAsset({ url, className, testid, name, fallback, }: {
+    url: string;
+    className?: string | undefined;
+    testid?: string | undefined;
+    name?: string | undefined;
+    fallback?: ReactNode;
+}): string | number | bigint | boolean | import("react").JSX.Element | Iterable<ReactNode> | Promise<string | number | bigint | boolean | Iterable<ReactNode> | import("react").ReactElement<unknown, string | import("react").JSXElementConstructor<any>> | import("react").ReactPortal | null | undefined> | null;
+
+// ---- textarea.d.ts ----
+import type * as React from "react";
+export declare function Textarea({ className, ...props }: React.ComponentProps<"textarea">): React.JSX.Element;
+
+// ---- toast.d.ts ----
+import * as ToastPrimitive from "@radix-ui/react-toast";
+import { type VariantProps } from "class-variance-authority";
+import type * as React from "react";
+declare const ToastProvider: React.FC<ToastPrimitive.ToastProviderProps>;
+declare function ToastViewport({ className, ...props }: React.ComponentProps<typeof ToastPrimitive.Viewport>): React.JSX.Element;
+declare const toastVariants: (props?: ({
+    variant?: "error" | "info" | "success" | null | undefined;
+} & import("class-variance-authority/types").ClassProp) | undefined) => string;
+declare function Toast({ className, variant, ...props }: React.ComponentProps<typeof ToastPrimitive.Root> & VariantProps<typeof toastVariants>): React.JSX.Element;
+declare function ToastTitle({ className, ...props }: React.ComponentProps<typeof ToastPrimitive.Title>): React.JSX.Element;
+declare function ToastDescription({ className, ...props }: React.ComponentProps<typeof ToastPrimitive.Description>): React.JSX.Element;
+declare function ToastClose({ className, ...props }: React.ComponentProps<typeof ToastPrimitive.Close>): React.JSX.Element;
+export { Toast, ToastClose, ToastDescription, ToastProvider, ToastTitle, ToastViewport, toastVariants, };
+
+// ---- ToggleSegment.d.ts ----
+export declare function ToggleSegment({ testid, label, active, onClick, }: {
+    testid: string;
+    label: string;
+    active: boolean;
+    onClick: () => void;
+}): import("react").JSX.Element;
+
+// ---- ToolFileLink.d.ts ----
+export declare function ToolFileLink({ path, workspaceRoot, onOpenFile, disabled, className, label, }: {
+    path: string;
+    workspaceRoot?: string | undefined;
+    onOpenFile?: ((path: string) => void) | undefined;
+    disabled?: boolean;
+    className?: string;
+    label?: string;
+}): import("react").JSX.Element;
+
+// ---- tooltip.d.ts ----
+import * as TooltipPrimitive from "@radix-ui/react-tooltip";
+import type * as React from "react";
+declare const TooltipProvider: React.FC<TooltipPrimitive.TooltipProviderProps>;
+declare const Tooltip: React.FC<TooltipPrimitive.TooltipProps>;
+declare const TooltipTrigger: React.ForwardRefExoticComponent<TooltipPrimitive.TooltipTriggerProps & React.RefAttributes<HTMLButtonElement>>;
+declare function TooltipContent({ className, sideOffset, ...props }: React.ComponentProps<typeof TooltipPrimitive.Content>): React.JSX.Element;
+declare function IconTooltip({ label, side, align, wrapTrigger, delayDuration, children, }: {
+    label: React.ReactNode;
+    side?: React.ComponentProps<typeof TooltipPrimitive.Content>["side"];
+    align?: React.ComponentProps<typeof TooltipPrimitive.Content>["align"];
+    wrapTrigger?: boolean;
+    /** Overrides the provider's hover delay — `0` for a label that *replaces* unreadable truncated text. */
+    delayDuration?: number;
+    children: React.ReactNode;
+}): React.JSX.Element;
+export { IconTooltip, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger };
+
+// ---- useThemeSwap.d.ts ----
+/**
+ * Subscribes to the host page's root element for a theme change — `data-theme`, `class`, or an inline
+ * `style` attribute, the three ways a host might repaint its CSS custom properties — and calls `onSwap`
+ * each time. The kit has no direct line to the host's own theme runtime, so it watches the DOM instead.
+ * Returns the unsubscribe function. See SPEC.md.
+ */
+export declare function useThemeSwap(onSwap: () => void): () => void;

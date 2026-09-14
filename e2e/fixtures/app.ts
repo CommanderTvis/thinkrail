@@ -363,3 +363,21 @@ export async function requestOverWire<T>(
 		{ requestMethod: method, requestParams: params },
 	) as Promise<T>;
 }
+
+export async function setPluginEnabled(page: Page, id: string, enabled: boolean): Promise<void> {
+	await page.getByTestId("open-settings").click();
+	await page.getByTestId("settings-nav-plugins").click();
+	const toggle = page
+		.locator(`[data-testid="settings-plugins-row"][data-plugin-id="${id}"]`)
+		.getByTestId("settings-plugin-toggle");
+	if ((await toggle.getAttribute("data-active")) !== String(enabled)) await toggle.click();
+	await expect(toggle).toHaveAttribute("data-active", String(enabled), { timeout: 20_000 });
+	if (enabled) {
+		await page
+			.getByTestId(`settings-nav-${id}`)
+			.waitFor({ state: "visible", timeout: 20_000 })
+			.catch(() => {});
+	}
+	await page.keyboard.press("Escape");
+	await expect(page.getByTestId("settings-dialog")).toBeHidden();
+}

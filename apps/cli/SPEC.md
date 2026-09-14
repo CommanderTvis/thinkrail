@@ -194,7 +194,12 @@ and `trash`'s **native helper sidecars** (which macOS/Windows must execute from 
     *server package's* module context (absolute paths — they aren't deps of `cli`), so Bun compiles the
     raw `.ts` and their real deps (`yaml`, `linkedom`, `unpdf`, …) into the binary; plus the
     `pi-spec-graph`/`pi-thinkrail-workflow`/`pi-todos` `skills/` files embedded like web assets (matching what dev
-    wires via `additionalSkillPaths` — parity, not a superset). Its `.d.ts` types the factories via the server's exported `BundledExtensionFactory`,
+    wires via `additionalSkillPaths` — parity, not a superset). It does the same, count-driven, per
+    builtin plugin (`@thinkrail/server/build-support`'s `BuildRuntimeSources.plugins`, itself built from
+    each plugin package's own `./build-support`): each plugin's `pi.extensions` entries are value-imported
+    as `p<pluginIndex>x<extensionIndex>` factories, and its skills/assets are embedded under `<id>/skills/...`
+    / `<id>/assets/...` routes in the same manifest, staged at boot into their own sibling "plugins" cache
+    dir. Its `.d.ts` types the factories via the server's exported `BundledExtensionFactory`,
     so `cli` still never imports `@earendil-works/pi-coding-agent`.
   - `src/runtime-assets.generated.ts` — embeds `trash`'s `macos-trash` and `windows-trash.exe` helper
     binaries, resolved from the server package's dependency context, as a content-hashed manifest.

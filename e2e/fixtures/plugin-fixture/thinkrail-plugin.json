@@ -1,0 +1,24 @@
+{
+	"id": "e2e-fixture",
+	"label": "E2E Fixture",
+	"icon": "puzzle",
+	"version": "0.1.0",
+	"apiGeneration": 1,
+	"wireVersion": 1,
+	"enabledByDefault": false,
+	"dependsOn": [],
+	"host": "host.js",
+	"web": "web.js",
+	"styles": "styles.css",
+	"contributes": {
+		"sideTools": [
+			{
+				"tool": "plugin:e2e-fixture:panel",
+				"label": "Fixture",
+				"icon": "puzzle",
+				"defaultSide": "right"
+			}
+		],
+		"fileViewers": []
+	}
+}

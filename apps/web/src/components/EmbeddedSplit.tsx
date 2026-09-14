@@ -1,11 +1,11 @@
 import { RiCloseLine } from "@remixicon/react";
-import { type ReactNode, useEffect, useRef } from "react";
 import {
 	type ImperativePanelHandle,
 	ResizableHandle,
 	ResizablePanel,
 	ResizablePanelGroup,
-} from "@/components/ui/resizable";
+} from "@thinkrail/plugin-ui";
+import { type ReactNode, useEffect, useRef } from "react";
 
 const COMPANION_SIZE = 45;
 const COMPANION_MIN = 15;

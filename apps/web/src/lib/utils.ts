@@ -1,5 +1,5 @@
 import type { UserMessage } from "@thinkrail/contracts";
-import { cn } from "@/lib/cn";
+import { cn } from "@thinkrail/plugin-ui";
 
 export { cn };
 

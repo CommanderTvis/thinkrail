@@ -5,9 +5,8 @@ import {
 	RiDeleteBinLine as Trash,
 } from "@remixicon/react";
 import type { BranchDetail } from "@thinkrail/contracts";
+import { IconTooltip, Popover, PopoverContent, PopoverTrigger } from "@thinkrail/plugin-ui";
 import { useCallback, useEffect, useState } from "react";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { IconTooltip } from "@/components/ui/tooltip";
 import { toast, useAppStore } from "../store";
 import { errorText, getTransport } from "../transport";
 import { ConfirmPopover } from "./ConfirmPopover";

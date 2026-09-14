@@ -17,6 +17,10 @@ function preset(tools: string[]): LayoutPreset {
 	};
 }
 
-test("validateLayoutPreset rejects an unknown tool id", () => {
+test("validateLayoutPreset accepts a plugin tool id", () => {
+	expect(() => validateLayoutPreset(preset(["plugin:spec-dialect:specs"]))).not.toThrow();
+});
+
+test("validateLayoutPreset rejects a tool id that is neither builtin nor plugin-shaped", () => {
 	expect(() => validateLayoutPreset(preset(["not-a-real-tool"]))).toThrow();
 });

@@ -2,7 +2,7 @@ import {
 	RiArrowDownSLine as ChevronDown,
 	RiArrowRightSLine as ChevronRight,
 } from "@remixicon/react";
-import { PopoverContent } from "@/components/ui/popover";
+import { PopoverContent } from "@thinkrail/plugin-ui";
 import { cn } from "../lib";
 import { type PlanGlance, planSummary, stripStatus } from "./planView";
 import { glanceIcon, TodoAddRow, TodoRows } from "./TodoList";

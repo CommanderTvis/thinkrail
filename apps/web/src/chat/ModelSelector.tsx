@@ -4,7 +4,6 @@ import {
 	RiRefreshLine as RefreshCw,
 } from "@remixicon/react";
 import type { WireModel } from "@thinkrail/contracts";
-import { useState } from "react";
 import {
 	Command,
 	CommandEmpty,
@@ -12,8 +11,11 @@ import {
 	CommandInput,
 	CommandItem,
 	CommandList,
-} from "@/components/ui/command";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+	Popover,
+	PopoverContent,
+	PopoverTrigger,
+} from "@thinkrail/plugin-ui";
+import { useState } from "react";
 import { cn } from "@/lib";
 
 function formatContext(tokens: number): string {

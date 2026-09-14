@@ -4,11 +4,9 @@ import {
 	RiShieldCheckLine as ShieldCheck,
 } from "@remixicon/react";
 import type { Project, SkillCatalogEntry, SkillDecision, Workspace } from "@thinkrail/contracts";
+import { Button, Dialog, DialogContent, DialogTitle, IconTooltip } from "@thinkrail/plugin-ui";
 import { useCallback, useEffect, useState } from "react";
 import { LoadingRegion } from "@/components/Skeleton";
-import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
-import { IconTooltip } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { toast, useAppStore } from "@/store";
 import { errorText, getTransport, reloadSessionResourcesWithSkillBaseline } from "@/transport";

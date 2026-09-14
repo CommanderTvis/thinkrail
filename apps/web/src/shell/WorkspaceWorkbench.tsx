@@ -5,6 +5,9 @@ import {
 	RiChatNewLine as MessageSquarePlus,
 	RiTerminalBoxLine as SquareTerminal,
 } from "@remixicon/react";
+import { pluginMethodName } from "@thinkrail/plugin-api";
+import type { TabDecoration } from "@thinkrail/plugin-api/web";
+import { DropdownMenuItem, IconTooltip } from "@thinkrail/plugin-ui";
 import {
 	lazy,
 	type ReactNode,
@@ -15,27 +18,31 @@ import {
 	useRef,
 	useState,
 } from "react";
-import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
-import { IconTooltip } from "@/components/ui/tooltip";
 import { ErrorBoundary } from "../components/ErrorBoundary";
 import { QuietScrollArea } from "../components/QuietScrollArea";
 import { LoadingRegion } from "../components/Skeleton";
 import { type LayoutAttention, layoutResourceIdentity, readLayoutSelection } from "../lib";
 import { ChangesPanel } from "../panels/ChangesPanel";
 import { ConfirmDialog } from "../panels/ConfirmDialog";
-import { coreViewerFor } from "../panels/coreViewers";
 import { DiffPane } from "../panels/DiffPane";
 import { FilePane } from "../panels/FilePane";
 import { FileTree } from "../panels/FileTree";
 import { isFileTabDirty } from "../panels/fileSave";
 import { openFileInTab } from "../panels/openTabs";
-
+import { PluginToolBody } from "../panels/PluginToolBody";
 import { ReviewPanel, selectActiveReviewedPath } from "../panels/ReviewPanel";
 import { reviewFlags } from "../panels/reviewModel";
 import { SpecsPanel } from "../panels/SpecsPanel";
 import { TerminalWorkbenchBody, useTerminalClose } from "../panels/TerminalWorkbench";
 import { useWorkspaceReview } from "../panels/useWorkspaceReview";
 import { useWorkspaceSpecs } from "../panels/useWorkspaceSpecs";
+import {
+	selectFileViewer,
+	selectTabDecorators,
+	selectToolCatalog,
+	selectWorkspaceActions,
+	usePluginRegistry,
+} from "../plugins/registry";
 import {
 	type EditorTab,
 	isConnectedGeneration,
@@ -72,6 +79,7 @@ import {
 	type LayoutToolCatalog,
 	type LayoutToolId,
 	type PreparedLayoutClose,
+	resolveLayoutTool,
 	selectTab,
 	VERTICAL_TABS_WIDTH,
 	Workbench,
@@ -81,9 +89,13 @@ import { toLayoutTab, useLayoutIntentProcessing } from "./layoutIntents";
 import { commitWorkspaceLayout, useWorkspaceLayoutState } from "./layoutState";
 import { syncLegacySelectionFromAttention, useLegacySelectionAdapter } from "./legacySelection";
 import { ProjectsTool } from "./ProjectsTool";
+import { resolvePluginRailDefaults } from "./railDefault";
+import { decorateTab } from "./tabDecoration";
 import { useTerminalPlacementReconciliation } from "./terminalReconciliation";
 import { useReportedActiveFile } from "./useReportedActiveFile";
 import { WorkspaceChatHistory } from "./WorkspaceChatHistory";
+
+const CLAUDE_CODE_ID = "claude-code";
 
 const PlanPane = lazy(() => import("../panels/PlanPane"));
 
@@ -266,6 +278,20 @@ function useRailDefault(
 		}
 		if (next !== attention) changeAttention(next);
 	}, [specless, workspaceId, document, attention, changeAttention]);
+
+	const pluginsAnswered = useRef<string | null>(null);
+	useEffect(() => {
+		if (!document || !attention || pluginsAnswered.current === workspaceId) return;
+		let cancelled = false;
+		void resolvePluginRailDefaults(document, attention, workspaceId).then((next) => {
+			if (cancelled) return;
+			pluginsAnswered.current = workspaceId;
+			if (next !== attention) changeAttention(next);
+		});
+		return () => {
+			cancelled = true;
+		};
+	}, [workspaceId, document, attention, changeAttention]);
 }
 
 export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
@@ -277,7 +303,18 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 		(state) => state.layoutProjectionEpochByWorkspace[workspaceId] ?? 0,
 	);
 	const layoutPreferences = useAppStore((state) => state.localLayoutPreferences);
-	const catalog: LayoutToolCatalog = useMemo(() => buildLayoutToolCatalog(), []);
+	const pluginToolCatalog = usePluginRegistry(selectToolCatalog);
+	const catalog: LayoutToolCatalog = useMemo(
+		() =>
+			buildLayoutToolCatalog(
+				// A plugin's declared tool id is always `plugin:<id>:<name>` (`PluginToolId`) — the registry
+				// just doesn't narrow the string type of what it read off the wire. See plugins/SPEC.md.
+				pluginToolCatalog.map((entry) => ({ ...entry, id: entry.id as LayoutToolId })),
+			),
+		[pluginToolCatalog],
+	);
+	const tabDecorators = usePluginRegistry(selectTabDecorators);
+	const workspaceActions = usePluginRegistry(selectWorkspaceActions);
 	useReportedActiveFile(workspaceId);
 	const verticalWidthTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 	useEffect(
@@ -305,7 +342,13 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 	);
 	const workspace = useAppStore((state) => selectWorkspaceById(state, workspaceId));
 	const vcsGap = workspace?.vcs;
-	const unofferedTools = vcsGap ? GIT_TOOLS : NO_UNOFFERED_TOOLS;
+	const unofferedTools = useMemo(
+		() =>
+			vcsGap
+				? [...GIT_TOOLS, ...[...catalog.values()].filter((e) => e.requiresGit).map((e) => e.id)]
+				: NO_UNOFFERED_TOOLS,
+		[vcsGap, catalog],
+	);
 	const contextProject = useAppStore(selectContextProject);
 	const editorTabs = useAppStore((state) => state.tabsByWorkspace[workspaceId] ?? NO_EDITOR_TABS);
 	const chatStarting = useAppStore((state) => (state.chatStartsByWorkspace[workspaceId] ?? 0) > 0);
@@ -431,7 +474,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 			const loadedTick = selectWorkspaceTick(useAppStore.getState(), workspaceId);
 			if (tab.kind === "file" || tab.kind === "external-file") {
 				const external = tab.kind === "external-file";
-				const viewer = coreViewerFor(tab.path);
+				const viewer = selectFileViewer(usePluginRegistry.getState(), tab.path);
 				const install = (content: string) => {
 					const latest = useAppStore.getState();
 					if (!current || !isConnectedGeneration(latest, connectionGeneration)) return;
@@ -456,7 +499,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 					install("");
 				} else {
 					void getTransport()
-						.request("fs.readFile", {
+						.request(external ? pluginMethodName(CLAUDE_CODE_ID, "readFile") : "fs.readFile", {
 							workspaceId,
 							path: tab.path,
 						})
@@ -586,6 +629,11 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 		],
 	);
 
+	const resolveTabDecoration = useCallback(
+		(tab: LayoutTab): TabDecoration | null => decorateTab(tabDecorators, tab, workspaceId),
+		[tabDecorators, workspaceId],
+	);
+
 	const renderToolBody = useCallback(
 		(tool: LayoutToolId) => {
 			let body: ReactNode;
@@ -621,6 +669,21 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 						<ReviewPanel workspaceId={workspaceId} failed={review.failed} />
 					);
 					break;
+				default: {
+					const entry = resolveLayoutTool(catalog, tool);
+					body =
+						vcsGap && entry.requiresGit ? (
+							gitlessNotice(vcsGap)
+						) : (
+							<PluginToolBody
+								tool={tool}
+								workspaceId={workspaceId}
+								label={entry.label}
+								icon={entry.icon}
+								dormant={entry.dormant}
+							/>
+						);
+				}
 			}
 			return (
 				<ErrorBoundary label={`${tool} tool`} resetKeys={[workspaceId, tool]}>
@@ -755,7 +818,8 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 							/>
 						);
 					}
-					return null;
+					const DecoratedIcon = resolveTabDecoration(tab)?.icon;
+					return DecoratedIcon ? <DecoratedIcon className="size-14 shrink-0" /> : null;
 				}}
 				renderTabAdornment={(tab) => {
 					if ((tab.kind === "file" || tab.kind === "external-file") && dirtyPaths.has(tab.path)) {
@@ -796,7 +860,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 							);
 						}
 					}
-					return null;
+					return resolveTabDecoration(tab)?.adornment ?? null;
 				}}
 				renderToolBody={renderToolBody}
 				renderEmptyCenter={(groupId) => (
@@ -871,6 +935,13 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 								<SquareTerminal className="size-14" />
 							</button>
 						</IconTooltip>
+						{workspaceActions.map((action) => (
+							<action.value.component
+								key={action.pluginId}
+								workspaceId={workspaceId}
+								groupId={groupId}
+							/>
+						))}
 					</>
 				)}
 				renderSideMenuActions={(side, groupId) =>

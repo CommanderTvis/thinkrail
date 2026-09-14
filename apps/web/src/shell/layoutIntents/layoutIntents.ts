@@ -3,6 +3,7 @@ import type { LayoutAttention } from "../../lib";
 import {
 	type EditorTab,
 	layoutOpenOptionsForNavigation,
+	selectTerminalRunsClaude,
 	shouldAdvanceAcceptedNavigation,
 	toast,
 	useAppStore,
@@ -255,7 +256,9 @@ export function useLayoutIntentProcessing(
 							groupId,
 							layoutIntent.intent,
 							layoutIntent.claimPreview ?? false,
-							() => false,
+							(selected) =>
+								selected.kind === "terminal" &&
+								selectTerminalRunsClaude(state, workspaceId, selected.tabKey),
 						);
 				if (!isLayoutUnavailable(opened)) result = opened;
 				break;

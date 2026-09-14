@@ -1,8 +1,7 @@
 import { RiChatNewLine as MessageSquarePlus } from "@remixicon/react";
+import type { LineSelection, ReviewCommentingCallbacks } from "@thinkrail/plugin-ui/editor";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import type { LineSelection } from "@/panels/reviewGutter";
-import type { ReviewCommentingCallbacks } from "@/panels/reviewWidgets";
 import { mapPreviewSelection } from "./previewAnchor";
 import { markReviewRegions, stampedSelectionLines } from "./sourceLines";
 import type { EditorReview } from "./useReviewCommenting";

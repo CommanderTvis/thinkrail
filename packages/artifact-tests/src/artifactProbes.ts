@@ -11,6 +11,9 @@ export interface ArtifactResources {
 		readonly macos: string;
 		readonly windows: string;
 	};
+	/** A builtin plugin's staged skills/assets dir, or `null` when it has none of that kind. */
+	pluginSkillsDir(id: string): string | null;
+	pluginAssetsDir(id: string): string | null;
 }
 
 export interface RunningArtifactHost {

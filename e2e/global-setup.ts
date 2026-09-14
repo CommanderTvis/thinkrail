@@ -25,6 +25,7 @@ import {
 	E2E_PICK_DIR_POINTER,
 	E2E_PICK_FILE_POINTER,
 } from "./fixtures/paths";
+import { seedPluginFixture } from "./fixtures/pluginFixture";
 import { seedFixtureRepo } from "./fixtures/repo";
 import { seedExternalCwdSessions } from "./fixtures/sessions";
 import { seedTemplateFixtures } from "./fixtures/templates";
@@ -92,6 +93,7 @@ export default function globalSetup(): void | Promise<void> {
 		seedTemplateFixtures();
 		seedAgentDefinitionFixtures();
 		seedFixtureRepo();
+		seedPluginFixture();
 		writeFileSync(E2E_PICK_DIR_POINTER, E2E_FIXTURE_REPO);
 		writeFileSync(E2E_PICK_FILE_POINTER, join(E2E_DATA_DIR, "outside.md"));
 		writeFileSync(join(E2E_DATA_DIR, "outside.md"), "# outside any worktree\n");

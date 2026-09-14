@@ -19,8 +19,8 @@ import {
 	type JbcentralInstall,
 	type JbcentralStatus,
 } from "@thinkrail/contracts";
+import { Button } from "@thinkrail/plugin-ui";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Button } from "@/components/ui/button";
 import { copyText, hostWording } from "@/lib";
 import { getTransport } from "@/transport";
 import { SettingsSwitch } from "./SettingsSwitch";

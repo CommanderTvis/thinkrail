@@ -25,6 +25,7 @@ import type {
 	LoginReply,
 	OpenBranchReview,
 	OpenPrResult,
+	PluginRosterEntry,
 	PrDraft,
 	Project,
 	ProjectPathStatus,
@@ -41,6 +42,7 @@ import type {
 	Template,
 	TemplateInfo,
 	TemplateScope,
+	TerminalAgentRecord,
 	TodoItem,
 	TodoPlan,
 	TodoStatus,
@@ -87,6 +89,7 @@ export const INITIAL_TERMINAL_TAB_KEY = "thinkrail-initial";
 export interface TerminalTabInfo {
 	tabKey: string;
 	title: string;
+	agent?: TerminalAgentRecord;
 }
 
 export interface TerminalTabsPush {
@@ -99,7 +102,10 @@ export type TemplateReadLocation =
 	| { projectId: string; workspaceId?: never }
 	| { workspaceId?: never; projectId?: never };
 
+export type PluginWireName = `plugin.${string}.${string}`;
+
 export const PROTOCOL_VERSION = 66;
+export const PLUGIN_ROSTER_PROTOCOL_VERSION = 66;
 export const WINDOWS_SHELL_SETTINGS_PROTOCOL_VERSION = 62;
 export const PROJECT_TEMPLATE_PREVIEW_PROTOCOL_VERSION = 63;
 export const THEME_SYSTEM_PROTOCOL_VERSION = 58;
@@ -125,6 +131,7 @@ export interface ServerWelcome {
 	projects: Project[];
 	recentProjects: Project[];
 	config: AppConfig;
+	plugins: PluginRosterEntry[];
 }
 
 export interface WorkspaceRemoved {
@@ -266,6 +273,9 @@ export const WS_METHODS = {
 	templateGet: "template.get",
 	templateSave: "template.save",
 	templateDelete: "template.delete",
+	pluginsList: "plugins.list",
+	pluginsRescan: "plugins.rescan",
+	pluginsRetry: "plugins.retry",
 } as const;
 
 export const WS_CHANNELS = {
@@ -290,10 +300,11 @@ export const WS_CHANNELS = {
 	hostUpdateAvailable: "host.updateAvailable",
 	feedbackInterview: "feedback.interview",
 	reviewChanged: "review.changed",
+	pluginsChanged: "plugins.changed",
 } as const;
 
 export type WsMethod = (typeof WS_METHODS)[keyof typeof WS_METHODS];
-export type WsChannel = (typeof WS_CHANNELS)[keyof typeof WS_CHANNELS];
+export type WsChannel = (typeof WS_CHANNELS)[keyof typeof WS_CHANNELS] | PluginWireName;
 
 export const ASK_USER_ANSWERS_CUSTOM_TYPE = "ask-user-answers";
 
@@ -505,6 +516,8 @@ export interface WsMethodMap {
 			id: string;
 			created: boolean;
 			replay?: string;
+			prefill?: string;
+			prefillSubmit?: boolean;
 		};
 	};
 	"terminal.rename": {
@@ -670,6 +683,10 @@ export interface WsMethodMap {
 		params: { workspaceId?: string; scope: TemplateScope; name: string };
 		result: Ack;
 	};
+	"plugins.list": { params: Record<string, never>; result: PluginRosterEntry[] };
+	"plugins.rescan": { params: Record<string, never>; result: PluginRosterEntry[] };
+	"plugins.retry": { params: { id: string }; result: PluginRosterEntry[] };
+	[method: PluginWireName]: { params: unknown; result: unknown };
 }
 
 export type WsMethodName = keyof WsMethodMap;

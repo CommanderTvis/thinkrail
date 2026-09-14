@@ -46,6 +46,7 @@ only alternative if fault isolation ever becomes worth the complexity.
 - **Engine host** — `packages/server` (+ `packages/shared`), launched in-process by `apps/cli` or
   `apps/desktop` (Electrobun). `createServer()` = `Bun.serve` HTTP+WS + `AgentSessionManager`
   (one in-process `AgentSession` per tab) + handlers + persistence.
+
 - **The wire** — `packages/contracts`: the typed, versioned protocol. Types-only.
 - **UI client** — `apps/web`: mobile-first React, ships independently, dials a host over the wire.
 
@@ -68,12 +69,15 @@ apps/
   cli/        V1 entrypoint: boot host + open browser   (SPEC.md)
   web/        mobile-first UI client                    (SPEC.md)
   desktop/    Electrobun local-host launcher             (SPEC.md)
+
   website/    public landing + blog + vibecoding (Cloudflare Pages) (SPEC.md)
 packages/
   server/     createServer(): Bun.serve + AgentSessionManager  (SPEC.md)
   contracts/  the wire (types-only)                     (SPEC.md)
   shared/     shellEnv (server-side only)               (SPEC.md)
   spec-graph/ portable pi extension: spec_* tools + skill (SPEC.md)
+  plugin-api/ the plugin contract: manifest, host/web contexts (SPEC.md)
+  plugin-ui/  shared plugin UI kit: primitives, markdown, editor (SPEC.md)
   pi-delegation/ portable pure-pi delegation core: child sessions from sessions (SPEC.md)
   pi-subagents/  portable pure-pi extension: Agent tools over pi-delegation (SPEC.md)
 ```
@@ -98,8 +102,10 @@ Architecture decisions live as spec-graph nodes, dogfooding the spec layer the p
 
 ## Non-negotiable invariants
 
-- **`apps/web` depends on `packages/contracts` only** — never on `server`/`shared`. This is what makes
-  the UI shippable without the host.
+- **`apps/web` depends on `packages/contracts`, `packages/plugin-api` (the `/web` entry and root types),
+  and `packages/plugin-ui`, plus a builtin plugin package's `./manifest` and `./web` — never on
+  `server`/`shared`, and never a plugin's `host` half.** This is what makes the UI shippable without the
+  host. An external plugin's web half arrives over the wire instead of at build time.
 - **Never *value*-import `pi` in browser-bundled code; import types only, from the `pi-ai` /
   `pi-agent-core` package roots** (`verbatimModuleSyntax` erases type-only imports, so no runtime reaches
   the bundle). `@earendil-works/pi-coding-agent` is server-only and never reaches `contracts`/`web` (it
@@ -129,7 +135,12 @@ Architecture decisions live as spec-graph nodes, dogfooding the spec layer the p
   come from a four-step alpha scale as tokens, never Tailwind's `/40` modifier. `styles/COLOR.md` is
   the system, `styles/colorUsage.test.ts` the gate — Tailwind drops an unknown utility *silently*, so
   a token that isn't published renders as nothing.
-- **Icons: `@remixicon/react` (Remix Icon; outline `Line` by default, solid `Fill` when the item is active/selected) only. UI primitives: shadcn/ui** (Radix), copied into
+- **Icons: `@remixicon/react` (Remix Icon; outline `Line` by default, solid `Fill` when the item is active/selected) for everything the UI *does*.** What a *file* **is** is the one exception: file-type
+  glyphs come from the builtin `packages/plugin-file-icons` plugin's **material-icon-theme** (MIT) set,
+  recoloured to `currentColor` at build time and served through the `fileIcon` core slot; core's
+  `components/FileTypeIcon` falls back to a plain Remix glyph when that plugin is off. Remix has no
+  vocabulary for `.kt` vs `.tsx` vs `Dockerfile`, and inventing one per language is not a UI kit's job.
+  **UI primitives: shadcn/ui** (Radix), copied into
   `apps/web/src/components/ui/` (we own them) and themed with our token utilities — *not* shadcn's
   default palette. `cn()` lives in `apps/web/src/lib/utils.ts`.
 - The transport's **host endpoint is a parameter** (default same-origin); `server.welcome` carries a
@@ -146,9 +157,12 @@ reusable by any pi UI (extraction-ready as a future `packages/chat-ui`).
   the only app-integration piece (wires store + transport). Theme **only via token utilities** so the
   primitives wear any theme.
 - **Adding a tool = two decoupled sides, joined by tool name:** the **capability** is a pi **custom tool /
-  extension/skill** (server-side, passed to `createAgentSession`); the **presentation** is a UI renderer
-  registered via **`registerToolRenderer("<name>", …)`** (`chat/toolRegistry`) — unregistered tools fall
-  back to `DefaultToolRenderer`. Interactive tools route through the `pi.extensionUi` bridge.
+  extension/skill** (server-side, passed to `createAgentSession`) or a plugin's pi-free `PluginToolDefinition`
+  (`packages/plugin-api`, adapted to a pi tool by the server's plugin loader); the **presentation** is a UI
+  renderer registered via **`registerToolRenderer("<name>", …)`** (`chat/toolRegistry`) — reached from a
+  plugin's web half through its own context (`ctx.toolRenderer`) rather than by importing the chat module.
+  Unregistered tools fall back to `DefaultToolRenderer`. Interactive tools route through the
+  `pi.extensionUi` bridge.
 - Full module spec: `apps/web/src/chat/SPEC.md`.
 
 ## Verification (run for every app-affecting change)

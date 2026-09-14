@@ -1,5 +1,5 @@
 import { RiBookOpenLine as BookOpen } from "@remixicon/react";
-import { IconTooltip } from "@/components/ui/tooltip";
+import { IconTooltip } from "@thinkrail/plugin-ui";
 import { cn } from "@/lib/utils";
 
 export function SkillsButton({

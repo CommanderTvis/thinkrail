@@ -17,13 +17,17 @@ import {
 } from "@thinkrail/contracts";
 import { errorCodeOf } from "@thinkrail/shared/codedError";
 import {
+	bundledPluginRuntime,
 	disposeAllSessions,
 	getSessionWorkspaceId,
 	isProjectSkillPath,
+	promptSession,
 	refreshDynamicTools,
+	resetDelegationServices,
 	setActivityProjectResolver,
 	setExtUiPendingObserver,
 	setExtUiPublisher,
+	setPluginResourcesProvider,
 	setReviewCommentHandler,
 	setSessionActivityPublisher,
 	setSessionCreatedPublisher,
@@ -51,9 +55,11 @@ import {
 } from "../auth";
 import { redeliverInterview, releaseInterview, setFeedbackPublisher } from "../feedback";
 import { resolveWorktreeFile } from "../fs";
+import { gitAsync } from "../git";
 import { logger } from "../log";
 import { mcpToolsFor, serveMcp } from "../mcp";
-import { loadWorkspaces } from "../persistence";
+import { dataDir, loadWorkspaces } from "../persistence";
+import { installPlugins, type PluginRuntime } from "../plugins";
 import {
 	getProjects,
 	listProjects,
@@ -62,33 +68,51 @@ import {
 	setProjectPublisher,
 } from "../projects";
 import { reanchorWorkspace, resolveCommentFromAgent, setReviewPublisher } from "../reviews";
-import { getConfig, setSettingsPublisher } from "../settings";
+import { getConfig, setPluginNamespaceValidator, setSettingsPublisher } from "../settings";
 import {
+	agentRecordOf,
 	closeAllTerminals,
 	persistTerminalSessions,
 	resumeClientTerminals,
 	reviveTerminalSessions,
+	setAgentRecord,
+	setRevivePrefillHook,
+	setTerminalEnvContributors,
+	setTerminalObserver,
 	setTerminalPublisher,
 	setTerminalTabsPublisher,
 	setTerminalTokenEndpoint,
 	terminalForToken,
+	terminalRefs,
+	terminalToken,
+	workspaceForProcess,
+	writeTerminalFromHost,
 } from "../terminal";
 import { isTodoToolEnd, maybeAttachChangeArtifacts } from "../todos";
 import {
+	ensureWatch,
 	setRepoMetaPublisher,
 	setSkillPathClassifier,
 	setWatchPublisher,
 	stopAllWatches,
 } from "../watch";
-import { getWorkspace, refreshWorkspaceBranch, setWorkspacePublisher } from "../workspaces";
+import {
+	getWorkspace,
+	listAllWorkspaceRecords,
+	listWorkspaceRecords,
+	refreshWorkspaceBranch,
+	setWorkspacePublisher,
+} from "../workspaces";
 import {
 	isPromptCommitted,
 	isSettledTurn,
 	maybeAutoRenameWorkspace,
+	maybeAutoRenameWorkspaceFromTurn,
 	maybeNaiveNameWorkspace,
+	maybeNaiveNameWorkspaceFromPrompt,
 } from "./autoRename";
 import { setFsNudgePublisher } from "./fsNudge";
-import { handleRequest, requestMethodDiagnostic } from "./handlers";
+import { handleRequest, requestMethodDiagnostic, setPluginRuntime } from "./handlers";
 import { provisionInitialTerminal } from "./initialTerminal";
 import { trackLoginOutcome } from "./loginAnalytics";
 import { RequestReplayCache } from "./requestReplayCache";
@@ -189,6 +213,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	}, 1000);
 	let stopping = false;
 	let shutdownPromise: Promise<void> | undefined;
+	let plugins: PluginRuntime | undefined;
 
 	const armClientReap = (clientKey: string): void => {
 		reapTimers.set(
@@ -234,7 +259,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 				const body: unknown = await req.json().catch(() => null);
 				const reply = await serveMcp(body, {
 					cwd: worktreePath,
-					tools: mcpToolsFor(worktreePath),
+					tools: [...mcpToolsFor(worktreePath), ...(plugins?.mcpTools(owner, worktreePath) ?? [])],
 				});
 				return reply.body === null
 					? new Response(null, { status: reply.status })
@@ -242,6 +267,9 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 			}
 			if (url.pathname.startsWith("/files/")) {
 				return serveWorktreeFile(url.pathname);
+			}
+			if (url.pathname.startsWith("/plugin/")) {
+				return plugins ? plugins.serveRoute(req, url) : new Response("not found", { status: 404 });
 			}
 			if (staticDir) {
 				return serveStatic(url.pathname, staticDir);
@@ -277,6 +305,8 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 				ws.subscribe(WS_CHANNELS.settingsChanged);
 				if (hostUpdate) ws.subscribe(WS_CHANNELS.hostUpdateAvailable);
 				ws.subscribe(WS_CHANNELS.reviewChanged);
+				ws.subscribe(WS_CHANNELS.pluginsChanged);
+				for (const channel of plugins?.channelNames() ?? []) ws.subscribe(channel);
 				const hostPlatform: HostPlatform =
 					process.platform === "darwin" || process.platform === "win32"
 						? process.platform
@@ -287,6 +317,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 					projects: listProjects(),
 					recentProjects: listRecentProjects(),
 					config: getConfig(),
+					plugins: plugins?.roster() ?? [],
 					...(appVersion ? { appVersion } : {}),
 					...(hostUpdateNotice ? { hostUpdate: hostUpdateNotice } : {}),
 				};
@@ -505,6 +536,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		const data =
 			event.kind === "removed" ? { projectId: event.projectId, id: event.id } : event.workspace;
 		server.publish(channel, JSON.stringify({ channel, data }));
+		plugins?.workspaceEvent(event);
 	});
 
 	const publishFsChanged = (payload: WorkspaceFsChangedPayload) => {
@@ -513,6 +545,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 			JSON.stringify({ channel: WS_CHANNELS.workspaceFsChanged, data: payload }),
 		);
 		reanchorWorkspace(payload.workspaceId);
+		plugins?.fsChanged(payload);
 	};
 	setWatchPublisher(publishFsChanged);
 	setSkillPathClassifier(isProjectSkillPath);
@@ -623,6 +656,83 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		enabled: getConfig().analyticsEnabled,
 	});
 
+	plugins = await installPlugins({
+		dataDir: dataDir(),
+		publish: (channel, payload, target) => {
+			const message = JSON.stringify({ channel, data: payload });
+			if (target === undefined) {
+				server.publish(channel, message);
+				return;
+			}
+			const ws = sockets.get(target.clientKey);
+			if (ws === undefined) return;
+			try {
+				ws.send(message);
+			} catch {
+				ws.close();
+			}
+		},
+		publishRoster: (roster) => {
+			server.publish(
+				WS_CHANNELS.pluginsChanged,
+				JSON.stringify({ channel: WS_CHANNELS.pluginsChanged, data: roster }),
+			);
+			for (const ws of sockets.values()) {
+				for (const channel of plugins?.channelNames() ?? []) ws.subscribe(channel);
+			}
+		},
+		publicBaseUrl: () => `http://${statusHost}:${server.port ?? port}`,
+		terminal: {
+			token: terminalToken,
+			forToken: terminalForToken,
+			agentRecord: agentRecordOf,
+			setAgentRecord,
+			write: (terminal, data) => writeTerminalFromHost(terminal.workspaceId, terminal.tabKey, data),
+			list: terminalRefs,
+			workspaceForProcess,
+		},
+		sessions: { send: promptSession },
+		workspaces: {
+			projects: getProjects,
+			list: (projectId) =>
+				projectId !== undefined ? listWorkspaceRecords(projectId) : listAllWorkspaceRecords(),
+			get: (id) => {
+				try {
+					return getWorkspace(id);
+				} catch {
+					return null;
+				}
+			},
+			watch: (id) => ensureWatch(id).then(() => undefined),
+			suggestName: (workspaceId, hint) => {
+				if (hint.turn !== undefined) {
+					void maybeAutoRenameWorkspaceFromTurn(workspaceId, {
+						prompt: hint.prompt ?? "",
+						answer: hint.turn,
+					});
+				} else if (hint.prompt !== undefined) {
+					void maybeNaiveNameWorkspaceFromPrompt(workspaceId, hint.prompt);
+				}
+			},
+		},
+		git: (cwd, args, options) => gitAsync(cwd, [...args], options),
+		config: getConfig,
+		resourcesChanged: () => {
+			refreshDynamicTools();
+			resetDelegationServices();
+		},
+		logger,
+		bundledPluginRuntime,
+	});
+	setPluginRuntime(plugins);
+	setTerminalEnvContributors(plugins.terminalEnv);
+	setTerminalObserver((event) => {
+		plugins?.onTerminalEvent(event);
+	});
+	setRevivePrefillHook(plugins.revivePrefill);
+	setPluginResourcesProvider(plugins.piResources);
+	setPluginNamespaceValidator(plugins.validateSettings);
+
 	reviveTerminalSessions();
 	for (const workspace of loadWorkspaces()) provisionInitialTerminal(workspace);
 
@@ -652,8 +762,12 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	const stop = (): void => {
 		if (stopping) return;
 		stopping = true;
+		plugins?.dispose();
+		setPluginRuntime(null);
 		void shutdownAnalytics();
 		stopHostUpdateChecks();
+		setRevivePrefillHook(null);
+		setTerminalEnvContributors(null);
 		cancelAllLogins();
 		stopJbcentralRuntime();
 		stopAllWatches();

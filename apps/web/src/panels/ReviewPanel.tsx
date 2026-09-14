@@ -9,10 +9,9 @@ import {
 	RiDeleteBin6Line as Trash2,
 } from "@remixicon/react";
 import type { ReviewComment } from "@thinkrail/contracts";
+import { IconTooltip, PopoverTrigger } from "@thinkrail/plugin-ui";
 import { useState } from "react";
 import { QuietScrollArea } from "@/components/QuietScrollArea";
-import { PopoverTrigger } from "@/components/ui/popover";
-import { IconTooltip } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { PlanStatusIcon, SectionLabel } from "../chat/planKit";
 import { sessionGlance } from "../chat/planView";

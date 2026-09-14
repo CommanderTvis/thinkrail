@@ -1,5 +1,5 @@
-import type { LineSelection } from "@/panels/reviewGutter";
-import { stampedSelectionLines } from "@/panels/selectionLines";
+import type { LineSelection } from "@thinkrail/plugin-ui/editor";
+import { stampedSelectionLines } from "@thinkrail/plugin-ui/markdown";
 
 export { stampedSelectionLines };
 

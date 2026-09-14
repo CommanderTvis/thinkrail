@@ -55,6 +55,8 @@ const MODULE_RULES: readonly ModuleRule[] = [
 		allowed: ["apps/cli", "packages/server", "packages/shared"],
 	},
 	{ root: "packages/contracts", allowed: [] },
+	{ root: "packages/plugin-ui", allowed: [] },
+	{ root: "packages/plugin-api", allowed: ["packages/contracts"] },
 	{ root: "packages/shared", allowed: ["packages/contracts"] },
 	{ root: "packages/pi-delegation", allowed: [] },
 	{ root: "packages/pi-subagents", allowed: ["packages/pi-delegation"] },
@@ -62,6 +64,13 @@ const MODULE_RULES: readonly ModuleRule[] = [
 		root: "packages/server",
 		allowed: [
 			"packages/contracts",
+			"packages/plugin-api",
+			...([] as const).flatMap((plugin) =>
+				(["./host", "./manifest", "./contracts", "./build-support"] as const).map((subpath) => ({
+					target: `packages/${plugin}`,
+					subpath,
+				})),
+			),
 			"packages/shared",
 			"packages/spec-graph",
 			"packages/pi-delegation",
@@ -73,15 +82,39 @@ const MODULE_RULES: readonly ModuleRule[] = [
 	},
 	{
 		root: "apps/web",
-		allowed: ["packages/contracts"],
+		allowed: [
+			"packages/contracts",
+			"packages/plugin-ui",
+			"packages/plugin-api",
+			...([] as const).flatMap((plugin) => [
+				{ target: `packages/${plugin}`, subpath: "./manifest" },
+				{ target: `packages/${plugin}`, subpath: "./web" },
+				{ target: `packages/${plugin}`, subpath: "./contracts", typesOnly: true },
+			]),
+		],
 	},
 	{
 		root: "apps/cli",
-		allowed: ["packages/server", "packages/shared"],
+		allowed: [
+			"packages/server",
+			"packages/shared",
+			...([] as const).map((plugin) => ({
+				target: `packages/${plugin}`,
+				subpath: "./build-support",
+			})),
+		],
 	},
 	{
 		root: "apps/desktop",
-		allowed: ["packages/server", "packages/shared", "packages/contracts"],
+		allowed: [
+			"packages/server",
+			"packages/shared",
+			"packages/contracts",
+			...([] as const).map((plugin) => ({
+				target: `packages/${plugin}`,
+				subpath: "./build-support",
+			})),
+		],
 	},
 ];
 

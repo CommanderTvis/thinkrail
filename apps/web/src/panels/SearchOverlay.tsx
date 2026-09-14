@@ -1,7 +1,7 @@
 import { RiSearchLine as SearchIcon } from "@remixicon/react";
 import type { SearchHit } from "@thinkrail/contracts";
+import { Dialog, DialogContent, DialogTitle } from "@thinkrail/plugin-ui";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { FileTypeIcon } from "../components/FileTypeIcon";
 import { useAppStore } from "../store";
 import { getTransport } from "../transport";

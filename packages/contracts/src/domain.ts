@@ -476,7 +476,9 @@ export interface SpecGraphSnapshot {
 }
 
 export type BuiltinLayoutToolId = "projects" | "specs" | "files" | "changes" | "review";
-export type LayoutToolId = BuiltinLayoutToolId;
+export type LayoutToolId = BuiltinLayoutToolId | PluginToolId;
+
+export const LEGACY_LAYOUT_TOOL_IDS: Readonly<Record<string, PluginToolId>> = {};
 
 export type LayoutBottomAlignment = "center" | "center-left" | "center-right" | "full";
 
@@ -546,6 +548,74 @@ export function isLineWidth(value: unknown): value is number {
 	);
 }
 
+/** Whether a plugin is builtin (shipped in this repository) or external (installed by the user). */
+export type PluginOrigin = "builtin" | "external";
+/** A plugin's runtime state in the roster. */
+export type PluginStatus = "active" | "disabled" | "failed" | "refused";
+export type PluginToolSide = "left" | "right";
+
+/** One side tool a plugin's manifest declares, rendered under a `plugin:<id>:<tool>` layout id. */
+export interface PluginSideToolContribution {
+	tool: string;
+	label: string;
+	icon: string;
+	defaultSide: PluginToolSide;
+	/** Withheld, like Changes and Review, in a workspace whose folder has no git history to read. */
+	requiresGit?: true;
+}
+
+/** One file viewer a plugin's manifest declares: the extensions and names it claims, and how the file is read. */
+export interface PluginFileViewerContribution {
+	extensions: string[];
+	names: string[];
+	read: "text" | "none";
+}
+
+/** The statically known parts of a plugin, declared in its manifest before any of its code runs. */
+export interface PluginContributions {
+	sideTools: PluginSideToolContribution[];
+	fileViewers: PluginFileViewerContribution[];
+}
+
+export type PluginRosterChannel =
+	| { kind: "state"; snapshot: string; key: string[] }
+	| { kind: "event" };
+
+/** One row of the plugin roster carried on `server.welcome` and `plugins.changed`; the web loader's desired state. */
+export interface PluginRosterEntry {
+	id: string;
+	label: string;
+	description?: string;
+	icon: string;
+	version: string;
+	wireVersion: number;
+	origin: PluginOrigin;
+	status: PluginStatus;
+	reason?: string;
+	dependsOn: string[];
+	modifiesSystemPrompt: boolean;
+	contributes: PluginContributions;
+	/** Wire-facing projection of the contract's channels, so a web half never loads the typebox contract. */
+	channels: Record<string, PluginRosterChannel>;
+	/** External plugins only: paths under `/plugin/<id>/`. */
+	web?: { module: string; styles?: string };
+	/** The manifest's `assets` subpath, when declared, for any origin — lets the web loader build asset URLs without the manifest. */
+	assets?: string;
+}
+
+export type PluginToolId = `plugin:${string}:${string}`;
+
+export type PluginSettingsNamespace = { enabled?: boolean } & Record<string, unknown>;
+
+/** The agent running in a terminal, as the host persists and broadcasts it; `kind` names the plugin's agent. */
+export interface TerminalAgentRecord {
+	kind: string;
+	command: string;
+	sessionId?: string;
+	cwd?: string;
+	model?: string;
+}
+
 export interface AppConfig extends ThemePreference {
 	analyticsEnabled: boolean;
 	terminalReplayKb: number;
@@ -572,13 +642,20 @@ export interface AppConfig extends ThemePreference {
 	codeFontFamily: string;
 	/** Render the code font's ligatures where the surface can. */
 	codeFontLigatures: boolean;
+	/** Per-plugin settings namespaces, keyed by plugin id. */
+	plugins: Record<string, PluginSettingsNamespace>;
+	/** Absolute directories scanned for external plugins, beyond the builtin ones. */
+	pluginPaths: string[];
 }
 
 /** The `settings.update` payload: `null` clears an optional override back to unset (⇒ the default). */
-export type AppConfigUpdate = Partial<Omit<AppConfig, "reviewModel" | "reviewEffort">> & {
+export type AppConfigUpdate = Partial<
+	Omit<AppConfig, "reviewModel" | "reviewEffort" | "plugins">
+> & {
 	reviewModel?: WireModel | null;
 	reviewEffort?: ThinkingLevel | null;
 	/** `null` for a namespace resets it back to `{}`. */
+	plugins?: Record<string, PluginSettingsNamespace | null>;
 };
 
 export type InterviewResponse = "book" | "postpone" | "never";
@@ -630,6 +707,8 @@ export const DEFAULT_CONFIG: AppConfig = {
 	subagentsEnabled: true,
 	jbcentralQuotaEnabled: true,
 	jbcentralQuotaRefreshSeconds: JBCENTRAL_QUOTA_REFRESH_SECONDS.default,
+	plugins: {},
+	pluginPaths: [],
 };
 
 export function normalizeThemePreference(value: unknown): ThemePreference {

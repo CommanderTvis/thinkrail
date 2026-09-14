@@ -22,3 +22,19 @@ export declare const embeddedSkillFiles: EmbeddedSkillFile[];
 
 /** Content hash of the embedded skills — keys the on-disk staging dir so a new build re-extracts. */
 export declare const bundledSkillsVersion: string;
+
+/** Per builtin plugin id: its pi extensions' default-export factories, in manifest order. */
+export declare const bundledPluginFactories: Record<string, BundledExtensionFactory[]>;
+
+/** Per builtin plugin id: its skills route under the staged plugins dir, or `null` when it has none. */
+export declare const bundledPluginSkillRoutes: Record<string, string | null>;
+
+/** Per builtin plugin id: its assets route under the staged plugins dir, or `null` when it has none. */
+export declare const bundledPluginAssetRoutes: Record<string, string | null>;
+
+/** Every builtin plugin's skill/asset files, embedded into the single-file binary under
+ * `plugins/<id>/skills/...` / `plugins/<id>/assets/...` routes. */
+export declare const embeddedPluginRuntimeFiles: EmbeddedSkillFile[];
+
+/** Content hash of the embedded plugin runtime files — keys their on-disk staging dir. */
+export declare const bundledPluginRuntimeVersion: string;

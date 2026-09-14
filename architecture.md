@@ -4,7 +4,7 @@ type: architecture-design
 status: active
 title: ThinkRail — top-level architecture
 parent: goal-and-requirements
-covers: [client-host-split, cli-entrypoint, wire-contract, transport-endpoint, ui-shell-panels, git-worktrees, remote-tailscale, hydrate-then-stream, domain-vs-view-state, frontend-local-workbench-frame, client-local-navigation, central-integration]
+covers: [client-host-split, blueprint-two-hosts, cli-entrypoint, wire-contract, transport-endpoint, ui-shell-panels, git-worktrees, remote-tailscale, hydrate-then-stream, domain-vs-view-state, frontend-local-workbench-frame, client-local-navigation, central-integration, plugins]
 tags: [v1, architecture]
 ---
 
@@ -19,24 +19,39 @@ dials it over the network; a phone reaches the selected host over Tailscale.
 ## Topology — three rings
 
 - **Engine host** (`packages/server` + `packages/shared`, launched by `apps/cli` or `apps/desktop`
-  in local-host mode): owns `pi`, session state, persistence, and serves the wire endpoint. It bundles pi extensions
-  (`pi-web-access`, `pi-visualize`, `pi-spec-graph`, `pi-thinkrail-workflow`) into every session.
-- **The wire** (`packages/contracts`): the typed, versioned protocol — the only coupling between client
-  and host.
+  in local-host mode): owns `pi`, session state, persistence, and serves the wire endpoint. It bundles pi
+  extensions (`pi-web-access`, `pi-visualize`, `pi-thinkrail-workflow`) into every session directly, and
+  loads the three builtin plugin packages plus any external plugin found on disk through
+  `packages/server/src/plugins` — the loader that composes a plugin's host half against the same seams
+  core features use. A plugin's own `pi` extensions and skills, spec-dialect's included, ride the same
+  per-session resource loader as the directly bundled ones.
+- **The wire** (`packages/contracts` and `packages/plugin-api`): the typed, versioned protocol — the only
+  coupling between client and host, plus the contract a plugin is written against so its own methods,
+  channels, and UI contributions can live outside either ring. `packages/plugin-ui` is the shared
+  component kit a plugin's web half is built against, never a wire concern of its own.
 - **UI client** (`apps/web`): a mobile-first React client, transport-driven and endpoint-configurable,
-  shippable as static assets independent of the host.
+  shippable as static assets independent of the host. Its dependency edge widens from `contracts` alone to
+  `contracts` + `plugin-api` (the `/web` entry and root types) + `plugin-ui`, plus each builtin plugin
+  package's `./manifest` value and `./web` module (an external plugin's web half arrives over the wire
+  instead, fetched from `/plugin/<id>/...` rather than imported at build time).
 
 ```
 apps/cli        browser host launcher: boot server + open browser ── depends on ─▶ packages/server
-apps/web        UI client (mobile-first)                           ── depends on ─▶ packages/contracts
+apps/web        UI client (mobile-first)                           ── depends on ─▶ packages/contracts, packages/plugin-api, packages/plugin-ui, each builtin plugin package's ./manifest + ./web
 apps/desktop    Electrobun local-host launcher (V1)                ── depends on ─▶ packages/server, packages/contracts, packages/shared
+
 apps/website    public landing + blog + /vibecoding (Cloudflare Pages) ── depends on ─▶ packages/website-analytics
 packages/website-analytics  dependency-free browser analytics policy for the public website
-packages/server createServer(): Bun.serve(HTTP+WS) + AgentSessionManager (in-process pi) ── depends on ─▶ packages/contracts, packages/shared, packages/pi-delegation, packages/pi-subagents
+packages/server createServer(): Bun.serve(HTTP+WS) + AgentSessionManager (in-process pi) ── depends on ─▶ packages/contracts, packages/shared, packages/pi-delegation, packages/pi-subagents, packages/plugin-api, the three builtin plugin packages
 packages/contracts  the wire (types-only)
+packages/plugin-api the contract between the host, the web client, and a plugin — builtin or external
+                    ([[module-plugin-api]])
+packages/plugin-ui  shared UI kit a plugin's web half is built against (shadcn primitives, markdown,
+                    editor, visualization card)
+packages/plugin-spec-dialect   builtin plugin: the spec graph, its panel, and the spec_* tools
+packages/plugin-blueprint      builtin plugin: the blueprint format, depends on plugin-spec-dialect
+packages/plugin-claude-code    builtin plugin: Claude Code integration (IDE bridge, terminal facts, config)
 packages/shared     shellEnv (server-side only)
-packages/spec-graph portable pi extension: spec_* tools + skill (bundled into every session by packages/server;
-                    its pi-free core/ read model also backs the host's spec.graph read method)
 packages/pi-visualize          portable pi extension: the visualize tool (bundled into every session)
 packages/pi-delegation         portable pure-pi package: the delegation core — agent sessions spawned
                     from agent sessions (createChild + run-owning handle, lineage, registry, events)
@@ -45,6 +60,107 @@ packages/pi-subagents          portable pure-pi extension: Agent + get_subagent_
 packages/pi-thinkrail-workflow pi extension: the workflow skill system + its always-on routing rule
                     (bundled into every session; workspace-internal, not portable)
 ```
+
+### Module graph, by dependency
+
+Every arrow is an edge `scripts/check-module-boundaries.ts` allows (manifest dependencies and static
+imports alike; `bun run check:boundaries` fails on any other); a label names the only package subpaths
+that edge may reach. Arrows point at what a module depends on. `pi-web-access` (npm) is the one bundled
+extension that is not a workspace package.
+
+```mermaid
+flowchart LR
+    subgraph launchers["launchers"]
+        CLI["apps/cli"]
+        DESK["apps/desktop"]
+    end
+    subgraph client["UI client"]
+        WEB["apps/web"]
+    end
+    subgraph wire["the wire"]
+        C["packages/contracts"]
+        API["packages/plugin-api"]
+        KIT["packages/plugin-ui"]
+    end
+    subgraph plugins["builtin plugins"]
+        SPEC["packages/plugin-spec-dialect"]
+        BP["packages/plugin-blueprint"]
+        CC["packages/plugin-claude-code"]
+    end
+    subgraph host["engine host"]
+        S["packages/server"]
+        SH["packages/shared"]
+    end
+    subgraph pi["pi packages"]
+        SG["packages/spec-graph"]
+        DEL["packages/pi-delegation"]
+        SUB["packages/pi-subagents"]
+        TODO["packages/pi-todos"]
+        VIS["packages/pi-visualize"]
+        WF["packages/pi-thinkrail-workflow"]
+    end
+    subgraph site["public website"]
+        SITE["apps/website"]
+        AN["packages/website-analytics"]
+    end
+    AT["packages/artifact-tests"]
+
+    CLI --> S
+    CLI --> SH
+    CLI -->|"build-support"| SPEC
+    CLI -->|"build-support"| BP
+    CLI -->|"build-support"| CC
+    DESK --> S
+    DESK --> SH
+    DESK --> C
+    DESK -->|"build-support"| SPEC
+    DESK -->|"build-support"| BP
+    DESK -->|"build-support"| CC
+    WEB --> C
+    WEB --> API
+    WEB --> KIT
+    WEB -->|"manifest · web · contracts (types)"| SPEC
+    WEB -->|"manifest · web · contracts (types)"| BP
+    WEB -->|"manifest · web · contracts (types)"| CC
+    API --> C
+    SH --> C
+    SPEC --> API
+    SPEC --> C
+    SPEC --> SH
+    SPEC --> KIT
+    SPEC --> SG
+    BP --> API
+    BP --> C
+    BP --> SH
+    BP --> KIT
+    BP -->|"contracts (host: value · web: types)"| SPEC
+    CC --> API
+    CC --> C
+    CC --> SH
+    CC --> KIT
+    S --> C
+    S --> SH
+    S --> API
+    S -->|"host · manifest · contracts · build-support"| SPEC
+    S -->|"host · manifest · contracts · build-support"| BP
+    S -->|"host · manifest · contracts · build-support"| CC
+    S --> SG
+    S --> DEL
+    S --> SUB
+    S --> TODO
+    S --> VIS
+    S --> WF
+    SUB --> DEL
+    SITE --> AN
+    AT --> CLI
+    AT --> S
+    AT --> SH
+```
+
+Inside a plugin package a further rule holds: its `web/` files may not import its `host/`, so the two halves
+meet only through the manifest and the contract. Packages with no outgoing arrow (`contracts`,
+`plugin-ui`, `pi-delegation`, `pi-todos`, `pi-visualize`, `pi-thinkrail-workflow`, `spec-graph`,
+`website-analytics`) depend on nothing in the workspace, which is what lets each ship on its own.
 
 Artifact verification is a separate source-only workspace, [[module-artifact-tests]]. It depends on
 CLI build metadata, server test fixtures, and shared teardown; root tools and browser E2E consume it.
@@ -194,7 +310,19 @@ dependency. This keeps test process drivers outside both launchers and the serve
     **tmux was rejected** as the persistence layer: an unassumable dependency on Windows, a competing tab
     model, env-propagation breakage, and polling-based capture — for restart survival we have already
     decided not to hold. Detail: [[submodule-server-terminal]].
-13. **Central's cross-module lifecycle has one architectural owner.** Its adapter, runtime generation,
+13. **The blueprint format is proved on two agent hosts, and that is not a second engine.** The
+    interactive-spec generator runs on the in-process `pi` runtime *and* on Claude Code headless
+    (`--print --output-format stream-json`), because a document format that only one runtime can produce
+    is a format tied to a vendor — and the format is the artefact here, not the runtime. This does **not**
+    reopen the pi-only engine decision: neither runner is an agent *session*. They take a system prompt
+    and a prompt and return text; they hold no tools, no filesystem access, no session state, and nothing
+    in `AgentSessionManager` knows they exist. Chats, workspaces, skills and compaction remain `pi`'s
+    alone, in-process, exactly as the goal spec says. The Claude runner is additionally gated on the
+    Claude Code plugin (`@thinkrail/plugin-claude-code`) being enabled — read generically, as whichever
+    registered launcher answers to id `"claude"` — so a user who does not run Claude Code never acquires a
+    `claude` subprocess. The format and its reactor are now `@thinkrail/plugin-blueprint`, an
+    external-shaped builtin plugin. Detail: [[module-plugin-blueprint]], [[module-plugin-claude-code]].
+14. **Central's cross-module lifecycle has one architectural owner.** Its adapter, runtime generation,
     wire status/quota, synchronized preferences, provider card, and top-bar readout remain in their bounded
     modules; the correspondence between those surfaces and their liveness obligations belongs to
     [[central-integration]]. This keeps feature-specific mechanics in
@@ -239,6 +367,21 @@ dependency. This keeps test process drivers outside both launchers and the serve
     wire mirrors only the UI-facing run details and exposes transcript reads; neither portable package
     depends on ThinkRail. Contract, semantics, and the full decision log:
     [[module-pi-delegation]], [[module-pi-subagents]], and [[submodule-server-agent]].
+17. **Plugins are the extension boundary, builtin and external at parity.** A feature that would otherwise
+    reach through every ring — a wire method, a channel, a store slice, a panel switch arm — instead lives
+    behind `packages/plugin-api`: a manifest plus a host half, a web half, or both, loaded by
+    `packages/server/src/plugins` and `apps/web/src/plugins`. A builtin plugin ships inside this repository
+    and the artifact; an external plugin is a directory a user installs under `<dataDir>/plugins`. Both
+    declare the same manifest, get the same capability set, and appear in the same roster — capability
+    parity is deliberate, since most plugins this contract is measured against are external work. Every
+    plugin can be turned on and off while the app runs, with no host restart and no browser reload, which
+    the loaders are built around from the start rather than retrofitted. The API carries no compatibility
+    promise; a single generation integer, declared in the manifest and checked before load, is the whole
+    contract — a mismatch is refused with a reason naming both generations rather than allowed to
+    half-load. There is no sandbox: a host half runs in-process with the host's own privileges, and a web
+    half runs on the app's origin, which is the trust model architecture Decision 2's rejection of a
+    subprocess engine already implies. Full contract, capability set, and the enable/disable state machine:
+    [[module-plugin-api]].
 
 ## Invariants
 

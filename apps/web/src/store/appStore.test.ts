@@ -3149,6 +3149,28 @@ test("applyConfig folds and normalizes the server-synced theme preference", () =
 	});
 });
 
+test("applyConfig carries the plugins namespace and plugin paths, defaulting when absent", () => {
+	useAppStore.getState().applyConfig({
+		...DEFAULT_CONFIG,
+		plugins: { "spec-dialect": { enabled: false } },
+		pluginPaths: ["/abs/plugins"],
+	});
+	expect(useAppStore.getState()).toMatchObject({
+		plugins: { "spec-dialect": { enabled: false } },
+		pluginPaths: ["/abs/plugins"],
+	});
+
+	useAppStore.getState().applyConfig({
+		...DEFAULT_CONFIG,
+		plugins: undefined,
+		pluginPaths: undefined,
+	} as unknown as AppConfig);
+	expect(useAppStore.getState()).toMatchObject({
+		plugins: DEFAULT_CONFIG.plugins,
+		pluginPaths: DEFAULT_CONFIG.pluginPaths,
+	});
+});
+
 test("applyConfig projects and validates the Windows terminal shell", () => {
 	useAppStore.getState().applyConfig({
 		...DEFAULT_CONFIG,

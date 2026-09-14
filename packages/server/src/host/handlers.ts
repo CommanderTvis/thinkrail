@@ -99,6 +99,7 @@ import {
 import { githubAuthStatus, githubRefresh } from "../github";
 import { clampLimit, getHistoryIndex } from "../history";
 import { logger } from "../log";
+import { cascadeDisable, type PluginRuntime, parsePluginMethod } from "../plugins";
 import { openPr, previewPr } from "../pr";
 import {
 	acknowledgeProjectSkills,
@@ -203,6 +204,13 @@ export interface RequestContext {
 }
 
 type Handler = (params: unknown, ctx: RequestContext) => unknown | Promise<unknown>;
+
+let pluginRuntime: PluginRuntime | null = null;
+
+/** Installed by `server.ts` once `installPlugins()` resolves; cleared again on `stop()`. */
+export function setPluginRuntime(runtime: PluginRuntime | null): void {
+	pluginRuntime = runtime;
+}
 
 async function archiveTeardown(ws: Workspace): Promise<void> {
 	try {
@@ -851,7 +859,23 @@ const handlers: Record<string, Handler> = {
 		});
 	},
 	"settings.update": (params) => {
-		return updateConfig((params as { config: AppConfigUpdate }).config);
+		const requested = (params as { config: AppConfigUpdate }).config;
+		const config =
+			requested.plugins !== undefined && pluginRuntime
+				? { ...requested, plugins: cascadeDisable(requested.plugins, pluginRuntime.roster()) }
+				: requested;
+		const updated = updateConfig(config);
+		pluginRuntime?.settingsChanged(updated);
+		return updated;
+	},
+	"plugins.list": () => pluginRuntime?.roster() ?? [],
+	"plugins.rescan": () => {
+		if (!pluginRuntime) throw new Error("Plugins are not initialized");
+		return pluginRuntime.rescan();
+	},
+	"plugins.retry": (params) => {
+		if (!pluginRuntime) throw new Error("Plugins are not initialized");
+		return pluginRuntime.retry((params as { id: string }).id);
 	},
 	"feedback.respond": (params) => {
 		respondToInterview((params as { action: InterviewResponse }).action);
@@ -977,7 +1001,7 @@ const handlers: Record<string, Handler> = {
 
 export function requestMethodDiagnostic(method: string): string {
 	if (Object.hasOwn(handlers, method)) return method;
-	return "unknown method";
+	return parsePluginMethod(method) ? method : "unknown method";
 }
 
 export function shouldRefreshOpenReview(allowCached: boolean | undefined): boolean {
@@ -991,5 +1015,7 @@ export async function handleRequest(
 ): Promise<unknown> {
 	const handler = Object.hasOwn(handlers, method) ? handlers[method] : undefined;
 	if (handler) return handler(params, ctx);
+	if (pluginRuntime && parsePluginMethod(method))
+		return pluginRuntime.handleRequest(method, params, ctx);
 	throw new Error(`Unknown method: ${method}`);
 }

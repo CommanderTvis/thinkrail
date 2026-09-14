@@ -9,7 +9,13 @@ import {
 	type LayoutPreset,
 } from "@thinkrail/contracts";
 import { validateCustomLayoutPresets } from "./layoutPresets";
-import { getConfig, resetConfigCache, setSettingsPublisher, updateConfig } from "./settings";
+import {
+	getConfig,
+	resetConfigCache,
+	setPluginNamespaceValidator,
+	setSettingsPublisher,
+	updateConfig,
+} from "./settings";
 
 let dataDir: string;
 const savedDataDir = process.env.THINKRAIL_DATA_DIR;
@@ -42,6 +48,7 @@ beforeEach(() => {
 
 afterEach(() => {
 	setSettingsPublisher(null);
+	setPluginNamespaceValidator(null);
 	resetConfigCache();
 	rmSync(dataDir, { recursive: true, force: true });
 	if (savedDataDir === undefined) delete process.env.THINKRAIL_DATA_DIR;
@@ -463,4 +470,37 @@ test("stored custom presets keep only complete current-schema entries", () => {
 	);
 	resetConfigCache();
 	expect(getConfig().customLayoutPresets).toEqual([preset("valid")]);
+});
+
+test("two plugin namespaces written in sequence both survive", () => {
+	updateConfig({ plugins: { alpha: { enabled: true, count: 1 } } });
+	const next = updateConfig({ plugins: { beta: { enabled: false } } });
+	expect(next.plugins).toEqual({ alpha: { enabled: true, count: 1 }, beta: { enabled: false } });
+});
+
+test("a plugin namespace patch merges into its own id only, and null resets it", () => {
+	updateConfig({ plugins: { alpha: { enabled: true, count: 1 } } });
+	const patched = updateConfig({ plugins: { alpha: { count: 2 } } });
+	expect(patched.plugins.alpha).toEqual({ enabled: true, count: 2 });
+	const reset = updateConfig({ plugins: { alpha: null } });
+	expect(reset.plugins.alpha).toEqual({});
+});
+
+test("the installed plugin namespace validator sees the update and the current namespaces", () => {
+	const seen: unknown[] = [];
+	setPluginNamespaceValidator((update, current) => {
+		seen.push([update, current]);
+		return { ...current, alpha: { enabled: true } };
+	});
+	const next = updateConfig({ plugins: { alpha: { enabled: false } } });
+	expect(next.plugins.alpha).toEqual({ enabled: true });
+	expect(seen).toEqual([[{ alpha: { enabled: false } }, DEFAULT_CONFIG.plugins]]);
+});
+
+test("pluginPaths must be absolute", () => {
+	expect(() => updateConfig({ pluginPaths: ["relative/path"] })).toThrow(
+		"pluginPaths must be absolute paths",
+	);
+	const next = updateConfig({ pluginPaths: ["/abs/one", "/abs/two"] });
+	expect(next.pluginPaths).toEqual(["/abs/one", "/abs/two"]);
 });

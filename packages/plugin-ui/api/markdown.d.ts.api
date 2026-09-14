@@ -1,0 +1,118 @@
+// ---- markdown/index.d.ts ----
+export { CodeBlock } from "./CodeBlock";
+export { FrontmatterProperties } from "./FrontmatterProperties";
+export { type FrontmatterBlock, type FrontmatterProperty, parseFrontmatter, serializeFrontmatter, withFrontmatter, } from "./frontmatter";
+export { remarkHeadingIds } from "./headingIds";
+export { cachedHighlight, highlightCode } from "./highlighter";
+export { Markdown, type MarkdownRehypePlugins } from "./Markdown";
+export { type AlertVariant, alertComponents, parseAlertMarker, remarkGithubAlerts, } from "./markdownAlerts";
+export { stampedSelectionLines } from "./selectionLines";
+export { THINKRAIL_SHIKI_THEME, THINKRAIL_SHIKI_THEME_NAME } from "./shikiTheme";
+
+// ---- editor/reviewGutter.d.ts ----
+import type { editor } from "monaco-editor";
+export interface LineSelection {
+    startLine: number;
+    endLine: number;
+}
+export declare function applyReviewDecorations(codeEditor: editor.ICodeEditor, previous: string[], ranges: LineSelection[]): string[];
+
+// ---- markdown/CodeBlock.d.ts ----
+export declare function CodeBlock({ code, lang }: {
+    code: string;
+    lang: string;
+}): import("react").JSX.Element;
+
+// ---- markdown/frontmatter.d.ts ----
+export interface FrontmatterProperty {
+    key: string;
+    value: string | string[] | Record<string, string>;
+}
+export interface FrontmatterBlock {
+    properties: FrontmatterProperty[];
+    /** The block's inner text as written; what the read-only fallback shows. */
+    raw: string;
+    /** False when the YAML uses shapes this editor does not speak — the block renders read-only. */
+    editable: boolean;
+}
+/**
+ * The properties a document opens with, or null when it has no frontmatter at all. Only the shapes the
+ * editor can round-trip parse as editable — top-level `key: scalar`, `key: [a, b]` (inline or spread
+ * across lines), a block list of
+ * scalars, and a one-level mapping of scalars; anything else (deeper nesting, multiline strings,
+ * anchors) keeps the whole block read-only rather than risking a rewrite that drops what it did not
+ * understand. See SPEC.md.
+ */
+export declare function parseFrontmatter(content: string): FrontmatterBlock | null;
+export declare function serializeFrontmatter(properties: readonly FrontmatterProperty[]): string;
+/** The document with its frontmatter replaced (or created, when it had none and gains properties). */
+export declare function withFrontmatter(content: string, properties: readonly FrontmatterProperty[]): string;
+
+// ---- markdown/FrontmatterProperties.d.ts ----
+export declare function FrontmatterProperties({ content, onEdit, typeSuggestions, }: {
+    content: string;
+    onEdit?: (next: string) => void;
+    /** Suggestions for the `type` property's value, when the app has a closed vocabulary for it. */
+    typeSuggestions?: readonly string[];
+}): import("react").JSX.Element | null;
+
+// ---- markdown/headingIds.d.ts ----
+interface MdNode {
+    type: string;
+    value?: string;
+    children?: MdNode[];
+    data?: {
+        hProperties?: Record<string, unknown>;
+    };
+}
+/** Stamps every heading with a slugged, de-duplicated `id`, for outline navigation and anchor links. */
+export declare function remarkHeadingIds(): (tree: MdNode) => void;
+export {};
+
+// ---- markdown/highlighter.d.ts ----
+/** What has already been highlighted, for a first paint that does not start as plain text. */
+export declare function cachedHighlight(code: string, lang: string): string | null;
+export declare function highlightCode(code: string, lang: string): Promise<string | null>;
+
+// ---- markdown/Markdown.d.ts ----
+import { type ComponentProps } from "react";
+import ReactMarkdown from "react-markdown";
+export type MarkdownRehypePlugins = ComponentProps<typeof ReactMarkdown>["rehypePlugins"];
+export declare function Markdown({ text, className, remarkPlugins, rehypePlugins, urlTransform, components, }: {
+    text: string;
+    className?: string;
+    remarkPlugins?: ComponentProps<typeof ReactMarkdown>["remarkPlugins"];
+    rehypePlugins?: ComponentProps<typeof ReactMarkdown>["rehypePlugins"];
+    urlTransform?: ComponentProps<typeof ReactMarkdown>["urlTransform"];
+    components?: ComponentProps<typeof ReactMarkdown>["components"];
+}): import("react").JSX.Element;
+
+// ---- markdown/markdownAlerts.d.ts ----
+import type { Components } from "react-markdown";
+export type AlertVariant = "note" | "tip" | "important" | "warning" | "caution";
+export declare function parseAlertMarker(text: string): {
+    variant: AlertVariant;
+    rest: string;
+} | null;
+interface MdNode {
+    type: string;
+    value?: string;
+    children?: MdNode[];
+    data?: {
+        hName?: string;
+        hProperties?: Record<string, unknown>;
+    };
+}
+export declare function remarkGithubAlerts(): (tree: MdNode) => void;
+export declare const alertComponents: Components;
+export {};
+
+// ---- markdown/selectionLines.d.ts ----
+import type { LineSelection } from "../editor/reviewGutter";
+/** The source line span the current selection falls in, read from `data-md-line-*` stamps. */
+export declare function stampedSelectionLines(container: HTMLElement): LineSelection | null;
+
+// ---- markdown/shikiTheme.d.ts ----
+import type { ThemeRegistration } from "shiki/core";
+export declare const THINKRAIL_SHIKI_THEME_NAME = "thinkrail-css-variables";
+export declare const THINKRAIL_SHIKI_THEME: ThemeRegistration;

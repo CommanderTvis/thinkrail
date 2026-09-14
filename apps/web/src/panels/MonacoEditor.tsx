@@ -1,8 +1,8 @@
+import type { EditorReview } from "@thinkrail/plugin-ui/editor";
 import {
 	type EditorSelectionChange,
 	MonacoEditor as KitMonacoEditor,
-} from "@/panels/MonacoEditorBase";
-import type { EditorReview } from "@/panels/reviewTypes";
+} from "@thinkrail/plugin-ui/editor";
 import { LoadingRegion } from "../components/Skeleton";
 import { useAppStore } from "../store";
 import { reportIdeDocumentClosed } from "../transport";

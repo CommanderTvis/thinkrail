@@ -14,10 +14,10 @@ import {
 	type ProviderStatus,
 	type ProviderStatusReport,
 } from "@thinkrail/contracts";
+import { Button } from "@thinkrail/plugin-ui";
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { LoginDialog } from "@/auth";
 import { SkeletonRows } from "@/components/Skeleton";
-import { Button } from "@/components/ui/button";
 import { toast, useAppStore } from "@/store";
 import { errorText, getTransport } from "@/transport";
 import { JetBrainsAiCard } from "./JetBrainsAiCard";
