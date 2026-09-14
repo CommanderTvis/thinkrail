@@ -57,7 +57,7 @@ import { redeliverInterview, releaseInterview, setFeedbackPublisher } from "../f
 import { resolveWorktreeFile } from "../fs";
 import { gitAsync } from "../git";
 import { logger } from "../log";
-import { mcpToolsFor, serveMcp } from "../mcp";
+import { serveMcp } from "../mcp";
 import { dataDir, loadWorkspaces } from "../persistence";
 import { installPlugins, type PluginRuntime } from "../plugins";
 import {
@@ -265,10 +265,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 					return new Response("unknown workspace", { status: 404 });
 				}
 				const body: unknown = await req.json().catch(() => null);
-				const reply = await serveMcp(body, {
-					cwd: worktreePath,
-					tools: [...mcpToolsFor(worktreePath), ...(plugins?.mcpTools(owner, worktreePath) ?? [])],
-				});
+				const reply = await serveMcp(body, plugins?.mcpTools(owner, worktreePath) ?? []);
 				return reply.body === null
 					? new Response(null, { status: reply.status })
 					: Response.json(reply.body, { status: reply.status });

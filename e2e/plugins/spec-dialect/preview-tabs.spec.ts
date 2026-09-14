@@ -3,7 +3,7 @@ import {
 	createWorkspaceViaDialog,
 	enterDefaultWorkspace,
 	openFixtureProject,
-} from "./fixtures/app";
+} from "../../fixtures/app";
 
 async function openWorkspaceFiles(page: import("@playwright/test").Page): Promise<void> {
 	await openFixtureProject(page);
@@ -214,7 +214,7 @@ test("the Specs panel shares the one slot, and closing the preview tab releases 
 	await expect(tabs).toHaveCount(2);
 	await expect(tabs.nth(1)).toContainText("notes.txt");
 
-	await page.getByTestId("tab-specs").click();
+	await page.getByTestId("tab-plugin:spec-dialect:specs").click();
 	await page.locator('[data-testid="spec-node"][data-spec-id="sample-root"]').click();
 	await expect(tabs).toHaveCount(2);
 	await expect(tabs.first()).toContainText("README.md");

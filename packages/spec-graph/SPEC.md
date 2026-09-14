@@ -78,13 +78,23 @@ pi-native prompt influence through an extension, not host prompt assembly.
 
 ## thinkrail integration
 
-`packages/server/src/agent/extensions.ts` layers this package into every session's
-`DefaultResourceLoader` the same way as `pi-web-access`: `require.resolve("pi-spec-graph/index.ts")` on
-`additionalExtensionPaths`, the package's `skills` dir on `additionalSkillPaths`. Server references it only
-by resolved path (no value import), so it stays out of server's typecheck graph. Separately,
-`packages/server/src/spec/` value-imports **`pi-spec-graph/core`** (the pi-free model — no pi packages in
-that subtree) to serve the read-only Specs viewer over the wire — the same is-a-spec rule, parser, and
-revalidate-on-read `SpecIndex` the agent tools use.
+`@thinkrail/plugin-spec-dialect` (a builtin plugin package, not core) owns this package's agent-side
+wiring: its manifest's `pi` block names `pi-spec-graph` as an extension and `pi-spec-graph/skills` as a
+skill directory, which the plugin loader resolves — in dev, through the plugin's own `./build-support`
+module (`require.resolve("pi-spec-graph/index.ts")`, mirroring how `packages/server/src/buildSupport.ts`
+resolves the non-plugin bundled extensions); in a compiled binary/desktop, through the staged
+`BundledPluginRuntime` a future build step populates — into every session's `DefaultResourceLoader`, and
+because the manifest sets `reachesSubagents: true`, into delegated child sessions as well. This is a
+**value import** — `packages/plugin-spec-dialect/host/index.ts` and `piResources.ts`'s dev path both
+`require()`/import this package directly, sanctioned as the one case a builtin plugin is expected to
+depend on the pi package it wraps (`plugin-api/SPEC.md`'s general "no pi package" plugin dependency rule
+is about an arbitrary external plugin author, not the plugin whose whole reason to exist is this one).
+Separately, `packages/plugin-spec-dialect/host/index.ts` and `packages/server/src/spec/` both
+value-import **`pi-spec-graph/core`** (the pi-free model — no pi packages in that subtree): the plugin to
+serve the per-workspace Specs-panel read over its own `plugin.spec-dialect.graph` wire method, and
+`packages/server/src/spec/` to answer the project-level `projectHasSpecs` — the same is-a-spec rule,
+parser, and revalidate-on-read `SpecIndex` the agent tools use, kept as two independent caches
+(per-workspace in the plugin, per-project-root in core) since they answer different questions.
 
 ## Invariants
 

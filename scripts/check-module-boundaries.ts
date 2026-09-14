@@ -49,6 +49,10 @@ interface ModuleRule {
 	internal?: readonly ModuleInternalRule[];
 }
 
+const PLUGIN_WEB_MUST_NOT_REACH_HOST: readonly ModuleInternalRule[] = [
+	{ from: "web", forbid: ["host"] },
+];
+
 const MODULE_RULES: readonly ModuleRule[] = [
 	{
 		root: "packages/artifact-tests",
@@ -57,6 +61,17 @@ const MODULE_RULES: readonly ModuleRule[] = [
 	{ root: "packages/contracts", allowed: [] },
 	{ root: "packages/plugin-ui", allowed: [] },
 	{ root: "packages/plugin-api", allowed: ["packages/contracts"] },
+	{
+		root: "packages/plugin-spec-dialect",
+		allowed: [
+			"packages/plugin-api",
+			"packages/contracts",
+			"packages/shared",
+			"packages/plugin-ui",
+			"packages/spec-graph",
+		],
+		internal: PLUGIN_WEB_MUST_NOT_REACH_HOST,
+	},
 	{ root: "packages/shared", allowed: ["packages/contracts"] },
 	{ root: "packages/pi-delegation", allowed: [] },
 	{ root: "packages/pi-subagents", allowed: ["packages/pi-delegation"] },
@@ -65,7 +80,7 @@ const MODULE_RULES: readonly ModuleRule[] = [
 		allowed: [
 			"packages/contracts",
 			"packages/plugin-api",
-			...([] as const).flatMap((plugin) =>
+			...(["plugin-spec-dialect"] as const).flatMap((plugin) =>
 				(["./host", "./manifest", "./contracts", "./build-support"] as const).map((subpath) => ({
 					target: `packages/${plugin}`,
 					subpath,
@@ -86,7 +101,7 @@ const MODULE_RULES: readonly ModuleRule[] = [
 			"packages/contracts",
 			"packages/plugin-ui",
 			"packages/plugin-api",
-			...([] as const).flatMap((plugin) => [
+			...(["plugin-spec-dialect"] as const).flatMap((plugin) => [
 				{ target: `packages/${plugin}`, subpath: "./manifest" },
 				{ target: `packages/${plugin}`, subpath: "./web" },
 				{ target: `packages/${plugin}`, subpath: "./contracts", typesOnly: true },
@@ -98,7 +113,7 @@ const MODULE_RULES: readonly ModuleRule[] = [
 		allowed: [
 			"packages/server",
 			"packages/shared",
-			...([] as const).map((plugin) => ({
+			...(["plugin-spec-dialect"] as const).map((plugin) => ({
 				target: `packages/${plugin}`,
 				subpath: "./build-support",
 			})),
@@ -110,7 +125,7 @@ const MODULE_RULES: readonly ModuleRule[] = [
 			"packages/server",
 			"packages/shared",
 			"packages/contracts",
-			...([] as const).map((plugin) => ({
+			...(["plugin-spec-dialect"] as const).map((plugin) => ({
 				target: `packages/${plugin}`,
 				subpath: "./build-support",
 			})),

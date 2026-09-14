@@ -397,7 +397,6 @@ export default function syntheticExternalExtension(pi) {
 			assert(existsSync(helper), `trash helper is missing: ${helper}`);
 		}
 		for (const skill of [
-			"spec-graph",
 			"asking-user-questions",
 			"brainstorming",
 			"choosing-a-workflow",

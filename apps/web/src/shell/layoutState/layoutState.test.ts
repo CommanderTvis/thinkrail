@@ -336,7 +336,7 @@ describe("frontend-local layout state", () => {
 		expect(first.center).toMatchObject({ kind: "group", tabs: [] });
 		expect(first.left.groups[0]?.tabs).toEqual([toolTab("projects")]);
 		expect(first.right.groups.flatMap((group) => group.tabs)).toEqual([
-			toolTab("specs"),
+			toolTab("plugin:spec-dialect:specs"),
 			toolTab("files"),
 			toolTab("changes"),
 			toolTab("review"),

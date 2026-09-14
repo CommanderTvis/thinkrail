@@ -583,7 +583,9 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     Children opting into extensions
     (`extensions: true` in their definition) get the **curated child set**
     (`childExtensionFactories` in `extensions`): the headless-search policy + `pi-web-access` +
-    `pi-spec-graph` + every active plugin's own `childFactories` (`PluginPiResources`, below) —
+    every active plugin's own `childFactories` (`PluginPiResources`, below — this is how `pi-spec-graph`
+    reaches a child session now, via the spec-dialect plugin's `reachesSubagents` manifest flag rather
+    than a fixed import) —
     deliberately not the parent's full set (rationale + the listed-children
     carve-out: core decision #25). Web-access reaches the child set via a **named bundled-seam
     field** (`BundledExtensions.webAccessFactory`) in the binary and a Bun `require` in dev — its
@@ -607,10 +609,10 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     from session discovery—even if the global artifact changes—so a session cannot mutate its generation.
     All other user extensions
     retain normal discovery. The loader then adds
-    automatic **portable cross-agent skill aliases**, then loads the five bundled extensions — **`pi-web-access`**
-    (`web_search` + `fetch_content`), **`pi-visualize`** (`visualize`), **`pi-spec-graph`** (the `spec_*`
-    tools + its `before_agent_start` rule), **`pi-thinkrail-workflow`** (the workflow-router rule +
-    workflow skills), and **`pi-todos`** (the `todo_*` tools + its skill), then every active plugin's own
+    automatic **portable cross-agent skill aliases**, then loads the four fixed bundled extensions —
+    **`pi-web-access`** (`web_search` + `fetch_content`), **`pi-visualize`** (`visualize`),
+    **`pi-thinkrail-workflow`** (the workflow-router rule + workflow skills), and **`pi-todos`** (the
+    `todo_*` tools + its skill) — then every active plugin's own
     contribution (`PluginPiResources`, installed by the plugin loader via `setPluginResourcesProvider`;
     default: everything empty and a no-op tools extension): `factories` and `toolsExtension` join
     `sharedFactories` (so they reach both the bundled-binary and the dev-mode `extensionFactories` branch
@@ -740,11 +742,12 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
   still goes through the shared `ModelRuntime`, never pi-ai's stream/complete — plus the `/bun-oauth` + `/bedrock-provider`
   + `/compat` subpaths, value-imported **only** inside `registerBundledRuntime`'s dynamic imports);
   `pi-delegation` + `pi-subagents` (the portable delegation runtime and Agent-tool composition,
-  value-imported by the host embedding); `pi-web-access` + `pi-visualize` + `pi-spec-graph` +
-  `pi-thinkrail-workflow` + `pi-todos` (the bundled extension set — parent sessions load the set through
-  resource-loader paths or launcher factories; delegated children value-import `pi-spec-graph` and receive
-  the named `pi-web-access` factory through the bundled runtime seam, with source-mode Bun `require` as the
-  dev equivalent); `typebox` (the `ask_user_question` parameter schema); `trash` (the cross-platform OS
+  value-imported by the host embedding); `pi-web-access` + `pi-visualize` +
+  `pi-thinkrail-workflow` + `pi-todos` (the fixed bundled extension set — parent sessions load the set
+  through resource-loader paths or launcher factories; delegated children receive the named
+  `pi-web-access` factory through the bundled runtime seam, with source-mode Bun `require` as the dev
+  equivalent — `pi-spec-graph` is no longer in this fixed set, reaching both parent and child sessions
+  only through `@thinkrail/plugin-spec-dialect`'s `PluginPiResources` contribution); `typebox` (the `ask_user_question` parameter schema); `trash` (the cross-platform OS
   recycle-bin implementation; called with globbing disabled and allowed to throw — never degraded to
   `unlink`); `@stroncium/procfs` (directly pinned solely for the compiled Linux trash parser inclusion seam);
   `contracts` (`PiEvent`/`Model`/`ThinkingLevel`/`ImageContent`/`SessionStats`/`SessionSummary`/

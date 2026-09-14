@@ -503,21 +503,16 @@ wire reply. See [[module-plugin-blueprint]]. The **Skills-reload badge** rides t
   read against, written together so neither can outlive the content it describes. The transient
   A **`reveal-tool` `LayoutIntent`** is the arrangement-agnostic request to reveal/focus a singleton
   side tool; the shell layout integration consumes it and resolves the tool's current saved location.
-  **`changesRequest`** and **`specRequest`** add an optional path/item target to that reveal and carry a
+  **`changesRequest`** adds an optional path/item target to that reveal and carries a
   browser-local request-time center destination without exposing layout concerns to feature views. Async
   resolution carries the local
   destination group's navigation-clock stamp captured at click time: if later attention overtakes it, the
-  tool may still highlight the item but the stale completion cannot steal focus. Both intents are consumed
-  after handling so remount/re-read cannot replay a structural open. Two fields remain necessary because a
-  gitignored spec belongs to the spec graph, not the git-derived Changes view.
-  **`specsByWorkspace`** +
-  **`setWorkspaceSpecs`** hold each workspace's `spec.graph` snapshot (fetched by `panels`'
-  `useWorkspaceSpecs`, kept fresh on the workspace fs tick) so
-  the chat's turn divider can classify a written path as a spec off the very snapshot the Specs panel
-  renders — one definition of "this file is a spec", via the **`specPathMatcher(nodes)`** selector; dropped
-  with the workspace in `applyWorkspaceRemoved`. `setWorkspaceSpecs` **keeps the previous array identity when
-  the re-read found no change** — most fs ticks touch no spec, and a fresh identity would invalidate
-  `ChatView`'s matcher memo and re-derive every open chat's whole transcript about once a second.
+  tool may still highlight the item but the stale completion cannot steal focus. The intent is consumed
+  after handling so remount/re-read cannot replay a structural open. The spec-graph equivalent
+  (`specRequest`/`specsByWorkspace`/`setWorkspaceSpecs`/`specPathMatcher`) moved into
+  `@thinkrail/plugin-spec-dialect`'s own web-half store when specs became a plugin — a plugin owns its
+  own state, and `ChatView`'s turn divider now reaches the graph only through the plugin's
+  `writtenPathGroup` slot (`plugins/SPEC.md`), never through this store.
   **`openDoc(tab)`** caches and places either a resolved **`DocTab`** or a **`PlanTab`** (`kind: "plan"`,
   id `${workspaceId}:plan:${sessionId}` — one page per chat, re-open focuses). Local placement persistence
   keeps only resolver kind + durable session identity, never cached content. `PlanPane` reads the host-owned
@@ -623,10 +618,11 @@ branch's review — a commit sha means nothing in another worktree — and dropp
   functions *over* the slice rather than Zustand selectors, since a fresh rollup object returned from a
   selector would re-render the rail on every store change; see the activity section);
   `matchesWorktreePath` (line an agent-reported path — relative or absolute — up against a worktree-relative
-  one; shared by the Changes deep link and the spec classifier. The suffix rule is for **absolute reports
-  only** and is anchored at a separator: unanchored, `/wt/src/a-foo.ts` would match `src/foo.ts`; applied to
-  relative reports, `module-b/SPEC.md` would match the *root* `SPEC.md`) + `specPathMatcher` (is a written
-  path a spec-graph node?);
+  one; used by the Changes deep link, and by `@thinkrail/plugin-spec-dialect`'s own copy for its
+  `writtenPathGroup` slot — a plugin cannot import this module, so it keeps a small private copy rather
+  than reaching in. The suffix rule is for **absolute reports only** and is anchored at a separator:
+  unanchored, `/wt/src/a-foo.ts` would match `src/foo.ts`; applied to relative reports, `module-b/SPEC.md`
+  would match the *root* `SPEC.md`);
   `selectCatalogModel` (a model ref resolved against the **live** `models` list — a session's own `model`
   is the snapshot it was created with, so host-computed facts on it, today `thinkingLevels`, are read
   through this; callers fall back to the snapshot when the ref has left the catalog);

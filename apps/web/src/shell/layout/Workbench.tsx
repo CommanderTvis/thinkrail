@@ -864,7 +864,7 @@ function TabStrip({
 			? "center-tab-strip"
 			: location.area === "bottom"
 				? "bottom-tab-strip"
-				: tabs.some((tab) => tab.kind === "tool" && tab.tool === "specs")
+				: tabs.some((tab) => tab.kind === "tool" && tab.tool === "plugin:spec-dialect:specs")
 					? "right-tab-strip"
 					: "workbench-tab-strip";
 	return (
@@ -2219,7 +2219,7 @@ function SideGroupView({
 	return (
 		<div
 			data-testid={
-				group.tabs.some((tab) => tab.kind === "tool" && tab.tool === "specs")
+				group.tabs.some((tab) => tab.kind === "tool" && tab.tool === "plugin:spec-dialect:specs")
 					? "right-panel"
 					: "side-group"
 			}

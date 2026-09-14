@@ -7,11 +7,10 @@ test("runtime source manifest covers the launcher artifact surface", () => {
 	expect(sources.extensions.map((extension) => extension.specifier)).toEqual([
 		"pi-web-access/index.ts",
 		"pi-visualize/index.ts",
-		"pi-spec-graph/index.ts",
 		"pi-thinkrail-workflow/index.ts",
 		"pi-todos/index.ts",
 	]);
-	expect(sources.extensions.filter((extension) => extension.skills)).toHaveLength(3);
+	expect(sources.extensions.filter((extension) => extension.skills)).toHaveLength(2);
 	expect(
 		Object.fromEntries(
 			Object.entries(sources.ptyLibraries).map(([target, path]) => [target, basename(path)]),
@@ -25,5 +24,11 @@ test("runtime source manifest covers the launcher artifact surface", () => {
 	});
 	expect(basename(sources.trashHelpers.macos)).toBe("macos-trash");
 	expect(basename(sources.trashHelpers.windows)).toBe("windows-trash.exe");
-	expect(sources.plugins.map((plugin) => plugin.id)).toEqual([]);
+	expect(sources.plugins.map((plugin) => plugin.id)).toEqual(["spec-dialect"]);
+	const specDialect = sources.plugins[0];
+	expect(specDialect?.assets).toBeNull();
+	expect(specDialect?.pi.extensions.map((extension) => extension.specifier)).toEqual([
+		"pi-spec-graph",
+	]);
+	expect(specDialect?.pi.skills).toHaveLength(1);
 });
