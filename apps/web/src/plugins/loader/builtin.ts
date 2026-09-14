@@ -2,6 +2,7 @@ import type { PluginManifest } from "@thinkrail/plugin-api";
 import type { PluginWebModule } from "@thinkrail/plugin-api/web";
 import { manifest as blueprintManifest } from "@thinkrail/plugin-blueprint/manifest";
 import { manifest as claudeCodeManifest } from "@thinkrail/plugin-claude-code/manifest";
+import { manifest as discordManifest } from "@thinkrail/plugin-discord/manifest";
 import { manifest as specDialectManifest } from "@thinkrail/plugin-spec-dialect/manifest";
 
 export interface BuiltinWebPlugin {
@@ -26,6 +27,13 @@ export const BUILTIN_WEB_PLUGINS: readonly BuiltinWebPlugin[] = [
 		manifest: claudeCodeManifest,
 		load: () =>
 			import("@thinkrail/plugin-claude-code/web").then(
+				(module) => module.default as unknown as PluginWebModule,
+			),
+	},
+	{
+		manifest: discordManifest,
+		load: () =>
+			import("@thinkrail/plugin-discord/web").then(
 				(module) => module.default as unknown as PluginWebModule,
 			),
 	},
