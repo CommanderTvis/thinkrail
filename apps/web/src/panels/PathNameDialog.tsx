@@ -1,13 +1,13 @@
-import { useRef, useState } from "react";
-import { FileTypeIcon } from "@/components/FileTypeIcon";
-import { Button } from "@/components/ui/button";
 import {
+	Button,
 	Dialog,
 	DialogContent,
 	DialogFooter,
 	DialogHeader,
 	DialogTitle,
-} from "@/components/ui/dialog";
+} from "@thinkrail/plugin-ui";
+import { useRef, useState } from "react";
+import { FileTypeIcon } from "@/components/FileTypeIcon";
 
 /** A name the host can take as a path under the folder it is typed for: no empty or `..` segment. */
 export function validPathName(name: string): boolean {

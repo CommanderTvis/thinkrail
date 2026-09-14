@@ -1,21 +1,29 @@
 import type { Workspace } from "@thinkrail/contracts";
 import { useLayoutEffect, useRef } from "react";
 import { ProjectTree } from "../panels/ProjectTree";
+import { selectTabDecorators, usePluginRegistry } from "../plugins/registry";
 import { useAppStore } from "../store";
 import {
 	collectCenterGroups,
 	type LayoutCenterTab,
+	type LayoutTab,
 	layoutTabIcon,
 	layoutTabName,
 	paneForTab,
 	selectTab,
 	useCenterTabsInProjects,
 } from "./layout";
-
-const noIcon = () => null;
+import { decorateTab } from "./tabDecoration";
 
 function WorkspaceTabsPreview({ workspace }: { workspace: Workspace }) {
 	const document = useAppStore((state) => state.layoutDocumentsByWorkspace[workspace.id]);
+	const decorators = usePluginRegistry(selectTabDecorators);
+	// Decorators read the terminal catalog synchronously; subscribing keeps the Claude mark current here.
+	useAppStore((state) => state.terminalsByWorkspace[workspace.id]);
+	const renderTabIcon = (tab: LayoutTab) => {
+		const Icon = decorateTab(decorators, tab, workspace.id)?.icon;
+		return Icon ? <Icon className="size-14 shrink-0" /> : null;
+	};
 	if (!document) return null;
 	const groups = collectCenterGroups(document.center).filter((group) => group.tabs.length > 0);
 	if (groups.length === 0) return null;
@@ -38,8 +46,9 @@ function WorkspaceTabsPreview({ workspace }: { workspace: Workspace }) {
 			onClick={() => open(groupId, tab)}
 			className={`flex h-28 w-full min-w-0 items-center gap-4 pl-8 text-left tr-text-ui text-text-muted ${grouped ? "group-hover/pane:text-text-default" : "rounded-[var(--radius-sm)] hover:bg-control-bg-hovered hover:text-text-default"}`}
 		>
-			{layoutTabIcon(tab, noIcon)}
+			{layoutTabIcon(tab, renderTabIcon)}
 			<span className="truncate">{layoutTabName(tab)}</span>
+			{decorateTab(decorators, tab, workspace.id)?.adornment}
 		</button>
 	);
 	return (

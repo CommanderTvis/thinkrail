@@ -3,14 +3,14 @@ import {
 	RiGitCommitLine as GitCommitHorizontal,
 } from "@remixicon/react";
 import type { GitCommit } from "@thinkrail/contracts";
-import { useEffect, useRef, useState } from "react";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
 	DropdownMenuItem,
 	DropdownMenuLabel,
 	DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+} from "@thinkrail/plugin-ui";
+import { useEffect, useRef, useState } from "react";
 import { relativeTime } from "@/lib";
 import { getTransport } from "../transport";
 

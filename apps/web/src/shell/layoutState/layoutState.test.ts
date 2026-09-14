@@ -554,3 +554,29 @@ describe("frontend-local layout state", () => {
 		expect(local.getItem(localLayoutStorageKey(endpoint, "surface-b"))).not.toBeNull();
 	});
 });
+
+test("external configuration tabs and their neighboring tabs survive layout restoration", async () => {
+	const local = new MemoryStorage();
+	const session = new MemoryStorage();
+	session.setItem("thinkrail:layout-surface-id", "external-files");
+	setLayoutStateStorageForTests({ local, session }, endpoint);
+	const document = structuredClone(await ensureWorkspaceLayoutState("workspace"));
+	if (document.center.kind !== "group") throw new Error("missing center group");
+	document.center.tabs = [
+		{
+			kind: "external-file",
+			id: "config",
+			name: "config.toml",
+			path: "/home/test/.codex/config.toml",
+		},
+		{ kind: "file", id: "readme", name: "README.md", path: "README.md" },
+	];
+	await commitWorkspaceLayout("workspace", document);
+	resetLayoutStateForTests();
+	resetStore();
+	setLayoutStateStorageForTests({ local, session }, endpoint);
+	const restored = await ensureWorkspaceLayoutState("workspace");
+	expect(collectAllGroups(restored).flatMap((group) => group.tabs)).toEqual(
+		expect.arrayContaining(document.center.tabs),
+	);
+});

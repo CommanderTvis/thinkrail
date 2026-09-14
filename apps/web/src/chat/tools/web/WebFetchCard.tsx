@@ -1,5 +1,5 @@
 import { RiLinksLine as LinkIcon } from "@remixicon/react";
-import { ToolFileLink } from "@/chat/tools/ToolFileLink";
+import { ToolFileLink } from "@thinkrail/plugin-ui";
 import type { ToolRenderProps } from "../../toolRegistry";
 import { resultText, strArg } from "../toolHelpers";
 import { WebResultBody } from "./WebResultBody";

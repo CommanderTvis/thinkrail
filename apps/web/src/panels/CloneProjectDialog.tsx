@@ -1,13 +1,13 @@
 import type { Project } from "@thinkrail/contracts";
-import { useState } from "react";
-import { Button } from "@/components/ui/button";
 import {
+	Button,
 	Dialog,
 	DialogContent,
 	DialogDescription,
 	DialogHeader,
 	DialogTitle,
-} from "@/components/ui/dialog";
+} from "@thinkrail/plugin-ui";
+import { useState } from "react";
 import { errorText, getTransport } from "@/transport";
 import { FolderField } from "./FolderField";
 

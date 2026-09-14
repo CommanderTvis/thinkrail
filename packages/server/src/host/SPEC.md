@@ -644,3 +644,10 @@ One optional persisted `ReviewComment` field carries finding provenance: `origin
 sessionId }` — **landed**. The wire `stale?: boolean` is derived by the host per client snapshot, never
 stored. The `reflection` verdict field lands with the verifier above. No new tool parameter, no new
 `status`/`anchorState` enum value.
+
+## Plugin-owned external text files
+
+`fs.readFile` and `fs.writeFile` accept an absolute path only when it is worktree-contained or an active
+plugin currently exposes that exact path through `externalFiles`. The workspace must exist. External
+reads and writes use the same content hashes and compare-and-swap as worktree files. Directory reads,
+raw HTTP files, search, and trash retain their worktree containment.

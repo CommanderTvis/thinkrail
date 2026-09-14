@@ -5,8 +5,13 @@ import { dirname, join } from "node:path";
 import { parseSubcommand } from "./args";
 import {
 	bundledExtensionFactories,
+	bundledPluginAssetRoutes,
+	bundledPluginFactories,
+	bundledPluginRuntimeVersion,
+	bundledPluginSkillRoutes,
 	bundledSkillsVersion,
 	bundledWebAccessFactory,
+	embeddedPluginRuntimeFiles,
 	embeddedSkillFiles,
 } from "./bundled-extensions.generated";
 import { stagingRoot } from "./paths";
@@ -36,16 +41,36 @@ if (parseSubcommand(Bun.argv.slice(2)) === undefined) {
 	const staticDir = await stage("web", webAssetsVersion, embeddedWebAssets);
 	const skillsDir = await stage("skills", bundledSkillsVersion, embeddedSkillFiles);
 	const runtimeDir = await stage("runtime", runtimeAssetsVersion, embeddedRuntimeAssets);
+	const pluginsDir = await stage(
+		"plugins",
+		bundledPluginRuntimeVersion,
+		embeddedPluginRuntimeFiles,
+	);
 	const macosTrash = join(runtimeDir, "macos-trash");
 	const windowsTrash = join(runtimeDir, "windows-trash.exe");
 	if (process.platform !== "win32") chmodSync(macosTrash, 0o755);
 	process.env.THINKRAIL_STATIC_DIR ??= staticDir;
 	const { registerBundledRuntime } = await import("@thinkrail/server");
+	const plugins = Object.fromEntries(
+		Object.entries(bundledPluginFactories).map(([id, factories]) => [
+			id,
+			{
+				factories,
+				skillsDir: bundledPluginSkillRoutes[id]
+					? join(pluginsDir, bundledPluginSkillRoutes[id])
+					: null,
+				assetsDir: bundledPluginAssetRoutes[id]
+					? join(pluginsDir, bundledPluginAssetRoutes[id])
+					: null,
+			},
+		]),
+	);
 	await registerBundledRuntime({
 		factories: bundledExtensionFactories,
 		skillsDir,
 		trashHelpers: { macos: macosTrash, windows: windowsTrash },
 		webAccessFactory: bundledWebAccessFactory,
+		plugins,
 	});
 }
 const { launch } = await import("./bootstrap");

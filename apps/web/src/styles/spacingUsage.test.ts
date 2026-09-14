@@ -1,11 +1,13 @@
 import { describe, expect, it } from "bun:test";
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { normalizeEol } from "../../scripts/generatedFiles";
 
 const SRC = new URL("..", import.meta.url).pathname;
+const PLUGIN_UI_SRC = new URL("../../../../packages/plugin-ui/src/", import.meta.url).pathname;
 const read = (p: string) => normalizeEol(readFileSync(p, "utf8"));
-const rel = (p: string) => p.slice(SRC.length);
+const rel = (p: string) =>
+	p.startsWith(PLUGIN_UI_SRC) ? `plugin-ui/${p.slice(PLUGIN_UI_SRC.length)}` : p.slice(SRC.length);
 const sourceWithoutComments = (p: string) =>
 	read(p)
 		.replace(/\/\*[\s\S]*?\*\//g, "")
@@ -25,7 +27,10 @@ function sourceFiles(dir: string): string[] {
 	return out;
 }
 
-const FILES = [...sourceFiles(SRC)];
+const FILES = [
+	...sourceFiles(SRC),
+	...(existsSync(PLUGIN_UI_SRC) ? sourceFiles(PLUGIN_UI_SRC) : []),
+];
 const TS_FILES = FILES.filter((f) => /\.tsx?$/.test(f));
 const TOKENS = join(SRC, "styles/tokens.css");
 const SPACING_JSON = join(SRC, "styles/spacing.json");

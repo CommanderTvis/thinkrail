@@ -3,11 +3,17 @@ import {
 	RiArrowUpSLine as ChevronUp,
 	RiFolderLine as FolderIcon,
 	RiHistoryLine as History,
-	RiCloseLine as X,
 	RiSparkling2Line as Sparkles,
 	RiStopLine as Square,
+	RiCloseLine as X,
 } from "@remixicon/react";
-import type { ComposerGrowthLimit, ThinkingLevel, WireModel } from "@thinkrail/contracts";
+import {
+	type ComposerGrowthLimit,
+	REQUEST_IMAGE_BASE64_BUDGET,
+	type ThinkingLevel,
+	type WireModel,
+} from "@thinkrail/contracts";
+import { Popover, PopoverContent, PopoverTrigger } from "@thinkrail/plugin-ui";
 import {
 	type ClipboardEvent,
 	type DragEvent,
@@ -21,7 +27,6 @@ import {
 	useState,
 } from "react";
 import { FileTypeIcon } from "@/components/FileTypeIcon";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn, draggedFile } from "@/lib";
 import {
 	applyTemplateSlotEdit,
@@ -42,8 +47,8 @@ import {
 	useSlashCommandCompletion,
 } from "@/prompt";
 import { FileChip } from "./FileChip";
+import { fileToAttachedImage } from "./imageAttachment";
 import { ModelSelector } from "./ModelSelector";
-import { PromptImageChips, usePromptImages } from "./promptImages";
 import { ThinkingSelector } from "./ThinkingSelector";
 import type { ChatAttachment, DraftImage } from "./types";
 
@@ -86,6 +91,14 @@ export interface MentionCandidate {
 	path: string;
 	name: string;
 	kind: "file" | "dir";
+}
+
+type PendingImage = DraftImage;
+
+interface AttachError {
+	id: string;
+	name: string;
+	reason: string;
 }
 
 function activeToken(value: string, caret: number): { token: string; start: number } {
@@ -161,6 +174,8 @@ export interface ComposerHandle {
 	focusDraftEnd: () => void;
 }
 
+const EMPTY_IMAGES: DraftImage[] = [];
+
 export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Composer(
 	{
 		value,
@@ -194,13 +209,22 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 ) {
 	const ref = useRef<HTMLTextAreaElement>(null);
 	const [caret, setCaret] = useState(0);
-	const attachedImages = usePromptImages({ images: propsImages, onImagesChange });
-	const { images } = attachedImages;
+	const [localImages, setLocalImages] = useState<DraftImage[]>(propsImages ?? EMPTY_IMAGES);
+	const images = onImagesChange ? (propsImages ?? EMPTY_IMAGES) : localImages;
+	const imagesRef = useRef<DraftImage[]>(images);
+	imagesRef.current = images;
 	const [submitError, setSubmitError] = useState<string | null>(null);
-	const pendingImages = attachedImages.pending;
-	useEffect(() => {
-		if (images.length === 0) setSubmitError(null);
-	}, [images.length]);
+	const commitImages = (next: DraftImage[]) => {
+		imagesRef.current = next;
+		if (onImagesChange) {
+			onImagesChange(next);
+		} else {
+			setLocalImages(next);
+		}
+		if (next.length === 0) setSubmitError(null);
+	};
+	const [pendingImages, setPendingImages] = useState(0);
+	const [attachErrors, setAttachErrors] = useState<AttachError[]>([]);
 	const [mentionActiveIndex, setMentionActiveIndex] = useState(0);
 	const [mentionDismissed, setMentionDismissed] = useState(false);
 	const [sendMenuOpen, setSendMenuOpen] = useState(false);
@@ -310,7 +334,8 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 		}
 		setSubmitError(null);
 		onChange("");
-		attachedImages.reset();
+		commitImages([]);
+		setAttachErrors([]);
 		recallIdxRef.current = null;
 		setSlotSession(null);
 	};
@@ -357,7 +382,13 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 		},
 		restoreAttachments: (attachments: ChatAttachment[]) => {
 			if (attachments.length === 0) return;
-			attachedImages.restore(attachments);
+			commitImages([
+				...attachments.map((attachment) => ({
+					id: crypto.randomUUID(),
+					...attachment,
+				})),
+				...imagesRef.current,
+			]);
 			setSubmitError(null);
 			focusSelection(caret);
 		},
@@ -369,6 +400,40 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 		},
 		focusDraftEnd: () => focusSelection(value.length),
 	}));
+
+	const addFiles = async (files: File[]) => {
+		const picked = files.filter((f) => f.type.startsWith("image/"));
+		if (picked.length === 0) return;
+		setPendingImages((n) => n + picked.length);
+		try {
+			const settled = await Promise.allSettled(picked.map(fileToAttachedImage));
+			let used = imagesRef.current.reduce((sum, p) => sum + p.content.data.length, 0);
+			const additions: PendingImage[] = [];
+			const errors: AttachError[] = [];
+			settled.forEach((result, i) => {
+				const name = picked[i]?.name || "image";
+				if (result.status !== "fulfilled" || result.value === null) {
+					errors.push({ id: crypto.randomUUID(), name, reason: "unsupported image format" });
+					return;
+				}
+				const size = result.value.content.data.length;
+				if (used + size > REQUEST_IMAGE_BASE64_BUDGET) {
+					errors.push({ id: crypto.randomUUID(), name, reason: "message image limit reached" });
+					return;
+				}
+				used += size;
+				additions.push({
+					id: crypto.randomUUID(),
+					name,
+					...result.value,
+				});
+			});
+			if (additions.length > 0) commitImages([...imagesRef.current, ...additions]);
+			if (errors.length > 0) setAttachErrors((prev) => [...prev, ...errors]);
+		} finally {
+			setPendingImages((n) => n - picked.length);
+		}
+	};
 
 	const submit = (behavior: SubmitBehavior) => {
 		submitText(finalizeTemplateSlotSession(value, slotSession), behavior);
@@ -468,7 +533,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 		const files = [...e.clipboardData.files];
 		if (files.length > 0) {
 			e.preventDefault();
-			attachedImages.addFiles(files);
+			void addFiles(files);
 		}
 	};
 
@@ -483,7 +548,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 		}
 		if (e.dataTransfer.files.length > 0) {
 			e.preventDefault();
-			attachedImages.addFiles([...e.dataTransfer.files]);
+			void addFiles([...e.dataTransfer.files]);
 		}
 	};
 
@@ -574,10 +639,9 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 				</div>
 			) : null}
 
-			<PromptImageChips
-				controller={attachedImages}
-				leading={
-					submitError ? (
+			{images.length > 0 || pendingImages > 0 || attachErrors.length > 0 || submitError ? (
+				<div className="flex flex-wrap gap-4 px-12 pt-12" data-testid="composer-images">
+					{submitError ? (
 						<FileChip
 							data-testid="composer-command-error"
 							tone="error"
@@ -585,9 +649,63 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 							title={submitError}
 							label={submitError}
 						/>
-					) : null
-				}
-			/>
+					) : null}
+					{attachErrors.map((err) => (
+						<FileChip
+							key={err.id}
+							data-testid="composer-image-error"
+							tone="error"
+							icon={false}
+							title={`Couldn't attach ${err.name} — ${err.reason}`}
+							label={`Couldn't attach ${err.name}`}
+							meta={`— ${err.reason}`}
+							trailing={
+								<button
+									type="button"
+									aria-label="Dismiss"
+									onClick={() => setAttachErrors((prev) => prev.filter((p) => p.id !== err.id))}
+									className="hover:opacity-80"
+								>
+									<X className="size-12" />
+								</button>
+							}
+						/>
+					))}
+					{images.map((img) => (
+						<FileChip
+							key={img.id}
+							data-testid="composer-image"
+							path={img.name}
+							data-width={img.width}
+							data-height={img.height}
+							data-mime={img.content.mimeType}
+							title={img.name}
+							label={img.name}
+							meta={img.width && img.height ? ` · ${img.width}×${img.height}` : undefined}
+							trailing={
+								<button
+									type="button"
+									aria-label="Remove image"
+									onClick={() => commitImages(imagesRef.current.filter((p) => p.id !== img.id))}
+									className="text-text-muted hover:text-text-default"
+								>
+									<X className="size-12" />
+								</button>
+							}
+						/>
+					))}
+					{pendingImages > 0 ? (
+						<FileChip
+							data-testid="composer-image-pending"
+							label={
+								<span className="text-text-muted">
+									{pendingImages === 1 ? "Attaching…" : `Attaching ${pendingImages}…`}
+								</span>
+							}
+						/>
+					) : null}
+				</div>
+			) : null}
 
 			<div className="p-12">
 				<div

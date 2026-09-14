@@ -1,0 +1,616 @@
+/**
+ * @packageDocumentation
+ * The UI-client half of `@thinkrail/plugin-api`: {@link PluginWebContext} and the UI contribution
+ * types it registers. Imported by `apps/web` and by a plugin's web half; never by
+ * `packages/server` or any Node/Bun code, since it is a value-import surface a plugin's web
+ * module runs against in the browser, reading React and this entry from the host page's runtime
+ * registry rather than bundling its own copy.
+ */
+
+import type {
+	AppConfig,
+	GitDiffScope,
+	HostPlatform,
+	LayoutToolId,
+	PluginRosterEntry,
+	Project,
+	TerminalTabInfo,
+	Workspace,
+} from "@thinkrail/contracts";
+import type { ComponentType, ReactNode } from "react";
+import type {
+	ChannelPayload,
+	MethodParams,
+	MethodResult,
+	PluginContract,
+	PluginSettings,
+} from "../contract";
+
+/** The logger handed to a plugin's web half as {@link PluginWebContext.log}, one level per method. */
+export interface PluginWebLogger {
+	debug(msg: string, fields?: object): void;
+	info(msg: string, fields?: object): void;
+	warn(msg: string, fields?: object): void;
+	error(msg: string, fields?: object): void;
+}
+
+/**
+ * The cleanup function a {@link PluginWebActivate} may return. Run when the plugin is disabled or
+ * the roster otherwise drops it, before its registrations are unmounted. Unlike the host side, an
+ * ES module already loaded into the browser is never unloaded — disposing only unmounts
+ * contributions and drops registrations, so a later re-enable re-registers without fetching again.
+ */
+export type PluginDisposer = () => void | Promise<void>;
+
+/**
+ * The read-only slice of app state a plugin's web half may read (W3): projects, workspaces, the
+ * active workspace and editor, the current settings, terminals, per-workspace filesystem
+ * revisions, the plugin roster, and the host platform. Read synchronously with
+ * {@link PluginWebContext.host}, reactively with {@link PluginWebContext.useHost}, or observed
+ * outside React with {@link PluginWebContext.watchHost}. There is no raw store or actions bag
+ * behind it — this is the entire read surface a plugin's web half gets onto core state.
+ */
+export interface HostProjection {
+	/** Known projects. */
+	projects: readonly Project[];
+	/** Known workspaces, keyed by project id. */
+	workspaces: Readonly<Record<string, readonly Workspace[]>>;
+	/** The active workspace's id, or `null` when none is active. */
+	activeWorkspaceId: string | null;
+	/** The project id providing context for the active view, or `null`. */
+	contextProjectId: string | null;
+	/** The currently active editor, or `null`. */
+	activeEditor: EditorRef | null;
+	/** The current app configuration. */
+	config: AppConfig;
+	/** Known terminal tabs, keyed by workspace id. */
+	terminals: Readonly<Record<string, readonly TerminalTabInfo[]>>;
+	/** Filesystem revision counters, keyed by workspace id; bump on a watched change. */
+	workspaceRevisions: Readonly<Record<string, number>>;
+	/** The current plugin roster. */
+	roster: readonly PluginRosterEntry[];
+	/** The host's platform, or `null` before it is known. */
+	hostPlatform: HostPlatform | null;
+}
+
+/** Identifies one open editor and its dirty state, as read through {@link HostProjection.activeEditor} and the `editors` capability. */
+export interface EditorRef {
+	/** The editor's id, stable for as long as it stays open. */
+	id: string;
+	/** The workspace the editor belongs to. */
+	workspaceId: string;
+	/** The file path the editor shows. */
+	path: string;
+	/** Whether the editor shows a worktree file, an external file, or a diff. */
+	kind: "file" | "external-file" | "diff";
+	/** Whether the editor has unsaved changes. */
+	dirty: boolean;
+}
+
+/**
+ * An editor lifecycle or selection event, delivered to a handler registered with
+ * `PluginWebContext.editors.onEvent` (W12). Fed by Monaco and the markdown preview, so a plugin's
+ * own rendered document can report a selection through {@link PluginWebContext.editors} the same
+ * way selecting code does, without importing the editor module directly.
+ */
+export type EditorEvent =
+	| { kind: "opened" | "closed" | "activated" | "saved"; editor: EditorRef }
+	| {
+			kind: "selection";
+			editor: EditorRef;
+			selection: {
+				startLine: number;
+				startColumn: number;
+				endLine: number;
+				endColumn: number;
+				text: string;
+			} | null;
+	  };
+
+/** Identifies the terminal or chat pane a companion contribution is attached to (W6). */
+export interface CompanionHost {
+	/** Whether the companion is attached to a terminal or a chat pane. */
+	kind: "terminal" | "chat";
+	/** The workspace the host pane belongs to. */
+	workspaceId: string;
+	/** The host pane's tab key or session id. */
+	key: string;
+}
+
+/** The handle passed to a registered terminal accessory's component (W11), scoped to one terminal tab. */
+export interface TerminalAccessoryApi {
+	/** The workspace the terminal belongs to. */
+	workspaceId: string;
+	/** The terminal's tab key. */
+	tabKey: string;
+	/** Writes data into the terminal, as if typed. */
+	write(data: string): void;
+	/**
+	 * Reads the last `lines` lines of the terminal's buffer. `omitFaint` blanks faint (dim) cells — the
+	 * placeholders and suggestions a TUI draws in its input line, which are not text anyone typed.
+	 */
+	bufferTail(lines: number, options?: { omitFaint?: boolean }): string[];
+	/** Sets how key input is encoded before being written to the terminal. */
+	setKeyEncoding(mode: "default" | "agent-newline"): void;
+}
+
+/** Registers an agent an operator can launch a terminal with (W9), such as a New Workspace dialog entry. */
+export interface AgentLauncher {
+	/** The launcher's id, stable across sessions. */
+	id: string;
+	/** Shown wherever the launcher is offered. */
+	label: string;
+	/** Icon shown alongside `label`. */
+	icon: ComponentType<{ className?: string }>;
+	/** Models the launcher offers a choice of, when it supports more than one, each with its maker's mark if it has one. */
+	models?: readonly { id: string; label: string; icon?: ComponentType<{ className?: string }> }[];
+	/**
+	 * Builds the shell command that starts the agent.
+	 * @param options the chosen model, an optional system prompt, an initial prompt, and a session to resume
+	 * @returns the command to run in the opened terminal
+	 */
+	terminalCommand(options: {
+		model?: string;
+		systemPrompt?: string;
+		initialPrompt?: string;
+		resume?: { sessionId?: string };
+	}): string;
+	/** A hook reporting whether the launcher can currently be used, and why not otherwise. */
+	useAvailable(): { available: boolean; reason?: string };
+}
+
+/** Props passed to a registered file viewer's component (W7). */
+export interface FileViewerProps {
+	/** The workspace the file belongs to. */
+	workspaceId: string;
+	/** The file's path. */
+	path: string;
+	/** The file's current filesystem revision, bumping on a watched change. */
+	revision: number;
+}
+
+/**
+ * Registers a viewer for files the manifest's `contributes.fileViewers` names by extension (W7).
+ * `matches` narrows further than the manifest's extensions can (an extension shared with another
+ * viewer, say); the first registered viewer that matches wins.
+ */
+export interface FileViewerRegistration {
+	/** Further narrows which paths this viewer handles, beyond the manifest's declared extensions. */
+	matches?: (path: string) => boolean;
+	/** Renders the file. */
+	component: ComponentType<FileViewerProps>;
+	/** Handles opening the file outright instead of the file-open dispatcher's normal path; return `true` to take over. */
+	open?: (workspaceId: string, path: string) => boolean;
+}
+
+/** Registers a section in Settings (W4). */
+export interface SettingsSectionRegistration {
+	/** The section's id; defaults to the plugin's id when omitted. */
+	id?: string;
+	/** Shown in the Settings section list. */
+	label: string;
+	/** Icon shown alongside `label`. */
+	icon: ComponentType<{ className?: string }>;
+	/** Renders the section's contents. */
+	component: ComponentType;
+}
+
+/** Registers the component for a side tool the manifest's `contributes.sideTools` declares (W5). */
+export interface SideToolRegistration {
+	/** The tool name, matching an entry in the manifest's `contributes.sideTools`. */
+	tool: string;
+	/** Renders the tool, scoped to one workspace. */
+	component: ComponentType<{ workspaceId: string }>;
+	/** Decides per workspace whether the tool starts open on the rail by default. */
+	railDefault?: (workspaceId: string) => Promise<boolean>;
+}
+
+/** Registers an embedded companion pane attachable to a terminal or chat host (W6). */
+export interface CompanionRegistration {
+	/** The companion's kind, used with {@link PluginWebContext.focusCompanion}. */
+	kind: string;
+	/** Which host kinds this companion can attach to. */
+	hosts: readonly ("terminal" | "chat")[];
+	/** Shown on the companion's tab or toggle. */
+	title: string;
+	/** Icon shown alongside `title`. */
+	icon: ComponentType<{ className?: string }>;
+	/** A hook reporting whether the companion is available for a given host. */
+	useAvailable(host: CompanionHost): boolean;
+	/** A hook overriding `title` with a per-instance value (e.g. a drawing's own heading); `null` falls back to `title`. */
+	useTitle?(host: CompanionHost): string | null;
+	/** Renders the companion, scoped to the host it is attached to. */
+	component: ComponentType<{ host: CompanionHost }>;
+}
+
+/** The icon or adornment a `tabDecoration` resolver returns for one tab (W8). */
+export interface TabDecoration {
+	/** Overrides the tab's icon. */
+	icon?: ComponentType<{ className?: string }>;
+	/** Extra content rendered alongside the tab, such as a badge. */
+	adornment?: ReactNode;
+}
+
+/** Identifies one open tab, passed to a `tabDecoration` resolver (W8). */
+export type TabRef =
+	| { kind: "terminal"; workspaceId: string; tabKey: string }
+	| { kind: "tool"; workspaceId: string; tool: LayoutToolId }
+	| { kind: "file" | "external-file" | "diff"; workspaceId: string; path: string }
+	| { kind: "chat"; workspaceId: string; sessionId: string };
+
+/**
+ * A workspace-scoped action registration (W10), the default `scope`. Rendered in the workspace's
+ * start-actions row beside the host's own new-chat and new-terminal buttons — wherever the client's
+ * layout puts that row: the centre tab strip, or under the workspace in the Projects navigator when
+ * tabs live there. The component must not assume which.
+ */
+export interface WorkspaceScopedActionRegistration {
+	/** The action's id. */
+	id: string;
+	scope?: "workspace";
+	/** Renders the action, scoped to a workspace and the centre group an open from it should target. */
+	component: ComponentType<{ workspaceId: string; groupId: string }>;
+}
+
+/** A project-scoped action registration (W10), which also renders on the Welcome screen and after project creation. */
+export interface ProjectScopedActionRegistration {
+	/** The action's id. */
+	id: string;
+	scope: "project";
+	/** Renders the action, scoped to a project. */
+	component: ComponentType<{ projectId: string }>;
+}
+
+/** Registers a contribution to the centre actions slot, workspace- or project-scoped (W10). */
+export type WorkspaceActionRegistration =
+	| WorkspaceScopedActionRegistration
+	| ProjectScopedActionRegistration;
+
+/** Registers a row rendered alongside a terminal (W11), given a {@link TerminalAccessoryApi} scoped to that terminal. */
+export interface TerminalAccessoryRegistration {
+	/** Renders the accessory row. */
+	component: ComponentType<{ terminal: TerminalAccessoryApi }>;
+}
+
+/**
+ * Core rendering slots a plugin may fill (W17 for `fileIcon`; `documentLink` and
+ * `writtenPathGroup` are consulted the same way). Filled with {@link PluginWebContext.slot}; the
+ * first registered resolver that returns non-null wins.
+ */
+export interface CoreSlots {
+	/**
+	 * Resolves a file-type glyph for a path, consulted wherever core renders a file (W17). Return the
+	 * same component for the same answer: core renders the result as an element, so a fresh component
+	 * per call is a new element type on every render and remounts the glyph (a resize flickers).
+	 */
+	fileIcon?: (
+		path: string,
+		kind: "file" | "directory",
+	) => ComponentType<{ className?: string }> | null;
+	/** Resolves a document link's href to a workspace-relative path core can open. */
+	documentLink?: (workspaceId: string, href: string) => { path: string } | null;
+	/** Groups a written path under a labelled, revealable tool for a changes-style listing. */
+	writtenPathGroup?: (
+		workspaceId: string,
+		path: string,
+	) => { id: string; label: (count: number) => string; tool: LayoutToolId } | null;
+}
+
+/** A tool call's lifecycle state, passed to a registered {@link ToolRenderer}. */
+export type ToolStatus = "running" | "done" | "error";
+
+/** Props passed to a tool renderer registered with {@link PluginWebContext.toolRenderer}. */
+export interface ToolRenderProps {
+	/** The tool call's id. */
+	toolCallId: string;
+	/** The tool's name, the same name a {@link PluginToolDefinition} declares. */
+	toolName: string;
+	/** The call's arguments. */
+	args: Record<string, unknown>;
+	/** The call's result, once available. */
+	result: unknown;
+	/** The call's current status. */
+	status: ToolStatus;
+	/** The workspace root the call ran in, when known. */
+	workspaceRoot?: string | undefined;
+	/** Opens a file from within the renderer, when the host supports it. */
+	onOpenFile?: ((path: string) => void) | undefined;
+	/** Whether the call's result is still streaming in. */
+	streaming: boolean;
+	/** Whether the renderer may take interactive input, such as a confirmation. */
+	interactive?: boolean;
+	/** Reports a rendering error, or clears one by passing `null`. */
+	onRender?: ((error: string | null) => void) | undefined;
+}
+
+/** Renders one tool call, registered by tool name with {@link PluginWebContext.toolRenderer}. */
+export type ToolRenderer = (props: ToolRenderProps) => ReactNode;
+
+/** Options for {@link PluginWebContext.toolRenderer}. */
+export interface ToolRendererOptions {
+	/** Renders a one-line summary shown when the full renderer is collapsed. */
+	summary?: (props: ToolRenderProps) => string;
+	/** Whether the renderer is wrapped in the standard tool-call card chrome, or rendered bare. */
+	chrome?: "card" | "bare";
+}
+
+/**
+ * The context passed to a plugin's {@link PluginWebActivate} function: the closed set of
+ * nineteen web capabilities (W1–W19 in the module spec). Every registration made through it is
+ * recorded by the loader and unmounted when the plugin is disabled, so a plugin keeps no cleanup
+ * bookkeeping of its own. All members are only meaningful to call during or after `activate` runs.
+ */
+export interface PluginWebContext<C extends PluginContract> {
+	/** The plugin's id, from its contract. */
+	readonly id: C["id"];
+	/** This activation's logger. */
+	readonly log: PluginWebLogger;
+
+	/**
+	 * Calls one of the contract's declared WS request methods (W1).
+	 * @param name the method name from the contract
+	 * @param params the method's params
+	 * @returns the method's result
+	 */
+	request<M extends keyof C["methods"]>(
+		name: M,
+		params: MethodParams<C, M>,
+	): Promise<MethodResult<C, M>>;
+	/**
+	 * Subscribes to one of the contract's declared channels (W1). For a state channel this reads
+	 * the keyed snapshot on mount and again on reconnect, rather than relying on any replay.
+	 * @param channel the channel name from the contract
+	 * @param handler called with each pushed payload
+	 * @param scope for a state channel, the key fields identifying which scope to read and subscribe to
+	 * @returns a function that cancels the subscription
+	 */
+	subscribe<K extends keyof C["channels"]>(
+		channel: K,
+		handler: (payload: ChannelPayload<C, K>) => void,
+		scope?: Partial<ChannelPayload<C, K>>,
+	): () => void;
+
+	/** Reads the plugin's settings reactively (W2). */
+	useSettings(): PluginSettings<C>;
+	/**
+	 * Patches the plugin's settings namespace (W2). The web side never writes settings locally —
+	 * the returned promise resolves once `settings.changed` round-trips, so `useSettings` updates
+	 * through the same path any other client's change would.
+	 * @param patch fields to merge into the plugin's settings
+	 */
+	patchSettings(patch: Partial<PluginSettings<C>>): Promise<void>;
+
+	/** Reads a value from the {@link HostProjection} reactively, re-rendering only when the selected value changes (W3). */
+	useHost<T>(selector: (host: HostProjection) => T): T;
+	/** Reads a value from the {@link HostProjection} synchronously, outside a render (W3). */
+	host(): HostProjection;
+	/**
+	 * Observes a value from the {@link HostProjection} outside React (W3), calling `listener` only
+	 * when the selected value changes.
+	 * @param selector projects the value to watch
+	 * @param listener called with the new and previous value on change
+	 * @returns a function that stops observing
+	 */
+	watchHost<T>(
+		selector: (host: HostProjection) => T,
+		listener: (value: T, previous: T) => void,
+	): () => void;
+
+	/** Contributes a Settings section (W4). */
+	settingsSection(section: SettingsSectionRegistration): void;
+
+	/** Registers the component for a manifest-declared side tool (W5). */
+	sideTool(registration: SideToolRegistration): void;
+
+	/** Contributes an embedded companion pane (W6). */
+	companion(registration: CompanionRegistration): void;
+	/** Focuses a companion of the given `kind` attached to `host` (W6). */
+	focusCompanion(host: CompanionHost, kind: string): void;
+
+	/** Registers a file viewer for the manifest's declared extensions (W7). */
+	fileViewer(registration: FileViewerRegistration): void;
+
+	/** Registers a resolver decorating tabs with an icon or adornment (W8); first non-null result wins. */
+	tabDecoration(decorate: (tab: TabRef) => TabDecoration | null): void;
+
+	/** Registers an agent launcher (W9). */
+	launcher(launcher: AgentLauncher): void;
+	/** Reads all registered agent launchers synchronously (W9). */
+	launchers(): readonly AgentLauncher[];
+	/** Reads all registered agent launchers reactively (W9). */
+	useLaunchers(): readonly AgentLauncher[];
+
+	/** Contributes a workspace- or project-scoped action (W10). */
+	workspaceAction(action: WorkspaceActionRegistration): void;
+
+	/** Contributes a terminal accessory row (W11). */
+	terminalAccessory(registration: TerminalAccessoryRegistration): void;
+
+	/** Editor operations and events (W12). */
+	editors: {
+		/**
+		 * Registers an observer of editor lifecycle and selection events.
+		 * @param handler called with each event
+		 * @returns a function that cancels the observation
+		 */
+		onEvent(handler: (event: EditorEvent) => void): () => void;
+		/**
+		 * Opens a file in an editor.
+		 * @param workspaceId the workspace the file belongs to
+		 * @param path the file's path
+		 * @param options a line to reveal, whether to open as a preview tab, and `raw` to bypass every registered file viewer and the binary read strategy
+		 * @returns the opened editor, or `null` if it could not be opened
+		 */
+		open(
+			workspaceId: string,
+			path: string,
+			options?: { line?: number; keyPath?: readonly string[]; preview?: boolean; raw?: boolean },
+		): Promise<EditorRef | null>;
+		/** Closes an editor by id. */
+		close(id: string): void;
+		/** Lists open editors, optionally scoped to one workspace. */
+		list(workspaceId?: string): readonly EditorRef[];
+		/** Reports whether an editor has unsaved changes. */
+		isDirty(id: string): boolean;
+		/** Saves an editor's contents. */
+		save(id: string): Promise<void>;
+		/** Reads the active editor reactively. */
+		useActive(): EditorRef | null;
+		/**
+		 * Reports a selection made in a plugin's own rendered document into the shared editor-events
+		 * stream, the same surface Monaco and the markdown preview report through.
+		 * @param editor the editor the selection belongs to
+		 * @param selection the selected range and text, or `null` to clear it
+		 */
+		reportSelection(
+			editor: EditorRef,
+			selection: {
+				startLine: number;
+				startColumn: number;
+				endLine: number;
+				endColumn: number;
+				text: string;
+			} | null,
+		): void;
+	};
+
+	/**
+	 * Opens a terminal in a workspace (W13). Attaches to `options.tabKey` instead of creating a new
+	 * tab when a tab with that key already exists in the layout.
+	 * @param workspaceId the workspace to open the terminal in
+	 * @param options a command to run, a tab key to attach to or create, and an actions group id
+	 * @returns the opened or attached terminal's tab key
+	 */
+	openTerminal(
+		workspaceId: string,
+		options?: { command?: string; tabKey?: string; groupId?: string },
+	): Promise<{ tabKey: string }>;
+	/**
+	 * Opens a chat tab in a workspace (W13). `options.prompt`, when given, is submitted immediately
+	 * rather than staged as a draft.
+	 * @param workspaceId the workspace to open the chat in
+	 * @param options an opening prompt to submit
+	 * @returns the opened chat's session id
+	 */
+	openChat(
+		workspaceId: string,
+		options?: { prompt?: string; sessionId?: string },
+	): Promise<{ sessionId: string }>;
+	/** Enters a project's default workspace, creating it if needed (W13). */
+	enterDefaultWorkspace(projectId: string): Promise<Workspace | null>;
+	/** Asks the host for a file (or, with `directory`, a folder) picker (W13); resolves to `null` if the user cancels. */
+	pickFile(options?: { workspaceId?: string; directory?: boolean }): Promise<string | null>;
+
+	/** Builds a byte URL for a worktree file (W14). */
+	fileUrl(workspaceId: string, path: string): string;
+	/** Reads a file's current filesystem revision reactively, bumping on a watched change (W14). */
+	useFileRevision(workspaceId: string, path: string): number;
+	/** Starts watching a workspace for filesystem changes, keeping {@link PluginWebContext.useFileRevision} current (W14). */
+	watchWorkspace(workspaceId: string): Promise<void>;
+
+	/** Registers an observer called after the transport reconnects (W15). */
+	onReconnect(handler: () => void): () => void;
+	/** Registers an observer called when a workspace is removed (W15). */
+	onWorkspaceRemoved(handler: (workspaceId: string) => void): () => void;
+
+	/** Reveals a tool by id in the layout, placing and selecting it (W16). */
+	revealTool(workspaceId: string, tool: LayoutToolId): void;
+
+	/** Scopes the Changes panel to a commit, the uncommitted tree, or a branch (W18). */
+	setDiffScope(workspaceId: string, scope: GitDiffScope): void;
+
+	/**
+	 * Builds a URL for a file under the manifest's declared `assets` directory (W19). Throws when the
+	 * plugin declares no `assets`.
+	 * @param path the asset's path, relative to the manifest's `assets` directory
+	 */
+	assetUrl(path: string): string;
+
+	/**
+	 * Fills a {@link CoreSlots} slot. The first registered resolver that returns non-null wins.
+	 * @param name the slot to fill
+	 * @param resolver the slot's resolver
+	 */
+	slot<K extends keyof CoreSlots>(name: K, resolver: NonNullable<CoreSlots[K]>): void;
+
+	/**
+	 * Registers the renderer for a tool call, joined by tool name to a {@link PluginToolDefinition}
+	 * or any other tool of that name; an unregistered tool falls back to the default renderer.
+	 * @param name the tool name to render
+	 * @param renderer renders each call to that tool
+	 * @param options a collapsed summary and chrome choice
+	 */
+	toolRenderer(name: string, renderer: ToolRenderer, options?: ToolRendererOptions): void;
+
+	/**
+	 * Reads a client-local preference, namespaced and endpoint-qualified under
+	 * {@link pluginPreferenceKey}. Nothing plugin-local crosses the wire.
+	 * @param key the preference name
+	 * @returns get, set, and remove operations on that preference
+	 */
+	preference(key: string): { get(): string | null; set(value: string): void; remove(): void };
+
+	/**
+	 * Resolves a handle to a declared dependency's wire surface, for a plugin listed in this
+	 * plugin's manifest `dependsOn`. The web-side counterpart of {@link DependencyHandle}: the
+	 * ordinary request path rather than an in-process call.
+	 * @param contract the dependency's contract value, imported only as a type
+	 * @returns a handle to call the dependency's methods and subscribe to its channels
+	 */
+	dependency<D extends PluginContract>(
+		contract: D,
+	): {
+		request<M extends keyof D["methods"]>(
+			name: M,
+			params: MethodParams<D, M>,
+		): Promise<MethodResult<D, M>>;
+		subscribe<K extends keyof D["channels"]>(
+			channel: K,
+			handler: (payload: ChannelPayload<D, K>) => void,
+		): () => void;
+	};
+
+	/** Shows a toast notification. */
+	notify(kind: "info" | "error", title: string, description?: string): void;
+}
+
+/**
+ * A plugin's web entry point. Called once per activation with a fresh {@link PluginWebContext};
+ * every registration made through that context takes effect immediately and is unmounted when the
+ * plugin is disabled. A contribution is rendered by its own wrapper component keyed by plugin id,
+ * so every hook it uses lives inside a component that mounts and unmounts as a whole — no shared
+ * component's hook count may vary with the roster.
+ * @param ctx this activation's web context
+ * @returns nothing, or a {@link PluginDisposer} to run when the plugin is disabled
+ */
+export type PluginWebActivate<C extends PluginContract> = (
+	ctx: PluginWebContext<C>,
+) => undefined | PluginDisposer;
+
+/** The value a plugin's web entry module exports by default, built with {@link definePluginWeb}. */
+export interface PluginWebModule<C extends PluginContract = PluginContract> {
+	/** The plugin's activate function. */
+	activate: PluginWebActivate<C>;
+}
+
+/**
+ * Identity helper that returns `module` unchanged while inferring its contract type parameter `C`
+ * purely as a type — the web half never imports a contract value, only its shape, so `C` is
+ * supplied at the call site via `definePluginWeb<typeof contract>(...)` using an `import type`.
+ * @param module the plugin's activate function
+ * @returns `module`, unchanged
+ * @example
+ * ```ts
+ * export default definePluginWeb<typeof contract>({
+ *   activate(ctx) {
+ *     ctx.sideTool({ tool: "board", component: TodoBoard });
+ *     ctx.subscribe("todos", (todos) => console.log(todos));
+ *   },
+ * });
+ * ```
+ */
+export function definePluginWeb<C extends PluginContract>(
+	module: PluginWebModule<C>,
+): PluginWebModule<C> {
+	return module;
+}

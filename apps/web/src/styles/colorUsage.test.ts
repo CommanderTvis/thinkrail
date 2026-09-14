@@ -1,12 +1,16 @@
 import { describe, expect, it } from "bun:test";
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { loadColors, paletteVar, renderCss, themeColorKeys, validate } from "../../scripts/colors";
 import { normalizeEol } from "../../scripts/generatedFiles";
 
 const SRC = new URL("..", import.meta.url).pathname;
+const PLUGIN_UI_SRC = new URL("../../../../packages/plugin-ui/src/", import.meta.url).pathname;
 const read = (path: string) => normalizeEol(readFileSync(path, "utf8"));
-const rel = (path: string) => path.slice(SRC.length);
+const rel = (path: string) =>
+	path.startsWith(PLUGIN_UI_SRC)
+		? `plugin-ui/${path.slice(PLUGIN_UI_SRC.length)}`
+		: path.slice(SRC.length);
 const code = (path: string) =>
 	read(path)
 		.replace(/\/\*[\s\S]*?\*\//g, "")
@@ -27,7 +31,10 @@ function sourceFiles(dir: string, exts = /\.(tsx?|css)$/): string[] {
 }
 
 const COLORS = loadColors();
-const FILES = [...sourceFiles(SRC)];
+const FILES = [
+	...sourceFiles(SRC),
+	...(existsSync(PLUGIN_UI_SRC) ? sourceFiles(PLUGIN_UI_SRC) : []),
+];
 const TS_FILES = FILES.filter((f) => /\.tsx?$/.test(f));
 const CSS_FILES = FILES.filter((f) => f.endsWith(".css"));
 
@@ -191,7 +198,7 @@ describe("colour at a call site", () => {
 });
 
 describe("raw colour values", () => {
-	const ALLOWLIST = new Set(["lib/utils.ts", "panels/colorUtils.ts"]);
+	const ALLOWLIST = new Set(["lib/utils.ts", "plugin-ui/editor/colorUtils.ts"]);
 
 	it("appear in no component", () => {
 		const literal = /#[0-9a-fA-F]{3,8}\b|\brgba?\(|\bhsla?\(/;

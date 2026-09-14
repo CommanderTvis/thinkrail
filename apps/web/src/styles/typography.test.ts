@@ -21,6 +21,7 @@ import {
 
 const typography = loadTypography();
 const SRC = new URL("..", import.meta.url).pathname;
+const PLUGIN_UI_SRC = new URL("../../../../packages/plugin-ui/src/", import.meta.url).pathname;
 const GENERATED = normalizeEol(readFileSync(GENERATED_PATH, "utf8"));
 
 const read = (p: string) => readFileSync(p, "utf8");
@@ -428,8 +429,8 @@ describe("generated CSS", () => {
 		expect(GENERATED).toContain("--tr-font-size-s11: 11px;");
 		expect(GENERATED).toContain("--tr-font-size-s13: 13px;");
 		expect(GENERATED).toContain("--tr-line-height-default: 1.6;");
-		const monaco = read(join(SRC, "panels/monacoSetup.ts"));
-		const editorFont = read(join(SRC, "panels/editorFont.ts"));
+		const monaco = read(join(PLUGIN_UI_SRC, "editor/monacoSetup.ts"));
+		const editorFont = read(join(PLUGIN_UI_SRC, "editor/editorFont.ts"));
 		const xterm = read(join(SRC, "panels/TerminalInstance.tsx"));
 		expect(editorFont).toContain('cssVar("--tr-font-size-s11")');
 		expect(xterm).toContain('cssVar("--tr-font-size-s13")');

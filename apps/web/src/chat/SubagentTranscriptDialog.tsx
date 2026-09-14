@@ -1,6 +1,6 @@
 import type { DelegationRunStatus, TranscriptMessage } from "@thinkrail/contracts";
+import { Dialog, DialogContent, DialogTitle } from "@thinkrail/plugin-ui";
 import { useEffect, useMemo, useState } from "react";
-import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { errorText, getTransport, wsErrorCode } from "@/transport";
 import { AskStatesContext, deriveAskStates } from "./askState";
 import { ChatActionsContext } from "./ChatActions";

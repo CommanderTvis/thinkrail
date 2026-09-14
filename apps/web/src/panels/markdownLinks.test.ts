@@ -2,9 +2,14 @@ import { afterEach, expect, test } from "bun:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { Markdown } from "../chat/Markdown";
+import { usePluginRegistry } from "../plugins/registry";
+import { useAppStore } from "../store";
 import { classifyHref, documentComponents, resolveRelativePath, slugify } from "./markdownLinks";
+import { specUrlTransform } from "./specDocument";
 
-afterEach(() => {});
+afterEach(() => {
+	usePluginRegistry.setState({ slots: { fileIcon: [], documentLink: [], writtenPathGroup: [] } });
+});
 
 test("classifyHref distinguishes anchors, external, and relative targets", () => {
 	expect(classifyHref(undefined)).toBe("empty");
@@ -53,6 +58,32 @@ test("relative document targets have no browser-navigable href", () => {
 	expect(html).toContain('<button type="button" data-testid="markdown-file-link"');
 	expect(html).toContain('data-path="apps/web/src/themes/SPEC.md"');
 	expect(html).not.toContain('href="../themes/SPEC.md"');
+});
+
+test("a spec: link resolves through the documentLink slot before the legacy graph lookup", () => {
+	useAppStore.setState({
+		specsByWorkspace: {
+			"workspace-1": [
+				{ id: "todo-groups", type: "task-spec", title: "t", path: "legacy/path.md" } as never,
+			],
+		},
+	});
+	usePluginRegistry
+		.getState()
+		.addSlot("spec-dialect", "documentLink", (_workspaceId, href) =>
+			href === "spec:todo-groups" ? { path: "plugin/resolved.md" } : null,
+		);
+
+	const html = renderToStaticMarkup(
+		createElement(Markdown, {
+			text: "[the spec](spec:todo-groups)",
+			urlTransform: specUrlTransform,
+			components: documentComponents({ workspaceId: "workspace-1", path: "chat.md" }),
+		}),
+	);
+
+	expect(html).toContain('data-path="plugin/resolved.md"');
+	expect(html).not.toContain('data-path="legacy/path.md"');
 });
 
 test("slugify matches GitHub-style heading anchors", () => {

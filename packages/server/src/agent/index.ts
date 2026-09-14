@@ -5,12 +5,16 @@ export { readChildTranscript, resetDelegationServices } from "./delegation";
 export {
 	type BundledExtensionFactory,
 	type BundledExtensions,
+	type BundledPluginRuntime,
+	bundledPluginRuntime,
 	listProjectAliasSkillNames,
 	listSkillCatalog,
 	listSkillCommands,
 	PI_EXTENSION_PACKAGES,
 	type PiExtensionPackage,
+	type PluginPiResources,
 	registerBundledRuntime,
+	setPluginResourcesProvider,
 } from "./extensions";
 export * from "./oneshot";
 export {

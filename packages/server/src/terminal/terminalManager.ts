@@ -1,12 +1,15 @@
 import { randomUUID } from "node:crypto";
 import { userInfo } from "node:os";
 import type {
+	TerminalAgentRecord,
 	TerminalDataPush,
 	TerminalDetachedPush,
 	TerminalExitPush,
 	TerminalTabInfo,
 } from "@thinkrail/contracts";
 import { TERMINAL_REPLAY_KB, WS_CHANNELS } from "@thinkrail/contracts";
+import type { TerminalRef } from "@thinkrail/plugin-api";
+import type { RevivePrefill, TerminalEvent } from "@thinkrail/plugin-api/host";
 import { type IPty, spawn } from "bun-pty";
 import {
 	loadConfig,
@@ -28,7 +31,7 @@ import { nudgePtyRedraw, type PtyGrid, resizePtyIfChanged } from "./ptyGrid";
 import { terminalShell, terminalShellArgs, terminalShellStartFailure } from "./shellArgs";
 import { hasChildProcesses } from "./shellBusy";
 import { adoptedTitle } from "./terminalTitle";
-import { forgetTerminalTokens, type TerminalRef, terminalMcpUrl } from "./terminalTokens";
+import { forgetTerminalTokens, terminalMcpUrl } from "./terminalTokens";
 
 type PushToClient = (clientKey: string, channel: string, data: unknown) => TerminalDeliveryResult;
 
@@ -41,6 +44,9 @@ interface TerminalEntry {
 	recorder: OutputRecorder;
 	mouseModeGuard: MouseModeGuard;
 	grid: PtyGrid;
+	agentKind?: string | undefined;
+	agentCommand?: string | undefined;
+	agentSessionId?: string | undefined;
 }
 
 interface TabRecord {
@@ -63,7 +69,9 @@ const terminals = new Map<string, TerminalEntry>();
 const ptyByTab = new Map<string, string>();
 const tabsByWorkspace = new Map<string, TabRecord[]>();
 const pendingReplay = new Map<string, string>();
+const pendingPrefill = new Map<string, { text: string; submit: boolean }>();
 /** The session an un-taken offer names, kept so a restart still has one to make. See SPEC.md. */
+const carriedAgent = new Map<string, TerminalAgentRecord>();
 
 const TAB_INDEX_SEP = "\u0000";
 
@@ -85,6 +93,15 @@ export function setTerminalTabsPublisher(
 	fn: (workspaceId: string, tabs: TerminalTabInfo[]) => void,
 ): void {
 	broadcastTabs = fn;
+}
+
+let terminalObserver: (event: TerminalEvent) => void = () => {};
+export function setTerminalObserver(fn: ((event: TerminalEvent) => void) | null): void {
+	terminalObserver = fn ?? (() => {});
+}
+
+function notifyObserver(event: TerminalEvent): void {
+	terminalObserver(event);
 }
 
 function membershipChanged(workspaceId: string): void {
@@ -132,6 +149,14 @@ const completions = createTerminalCompletionQueue((clientKey, channel, data) =>
 	pushToClient(clientKey, channel, data),
 );
 
+type EnvContributor = (terminal: TerminalRef) => Record<string, string>;
+
+let installedEnvContributor: EnvContributor | null = null;
+
+export function setTerminalEnvContributors(contributor: EnvContributor | null): void {
+	installedEnvContributor = contributor;
+}
+
 function ptyEnv(workspaceId: string, tabKey: string): Record<string, string> {
 	const env: Record<string, string> = {};
 	for (const [key, value] of Object.entries(process.env)) {
@@ -147,6 +172,7 @@ function ptyEnv(workspaceId: string, tabKey: string): Record<string, string> {
 	env.LOGNAME = username;
 	const mcpUrl = terminalMcpUrl({ workspaceId, tabKey });
 	if (mcpUrl !== null) env.THINKRAIL_MCP_URL = mcpUrl;
+	Object.assign(env, installedEnvContributor?.({ workspaceId, tabKey }) ?? {});
 	return env;
 }
 
@@ -250,6 +276,7 @@ function spawnForTab(
 	};
 	terminals.set(id, entry);
 	ptyByTab.set(tabIndex(workspaceId, tabKey), id);
+	notifyObserver({ kind: "spawned", terminal: { workspaceId, tabKey }, pid: pty.pid });
 
 	pty.onData((raw) => {
 		const data = mouseModeGuard.transform(raw);
@@ -263,6 +290,14 @@ function spawnForTab(
 		ptyByTab.delete(index);
 		const finalScreen = recorder.snapshot();
 		if (finalScreen) pendingReplay.set(index, finalScreen);
+		// A pair still set here died with the shell, not by the user's hand — carried like the screen. See SPEC.md.
+		if (entry.agentKind !== undefined && entry.agentCommand !== undefined) {
+			carriedAgent.set(index, {
+				kind: entry.agentKind,
+				command: entry.agentCommand,
+				...(entry.agentSessionId !== undefined ? { sessionId: entry.agentSessionId } : {}),
+			});
+		}
 		recorder.dispose();
 		const finalBatch = output.finish();
 		const data: TerminalDataPush | undefined = finalBatch
@@ -272,6 +307,11 @@ function spawnForTab(
 		if (entry.attachedClient) {
 			completions.enqueue(entry.attachedClient, { ...(data ? { data } : {}), exit });
 		}
+		notifyObserver({
+			kind: "exited",
+			terminal: { workspaceId: entry.workspaceId, tabKey: entry.tabKey },
+			exitCode,
+		});
 	});
 	return { id, entry };
 }
@@ -304,6 +344,28 @@ export interface AttachResult {
 	id: string;
 	created: boolean;
 	replay?: string;
+	/** Typed into the shell but never run — the user decides whether to resume. See SPEC.md. */
+	prefill?: string;
+	/** Run the offer instead of typing it: a surface that promised to bring its agent back. */
+	prefillSubmit?: boolean;
+}
+
+type RevivePrefillHook = (
+	terminal: TerminalRef,
+	record: TerminalAgentRecord,
+) => RevivePrefill | null;
+
+let installedRevivePrefillHook: RevivePrefillHook | null = null;
+
+export function setRevivePrefillHook(hook: RevivePrefillHook | null): void {
+	installedRevivePrefillHook = hook;
+}
+
+function revivePrefillFor(
+	terminal: TerminalRef,
+	record: TerminalAgentRecord,
+): RevivePrefill | null {
+	return installedRevivePrefillHook?.(terminal, record) ?? null;
 }
 
 export function attachTerminal(
@@ -352,17 +414,26 @@ export function attachTerminal(
 	const revived = pendingReplay.get(index);
 	const { id, entry } = spawnForTab(workspaceId, tabKey, clientKey, options, revived);
 	pendingReplay.delete(index);
+	// Consumed by the first shell that comes back, not held for every later reattach: the offer belongs to
+	// the session that was interrupted, and re-typing it into a shell already in use would be an intrusion.
+	const prefillEntry = pendingPrefill.get(index);
+	pendingPrefill.delete(index);
 	if (isNewTab) membershipChanged(workspaceId);
 	const replay = entry.recorder.snapshot();
 	return {
 		id,
 		created: true,
 		...(replay ? { replay } : {}),
+		...(prefillEntry ? { prefill: prefillEntry.text } : {}),
+		...(prefillEntry?.submit ? { prefillSubmit: true } : {}),
 	};
 }
 
 export function listTerminals(workspaceId: string): TerminalTabInfo[] {
-	return tabsFor(workspaceId).map(({ tabKey, title }) => ({ tabKey, title }));
+	return tabsFor(workspaceId).map(({ tabKey, title }) => {
+		const agent = agentRecordOf({ workspaceId, tabKey });
+		return { tabKey, title, ...(agent ? { agent } : {}) };
+	});
 }
 
 function attachedEntry(id: string, caller: string): TerminalEntry | undefined {
@@ -428,9 +499,12 @@ export function closeTerminalTab(
 
 	tabs.splice(position, 1);
 	pendingReplay.delete(index);
+	pendingPrefill.delete(index);
+	carriedAgent.delete(index);
 	forgetTerminalTokens(workspaceId, tabKey);
 	if (entry && id) disposeTerminalEntry(id, entry);
 	membershipChanged(workspaceId);
+	notifyObserver({ kind: "closed", terminal: { workspaceId, tabKey } });
 	return { closed: true, busy: false };
 }
 
@@ -445,6 +519,7 @@ export function closeWorkspaceTerminals(workspaceId: string): void {
 	for (const [id, entry] of terminals) {
 		if (entry.workspaceId === workspaceId) {
 			disposeTerminalEntry(id, entry);
+			notifyObserver({ kind: "closed", terminal: { workspaceId, tabKey: entry.tabKey } });
 		}
 	}
 	tabsByWorkspace.delete(workspaceId);
@@ -487,14 +562,61 @@ export function renameTerminal(workspaceId: string, tabKey: string, title: strin
 	broadcastTabs(workspaceId, listTerminals(workspaceId));
 }
 
+export function agentRecordOf(terminal: TerminalRef): TerminalAgentRecord | null {
+	const entry = entryFor(terminal.workspaceId, terminal.tabKey);
+	if (!entry || entry.agentKind === undefined || entry.agentCommand === undefined) return null;
+	return {
+		kind: entry.agentKind,
+		command: entry.agentCommand,
+		...(entry.agentSessionId !== undefined ? { sessionId: entry.agentSessionId } : {}),
+	};
+}
+
+export function setAgentRecord(terminal: TerminalRef, record: TerminalAgentRecord | null): void {
+	const entry = entryFor(terminal.workspaceId, terminal.tabKey);
+	if (!entry) return;
+	if (record) {
+		entry.agentKind = record.kind;
+		entry.agentCommand = record.command;
+		entry.agentSessionId = record.sessionId;
+	} else {
+		entry.agentKind = undefined;
+		entry.agentCommand = undefined;
+		entry.agentSessionId = undefined;
+		const reset = entry.mouseModeGuard.resetIfEnabled();
+		if (reset) {
+			entry.recorder.push(reset);
+			entry.output.push(reset);
+		}
+	}
+	const tab = tabsByWorkspace
+		.get(terminal.workspaceId)
+		?.find((candidate) => candidate.tabKey === terminal.tabKey);
+	if (tab && record) {
+		const title = adoptedTitle(tab.title);
+		if (title !== "" && title !== tab.title) tab.title = title;
+	}
+	persistTerminalSessions();
+	broadcastTabs(terminal.workspaceId, listTerminals(terminal.workspaceId));
+	notifyObserver({ kind: "agentChanged", terminal, record: agentRecordOf(terminal) });
+}
+
 export function persistTerminalSessions(): void {
 	const sessions: PersistedTerminalSessions = {};
 	for (const [workspaceId, tabs] of tabsByWorkspace) {
 		if (tabs.length === 0) continue;
 		sessions[workspaceId] = tabs.map(({ tabKey, title, defaultTitle }) => {
+			const index = tabIndex(workspaceId, tabKey);
+			// Only a session still running when we shut down: one the user already ended is not something
+			// to bring back — see SPEC.md.
+			const live = agentRecordOf({ workspaceId, tabKey });
+			// An offer nobody took is still worth making: the user closed the app without answering it, and
+			// a shell that was handed the invocation and never ran it kept nothing. See SPEC.md.
+			const agent = live ?? carriedAgent.get(index);
 			return {
 				tabKey,
 				title: defaultTitle ?? title,
+				...(agent ? { agent } : {}),
 			};
 		});
 	}
@@ -509,6 +631,16 @@ export function reviveTerminalSessions(): void {
 			if (!isValidTerminalTabKey(tab?.tabKey)) continue;
 			const title = isValidTerminalTitle(tab.title) ? tab.title : "Terminal";
 			restored.push({ tabKey: tab.tabKey, title, defaultTitle: title });
+			const record = tab.agent;
+			if (record && typeof record.command === "string" && typeof record.kind === "string") {
+				const terminal: TerminalRef = { workspaceId, tabKey: tab.tabKey };
+				const result = revivePrefillFor(terminal, record);
+				const submit = result?.submit ?? false;
+				if (result?.text) {
+					pendingPrefill.set(tabIndex(workspaceId, tab.tabKey), { text: result.text, submit });
+					carriedAgent.set(tabIndex(workspaceId, tab.tabKey), record);
+				}
+			}
 		}
 		if (restored.length > 0) tabsByWorkspace.set(workspaceId, restored);
 	}
@@ -520,4 +652,6 @@ export function resetTerminalState(): void {
 	ptyByTab.clear();
 	tabsByWorkspace.clear();
 	pendingReplay.clear();
+	pendingPrefill.clear();
+	carriedAgent.clear();
 }

@@ -4,8 +4,8 @@ import {
 	RiRefreshLine as Refresh,
 	RiAnticlockwiseLine as RotateCcw,
 } from "@remixicon/react";
+import { IconTooltip } from "@thinkrail/plugin-ui";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { IconTooltip } from "@/components/ui/tooltip";
 import { clampZoomScale, isZoomGesture, ZOOM_SCALE_STEP, zoomScaleForWheel } from "@/lib";
 import { worktreeFileUrl } from "./filesUrl";
 

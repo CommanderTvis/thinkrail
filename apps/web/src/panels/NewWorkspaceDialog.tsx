@@ -17,6 +17,33 @@ import {
 	type WireModel,
 	type Workspace,
 } from "@thinkrail/contracts";
+import type { AgentLauncher } from "@thinkrail/plugin-api/web";
+import {
+	Button,
+	CHIP,
+	CHIP_DISABLED,
+	CHIP_OFF,
+	CHIP_ON,
+	Command,
+	CommandEmpty,
+	CommandGroup,
+	CommandInput,
+	CommandItem,
+	CommandList,
+	Dialog,
+	DialogContent,
+	DialogDescription,
+	DialogTitle,
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuTrigger,
+	IconTooltip,
+	Popover,
+	PopoverContent,
+	PopoverTrigger,
+	Textarea,
+} from "@thinkrail/plugin-ui";
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { ModelSelector } from "@/chat/ModelSelector";
 import { PromptImageChips, usePromptImages } from "@/chat/promptImages";
@@ -24,21 +51,7 @@ import { SkillsButton } from "@/chat/SkillsButton";
 import { SkillsDialog } from "@/chat/SkillsDialog";
 import { ThinkingSelector } from "@/chat/ThinkingSelector";
 import { useModelCatalog } from "@/chat/useModelCatalog";
-import { Button } from "@/components/ui/button";
-import {
-	Command,
-	CommandEmpty,
-	CommandGroup,
-	CommandInput,
-	CommandItem,
-	CommandList,
-} from "@/components/ui/command";
-import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Textarea } from "@/components/ui/textarea";
-import { IconTooltip } from "@/components/ui/tooltip";
 import { cn } from "@/lib";
-import { CHIP, CHIP_OFF, CHIP_ON } from "@/panels/chips";
 import {
 	applyTemplateSlotEdit,
 	beginTemplateSlotSession,
@@ -56,8 +69,10 @@ import {
 	useSlashCommandCompletion,
 	useTemplateCommandPicker,
 } from "@/prompt";
+import { collectWorkbenchCenterGroups } from "@/shell/layout";
 import { selectCatalogModel, toast, useAppStore } from "@/store";
 import { createSessionWithSkillBaseline, errorText, getTransport } from "@/transport";
+import { selectLaunchers, usePluginRegistry } from "../plugins/registry";
 import { BranchPicker } from "./BranchPicker";
 import { useBranchList } from "./branches";
 import { enterDefaultWorkspace } from "./defaultWorkspace";
@@ -75,6 +90,34 @@ export function reconcileModel(
 }
 
 const AGENTS = [{ id: "pi" as const, label: "Bundled agent" }];
+
+function LauncherAgentOption({
+	launcher,
+	selected,
+	onSelect,
+}: {
+	launcher: AgentLauncher;
+	selected: boolean;
+	onSelect: () => void;
+}) {
+	const { available, reason } = launcher.useAvailable();
+	const Icon = launcher.icon;
+	return (
+		<button
+			type="button"
+			data-testid="ws-agent"
+			data-agent={launcher.id}
+			data-selected={selected || undefined}
+			disabled={!available}
+			title={available ? undefined : reason}
+			onClick={onSelect}
+			className={cn(CHIP, selected ? CHIP_ON : CHIP_OFF, !available && CHIP_DISABLED)}
+		>
+			<Icon className="size-14 shrink-0" />
+			{launcher.label}
+		</button>
+	);
+}
 
 const PILL_SHAPE =
 	"flex h-32 min-w-0 items-center gap-8 rounded-[var(--radius-sm)] border border-control-border-default bg-clip-padding bg-control-bg px-8 tr-text-ui text-text-default outline-none transition-colors";
@@ -116,6 +159,8 @@ export function NewWorkspaceDialog({
 	const [thinkingLevel, setThinkingLevel] = useState<ThinkingLevel>("medium");
 	const attachedImages = usePromptImages();
 	const [agent, setAgent] = useState<string>("pi");
+	const launchers = usePluginRegistry(selectLaunchers);
+	const [launcherModel, setLauncherModel] = useState<string | null>(null);
 	const [creating, setCreating] = useState(false);
 	const [trusting, setTrusting] = useState(false);
 	const [manageSkills, setManageSkills] = useState(false);
@@ -212,7 +257,7 @@ export function NewWorkspaceDialog({
 				.request("git.prefetch", { projectId, ref: initialBaseRef })
 				.catch(() => {});
 		}
-	}, [open, projectId, initialPrompt, initialBaseRef, updatePromptDraft, attachedImages.reset]);
+	}, [open, projectId, initialPrompt, initialBaseRef, updatePromptDraft]);
 
 	useEffect(() => {
 		if (!open) return;
@@ -365,7 +410,12 @@ export function NewWorkspaceDialog({
 		setBaseRef(list.defaultBranch);
 		prefetchBase(list.defaultBranch);
 	});
-	const submitEnabled = !creating && !templatePending && attachedImages.pending === 0;
+	const submitEnabled =
+		!creating &&
+		!templatePending &&
+		attachedImages.pending === 0 &&
+		(agent === "pi" || attachedImages.images.length === 0);
+	const selectedLauncher = launchers.find((candidate) => candidate.id === agent);
 
 	const gitless = projects.find((p) => p.id === selectedProjectId)?.hasGit === false;
 	const isolated = target === "worktree" && !gitless;
@@ -408,6 +458,22 @@ export function NewWorkspaceDialog({
 		}
 		onOpenChange(false);
 
+		const launcher = launchers.find((candidate) => candidate.id === agent);
+		if (launcher) {
+			const frame = store.workbenchFrame;
+			const centre = frame ? collectWorkbenchCenterGroups(frame.center)[0]?.id : undefined;
+			store.addTerminal(
+				workspace.id,
+				launcher.terminalCommand({
+					...(launcherModel ? { model: launcherModel } : {}),
+					...(text ? { initialPrompt: text } : {}),
+				}),
+				centre,
+				"center",
+				true,
+			);
+			return;
+		}
 		store.beginChatStart(workspace.id);
 		try {
 			const { result: session, syncedTick } = await createSessionWithSkillBaseline({
@@ -707,7 +773,37 @@ export function NewWorkspaceDialog({
 								{option.label}
 							</button>
 						))}
-						{agent !== "pi" ? null : (
+						{launchers.map((launcher) => (
+							<LauncherAgentOption
+								key={launcher.id}
+								launcher={launcher}
+								selected={agent === launcher.id}
+								onSelect={() => setAgent(launcher.id)}
+							/>
+						))}
+						{selectedLauncher?.models ? (
+							<DropdownMenu>
+								<DropdownMenuTrigger data-testid="ws-claude-model" className={PILL}>
+									{selectedLauncher.models.find((m) => m.id === launcherModel)?.label ??
+										"Default model"}
+								</DropdownMenuTrigger>
+								<DropdownMenuContent align="start">
+									<DropdownMenuItem onSelect={() => setLauncherModel(null)}>
+										Default model
+									</DropdownMenuItem>
+									{selectedLauncher.models.map((m) => (
+										<DropdownMenuItem
+											key={m.id}
+											data-testid={`ws-claude-model-${m.id}`}
+											onSelect={() => setLauncherModel(m.id)}
+										>
+											{m.icon ? <m.icon /> : null}
+											{m.label}
+										</DropdownMenuItem>
+									))}
+								</DropdownMenuContent>
+							</DropdownMenu>
+						) : agent !== "pi" ? null : (
 							<>
 								<ModelSelector
 									models={models}

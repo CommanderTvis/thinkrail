@@ -25,4 +25,5 @@ test("runtime source manifest covers the launcher artifact surface", () => {
 	});
 	expect(basename(sources.trashHelpers.macos)).toBe("macos-trash");
 	expect(basename(sources.trashHelpers.windows)).toBe("windows-trash.exe");
+	expect(sources.plugins.map((plugin) => plugin.id)).toEqual([]);
 });

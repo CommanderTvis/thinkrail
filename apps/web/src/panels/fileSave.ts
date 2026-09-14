@@ -1,8 +1,11 @@
 import type { FileWriteResult } from "@thinkrail/contracts";
-import { mergeText } from "../lib";
+import { pluginMethodName } from "@thinkrail/plugin-api";
+import { isAbsolutePath, mergeText } from "../lib";
 import { type EditorTab, toast, useAppStore } from "../store";
 import { errorText, getTransport } from "../transport";
 import { emitEditorEvent, findEditorRef } from "./editorEvents";
+
+const CLAUDE_CODE_ID = "claude-code";
 
 interface Buffer {
 	workspaceId: string;
@@ -66,7 +69,12 @@ export async function saveFileTab(workspaceId: string, tabId: string): Promise<v
 	};
 	let result: FileWriteResult;
 	try {
-		result = await getTransport().request("fs.writeFile", params);
+		result = isAbsolutePath(buffer.path)
+			? ((await getTransport().request(
+					pluginMethodName(CLAUDE_CODE_ID, "writeFile"),
+					params,
+				)) as FileWriteResult)
+			: await getTransport().request("fs.writeFile", params);
 	} catch (cause) {
 		toast.error(errorText(cause), "Couldn't save the file");
 		return;

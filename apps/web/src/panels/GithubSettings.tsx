@@ -4,8 +4,8 @@ import {
 	RiCloseLine as X,
 } from "@remixicon/react";
 import type { GithubAuthStatus } from "@thinkrail/contracts";
+import { Button } from "@thinkrail/plugin-ui";
 import { useEffect, useState } from "react";
-import { Button } from "@/components/ui/button";
 import { hostWording } from "@/lib/desktopShell";
 import { getTransport } from "@/transport";
 

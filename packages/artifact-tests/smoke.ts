@@ -171,6 +171,14 @@ async function launchDesktop(
 					macos: join(ready.runtimeDir, "macos-trash"),
 					windows: join(ready.runtimeDir, "windows-trash.exe"),
 				},
+				pluginSkillsDir: (id) => {
+					const dir = join(ready.runtimeDir, "plugins", id, "skills");
+					return existsSync(dir) ? dir : null;
+				},
+				pluginAssetsDir: (id) => {
+					const dir = join(ready.runtimeDir, "plugins", id, "assets");
+					return existsSync(dir) ? dir : null;
+				},
 			},
 			stop() {
 				stopPromise ??= (async () => {

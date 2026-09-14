@@ -1,7 +1,7 @@
 import type { GitStatus } from "@thinkrail/contracts";
+import { ToggleSegment } from "@thinkrail/plugin-ui";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { QuietScrollArea } from "@/components/QuietScrollArea";
-import { ToggleSegment } from "@/panels/ToggleSegment";
 import { FileTypeIcon } from "../components/FileTypeIcon";
 import { LoadingRegion } from "../components/Skeleton";
 import {

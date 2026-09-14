@@ -1,0 +1,149 @@
+// ---- editor/index.d.ts ----
+export { applyCodeFont, cssVar, editorFontSize } from "./editorFont";
+export { editorWrappingOptions } from "./editorWrapping";
+export { type EditorSelectionChange, MonacoEditor } from "./MonacoEditor";
+export { decorateEditorContextMenus } from "./monacoMenuIcons";
+export { defineThinkrailTheme, EDITOR_THEME, editorGpuUsable, gpuAcceleration, languageForPath, sharedEditorOptions, THEME, watchThemeSwap, } from "./monacoSetup";
+export { applyReviewDecorations, type LineSelection } from "./reviewGutter";
+export type { EditorReview, SideReview } from "./reviewTypes";
+export { attachReviewCommenting, attachReviewThreads, type ReviewCommentingCallbacks, type ReviewThreadActions, type ReviewThreadData, threadLabel, } from "./reviewWidgets";
+
+// ---- editor/editorFont.d.ts ----
+export declare function cssVar(name: string): string | undefined;
+export declare function editorFontSize(): number;
+/**
+ * The code font is one family for every code surface, so the override is written where they all read
+ * it: the `--tr-font-family-code` custom property. Empty restores the generated value. See SPEC.md.
+ */
+export declare function applyCodeFont(family: string): void;
+
+// ---- editor/editorWrapping.d.ts ----
+import type { editor } from "monaco-editor";
+export declare function editorWrappingOptions(lineWidth: number, bounded: boolean): Pick<editor.IStandaloneEditorConstructionOptions, "wordWrap" | "wordWrapColumn">;
+
+// ---- editor/MonacoEditor.d.ts ----
+import { type ReactNode } from "react";
+import type { EditorReview } from "./reviewTypes";
+export interface EditorSelectionChange {
+    workspaceId: string;
+    path: string;
+    text: string;
+    language: string;
+    startLine: number;
+    startColumn: number;
+    endLine: number;
+    endColumn: number;
+    empty: boolean;
+}
+export declare function MonacoEditor({ path, content, review, focusLine, onFocusHandled, workspaceId, editable, onChange, onSave, lineWidth, lineWidthBounded, gpuRendering, ligatures, onSelectionChange, onSendToChat, onClose, loading, }: {
+    path: string;
+    content: string;
+    review?: EditorReview;
+    focusLine?: number | undefined;
+    onFocusHandled?: (() => void) | undefined;
+    workspaceId?: string | undefined;
+    editable?: boolean | undefined;
+    onChange?: ((value: string) => void) | undefined;
+    onSave?: (() => void) | undefined;
+    lineWidth: number;
+    lineWidthBounded: boolean;
+    gpuRendering?: boolean;
+    ligatures?: boolean;
+    onSelectionChange?: ((change: EditorSelectionChange) => void) | undefined;
+    onSendToChat?: ((change: EditorSelectionChange) => void) | undefined;
+    onClose?: ((workspaceId: string, path: string) => void) | undefined;
+    loading?: ReactNode;
+}): import("react").JSX.Element;
+
+// ---- editor/monacoMenuIcons.d.ts ----
+import type * as monaco from "monaco-editor";
+export declare function decorateEditorContextMenus(codeEditor: monaco.editor.ICodeEditor): monaco.IDisposable;
+
+// ---- editor/monacoSetup.d.ts ----
+import { type Monaco } from "@monaco-editor/react";
+import type { Environment } from "monaco-editor";
+declare global {
+    interface Window {
+        MonacoEnvironment?: Environment;
+    }
+}
+export declare const THEME = "thinkrail";
+export declare const EDITOR_THEME = "thinkrail-editor";
+export declare function languageForPath(path: string): string;
+/** Whether Monaco's GPU renderer can run here — see panels/SPEC.md. */
+export declare const editorGpuUsable: Promise<boolean>;
+export declare function gpuAcceleration(requested: boolean): "on" | "off";
+export declare function sharedEditorOptions(lineWidth: number, bounded: boolean, gpu?: boolean, ligatures?: boolean): {
+    readonly wordWrap?: 'off' | 'on' | 'wordWrapColumn' | 'bounded';
+    readonly wordWrapColumn?: number;
+    readonly readOnly: true;
+    readonly minimap: {
+        readonly enabled: false;
+    };
+    readonly scrollBeyondLastLine: false;
+    readonly automaticLayout: true;
+    readonly fontSize: number;
+    readonly fontFamily: string;
+    readonly unicodeHighlight: {
+        readonly ambiguousCharacters: false;
+    };
+    readonly colorDecorators: false;
+    readonly experimentalGpuAcceleration: "off" | "on";
+    readonly fontLigatures: boolean;
+    readonly lineHeight?: number;
+};
+export declare function defineThinkrailTheme(m: Monaco): void;
+export declare function watchThemeSwap(m: Monaco, themeName?: string): () => void;
+
+// ---- editor/reviewGutter.d.ts ----
+import type { editor } from "monaco-editor";
+export interface LineSelection {
+    startLine: number;
+    endLine: number;
+}
+export declare function applyReviewDecorations(codeEditor: editor.ICodeEditor, previous: string[], ranges: LineSelection[]): string[];
+
+// ---- editor/reviewTypes.d.ts ----
+import type { ReviewCommentingCallbacks, ReviewThreadActions, ReviewThreadData } from "./reviewWidgets";
+export interface SideReview {
+    threads: ReviewThreadData[];
+    commenting: ReviewCommentingCallbacks;
+    focus: {
+        id: string;
+        line: number;
+    } | null;
+}
+export interface EditorReview extends SideReview {
+    actions: ReviewThreadActions;
+    onFocusHandled: () => void;
+    base: SideReview;
+}
+
+// ---- editor/reviewWidgets.d.ts ----
+import * as monaco from "monaco-editor";
+import type { LineSelection } from "./reviewGutter";
+export interface ReviewCommentingCallbacks {
+    onSave: (selection: LineSelection | null, text: string) => Promise<void>;
+    onSend: (selection: LineSelection | null, text: string) => Promise<void>;
+}
+export interface ReviewThreadData {
+    id: string;
+    startLine: number;
+    endLine: number;
+    body: string;
+    status: string;
+    anchorState: string;
+    stale?: boolean;
+    refuted?: boolean;
+}
+export declare function threadLabel(t: Pick<ReviewThreadData, "status" | "anchorState" | "stale" | "refuted">): string;
+export interface ReviewThreadActions {
+    onSendComment: (id: string) => Promise<void>;
+    onDeleteComment: (id: string) => Promise<void>;
+    onUpdateComment: (id: string, body: string) => Promise<void>;
+}
+export declare function attachReviewCommenting(codeEditor: monaco.editor.IStandaloneCodeEditor, callbacks: ReviewCommentingCallbacks): () => void;
+export declare function attachReviewThreads(codeEditor: monaco.editor.ICodeEditor, actions: ReviewThreadActions): {
+    setThreads: (threads: ReviewThreadData[]) => void;
+    dispose: () => void;
+};

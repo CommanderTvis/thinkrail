@@ -1,0 +1,102 @@
+import { RiFullscreenLine as Maximize2 } from "@remixicon/react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@thinkrail/plugin-ui";
+import { type ReactNode, useEffect, useRef, useState } from "react";
+import { CodeBlock } from "../markdown/CodeBlock";
+import { useThemeSwap as onThemeSwap } from "../useThemeSwap";
+import { renderMermaid } from "./mermaid";
+import { PanZoomView } from "./PanZoomView";
+
+export function MermaidView({
+	source,
+	title,
+	fallback,
+	interactive = false,
+	onRender,
+}: {
+	source: string;
+	title?: string;
+	fallback?: ReactNode;
+	/** Fill the space and be navigable in place — a pane, rather than a card in a transcript. */
+	interactive?: boolean;
+	/** What the renderer made of this source: `null` when it drew, the parse error when it did not. */
+	onRender?: (error: string | null) => void;
+}) {
+	const onRenderRef = useRef(onRender);
+	onRenderRef.current = onRender;
+	const [svg, setSvg] = useState<string | null>(null);
+	const [error, setError] = useState<string | null>(null);
+	const [open, setOpen] = useState(false);
+
+	useEffect(() => {
+		let cancelled = false;
+		const run = () => {
+			renderMermaid(source).then((res) => {
+				if (cancelled) return;
+				if (res.svg !== undefined) {
+					setSvg(res.svg);
+					setError(null);
+					onRenderRef.current?.(null);
+				} else {
+					const message = res.error ?? "Failed to render diagram";
+					setError(message);
+					onRenderRef.current?.(message);
+				}
+			});
+		};
+		setSvg(null);
+		setError(null);
+		run();
+		const stopThemeWatch = onThemeSwap(run);
+		return () => {
+			cancelled = true;
+			stopThemeWatch();
+		};
+	}, [source]);
+
+	if (error !== null) {
+		return (
+			<div data-testid="mermaid-error" className="flex flex-col gap-4">
+				<span className="text-feedback-error tr-text-metadata">
+					Diagram failed to render: {error}
+				</span>
+				<CodeBlock code={source} lang="" />
+			</div>
+		);
+	}
+	if (svg === null) {
+		return fallback ?? <span className="text-text-muted tr-text-metadata">Rendering diagram…</span>;
+	}
+	if (interactive) {
+		return (
+			<div data-testid="mermaid-svg" className="flex h-full min-h-0 flex-col">
+				<PanZoomView svg={svg} testid="mermaid-pan-zoom" />
+			</div>
+		);
+	}
+	return (
+		<div className="relative">
+			<PanZoomView svg={svg} testid="mermaid-svg" capped />
+			<button
+				type="button"
+				data-testid="mermaid-fullscreen"
+				aria-label="View diagram full screen"
+				title="Full screen"
+				onClick={() => setOpen(true)}
+				className="absolute top-4 right-4 rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg p-4 text-text-muted transition-colors hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
+			>
+				<Maximize2 className="size-14" />
+			</button>
+			<Dialog open={open} onOpenChange={setOpen}>
+				<DialogContent
+					data-testid="mermaid-fullscreen-dialog"
+					className="flex h-[90vh] w-[95vw] max-w-[95vw] flex-col gap-8"
+				>
+					<DialogHeader>
+						<DialogTitle>{title || "Diagram"}</DialogTitle>
+					</DialogHeader>
+					<PanZoomView svg={svg} />
+				</DialogContent>
+			</Dialog>
+		</div>
+	);
+}

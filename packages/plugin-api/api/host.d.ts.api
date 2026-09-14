@@ -1,0 +1,534 @@
+// ---- host/index.d.ts ----
+/**
+ * @packageDocumentation
+ * The engine-host half of `@thinkrail/plugin-api`: {@link PluginHostContext} and the types its
+ * members use. Imported by `packages/server` and by a plugin's host half; never by `apps/web` or
+ * any web-bundled code, since it is a value-import surface a plugin's host module runs against
+ * in-process.
+ */
+import type { Project, TerminalAgentRecord, Workspace, WorkspaceFsChangedPayload } from "@thinkrail/contracts";
+import type { ChannelPayload, MethodParams, MethodResult, PluginContract, PluginSettings } from "../contract";
+import type { PluginManifest } from "../manifest";
+import type { PluginToolDefinition, TerminalRef } from "../tool";
+/** The logger handed to a plugin's host half as {@link PluginHostContext.log}, one level per method. */
+export interface PluginLogger {
+    debug(msg: string, fields?: object): void;
+    info(msg: string, fields?: object): void;
+    warn(msg: string, fields?: object): void;
+    error(msg: string, fields?: object): void;
+}
+/**
+ * The cleanup function a {@link PluginHostActivate} may return. On a toggle the loader awaits it,
+ * bounded by a timeout; on host shutdown it is not awaited, since `stop()` is synchronous. Runs
+ * only after routing has stopped and in-flight work belonging to the activation has drained.
+ */
+export type PluginDisposer = () => void | Promise<void>;
+/** Identifies the caller of a method handler, for the per-client addressing {@link PluginHostContext.method} and {@link PluginHostContext.publish} support. */
+export interface PluginCall {
+    /** Opaque key of the calling client, usable as a `publish` target. */
+    clientKey: string;
+}
+/** A terminal lifecycle event delivered to a handler registered with {@link PluginHostContext.onTerminal}. */
+export type TerminalEvent = {
+    kind: "spawned";
+    terminal: TerminalRef;
+    pid: number;
+} | {
+    kind: "exited";
+    terminal: TerminalRef;
+    exitCode: number;
+} | {
+    kind: "closed";
+    terminal: TerminalRef;
+} | {
+    kind: "agentChanged";
+    terminal: TerminalRef;
+    record: TerminalAgentRecord | null;
+};
+/** A workspace lifecycle event delivered to a handler registered with {@link PluginHostContext.onWorkspace}. */
+export type WorkspaceEvent = {
+    kind: "created" | "updated";
+    workspace: Workspace;
+} | {
+    kind: "removed";
+    projectId: string;
+    id: string;
+};
+/** The value a {@link PluginHostContext.revivePrefill} hook returns to prefill a revived terminal's `terminal.attach`. */
+export interface RevivePrefill {
+    /** Text to prefill into the revived terminal. */
+    text?: string;
+    /** Whether to submit `text` immediately rather than leaving it staged. */
+    submit?: boolean;
+}
+/** Options for {@link PluginHostContext.git}. */
+export interface GitRunOptions {
+    /** Aborts the git process after this many milliseconds. */
+    timeoutMs?: number;
+    /** Allows the git process network access; denied by default. */
+    network?: boolean;
+}
+/** The result of a {@link PluginHostContext.git} call. */
+export interface GitRunResult {
+    /** Whether the process exited successfully. */
+    ok: boolean;
+    /** Captured stdout. */
+    out: string;
+    /** Captured stderr. */
+    err: string;
+    /** Set when `ok` is `false` because the process was killed on timeout or never launched. */
+    failure?: "timeout" | "launch";
+}
+/**
+ * What a declared {@link PluginDependency} grants at runtime: calling the dependency's wire
+ * methods and subscribing to its channels, in-process rather than over the socket. Obtained from
+ * {@link PluginHostContext.dependency}. Grants nothing beyond these two calls — no shared objects,
+ * no access to the dependency's other host half internals.
+ */
+export interface DependencyHandle<D extends PluginContract> {
+    /**
+     * Calls one of the dependency's declared methods in-process.
+     * @param name the method name from the dependency's contract
+     * @param params the method's params, validated against the dependency's schema
+     * @returns the method's result
+     */
+    request<M extends keyof D["methods"]>(name: M, params: MethodParams<D, M>): Promise<MethodResult<D, M>>;
+    /**
+     * Subscribes to one of the dependency's declared channels.
+     * @param channel the channel name from the dependency's contract
+     * @param handler called with each pushed payload
+     * @returns a function that cancels the subscription
+     */
+    subscribe<K extends keyof D["channels"]>(channel: K, handler: (payload: ChannelPayload<D, K>) => void): () => void;
+}
+/**
+ * The context passed to a plugin's {@link PluginHostActivate} function: the closed set of
+ * seventeen host capabilities (H1–H17 in the module spec). Every registration made through it is
+ * recorded by the loader and torn down on dispose, so a plugin keeps no cleanup bookkeeping of its
+ * own. All members are only meaningful to call during or after `activate` runs; once the
+ * activation is disposed, registrations made through it stop taking effect.
+ */
+export interface PluginHostContext<C extends PluginContract> {
+    /** The plugin's id, from its contract. */
+    readonly id: C["id"];
+    /** This activation's logger. */
+    readonly log: PluginLogger;
+    /** The plugin's assets directory, from the manifest's `assets`, or `null` when none was declared. */
+    readonly assetsDir: string | null;
+    /**
+     * Registers a handler for one of the contract's WS request methods (H1). Params are validated
+     * against the contract's schema before `handler` runs. While the plugin is disabled the method
+     * answers a plain disabled error instead of calling `handler`.
+     * @param name the method name from the contract
+     * @param handler called with the validated params and the calling client
+     */
+    method<M extends keyof C["methods"] & string>(name: M, handler: (params: MethodParams<C, M>, call: PluginCall) => MethodResult<C, M> | Promise<MethodResult<C, M>>): void;
+    /**
+     * Publishes a payload on one of the contract's declared channels (H2), to every subscriber or,
+     * with `target`, to one client. While the plugin is disabled this is a no-op; channels remain
+     * subscribed regardless of enablement, so a publish never reaches an unsubscribed topic
+     * silently.
+     * @param channel the channel name from the contract
+     * @param payload the channel's payload, matching its declared schema
+     * @param target when given, addresses the publish to this client only
+     */
+    publish<K extends keyof C["channels"] & string>(channel: K, payload: ChannelPayload<C, K>, target?: PluginCall): void;
+    /**
+     * Mounts an HTTP route under `/plugin/<id>/` (H3). While the plugin is disabled, requests under
+     * its route answer 404 instead of reaching `handler`.
+     * @param handler called with the request and the subpath under the plugin's route
+     */
+    route(handler: (request: Request, subpath: string) => Response | Promise<Response>): void;
+    /** Returns the public base URL a plugin's own route is reachable at (H3). */
+    publicBaseUrl(): string;
+    /** Exposes exact absolute paths for core text editing, recomputed per workspace on each read or save. */
+    externalFiles(provider: (workspaceId: string) => readonly string[]): void;
+    /**
+     * Registers a pi-free tool (H4). While the plugin is disabled, the tool is removed from the set
+     * future sessions and turns will see; a call already executing still finishes.
+     * @param definition the tool declaration, typically built with {@link definePluginTool}
+     */
+    tool(definition: PluginToolDefinition): void;
+    /**
+     * Registers a contributor of PTY environment variables, computed per terminal at spawn (H5).
+     * Only future terminals see the contribution — a running terminal keeps the environment it was
+     * given at spawn, since there is no way to restamp a live process.
+     * @param contributor called with the spawning terminal, returning env vars to add
+     */
+    terminalEnv(contributor: (terminal: TerminalRef) => Record<string, string>): void;
+    /** Mints an opaque identity token for `terminal` (H6), usable to authenticate calls back to the host for that terminal. */
+    terminalToken(terminal: TerminalRef): string;
+    /** Resolves a token minted by {@link PluginHostContext.terminalToken} back to its terminal, or `null` if it is unknown. */
+    terminalForToken(token: string): TerminalRef | null;
+    /** Reads the persisted, broadcast agent record for `terminal` (H7), or `null` when none is set. */
+    agentRecord(terminal: TerminalRef): TerminalAgentRecord | null;
+    /** Writes the persisted agent record for `terminal` (H7); `null` clears it. Dropped when the terminal closes. */
+    setAgentRecord(terminal: TerminalRef, record: TerminalAgentRecord | null): void;
+    /**
+     * Registers an observer of terminal lifecycle events (H8): spawned, exited, closed, and agent
+     * record changes.
+     * @param handler called with each event
+     */
+    onTerminal(handler: (event: TerminalEvent) => void): void;
+    /** Lists currently known terminals with their process id, or `null` when not yet spawned or already exited (H8). */
+    terminals(): readonly (TerminalRef & {
+        pid: number | null;
+    })[];
+    /** Resolves the workspace a running process belongs to, by pid, or `null` if unknown (H8). */
+    workspaceForProcess(pid: number): string | null;
+    /**
+     * Registers a hook offering a prefill for a terminal being revived (H9), returned to the client
+     * from `terminal.attach`.
+     * @param hook called with the reviving terminal and its agent record; returns a prefill or `null`
+     */
+    revivePrefill(hook: (terminal: TerminalRef, record: TerminalAgentRecord) => RevivePrefill | null): void;
+    /** Writes `data` into `terminal` host-side, bypassing client attachment (H10). */
+    writeTerminal(terminal: TerminalRef, data: string): void;
+    /** Sends `text` to a pi session, steering it while it streams rather than throwing (H11). */
+    sendToSession(sessionId: string, text: string): Promise<void>;
+    /** Lists known projects (H12). */
+    projects(): readonly Project[];
+    /** Lists workspaces, optionally scoped to one project (H12). */
+    workspaces(projectId?: string): readonly Workspace[];
+    /** Reads one workspace by id, or `null` if it does not exist (H12). */
+    workspace(id: string): Workspace | null;
+    /** Starts watching a workspace for filesystem changes, feeding {@link PluginHostContext.onFsChanged} (H12). */
+    watchWorkspace(id: string): Promise<void>;
+    /** Registers an observer of workspace lifecycle events (H12). */
+    onWorkspace(handler: (event: WorkspaceEvent) => void): void;
+    /** Registers an observer of batched filesystem-change events for watched workspaces (H12). */
+    onFsChanged(handler: (payload: WorkspaceFsChangedPayload) => void): void;
+    /**
+     * Feeds a hint into a workspace's auto-naming (H12).
+     * @param workspaceId the workspace to name
+     * @param hint text to derive a name from
+     */
+    suggestWorkspaceName(workspaceId: string, hint: {
+        prompt?: string;
+        turn?: string;
+    }): void;
+    /** Reads the plugin's own settings namespace, validated and defaulted (H13). */
+    settings(): PluginSettings<C>;
+    /** Registers an observer called with the plugin's settings whenever they change (H13). */
+    onSettings(handler: (next: PluginSettings<C>) => void): void;
+    /**
+     * Reads namespaced JSON state persisted under the data directory, at the path
+     * {@link pluginStateFile} builds for `name` (H14).
+     * @param name the state file name
+     * @param fallback returned when the file does not exist or fails to parse
+     * @returns the parsed value, or `fallback`
+     */
+    readState<T>(name: string, fallback: T): T;
+    /**
+     * Writes namespaced JSON state persisted under the data directory (H14). Survives the plugin
+     * being disabled or replaced, since code and state live in sibling trees.
+     * @param name the state file name
+     * @param value the value to persist as JSON
+     */
+    writeState(name: string, value: unknown): void;
+    /**
+     * Runs git through the host's bounded runner (H17), which disables terminal prompts, runs
+     * without a console window, and sets `GIT_OPTIONAL_LOCKS=0` so a host-side read is not mistaken
+     * by the watcher for a repository change.
+     * @param cwd the directory to run git in
+     * @param args the git arguments
+     * @param options timeout and network access
+     */
+    git(cwd: string, args: readonly string[], options?: GitRunOptions): Promise<GitRunResult>;
+    /**
+     * Resolves a handle to a declared dependency's wire surface, for a plugin listed in this
+     * plugin's manifest `dependsOn`.
+     * @param contract the dependency's contract value
+     * @returns a handle to call the dependency's methods and subscribe to its channels
+     */
+    dependency<D extends PluginContract>(contract: D): DependencyHandle<D>;
+}
+/**
+ * A plugin's host entry point. Called once per activation with a fresh {@link PluginHostContext};
+ * every registration made through that context takes effect immediately and is torn down on
+ * dispose. Each activation gets a monotonically increasing activation id, and anything the loader
+ * receives from a stale activation — a late publish, a timer the plugin forgot to clear — is
+ * dropped rather than reaching a client.
+ * @param ctx this activation's host context
+ * @returns nothing, or a {@link PluginDisposer} to run on dispose
+ */
+export type PluginHostActivate<C extends PluginContract> = (ctx: PluginHostContext<C>) => undefined | PluginDisposer | Promise<undefined | PluginDisposer>;
+/** The value a plugin's host entry module exports by default, built with {@link definePluginHost}. */
+export interface PluginHostModule<C extends PluginContract = PluginContract> {
+    /** The plugin's manifest. */
+    manifest: PluginManifest;
+    /** The plugin's wire contract, typically built with `definePluginContract`. */
+    contract: C;
+    /** The plugin's activate function. */
+    activate: PluginHostActivate<C>;
+}
+/**
+ * Identity helper that returns `module` unchanged while inferring its contract's literal type, so
+ * `activate`'s context is typed against the exact `contract` given here.
+ * @param module the plugin's manifest, contract, and activate function
+ * @returns `module`, unchanged
+ * @example
+ * ```ts
+ * export default definePluginHost({
+ *   manifest,
+ *   contract,
+ *   activate(ctx) {
+ *     ctx.method("listTodos", async () => ctx.readState("todos", []));
+ *     ctx.tool(
+ *       definePluginTool({
+ *         name: "add_todo",
+ *         label: "Add Todo",
+ *         description: "Adds a todo item",
+ *         parameters: Type.Object({ text: Type.String() }),
+ *         surfaces: ["agent"],
+ *         run: ({ text }) => ({ text: `added: ${text}` }),
+ *       }),
+ *     );
+ *   },
+ * });
+ * ```
+ */
+export declare function definePluginHost<C extends PluginContract>(module: PluginHostModule<C>): PluginHostModule<C>;
+
+// ---- contract.d.ts ----
+import type { Static, TObject, TSchema } from "typebox";
+/**
+ * One wire method's validated shape: a typebox object schema for its params and a typebox schema
+ * for its result. The loader validates a call's params against `params` at dispatch, before the
+ * registered handler runs; this is the first server-side validation in the codebase.
+ */
+export interface PluginMethodSpec<P extends TObject = TObject, R extends TSchema = TSchema> {
+    /** Typebox schema the method's params are validated against. */
+    params: P;
+    /** Typebox schema of the method's result. Not validated per call; pinned by fixture tests instead. */
+    result: R;
+}
+/**
+ * One wire channel's shape, declared as a state channel or an event channel.
+ *
+ * A state channel names the method that returns its current value (`snapshot`) and the param
+ * fields that key a subscription to one scope (`key`), so a subscriber can read the snapshot for
+ * its own pane on mount and on reconnect rather than replaying from a cache.
+ *
+ * An event channel has no snapshot and is documented as lossy: it exists for host-to-client
+ * requests that time out on their own, not for state a late subscriber must recover.
+ */
+export type PluginChannelSpec<T extends TSchema = TSchema, Methods extends string = string> = {
+    kind: "state";
+    payload: T;
+    snapshot: Methods;
+    key: readonly string[];
+} | {
+    kind: "event";
+    payload: T;
+};
+/**
+ * A plugin's one wire contract: its declared methods, channels, and settings schema under a
+ * single wire version. A host half imports the contract value (wrapped in
+ * {@link definePluginContract}) and validates against it; a web half never imports the value,
+ * only its shape via `import type` and the `MethodParams`/`MethodResult`/`ChannelPayload`/
+ * `PluginSettings` projections below, which is what keeps typebox out of the browser bundle.
+ */
+export interface PluginContract<Id extends string = string, M extends Record<string, PluginMethodSpec> = Record<string, PluginMethodSpec>, C extends Record<string, PluginChannelSpec> = Record<string, PluginChannelSpec>, S extends TObject = TObject> {
+    /** The plugin's id; every method and channel name is namespaced under it. */
+    id: Id;
+    /** Incremented whenever `methods` or `channels` change; a web half at a different version stays dormant. */
+    wireVersion: number;
+    /** The plugin's WS request methods, keyed by name. */
+    methods: M;
+    /** The plugin's channels, keyed by name. */
+    channels: C;
+    /** Typebox object schema for the plugin's settings namespace. */
+    settings: S;
+}
+/**
+ * Identity helper that returns `contract` unchanged while inferring its literal method, channel,
+ * and settings types. A plugin's host half wraps its contract value in this and passes the result
+ * to {@link PluginHostModule.contract}.
+ * @param contract the plugin's wire contract
+ * @returns `contract`, unchanged
+ * @example
+ * ```ts
+ * export const contract = definePluginContract({
+ *   id: "todo-board",
+ *   wireVersion: 1,
+ *   methods: {
+ *     listTodos: { params: Type.Object({}), result: Type.Array(Type.String()) },
+ *   },
+ *   channels: {
+ *     todos: { kind: "state", payload: Type.Array(Type.String()), snapshot: "listTodos", key: [] },
+ *   },
+ *   settings: Type.Object({ showDone: Type.Boolean({ default: false }) }),
+ * });
+ * ```
+ */
+export declare function definePluginContract<const C extends PluginContract>(contract: C): C;
+/** The validated param type of contract `C`'s method `M`, projected from its typebox `params` schema. */
+export type MethodParams<C extends PluginContract, M extends keyof C["methods"]> = Static<C["methods"][M]["params"]>;
+/** The result type of contract `C`'s method `M`, projected from its typebox `result` schema. */
+export type MethodResult<C extends PluginContract, M extends keyof C["methods"]> = Static<C["methods"][M]["result"]>;
+/** The payload type of contract `C`'s channel `K`, projected from its typebox `payload` schema. */
+export type ChannelPayload<C extends PluginContract, K extends keyof C["channels"]> = Static<C["channels"][K]["payload"]>;
+/** The settings type of contract `C`, projected from its typebox `settings` schema. */
+export type PluginSettings<C extends PluginContract> = Static<C["settings"]>;
+
+// ---- manifest.d.ts ----
+import type { PluginContributions } from "@thinkrail/contracts";
+/**
+ * Declares that a plugin is built on another plugin, by id and exact wire version. A plugin whose
+ * dependency is absent, disabled, failed, or at a different `wireVersion` is refused, naming this
+ * dependency as the reason. Activation runs dependency-first and disposal dependent-first; a cycle
+ * among declared dependencies is refused at load. See {@link PluginHostContext.dependency} for what
+ * the dependency then grants at runtime.
+ */
+export interface PluginDependency {
+    /** The id of the plugin depended on. */
+    id: string;
+    /** The exact `wireVersion` the dependency must be running for this plugin to load. */
+    wireVersion: number;
+}
+/**
+ * Declares the pi resources a plugin contributes to agent sessions, loaded alongside the host's
+ * own resources. Shown in Settings on the row where the user enables the plugin, so the trust
+ * decision is made with this information in front of them.
+ */
+export interface PluginPiBlock {
+    /** Extension entries fed to pi's resource loader (value-imported for a builtin plugin, real paths for an external one). */
+    extensions: readonly string[];
+    /** Skill directories fed to pi's resource loader; loaded skills carry `group = <plugin id>`. */
+    skills: readonly string[];
+    /** Whether these extensions and skills also reach delegated sub-agent sessions. Off by default. */
+    reachesSubagents: boolean;
+    /** Whether any extension appends to the system prompt via `before_agent_start`. Surfaced to the user next to the enable toggle. */
+    modifiesSystemPrompt: boolean;
+}
+/**
+ * The static description of a plugin: identity, versioning, its two entry points, and what it
+ * declares up front without running any code. The same fields are carried by a builtin plugin's
+ * `definePluginManifest`-wrapped export and by an external plugin's `thinkrail-plugin.json`.
+ * `contributes` exists because the file-open dispatcher and the layout engine each need a
+ * contribution to be known before the plugin's own code runs; a contribution's component or finer
+ * predicate is registered separately by the web half during activation.
+ */
+export interface PluginManifest {
+    /** The plugin's namespace for every wire method, channel, route, tool id, and settings key. For an external plugin this must equal its directory name. */
+    id: string;
+    /** Shown in the roster, the Settings list, and a dormant tool placeholder. */
+    label: string;
+    /** One sentence on what the plugin does, shown under its label in Settings. */
+    description?: string;
+    /** A Remix Icon name; an unrecognised name falls back to a generic glyph. */
+    icon: string;
+    /** The plugin's own version, informational only. */
+    version: string;
+    /** The {@link PLUGIN_API_GENERATION} this manifest was built against; a mismatch is refused before load. */
+    apiGeneration: number;
+    /** Incremented whenever the plugin's methods or channels change, so a separately shipped web half can detect drift. */
+    wireVersion: number;
+    /** Honoured for a builtin plugin; an external plugin always arrives disabled regardless of this value. */
+    enabledByDefault: boolean;
+    /** Other plugins this one is built on, by id and exact wire version; see {@link PluginDependency}. */
+    dependsOn: readonly PluginDependency[];
+    /** Relative path to the host half's ES module entry. Absent when the plugin has no host half. */
+    host?: string;
+    /** Relative path to the web half's ES module entry. Absent when the plugin has no web half. */
+    web?: string;
+    /** Relative path to the web half's compiled stylesheet. */
+    styles?: string;
+    /** Relative path to an assets directory the host serves or hands to the plugin. */
+    assets?: string;
+    /** The statically known parts of what the plugin contributes: side tools and file viewers. */
+    contributes: PluginContributions;
+    /** Agent-facing resources this plugin loads into sessions; see {@link PluginPiBlock}. */
+    pi?: PluginPiBlock;
+}
+/**
+ * Identity helper that returns `manifest` unchanged while inferring its literal types. Wrap a
+ * plugin's manifest value in this so downstream consumers (the roster, the loader) see the exact
+ * literal shape rather than a widened `PluginManifest`.
+ * @param manifest the plugin's manifest
+ * @returns `manifest`, unchanged
+ * @example
+ * ```ts
+ * export const manifest = definePluginManifest({
+ *   id: "todo-board",
+ *   label: "Todo Board",
+ *   icon: "checkbox-circle-line",
+ *   version: "1.0.0",
+ *   apiGeneration: PLUGIN_API_GENERATION,
+ *   wireVersion: 1,
+ *   enabledByDefault: false,
+ *   dependsOn: [],
+ *   host: "./host.js",
+ *   web: "./web.js",
+ *   styles: "./web.css",
+ *   contributes: { sideTools: [], fileViewers: [] },
+ * });
+ * ```
+ */
+export declare function definePluginManifest<const M extends PluginManifest>(manifest: M): M;
+
+// ---- tool.d.ts ----
+import type { Static, TObject } from "typebox";
+/** Identifies one terminal tab: the workspace it belongs to and its tab key within that workspace. */
+export type TerminalRef = {
+    workspaceId: string;
+    tabKey: string;
+};
+/** Where a registered tool is exposed: to the agent (`"agent"`) or over the per-terminal MCP table (`"mcp"`). */
+export type PluginToolSurface = "agent" | "mcp";
+/** Passed to a {@link PluginToolDefinition.run} function, describing the call site the tool ran from. */
+export interface PluginToolContext {
+    /** The resolved working directory for the call. */
+    cwd: string;
+    /** The workspace the call ran in, or `null` outside any workspace. */
+    workspaceId: string | null;
+    /** The terminal that owns the call, when the tool ran on the MCP surface. */
+    terminal?: TerminalRef;
+    /** The pi session id, when the tool ran on the agent surface. */
+    sessionId?: string;
+}
+/** The value a {@link PluginToolDefinition.run} function returns. */
+export interface PluginToolResult {
+    /** The tool's textual result, shown to the agent or the MCP caller. */
+    text: string;
+    /** Marks `text` as an error message rather than a normal result. */
+    isError?: boolean;
+    /** Structured detail alongside `text`, for a renderer registered against this tool's name. */
+    details?: unknown;
+}
+/**
+ * A pi-free declaration of one tool, registered with {@link PluginHostContext.tool}. The loader
+ * adapts it to a pi tool through a core extension and, for the `"mcp"` surface, to a handle on the
+ * per-terminal MCP table bound to the token owner — a plugin never imports a `pi` package to
+ * declare a tool. A renderer joins by `name` through `registerToolRenderer`, reached from the web
+ * context rather than by importing the chat module.
+ */
+export interface PluginToolDefinition<P extends TObject = TObject> {
+    /** The tool's name; also what a `registerToolRenderer` call joins against. */
+    name: string;
+    /** Shown wherever the tool is listed to the user. */
+    label: string;
+    /** Shown to the agent alongside the tool's schema. */
+    description: string;
+    /** Optional text appended to the system prompt introducing this tool, when the plugin needs more than `description` conveys. */
+    promptSnippet?: string;
+    /** Typebox object schema the tool's params are validated against. */
+    parameters: P;
+    /** Which surfaces the tool is exposed on; see {@link PluginToolSurface}. */
+    surfaces: readonly PluginToolSurface[];
+    /**
+     * Runs the tool.
+     * @param params the call's params, validated against `parameters`
+     * @param ctx the call site the tool ran from
+     * @returns the tool's result, or a promise of one
+     */
+    run(params: Static<P>, ctx: PluginToolContext): PluginToolResult | Promise<PluginToolResult>;
+}
+/**
+ * Identity helper that returns `tool` unchanged while inferring its literal `parameters` type, so
+ * `run`'s `params` argument is typed from `parameters` rather than widened to `unknown`.
+ * @param tool the tool declaration
+ * @returns `tool`, unchanged
+ */
+export declare function definePluginTool<P extends TObject>(tool: PluginToolDefinition<P>): PluginToolDefinition<P>;

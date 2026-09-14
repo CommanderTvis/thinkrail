@@ -5,7 +5,6 @@ import {
 	RiGitRepositoryLine as GitRepository,
 } from "@remixicon/react";
 import type { Project } from "@thinkrail/contracts";
-import type { ReactNode } from "react";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -14,8 +13,9 @@ import {
 	DropdownMenuLabel,
 	DropdownMenuSeparator,
 	DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { IconTooltip } from "@/components/ui/tooltip";
+	IconTooltip,
+} from "@thinkrail/plugin-ui";
+import type { ReactNode } from "react";
 import { hostWording } from "@/lib/desktopShell";
 
 export function AddProjectMenu({
