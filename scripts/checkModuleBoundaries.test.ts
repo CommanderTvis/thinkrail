@@ -10,6 +10,7 @@ const modules = {
 	"packages/artifact-tests": "@thinkrail/artifact-tests",
 	"packages/contracts": "@thinkrail/contracts",
 	"packages/plugin-api": "@thinkrail/plugin-api",
+	"packages/plugin-blueprint": "@thinkrail/plugin-blueprint",
 	"packages/plugin-spec-dialect": "@thinkrail/plugin-spec-dialect",
 	"packages/plugin-ui": "@thinkrail/plugin-ui",
 	"packages/shared": "@thinkrail/shared",
@@ -46,16 +47,23 @@ function fixture(): string {
 			"@thinkrail/plugin-api": "workspace:*",
 			"@thinkrail/contracts": "workspace:*",
 		},
+		"packages/plugin-blueprint": {
+			"@thinkrail/plugin-api": "workspace:*",
+			"@thinkrail/contracts": "workspace:*",
+			"@thinkrail/plugin-spec-dialect": "workspace:*",
+		},
 		"packages/server": {
 			"@thinkrail/contracts": "workspace:*",
 			"@thinkrail/shared": "workspace:*",
 			"@thinkrail/plugin-spec-dialect": "workspace:*",
+			"@thinkrail/plugin-blueprint": "workspace:*",
 			"pi-delegation": "workspace:*",
 			"pi-subagents": "workspace:*",
 		},
 		"apps/web": {
 			"@thinkrail/contracts": "workspace:*",
 			"@thinkrail/plugin-spec-dialect": "workspace:*",
+			"@thinkrail/plugin-blueprint": "workspace:*",
 		},
 		"apps/cli": {
 			"@thinkrail/server": "workspace:*",
@@ -159,5 +167,98 @@ test("rejects manifest, type-only, dynamic, CommonJS, and relative cross-boundar
 		'apps/web/src/typeLeak.ts: import "@thinkrail/server" creates forbidden apps/web -> packages/server edge',
 		'packages/pi-delegation/src/leak.ts: import "pi-subagents" creates forbidden packages/pi-delegation -> packages/pi-subagents edge',
 		'packages/shared/src/relativeLeak.ts: import "../../server/src/index" creates forbidden packages/shared -> packages/server edge',
+	]);
+});
+
+test("narrows a package edge to one subpath, ignoring the package's other subpaths", async () => {
+	const root = fixture();
+	write(
+		root,
+		"packages/plugin-blueprint/host/allowed.ts",
+		'import type { X } from "@thinkrail/plugin-spec-dialect/contracts";',
+	);
+	write(
+		root,
+		"packages/plugin-blueprint/host/leak.ts",
+		'import "@thinkrail/plugin-spec-dialect/web";',
+	);
+	write(
+		root,
+		"packages/plugin-blueprint/host/bareLeak.ts",
+		'import "@thinkrail/plugin-spec-dialect";',
+	);
+
+	expect(await moduleBoundaryViolations(root)).toEqual([
+		'packages/plugin-blueprint/host/bareLeak.ts: import "@thinkrail/plugin-spec-dialect" creates forbidden packages/plugin-blueprint -> packages/plugin-spec-dialect edge',
+		'packages/plugin-blueprint/host/leak.ts: import "@thinkrail/plugin-spec-dialect/web" creates forbidden packages/plugin-blueprint -> packages/plugin-spec-dialect edge',
+	]);
+});
+
+test("accepts a type-only subpath edge but rejects the same subpath as a value import", async () => {
+	const root = fixture();
+	write(
+		root,
+		"apps/web/src/types.ts",
+		'import type { X } from "@thinkrail/plugin-blueprint/contracts";',
+	);
+	write(
+		root,
+		"apps/web/src/value.ts",
+		'import { X } from "@thinkrail/plugin-blueprint/contracts";',
+	);
+
+	expect(await moduleBoundaryViolations(root)).toEqual([
+		'apps/web/src/value.ts: import "@thinkrail/plugin-blueprint/contracts" creates forbidden apps/web -> packages/plugin-blueprint edge',
+	]);
+});
+
+test("lets a plugin's host half take a value edge into another plugin's contracts, but keeps its web half to types only", async () => {
+	const root = fixture();
+	write(
+		root,
+		"packages/plugin-blueprint/host/index.ts",
+		'import { specDialectContract } from "@thinkrail/plugin-spec-dialect/contracts";\nconsole.log(specDialectContract);',
+	);
+	write(
+		root,
+		"packages/plugin-blueprint/web/typeLeak.ts",
+		'import type { X } from "@thinkrail/plugin-spec-dialect/contracts";',
+	);
+	write(
+		root,
+		"packages/plugin-blueprint/web/valueLeak.ts",
+		'import { specDialectContract } from "@thinkrail/plugin-spec-dialect/contracts";',
+	);
+
+	expect(await moduleBoundaryViolations(root)).toEqual([
+		'packages/plugin-blueprint/web/valueLeak.ts: import "@thinkrail/plugin-spec-dialect/contracts" creates forbidden packages/plugin-blueprint -> packages/plugin-spec-dialect edge',
+	]);
+});
+
+test("recognizes a per-specifier `import { type X }` as type-only", async () => {
+	const root = fixture();
+	write(
+		root,
+		"apps/web/src/inlineType.ts",
+		'import { type X } from "@thinkrail/plugin-blueprint/contracts";',
+	);
+	write(
+		root,
+		"apps/web/src/inlineMixed.ts",
+		'import { type X, value } from "@thinkrail/plugin-blueprint/contracts";',
+	);
+
+	expect(await moduleBoundaryViolations(root)).toEqual([
+		'apps/web/src/inlineMixed.ts: import "@thinkrail/plugin-blueprint/contracts" creates forbidden apps/web -> packages/plugin-blueprint edge',
+	]);
+});
+
+test("keeps a plugin's web half out of its own host half, but not the reverse", async () => {
+	const root = fixture();
+	write(root, "packages/plugin-blueprint/web/index.ts", 'import { activate } from "../host";');
+	write(root, "packages/plugin-blueprint/host/index.ts", 'import "../web";');
+
+	expect(await moduleBoundaryViolations(root)).toEqual([
+		'packages/plugin-blueprint/web/index.ts: import "../host" — packages/plugin-blueprint/web may not reach packages/plugin-blueprint/host',
 	]);
 });

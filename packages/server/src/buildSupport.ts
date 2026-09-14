@@ -1,6 +1,7 @@
 import { existsSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
+import { buildSupport as blueprintBuildSupport } from "@thinkrail/plugin-blueprint/build-support";
 import { buildSupport as specDialectBuildSupport } from "@thinkrail/plugin-spec-dialect/build-support";
 
 export type DesktopRuntimeTarget =
@@ -35,7 +36,7 @@ export interface BuildRuntimeSources {
 	readonly plugins: readonly BuildRuntimePlugin[];
 }
 
-const BUILTIN_PLUGIN_BUILD_SUPPORT = [specDialectBuildSupport];
+const BUILTIN_PLUGIN_BUILD_SUPPORT = [specDialectBuildSupport, blueprintBuildSupport];
 
 const require = createRequire(import.meta.url);
 
