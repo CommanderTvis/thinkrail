@@ -1,0 +1,5 @@
+/* Radix positions tooltip content inside a wrapper div of its own, and `pointer-events-none` on the
+   content leaves that wrapper catching every click under an open tooltip — see SPEC.md. */
+[data-radix-popper-content-wrapper]:has(> [data-slot="tooltip-content"]) {
+	pointer-events: none;
+}

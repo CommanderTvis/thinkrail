@@ -442,6 +442,19 @@ test("turnDivider is null with no user turn to open the round (nothing to summar
 	expect(turnDivider([done("s1", 1000)], 0)).toBeNull();
 });
 
+function groupOf(d: ReturnType<typeof turnDivider>, id: string): string[] {
+	return d?.groups.find((g) => g.id === id)?.paths ?? [];
+}
+
+const specGroup = (toolName: string, path: string) =>
+	toolName === "spec_create" || path.endsWith("SPEC.md")
+		? {
+				id: "specs",
+				label: (n: number) => `${n} spec${n === 1 ? "" : "s"}`,
+				tool: "specs" as const,
+			}
+		: null;
+
 test("turnDivider counts tools, collects only edit/write files, and measures user→end elapsed", () => {
 	const turns: ChatTurn[] = [
 		user("u1", 1_000),
@@ -455,7 +468,7 @@ test("turnDivider counts tools, collects only edit/write files, and measures use
 	];
 	const d = turnDivider(turns, 2);
 	expect(d?.toolCount).toBe(4);
-	expect(d?.changedFiles).toEqual(["a.ts"]);
+	expect(groupOf(d, "files")).toEqual(["a.ts"]);
 	expect(d?.elapsedMs).toBe(72_000);
 });
 
@@ -471,7 +484,7 @@ test("turnDivider spans multiple assistant turns in the round and dedupes files"
 	];
 	const d = turnDivider(turns, 3);
 	expect(d?.toolCount).toBe(3);
-	expect(d?.changedFiles).toEqual(["x.ts", "y.ts"]);
+	expect(groupOf(d, "files")).toEqual(["x.ts", "y.ts"]);
 	expect(d?.elapsedMs).toBe(5_000);
 });
 
@@ -482,7 +495,7 @@ test("turnDivider falls back to the last assistant timestamp when there is no �
 	];
 	const d = turnDivider(turns, 1);
 	expect(d?.toolCount).toBe(1);
-	expect(d?.changedFiles).toEqual(["x.ts"]);
+	expect(groupOf(d, "files")).toEqual(["x.ts"]);
 	expect(d?.elapsedMs).toBe(5_000);
 });
 
@@ -490,12 +503,11 @@ test("turnDivider reports no changed files / zero tools for a plain Q&A round", 
 	const turns: ChatTurn[] = [user("u1", 0), assistantWithPaths("a1", [], 2_000), done("s1", 2_000)];
 	const d = turnDivider(turns, 2);
 	expect(d?.toolCount).toBe(0);
-	expect(d?.specs).toEqual([]);
-	expect(d?.changedFiles).toEqual([]);
+	expect(d?.groups).toEqual([]);
 	expect(d?.elapsedMs).toBe(2_000);
 });
 
-test("turnDivider splits specs from code changes via isSpec, each path on exactly one side", () => {
+test("turnDivider splits specs from code changes via groupFor, each path in exactly one group", () => {
 	const turns: ChatTurn[] = [
 		user("u1", 0),
 		assistantWithPaths("a1", [
@@ -504,9 +516,9 @@ test("turnDivider splits specs from code changes via isSpec, each path on exactl
 		]),
 		done("s1", 5_000),
 	];
-	const d = turnDivider(turns, 2, (p) => p.endsWith("SPEC.md"));
-	expect(d?.specs).toEqual(["packages/pi-todos/SPEC.md"]);
-	expect(d?.changedFiles).toEqual(["packages/pi-todos/core/store.ts"]);
+	const d = turnDivider(turns, 2, specGroup);
+	expect(groupOf(d, "specs")).toEqual(["packages/pi-todos/SPEC.md"]);
+	expect(groupOf(d, "files")).toEqual(["packages/pi-todos/core/store.ts"]);
 });
 
 test("turnDivider counts a gitignored scratch spec as a spec, not as a (never-visible) change", () => {
@@ -520,10 +532,10 @@ test("turnDivider counts a gitignored scratch spec as a spec, not as a (never-vi
 		]),
 		done("s1", 5_000),
 	];
-	const d = turnDivider(turns, 2, () => false);
+	const d = turnDivider(turns, 2, specGroup);
 	expect(d?.toolCount).toBe(3);
-	expect(d?.specs).toEqual([path]);
-	expect(d?.changedFiles).toEqual([]);
+	expect(groupOf(d, "specs")).toEqual([path]);
+	expect(groupOf(d, "files")).toEqual([]);
 });
 
 test("turnDivider lets the spec side win a tie — a path reached by both routes is never double-counted", () => {
@@ -536,9 +548,9 @@ test("turnDivider lets the spec side win a tie — a path reached by both routes
 		]),
 		done("s1", 5_000),
 	];
-	const d = turnDivider(turns, 2);
-	expect(d?.specs).toEqual([path]);
-	expect(d?.changedFiles).toEqual([]);
+	const d = turnDivider(turns, 2, specGroup);
+	expect(groupOf(d, "specs")).toEqual([path]);
+	expect(groupOf(d, "files")).toEqual([]);
 });
 
 test("turnDivider treats every written file as a change when no classifier is supplied", () => {
@@ -548,6 +560,6 @@ test("turnDivider treats every written file as a change when no classifier is su
 		done("s1", 5_000),
 	];
 	const d = turnDivider(turns, 2);
-	expect(d?.specs).toEqual([]);
-	expect(d?.changedFiles).toEqual(["SPEC.md"]);
+	expect(groupOf(d, "specs")).toEqual([]);
+	expect(groupOf(d, "files")).toEqual(["SPEC.md"]);
 });

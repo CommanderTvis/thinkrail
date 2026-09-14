@@ -38,6 +38,7 @@ convention; their boundary is held by convention + spec. Sibling edges live here
 | `navigation` | backend-relative location model + fragment driver/validated restore | yes | [navigation/SPEC.md](src/navigation/SPEC.md) |
 | `transport` | the WS client + its singleton/store wiring | yes | [transport/SPEC.md](src/transport/SPEC.md) |
 | `store` | Zustand: domain projections, one local workbench frame, per-workspace views/attention, chat runtimes | yes | [store/SPEC.md](src/store/SPEC.md) |
+| `plugins` | the web half of the plugin loader: `registry` (contribution state, a leaf) + `loader` (composition root, `main.tsx`-only) | see child specs | [plugins/SPEC.md](src/plugins/SPEC.md) |
 | `panels` | layout-agnostic, store-driven feature views | no | [panels/SPEC.md](src/panels/SPEC.md) |
 | `resources` | resource descriptors, renderer resolution, and renderer-agnostic review surface types | yes | [resources/SPEC.md](src/resources/SPEC.md) |
 | `chat` | pi conversation UI primitives: content-block renderers + the tool-renderer registry | no | [chat/SPEC.md](src/chat/SPEC.md) |
@@ -332,6 +333,14 @@ themselves.
   and themed with our token utilities (`cn()` in `@thinkrail/ui/utils`) — never shadcn's default oklch
   palette. Use these for accessible menus / dialogs / tooltips; icon-only controls label themselves with
   `IconTooltip`, never native `title`.
+  - **A third-party *brand mark* is the one exception**: the Claude Code plugin's own `ClaudeGlyph`
+    identifies the agent on a terminal tab the way Warp does, and no generic glyph reads as that vendor.
+    It draws the vendor's own mark — the glyph a `CLAUDE.md` already wears in the file-icons plugin's set —
+    from its own `assets/claude.svg` via `ctx.assetUrl` and the kit's `SvgAsset`, and wears the
+    `agent-claude` token: a palette entry of its own, since a vendor identity is neither a status colour
+    nor the theme accent, but still wants per-theme adjustment for contrast. Core's own roster/tab-icon
+    lookup (`plugins/registry/icons.ts`'s `pluginIcon("claude")`) resolves the same mark through the
+    `fileIcon` slot instead, falling back to a plain Remix glyph when the file-icons plugin is off.
 
 ## Get right
 

@@ -23,6 +23,10 @@ export function registerToolRenderer(
 	registry.set(toolName, { renderer, ...options });
 }
 
+export function unregisterToolRenderer(toolName: string): void {
+	registry.delete(toolName);
+}
+
 export function getToolRenderer(toolName: string): ToolRenderer {
 	return registry.get(toolName)?.renderer ?? DefaultToolRenderer;
 }

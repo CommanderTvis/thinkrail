@@ -5,9 +5,9 @@ import {
 	strArg,
 	type ToolRenderProps,
 } from "@thinkrail/extension-api/web";
-import { CodeBlock } from "./CodeBlock";
+import { CodeBlock } from "@thinkrail/ui/markdown";
+import { ToolFileLink } from "@thinkrail/ui/ToolFileLink";
 import { Collapsible, countLines } from "./Collapsible";
-import { ToolFileLink } from "./ToolFileLink";
 
 export function WriteCard({
 	toolCallId,
