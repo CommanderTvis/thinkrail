@@ -16,6 +16,7 @@ const modules = {
 	"packages/plugin-discord": "@thinkrail/plugin-discord",
 	"packages/plugin-pdf-preview": "@thinkrail/plugin-pdf-preview",
 	"packages/plugin-spec-dialect": "@thinkrail/plugin-spec-dialect",
+	"packages/plugin-visualize": "@thinkrail/plugin-visualize",
 	"packages/plugin-ui": "@thinkrail/plugin-ui",
 	"packages/shared": "@thinkrail/shared",
 	"packages/pi-delegation": "pi-delegation",
@@ -80,6 +81,12 @@ function fixture(): string {
 			"@thinkrail/shared": "workspace:*",
 			"@thinkrail/plugin-ui": "workspace:*",
 		},
+		"packages/plugin-visualize": {
+			"@thinkrail/plugin-api": "workspace:*",
+			"@thinkrail/contracts": "workspace:*",
+			"@thinkrail/shared": "workspace:*",
+			"@thinkrail/plugin-ui": "workspace:*",
+		},
 		"packages/server": {
 			"@thinkrail/contracts": "workspace:*",
 			"@thinkrail/shared": "workspace:*",
@@ -88,6 +95,7 @@ function fixture(): string {
 			"@thinkrail/plugin-claude-code": "workspace:*",
 			"@thinkrail/plugin-pdf-preview": "workspace:*",
 			"@thinkrail/plugin-discord": "workspace:*",
+			"@thinkrail/plugin-visualize": "workspace:*",
 			"@thinkrail/plugin-branch-graph": "workspace:*",
 			"pi-delegation": "workspace:*",
 			"pi-background-commands": "workspace:*",
@@ -100,6 +108,7 @@ function fixture(): string {
 			"@thinkrail/plugin-claude-code": "workspace:*",
 			"@thinkrail/plugin-pdf-preview": "workspace:*",
 			"@thinkrail/plugin-discord": "workspace:*",
+			"@thinkrail/plugin-visualize": "workspace:*",
 			"@thinkrail/plugin-branch-graph": "workspace:*",
 		},
 		"apps/cli": {

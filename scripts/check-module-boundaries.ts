@@ -108,6 +108,17 @@ const MODULE_RULES: readonly ModuleRule[] = [
 		allowed: ["packages/plugin-api", "packages/contracts", "packages/shared", "packages/plugin-ui"],
 		internal: PLUGIN_WEB_MUST_NOT_REACH_HOST,
 	},
+	{
+		root: "packages/plugin-visualize",
+		allowed: [
+			"packages/plugin-api",
+			"packages/contracts",
+			"packages/shared",
+			"packages/plugin-ui",
+			"packages/pi-visualize",
+		],
+		internal: PLUGIN_WEB_MUST_NOT_REACH_HOST,
+	},
 	{ root: "packages/shared", allowed: ["packages/contracts"] },
 	{ root: "packages/pi-delegation", allowed: [] },
 	{ root: "packages/pi-background-commands", allowed: [] },
@@ -123,6 +134,7 @@ const MODULE_RULES: readonly ModuleRule[] = [
 					"plugin-blueprint",
 					"plugin-claude-code",
 					"plugin-discord",
+					"plugin-visualize",
 					"plugin-spec-dialect",
 					"plugin-branch-graph",
 				] as const
@@ -154,6 +166,7 @@ const MODULE_RULES: readonly ModuleRule[] = [
 					"plugin-blueprint",
 					"plugin-claude-code",
 					"plugin-discord",
+					"plugin-visualize",
 					"plugin-spec-dialect",
 					"plugin-branch-graph",
 				] as const
@@ -176,6 +189,7 @@ const MODULE_RULES: readonly ModuleRule[] = [
 					"plugin-blueprint",
 					"plugin-claude-code",
 					"plugin-discord",
+					"plugin-visualize",
 					"plugin-spec-dialect",
 					"plugin-branch-graph",
 				] as const
@@ -193,6 +207,7 @@ const MODULE_RULES: readonly ModuleRule[] = [
 					"plugin-blueprint",
 					"plugin-claude-code",
 					"plugin-discord",
+					"plugin-visualize",
 					"plugin-spec-dialect",
 					"plugin-branch-graph",
 				] as const

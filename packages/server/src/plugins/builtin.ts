@@ -6,12 +6,14 @@ import claudeCodeHost from "@thinkrail/plugin-claude-code/host";
 import discordHost from "@thinkrail/plugin-discord/host";
 import { manifest as pdfPreviewManifest } from "@thinkrail/plugin-pdf-preview/manifest";
 import specDialectHost from "@thinkrail/plugin-spec-dialect/host";
+import visualizeHost from "@thinkrail/plugin-visualize/host";
 
 export const BUILTIN_PLUGINS: readonly PluginHostModule[] = [
 	specDialectHost as PluginHostModule,
 	blueprintHost as PluginHostModule,
 	claudeCodeHost as unknown as PluginHostModule,
 	discordHost as unknown as PluginHostModule,
+	visualizeHost as unknown as PluginHostModule,
 	branchGraphHost as PluginHostModule,
 ];
 

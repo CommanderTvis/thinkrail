@@ -33,6 +33,7 @@
 		"@thinkrail/plugin-pdf-preview": "workspace:*",
 		"@thinkrail/plugin-spec-dialect": "workspace:*",
 		"@thinkrail/plugin-ui": "workspace:*",
+		"@thinkrail/plugin-visualize": "workspace:*",
 		"@xterm/addon-clipboard": "0.2.0",
 		"@xterm/addon-fit": "0.11.0",
 		"@xterm/addon-unicode11": "0.9.0",
