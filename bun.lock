@@ -71,6 +71,7 @@
         "@thinkrail/plugin-pdf-preview": "workspace:*",
         "@thinkrail/plugin-spec-dialect": "workspace:*",
         "@thinkrail/plugin-ui": "workspace:*",
+        "@thinkrail/plugin-visualize": "workspace:*",
         "@xterm/addon-clipboard": "0.2.0",
         "@xterm/addon-fit": "0.11.0",
         "@xterm/addon-unicode11": "0.9.0",
@@ -428,6 +429,32 @@
         "react-dom": "*",
       },
     },
+    "packages/plugin-visualize": {
+      "name": "@thinkrail/plugin-visualize",
+      "version": "0.1.0",
+      "dependencies": {
+        "@remixicon/react": "4.9.0",
+        "@thinkrail/contracts": "workspace:*",
+        "@thinkrail/plugin-api": "workspace:*",
+        "@thinkrail/plugin-ui": "workspace:*",
+        "@thinkrail/shared": "workspace:*",
+        "pi-visualize": "workspace:*",
+        "typebox": "catalog:",
+        "zustand": "5.0.14",
+      },
+      "devDependencies": {
+        "@types/bun": "catalog:",
+        "@types/react": "catalog:",
+        "@types/react-dom": "catalog:",
+        "react": "catalog:",
+        "react-dom": "catalog:",
+        "typescript": "catalog:",
+      },
+      "peerDependencies": {
+        "react": "*",
+        "react-dom": "*",
+      },
+    },
     "packages/server": {
       "name": "@thinkrail/server",
       "version": "0.0.0",
@@ -443,6 +470,7 @@
         "@thinkrail/plugin-discord": "workspace:*",
         "@thinkrail/plugin-pdf-preview": "workspace:*",
         "@thinkrail/plugin-spec-dialect": "workspace:*",
+        "@thinkrail/plugin-visualize": "workspace:*",
         "@thinkrail/shared": "workspace:*",
         "bun-pty": "0.4.10",
         "pi-delegation": "workspace:*",
@@ -1187,6 +1215,8 @@
     "@thinkrail/plugin-spec-dialect": ["@thinkrail/plugin-spec-dialect@workspace:packages/plugin-spec-dialect"],
 
     "@thinkrail/plugin-ui": ["@thinkrail/plugin-ui@workspace:packages/plugin-ui"],
+
+    "@thinkrail/plugin-visualize": ["@thinkrail/plugin-visualize@workspace:packages/plugin-visualize"],
 
     "@thinkrail/server": ["@thinkrail/server@workspace:packages/server"],
 
