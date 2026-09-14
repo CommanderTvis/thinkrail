@@ -4,15 +4,13 @@ import {
 	RiArrowGoBackLine as RotateCcw,
 } from "@remixicon/react";
 import { useT } from "@thinkrail/locales/react";
-import { IconButton } from "@thinkrail/ui/button";
-import type * as React from "react";
-import { useCallback, useEffect, useRef, useState } from "react";
 import {
 	clampZoomScale,
 	isZoomGesture,
 	ZOOM_SCALE_STEP,
 	zoomScaleForWheel,
 } from "@thinkrail/resource-renderers";
+import { IconButton } from "@thinkrail/ui/button";
 import type * as React from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 

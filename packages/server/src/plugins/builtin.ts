@@ -5,12 +5,14 @@ import branchGraphHost from "@thinkrail/plugin-branch-graph/host";
 import claudeCodeHost from "@thinkrail/plugin-claude-code/host";
 import discordHost from "@thinkrail/plugin-discord/host";
 import specDialectHost from "@thinkrail/plugin-spec-dialect/host";
+import visualizeHost from "@thinkrail/plugin-visualize/host";
 
 export const BUILTIN_PLUGINS: readonly PluginHostModule[] = [
 	specDialectHost as PluginHostModule,
 	blueprintHost as PluginHostModule,
 	claudeCodeHost as unknown as PluginHostModule,
 	discordHost as unknown as PluginHostModule,
+	visualizeHost as unknown as PluginHostModule,
 	branchGraphHost as PluginHostModule,
 ];
 
