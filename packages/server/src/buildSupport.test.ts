@@ -24,11 +24,18 @@ test("runtime source manifest covers the launcher artifact surface", () => {
 	});
 	expect(basename(sources.trashHelpers.macos)).toBe("macos-trash");
 	expect(basename(sources.trashHelpers.windows)).toBe("windows-trash.exe");
-	expect(sources.plugins.map((plugin) => plugin.id)).toEqual(["spec-dialect", "blueprint"]);
+	expect(sources.plugins.map((plugin) => plugin.id)).toEqual([
+		"spec-dialect",
+		"blueprint",
+		"claude-code",
+	]);
 	const specDialect = sources.plugins[0];
 	expect(specDialect?.assets).toBeNull();
 	expect(specDialect?.pi.extensions.map((extension) => extension.specifier)).toEqual([
 		"pi-spec-graph",
 	]);
 	expect(specDialect?.pi.skills).toHaveLength(1);
+	const claudeCode = sources.plugins[2];
+	expect(typeof claudeCode?.assets).toBe("string");
+	expect(claudeCode?.pi.extensions).toEqual([]);
 });

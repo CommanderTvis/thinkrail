@@ -1,5 +1,4 @@
 import type { GitDiffScope } from "@thinkrail/contracts";
-import { pluginMethodName } from "@thinkrail/plugin-api";
 import type { LayoutOpenOptions } from "@/store";
 import {
 	DOUBLE_CLICK_SETTLE_MS,
@@ -19,13 +18,12 @@ import {
 	selectWorkspaceNavTick,
 	selectWorkspaceTick,
 	type TabIntent,
+	toast,
 	useAppStore,
 } from "../store";
-import { getTransport } from "../transport";
+import { errorText, getTransport } from "../transport";
 import { diffTabId, diffTabName } from "./changesModel";
 import { emitEditorEvent, findEditorRef } from "./editorEvents";
-
-const CLAUDE_CODE_ID = "claude-code";
 
 function baseName(path: string): string {
 	return path.split("/").pop() || path;
@@ -150,7 +148,8 @@ async function openReadTab<T>(
 					? { ...options, ...extraOptions, claimPreview: true }
 					: { ...options, ...extraOptions },
 			);
-	} catch {
+	} catch (cause) {
+		toast.error(errorText(cause), "Couldn't open the file");
 	} finally {
 		inFlight.delete(id);
 	}
@@ -184,12 +183,7 @@ export function openFileInTab(
 		(): Promise<{ content: string; hash: string }> =>
 			binary
 				? Promise.resolve({ content: "", hash: "" })
-				: external
-					? (getTransport().request(pluginMethodName(CLAUDE_CODE_ID, "readFile"), {
-							workspaceId,
-							path,
-						}) as Promise<{ content: string; hash: string }>)
-					: getTransport().request("fs.readFile", { workspaceId, path }),
+				: getTransport().request("fs.readFile", { workspaceId, path }),
 		({ content, hash }, loadedTick) => ({
 			kind,
 			id,
