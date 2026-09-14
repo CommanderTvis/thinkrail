@@ -619,7 +619,7 @@ test("bottom groups arrange left-to-right, resize, fold to 27px, restore, and en
 	await page.getByRole("menuitem", { name: "New bottom group at left", exact: true }).click();
 	await expect(bottomGroups(page)).toHaveCount(3);
 	await expect(bottomGroups(page).nth(0)).toContainText("Files");
-	await page.getByTestId("tab-specs").click({ button: "right" });
+	await page.getByTestId("tab-plugin:spec-dialect:specs").click({ button: "right" });
 	const atLeft = page.getByRole("menuitem", { name: "New bottom group at left" });
 	await expect(atLeft).toBeDisabled();
 	await expect(atLeft).toHaveAttribute("title", "The bottom region is limited to 3 groups");

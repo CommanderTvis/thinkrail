@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { openWorkspaceChat, routineActivityRows, waitForAgentSettled } from "./fixtures/app";
+import { openWorkspaceChat, routineActivityRows, waitForAgentSettled } from "../../fixtures/app";
 
 test("turn-divider files-changed chip opens the file's diff and highlights its row in Changes", {
 	tag: "@agent",
@@ -55,7 +55,10 @@ test("turn-divider counts a scratch task-spec as a spec and opens it from the Sp
 	await expect(page.getByTestId("turn-divider-files")).toHaveCount(0);
 
 	await specChip.click();
-	await expect(page.getByTestId("tab-specs")).toHaveAttribute("data-active", "true");
+	await expect(page.getByTestId("tab-plugin:spec-dialect:specs")).toHaveAttribute(
+		"data-active",
+		"true",
+	);
 	await expect(page.getByTestId("editor-pane")).toContainText("Divider demo");
 	await expect(
 		page.locator('[data-testid="spec-node"][data-spec-id="task-divider-demo"]'),
@@ -161,7 +164,10 @@ test("the two artifact chips are a switch: one list at a time, and re-clicking c
 	await specsChip.click();
 	await expect(specsList).toBeVisible();
 	await expect(filesList).toHaveCount(0);
-	await expect(page.getByTestId("tab-specs")).toHaveAttribute("data-active", "true");
+	await expect(page.getByTestId("tab-plugin:spec-dialect:specs")).toHaveAttribute(
+		"data-active",
+		"true",
+	);
 
 	await filesChip.click();
 	await expect(filesList).toBeVisible();

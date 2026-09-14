@@ -1,7 +1,4 @@
 import { expect, test } from "bun:test";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { serveMcp } from "./index";
 import { handleMcpMessage, type McpToolHandle } from "./protocol";
 
@@ -101,43 +98,13 @@ test("unknown tool and unknown method are JSON-RPC errors; a batch is refused", 
 	expect((batch.body as { error: { code: number } }).error.code).toBe(-32600);
 });
 
-async function callSpecTool(
-	cwd: string,
-	name: string,
-	args: Record<string, unknown>,
-): Promise<{ text: string; isError?: boolean }> {
-	const reply = await serveMcp(request("tools/call", { name, arguments: args }), { cwd });
-	const result = resultOf(reply) as {
-		content: [{ text: string }];
-		isError?: boolean;
-	};
-	return { text: result.content[0].text, ...(result.isError ? { isError: true } : {}) };
-}
+test("serveMcp dispatches against exactly the tools it is handed", async () => {
+	const listed = await serveMcp(request("tools/list"), [ECHO]);
+	expect((resultOf(listed).tools as { name: string }[]).map((tool) => tool.name)).toEqual(["echo"]);
 
-test("the spec_* tools are served end to end: create, get, and schema rejection", async () => {
-	const root = mkdtempSync(join(tmpdir(), "mcp-spec-"));
-	try {
-		const listed = await serveMcp(request("tools/list"), { cwd: root });
-		const names = (resultOf(listed).tools as { name: string }[]).map((tool) => tool.name);
-		expect(names).toContain("spec_create");
-		expect(names).toContain("spec_grep");
-
-		const created = await callSpecTool(root, "spec_create", {
-			path: "SPEC.md",
-			id: "root-spec",
-			type: "module-design",
-			title: "The root",
-		});
-		expect(created.isError).toBeUndefined();
-		expect(readFileSync(join(root, "SPEC.md"), "utf8")).toContain("id: root-spec");
-
-		const got = await callSpecTool(root, "spec_get", { id: "root-spec" });
-		expect(got.text).toContain("root-spec [module-design]");
-
-		const rejected = await callSpecTool(root, "spec_get", { wrong: true });
-		expect(rejected.isError).toBe(true);
-		expect(rejected.text).toContain("Invalid arguments for spec_get");
-	} finally {
-		rmSync(root, { recursive: true, force: true });
-	}
+	const called = await serveMcp(
+		request("tools/call", { name: "echo", arguments: { value: "hi" } }),
+		[ECHO],
+	);
+	expect(resultOf(called)).toEqual({ content: [{ type: "text", text: "echo:hi" }] });
 });

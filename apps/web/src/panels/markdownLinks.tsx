@@ -2,7 +2,6 @@ import { remarkHeadingIds } from "@thinkrail/ui/markdown";
 import type { ReactNode } from "react";
 import type { Components } from "react-markdown";
 import { selectSlot, usePluginRegistry } from "../plugins/registry";
-import { useAppStore } from "../store";
 import { DOCUMENT_ID_PREFIX } from "./markdownHtml";
 import { openFileInTab } from "./openTabs";
 import { resourceBytesUrl } from "./resourcePane";
@@ -121,11 +120,7 @@ export function documentComponents(
 		}
 		const spec = specLinkTarget(href ?? "");
 		if (spec !== null) {
-			const slotPath = resolveDocumentLink(ctx.workspaceId, href ?? "")?.path;
-			const path =
-				slotPath ??
-				useAppStore.getState().specsByWorkspace[ctx.workspaceId]?.find((entry) => entry.id === spec)
-					?.path;
+			const path = resolveDocumentLink(ctx.workspaceId, href ?? "")?.path;
 			return (
 				<button
 					type="button"

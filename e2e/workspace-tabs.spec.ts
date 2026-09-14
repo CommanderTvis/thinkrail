@@ -44,9 +44,20 @@ test("the selected side tool follows workspace switches", async ({ page }) => {
 	await workspaces.nth(0).getByRole("button").first().click();
 	await expect(page.getByTestId("scope-name")).toHaveText("workspace-1");
 
-	const groupInfo = await page.getByTestId("tab-specs").evaluate((tab) => {
+	const groupInfo = await page.getByTestId("tab-plugin:spec-dialect:specs").evaluate((tab) => {
 		const group = tab.closest<HTMLElement>("[data-side][data-group-id]");
-		return { side: group?.dataset.side, groupId: group?.dataset.groupId };
+		const siblings = group
+			? [
+					...document.querySelectorAll<HTMLElement>(
+						`[data-side="${group.dataset.side}"][data-group-id]`,
+					),
+				]
+			: [];
+		return {
+			side: group?.dataset.side,
+			groupId: group?.dataset.groupId,
+			index: group ? siblings.indexOf(group) : -1,
+		};
 	});
 	if (!groupInfo.side || !groupInfo.groupId) throw new Error("missing Specs side group");
 	const group = page.locator(
@@ -55,10 +66,8 @@ test("the selected side tool follows workspace switches", async ({ page }) => {
 
 	await page.getByTestId("tab-projects").click({ button: "right" });
 	await page
-		.getByRole("menuitem", {
-			name: `Move to ${groupInfo.side} group ${groupInfo.groupId.slice(-4)}`,
-			exact: true,
-		})
+		.locator(`[data-testid="placement-group"][data-area="${groupInfo.side}"]`)
+		.nth(groupInfo.index)
 		.click();
 	await group.getByTestId("tab-projects").click();
 	await expect(group.getByTestId("tab-projects").getByRole("tab")).toHaveAttribute(

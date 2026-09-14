@@ -12,7 +12,10 @@
 			"!designs",
 			"!**/.claude",
 			"!apps/web/src/styles/generated",
-			"!apps/web/src/chat/generated"
+			"!apps/web/src/chat/generated",
+			"!packages/plugin-file-icons/web/fileIcons.generated.ts",
+			"!packages/plugin-claude-code/assets/claude.svg",
+			"!packages/plugin-codex/assets/codex.svg"
 		]
 	},
 	"formatter": {

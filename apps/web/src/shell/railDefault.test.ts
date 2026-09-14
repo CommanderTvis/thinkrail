@@ -86,17 +86,4 @@ describe("resolvePluginRailDefaults", () => {
 		const next = await resolvePluginRailDefaults(document(), attention, "w1");
 		expect(next.selectedByGroup["right-a"]).toBe(`tool:${PLUGIN_TOOL}`);
 	});
-
-	test("never touches the builtin specs tab — that stays the specless effect's job", async () => {
-		const withSpecs = document();
-		withSpecs.right.groups[0]?.tabs.push({
-			kind: "tool",
-			id: "tool:specs",
-			name: "Specs",
-			tool: "specs",
-		});
-		const attention = attentionOn("tool:specs");
-		const next = await resolvePluginRailDefaults(withSpecs, attention, "w1");
-		expect(next).toBe(attention);
-	});
 });

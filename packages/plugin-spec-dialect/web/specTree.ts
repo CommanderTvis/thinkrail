@@ -1,10 +1,25 @@
-import type { SpecGraphNode } from "@thinkrail/contracts";
-import { SPEC_ROLES } from "./specDocument";
+import type { SpecGraphNode } from "../contracts";
 
 export interface SpecTreeNode {
 	node: SpecGraphNode;
 	children: SpecTreeNode[];
 }
+
+interface SpecRole {
+	label: string;
+	tag: string;
+}
+
+/** Mirrors `apps/web/src/panels/specDocument.ts`'s `SPEC_ROLES` — that copy stays core for the generic
+ * markdown-preview feature (frontmatter-is-a-spec detection with no graph), so this plugin, which needs
+ * the same role labels for its own tree, keeps a small copy rather than reaching into `panels/`. */
+const SPEC_ROLES = {
+	"goal-and-requirements": { label: "Goal", tag: "GOAL" },
+	"architecture-design": { label: "Architecture", tag: "ARCH" },
+	"module-design": { label: "Module", tag: "MODULE" },
+	"submodule-design": { label: "Submodule", tag: "SUBMODULE" },
+	"task-spec": { label: "Task", tag: "TASK" },
+} as const satisfies Record<string, SpecRole>;
 
 type KnownSpecType = keyof typeof SPEC_ROLES;
 
