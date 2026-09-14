@@ -1,4 +1,8 @@
 import { RiCheckLine as Check, RiCloseLine as X } from "@remixicon/react";
+import type { ToolRenderProps } from "@/chat/toolRegistry";
+import { strArg } from "@/chat/tools/toolHelpers";
+import { parseComparisonOptions } from "@/chat/tools/visualize/args";
+import { MermaidView } from "@/chat/tools/visualize/MermaidView";
 import { strArg, type ToolRenderProps } from "@thinkrail/extension-api/web";
 import { parseComparisonOptions } from "./args";
 import { MermaidView } from "./MermaidView";

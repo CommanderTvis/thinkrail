@@ -7,4 +7,4 @@ export {
 	type BoundedStreamOptions,
 	runBounded,
 	streamBounded,
-} from "./runBounded";
+} from "@thinkrail/shared/runBounded";

@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { editorWrappingOptions } from "./editorWrapping";
+import { editorWrappingOptions } from "@/panels/editorWrapping";
 
 test("pane-bounded file wrapping can wrap before the configured column", () => {
 	expect(editorWrappingOptions(96, true)).toEqual({

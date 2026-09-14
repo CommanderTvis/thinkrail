@@ -8,6 +8,7 @@ import {
 	registerToolRenderer,
 	registerToolRendererPrefix,
 	resolveProminence,
+	unregisterToolRenderer,
 } from "./toolRegistry";
 
 const props = (args: Record<string, unknown>): ToolRenderProps => ({
@@ -41,6 +42,13 @@ describe("toolRegistry summaries", () => {
 		registerToolRenderer("with-renderer", renderer);
 		expect(getToolRenderer("with-renderer")).toBe(renderer);
 		expect(typeof getToolRenderer("totally-unknown")).toBe("function");
+	});
+
+	it("unregisterToolRenderer falls back to the default renderer again", () => {
+		const renderer = () => null;
+		registerToolRenderer("removable-tool", renderer);
+		unregisterToolRenderer("removable-tool");
+		expect(getToolRenderer("removable-tool")).not.toBe(renderer);
 	});
 });
 
