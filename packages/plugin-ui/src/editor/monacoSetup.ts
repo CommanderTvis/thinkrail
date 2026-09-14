@@ -50,24 +50,25 @@ interface WebGpu {
 	requestAdapter(): Promise<unknown>;
 }
 
-let webgpuUsable = false;
-void (async () => {
-	const gpu = (navigator as Navigator & { gpu?: WebGpu }).gpu;
-	if (!gpu) return;
-	try {
-		webgpuUsable = (await gpu.requestAdapter()) !== null;
-	} catch {
-		webgpuUsable = false;
-	}
-})();
-
 const devicePixelBoxUsable = supportsDevicePixelBox((options) =>
 	new ResizeObserver(() => {}).observe(document.createElement("div"), options),
 );
 
-/** Monaco's GPU renderer, only where everything it needs answers — see panels/SPEC.md. */
+let gpuUsable = false;
+/** Whether Monaco's GPU renderer can run here — see panels/SPEC.md. */
+export const editorGpuUsable: Promise<boolean> = (async () => {
+	const gpu = (navigator as Navigator & { gpu?: WebGpu }).gpu;
+	if (!gpu || !devicePixelBoxUsable) return false;
+	try {
+		gpuUsable = (await gpu.requestAdapter()) !== null;
+	} catch {
+		gpuUsable = false;
+	}
+	return gpuUsable;
+})();
+
 export function gpuAcceleration(requested: boolean): "on" | "off" {
-	return requested && webgpuUsable && devicePixelBoxUsable ? "on" : "off";
+	return requested && gpuUsable ? "on" : "off";
 }
 
 export function sharedEditorOptions(

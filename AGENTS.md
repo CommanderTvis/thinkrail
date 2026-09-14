@@ -3,289 +3,273 @@
 A ThinkRail-branded desktop-and-mobile client for the `pi` coding agent. The app is a thin host that
 runs `pi` and bridges it to a rich UI; `pi` owns models, skills, compaction, cost, and session state.
 
-Canonical specs (read these first):
-- `goal-and-requirements.md` — product goal + V1/V2 scope
-- `architecture.md` — top-level architecture, decisions, invariants
+## Fork workflow
 
-## Module structure & boundaries (top-priority requirement)
+This is CommanderTvis's fork of JetBrains/thinkrail (`upstream`). Upstream is a client for `pi`; the fork
+makes ThinkRail a workbench for more than one agent (Claude Code in the terminal, through the plugin API)
+while keeping every commit that upstream could take separate from the ones it could not. Its default branch,
+`claude-code-integration-plugin-api`, is a rebased chain on `upstream/main` in three parts, in this order:
 
-The app is built as a set of **clearly bounded modules**. This is a primary design requirement, not a
-nice-to-have — treat it with the same weight as the non-negotiable invariants below.
-- **Modules are fractal.** The boundary rule applies at *every* level: each package is a module, and the
-  directories *inside* a package (`packages/server/src/agent/`, `apps/web/src/transport/`, …) are modules
-  too. A sub-module is a directory with an `index.ts` **barrel** as its only public surface; siblings
-  import it **through that barrel, never its internals**. (Exception: where a barrel would defeat
-  code-splitting or a library's per-file convention — e.g. `apps/web/src/panels` and `components/ui`,
-  which lazy-load Monaco/shiki/xterm — imports stay per-file and the boundary is held by spec + convention.)
-- **Every module has a `SPEC.md`** that states its boundary explicitly: what it owns, what it exposes
-  as its public surface, and what it must *not* reach into (allowed deps and forbidden deps). The
-  **dependency edges *between* sibling sub-modules live in the parent module's `SPEC.md`** (a dependency
-  graph), not in each leaf — leaves declare only their own external deps + forbidden reaches.
-- **Boundaries should be covered by tests** where practical — a module's public surface and its
-  boundary rules are worth exercising with tests, not just relying on convention. This is a goal, not a
-  hard gate: aim for coverage, but don't block on guaranteeing it everywhere.
-- **The spec leads the code.** A change that moves or blurs a boundary updates the module's `SPEC.md`
-  first, then the code and the tests that pin it.
+1. **General improvements** — one commit per change that applies to upstream directly, each the unit of
+   a future upstream PR. Original subject, body and `Fixes JetBrains/thinkrail#<n>` trailer where an issue
+   exists.
+2. **The plugin API** — one commit: `packages/plugin-api`, `packages/plugin-ui`, the server loader, the web
+   registry, no plugins.
+3. **One commit per builtin plugin**, so each can be extracted to its own repository: spec-dialect,
+   blueprint, claude-code, discord, pdf-preview, branch-graph, visualize, file-icons, codex.
 
-## Engine: `pi` only, in-process
+Fork-only files (this README, this section) sit in one commit at the top.
 
-Built around the `pi` coding agent, run **in-process** via `@earendil-works/pi-coding-agent`
-(`createAgentSession`) — not a subprocess. No second runtime (no `claude-agent-sdk`), V1 or V2. We never
-assemble the prompt ourselves; we influence the agent only by what we feed `pi` (context, files, `pi`
-skills/extensions) and which flags we spawn it with.
+- **Amend, don't append.** A fix to something that already exists goes into the commit that owns it:
+  `git commit --fixup=<sha>` then `GIT_SEQUENCE_EDITOR=true git rebase -i --autosquash upstream/main`,
+  and `git push --force-with-lease`. A change that touches two parts is two fixups. The branch is
+  force-pushed aggressively; checkouts update with `git fetch && git reset --hard origin/<branch>`.
+- **New commits only for new things:** a new fix or feature for upstream (part 1, placed after the
+  commits it depends on), a new plugin (part 3), or a new core capability of the API (part 2 only if the
+  API commit would otherwise be incomplete without it; a capability a plugin introduced stays in that
+  plugin's commit until it is generalised).
+- **A part-1 commit is inserted into part 1, never appended at the tip.** The tip is the fork-only
+  commit; a new upstream-applicable fix or feature landing after it (or after the plugin commits) is
+  a placement bug, not a valid new commit — rebase it to sit with the other part-1 commits, before the
+  plugin API commit. One user-facing change is one commit: don't leave a feature and its own follow-up
+  fixes as separate commits once work on it is done — amend/squash them into that single commit
+  before moving on, per "amend, don't append" above.
+- **Every commit is green on its own:** `bun run typecheck`, `bun run lint` and `bun run test` pass at
+  each step, and the lockfile matches that step's manifests (`bun install --frozen-lockfile`). Test
+  files land with the code they test, never ahead of it.
+- **Upstream sync** is a rebase of the whole chain onto `upstream/main`; conflicts are resolved in the
+  commit that owns the file, and the final tree is compared against the pre-rebase tree before pushing.
+- **`electrobun prepare` is a single machine-wide lock, not a per-project one.** `bun scripts/prepare-devkit.ts`
+  (and anything that runs it: `apps/desktop`'s own `typecheck`, therefore the repo's `typecheck` gate and the
+  pre-commit hook) hangs indefinitely, with no output, while any `electrobun dev`/`bun run desktop:dev`
+  session is running anywhere on the machine — `hutch-engine` serializes every `prepare` behind a live
+  `dev`'s hold on the engine. This reproduces identically from a completely separate `git worktree` in
+  `/tmp`; the lock is not scoped to the project path, so an isolated disposable checkout does **not** avoid
+  it. Diagnosis: `hutch-engine status` (fast, unaffected) lists every registered project and its lock state.
+  Workaround: either stop the live `dev` session first, or skip that one step —
+  `CI=true bunx turbo run typecheck --filter='!@thinkrail/desktop'` plus `git commit --no-verify` — and
+  verify `apps/desktop` separately once a `dev` session is not running. Never `rm -rf .hutch` to "fix" a
+  hang: there is no tracked backup, and regenerating it hits the same lock.
+- **A single `git commit` invocation runs the full hook once.** If a commit hangs on the desktop step,
+  killing only *your own* spawned process tree (`prepare-devkit.ts` / `electrobun prepare`, found by
+  their start time) is safe; never touch a `dev` process you did not start — it is very likely the
+  live app someone is using to look at the result.
+- **Sending upstream:** a PR is one part-1 commit cherry-picked onto a branch from `upstream/main`; its
+  message is the commit message. Once merged, the rebase drops the commit.
 
-Tradeoff: in-process means **no crash isolation** — a fatal agent/provider fault takes the whole host
-down. Sessions still run concurrently (cooperative on one event loop); the subprocess RPC mode is the
-only alternative if fault isolation ever becomes worth the complexity.
+### The fork's commits, by title
 
-> The package scope is `@earendil-works/*`. The `@mariozechner/*` scope is the **deprecated** old name —
-> do not use it.
+The chain as of this writing, in order; titles rather than hashes because the hashes change on every
+rebase. Update this list when a commit is added, retitled or dropped.
 
-## Architecture (three rings)
+Part 1, general improvements, each a candidate upstream PR:
 
-- **Engine host** — `packages/server` (+ `packages/shared`), launched in-process by `apps/cli` or
-  `apps/desktop` (Electrobun). `createServer()` = `Bun.serve` HTTP+WS + `AgentSessionManager`
-  (one in-process `AgentSession` per tab) + handlers + persistence.
+- Reveal a file in the file manager, from our own menu
+- Open a plain folder as a project, with no git required
+- web: our own tab tooltips, and they stop blocking what they cover
+- Send an editor selection into a pi chat
+- Where a tab can go, drawn instead of listed
+- The light theme's diff canvas stops reading as disabled
+- Previewing a file before you keep it is a setting
+- The desktop window comes back to the port it had, and with it your tabs
+- tests: a fixture open survives a neighbour's pick and a loaded machine
+- Frontmatter edits like Obsidian properties, above the rendered view
+- The spec tools reach any agent in a ThinkRail terminal, over MCP
+- Panes a resource carries: embedded, never a tab of their own
+- A terminal whose pty inherited a stale utmpx record no longer runs as the wrong user
+- The outline moves to the pane's edge and drives both preview and source
+- A terminal frozen by a drain event the OS never delivered thaws on its own
+- On the desktop, the host is this computer, and the copy stops calling it "the host"
+- A file in the tree can be dragged to where it is wanted
+- feat(web): put the target choice above the Start work header
+- An issue number in a comment stops being painted as a colour
+- A repository URL becomes a project, cloned into a folder you choose
+- The desktop's right-click menu stops offering Look Up, Fonts, and Services
+- A file in the tree can be deleted, into the trash, after asking
+- A diff too narrow for two columns opens inline until you say otherwise
+- Cmd+F finds text in every preview, not only inside the editor
+- Typechecking the desktop stops waiting on a dev host that is running
+- A diagram inline in a document stops at a height you can see past
+- Search the whole workspace from one popup
+- The rendered markdown diff gets the outline and the properties block
+- A workbench frame belongs to the project it was arranged in
+- A selection you can see in the dark theme
+- The projects rail's plus says what it does
+- A spec's own frontmatter is a properties table, not a raw block
+- An inline diagram zooms like the fullscreen one, and pans inside its box
+- chore: bump TypeScript to 7.0.2 and migrate off the legacy compiler API
+- A spec is titled by its frontmatter, and its [[links]] go somewhere
+- The branch in the topbar opens the project's branches
+- A project with no specs opens its rail on Files
+- A terminal nobody is looking at stops rendering
+- The bottom row's controls clear the window's rounded corner
+- A code font you choose, with its ligatures
+- Settings answer to Command+, on macOS
+- The topbar says what "from main" means
+- A large markdown preview stops re-doing its own work
+- A selection reaches the document, not the chrome around it
+- Tests, fixtures and spec text the fork's changes left behind
+- The CLI waits a beat for a tab that is already open before opening another
+- Vertical tabs can live under their workspace in Projects
+- A dirty worktree can be force-removed before its branch
+- Branch pickers show every remote, collapsibly, and a click can switch or start a workspace
+- The Welcome provider warning recognizes connected JetBrains AI
+- JetBrains AI access source switching, for accounts with more than one org
+- Hidden models you can filter out in Settings and the model picker
+- A tooltip when a model name truncates in the model selector
+- Questionnaires superseded by later assistant activity clear the waiting status
+- Attached images in chat draft persist across tab switches
+- An open file says when its file is deleted on disk
+- A file or folder can be created, or renamed, from the Files tree
+- Remove the CLAUDE.md alias of AGENTS.md
+- Terminals start clean after a host restart
+- OpenAI models carry their provider mark
+- Chat tabs carry the Pi mark
+- A live terminal reattach restores full-screen input modes
+- Chats survive a provider switch when their saved model is unavailable
+- A project's absolute path can be copied from its context menu
+- A worktree made in ThinkRail's folder shows up as a workspace
+- A terminal agent names its workspace with set_title, over MCP
+- perf(web): enable the native React Compiler
+- Restoring the latest Pi chat in every workspace is a setting
+- Recents stops listing project folders that no longer exist
 
-- **The wire** — `packages/contracts`: the typed, versioned protocol. Types-only.
-- **UI client** — `apps/web`: mobile-first React, ships independently, dials a host over the wire.
+Part 2, the plugin API, and the change that builds on it:
 
-V1 has two additive entrypoints: `apps/cli` boots the host in-process and opens the browser, while
-`apps/desktop` packages the same host and web client in Electrobun. Remote/phone access (V2) is over
-Tailscale; auth stays external (the app carries an `owner` field).
+- Plugin API: the contract, the host loader, the web registry, and the UI kit
+- A review comment can be sent to an agent in a terminal, not just a chat session (rides on the plugin API's terminal-agent surface)
 
-**V1 shape (Worktree IDE):** left = projects (git repos) → workspaces (each a `git
-worktree`, own branch/cwd, under `~/.thinkrail/worktrees`); center = a tabbed area of Monaco file tabs
-+ chat tabs; right = a Files tree + Changes (git diff) + terminals, all scoped to the active
-worktree. The shell is built **first**, `pi` connected **last**. Deferred to V2: spec-graph viewer,
-PR/Checks.
+Part 3, one builtin plugin per commit:
 
-## Repo layout
+- The spec dialect is the first builtin plugin (spec-graph read, Specs panel, `spec_*` renderers)
+- Blueprint is a builtin plugin built on the spec dialect (interactive-spec format, author, reactor)
+- Claude Code integration is a builtin plugin (config pane, IDE bridge, hook status, launcher, terminal facts)
+- Discord Rich Presence is a builtin plugin (presence over local IPC)
+- The PDF preview is a builtin plugin (PDF file viewer, web only)
+- The branch graph is a builtin plugin (the project's branch graph side tool)
+- The terminal visualization is a builtin plugin (the terminal agent's live drawing surface)
+- File-type icons are a builtin plugin (material-icon-theme glyphs, web only)
+- OpenAI Codex is a builtin plugin (config, launcher, hook status, MCP wiring)
 
-```
-goal-and-requirements.md, architecture.md   top-level specs (repo root)
-central-integration.md                      cross-module spec: JetBrains AI via Central
-apps/
-  cli/        V1 entrypoint: boot host + open browser   (SPEC.md)
-  web/        mobile-first UI client                    (SPEC.md)
-  desktop/    Electrobun local-host launcher             (SPEC.md)
+Fork-only, one commit at the top: The fork describes itself: what it adds, how to run it, how its history moves (README, this file's fork sections).
 
-  website/    public landing + blog + vibecoding (Cloudflare Pages) (SPEC.md)
-packages/
-  server/     createServer(): Bun.serve + AgentSessionManager  (SPEC.md)
-  contracts/  the wire (types-only)                     (SPEC.md)
-  shared/     shellEnv (server-side only)               (SPEC.md)
-  spec-graph/ portable pi extension: spec_* tools + skill (SPEC.md)
-  plugin-api/ the plugin contract: manifest, host/web contexts (SPEC.md)
-  plugin-ui/  shared plugin UI kit: primitives, markdown, editor (SPEC.md)
-  plugin-spec-dialect/ builtin plugin: spec-graph read + Specs panel (SPEC.md)
-  plugin-blueprint/ builtin plugin: interactive-spec format, author, reactor (SPEC.md)
-  pi-delegation/ portable pure-pi delegation core: child sessions from sessions (SPEC.md)
-  pi-subagents/  portable pure-pi extension: Agent tools over pi-delegation (SPEC.md)
-  plugin-claude-code/ builtin plugin: Claude Code config, IDE bridge, terminal status (SPEC.md)
-  plugin-pdf-preview/ builtin plugin: PDF file viewer, web only (SPEC.md)
-  plugin-file-icons/ builtin plugin: material-icon-theme file-type glyphs, web only (SPEC.md)
-  plugin-codex/ builtin plugin: OpenAI Codex config, launcher, hook status, MCP wiring (SPEC.md)
-  plugin-discord/ builtin plugin: Discord Rich Presence over local IPC (SPEC.md)
-  plugin-branch-graph/ builtin plugin: the project's branch graph side tool (SPEC.md)
-  plugin-visualize/ builtin plugin: terminal agent's live drawing surface (SPEC.md)
-```
+## Read context proportionally
 
-## Spec graph (how decisions are recorded)
+- Use `goal-and-requirements.md` for the product's goal, principles, capabilities, and non-goals.
+- Use `architecture.md` for system topology, cross-module decisions, and repo-wide invariants.
+- Read the owning `SPEC.md` when work is governed by or may alter a module boundary, contract,
+  invariant, documented behavior, or architecture decision.
+- Localized work does not require unrelated specs or a full repository map.
 
-Architecture decisions live as spec-graph nodes, dogfooding the spec layer the product is about:
-- Top-level specs (`goal-and-requirements.md`, `architecture.md`) in the **repo root**.
-- Each module's spec is co-located as `<module>/SPEC.md`.
-- Frontmatter: `id`, `type` (goal-and-requirements | architecture-design | module-design |
-  submodule-design | task-spec), `status` (draft | active | stale | done | deprecated), `title`,
-  `parent` (single link), `depends-on` / `references` / `implements` (link lists), `covers` / `tags`.
-- **Specs are the source of truth and are updated during implementation.** A module spec is `draft`
-  until its design firms up, then `active`. Keep them honest as code lands.
-- **Comments: avoid them. Near-zero is the norm.** Decisions, invariants, trade-offs, rejected
-  alternatives, protocol history, bug post-mortems — all of it lives in the owning `SPEC.md` (or the
-  test that pins it), never in code comments. Code carries meaning through names, types, and control
-  flow. The only comments that may exist: lint/type directives (`biome-ignore` with a reason,
-  `/// <reference`) and a *rare* one-line hazard note where misediting silently breaks something no
-  type or test can pin — usually ending in a `see <SPEC>` pointer. A comment spanning multiple lines
-  is content that belongs in a spec: move it. Never narrate code or duplicate spec prose beside it.
+## Module structure and boundaries
 
-## Non-negotiable invariants
+Clear, fractal module boundaries are a top-priority requirement:
 
-- **`apps/web` depends on `packages/contracts`, `packages/plugin-api` (the `/web` entry and root types),
-  and `packages/plugin-ui`, plus a builtin plugin package's `./manifest` and `./web` — never on
-  `server`/`shared`, and never a plugin's `host` half.** This is what makes the UI shippable without the
-  host. An external plugin's web half arrives over the wire instead of at build time.
-- **Never *value*-import `pi` in browser-bundled code; import types only, from the `pi-ai` /
-  `pi-agent-core` package roots** (`verbatimModuleSyntax` erases type-only imports, so no runtime reaches
-  the bundle). `@earendil-works/pi-coding-agent` is server-only and never reaches `contracts`/`web` (it
-  pulls `node:fs` + provider SDKs). `pi-agent-core` + `pi-ai` are type-only devDeps of `contracts`.
-- **One id model:** the UI tab id vs `session.sessionId` (the `AgentSession` id). No separate pi UUID.
-- **`pi` owns state**; the host is a thin bridge and does not recompute what `pi` reports (cost, stats).
-- **Streaming:** `text_delta` / `thinking_delta` **APPEND**; `tool_execution_update.partialResult`
-  **REPLACE**.
-- **`prompt()` throws while a session is streaming** → call `steer()` / `followUp()`. Errors arrive via
-  the event stream + thrown methods, not a crash signal — wrap each call and forward to the WS client.
-- **Automatic work ends at `agent_settled`, never `agent_end`.** `agent_end` is attempt-level and may be
-  followed by provider retry, compaction/recovery, or a queued continuation even when `willRetry` is false.
-- **UI panels are layout-agnostic**; the shell arranges them (desktop multi-pane / mobile single-view).
-- **Web styling = Tailwind v4 utilities mapped to the CSS-var tokens** (`@theme inline`). The `@theme`
-  token families are GENERATED from JSON sources into `styles/generated/`, each carrying its own
-  `@theme inline` block (Tailwind flattens imports before resolving the theme, so an imported block
-  registers like an inline one): colour (`styles/colors.json` → `styles/generated/colors.css`) and
-  spacing (`styles/spacing.json` → `styles/generated/spacing.css`, which **owns the Tailwind `--spacing`
-  base mapping**). `apps/web/src/index.css` is the integration point — it `@import`s the generated layers
-  and holds only the non-generated remainder (Preflight font defaults, chrome geometry such as
-  `--spacing-panel-header-row`, animations); it does **not** own the `--spacing` mapping. Themes swap the
-  token set via `[data-theme]`. Components use utilities,
-  **never inline `style` objects or raw hex** — that's what keeps the UI themeable and responsive.
-  **Colour has two layers and components may only name the second:** the per-theme *palette*
-  (`themes/bundled/*.theme.json` → `--elevated`, `--hint`) is internal; the *semantic* tokens
-  (`styles/colors.json` → `bg-container-elevated-bg`, `text-feedback-warning`) are the surface. Tints
-  come from a four-step alpha scale as tokens, never Tailwind's `/40` modifier. `styles/COLOR.md` is
-  the system, `styles/colorUsage.test.ts` the gate — Tailwind drops an unknown utility *silently*, so
-  a token that isn't published renders as nothing.
-- **Icons: `@remixicon/react` (Remix Icon; outline `Line` by default, solid `Fill` when the item is active/selected) for everything the UI *does*.** What a *file* **is** is the one exception: file-type
-  glyphs come from the builtin `packages/plugin-file-icons` plugin's **material-icon-theme** (MIT) set,
-  recoloured to `currentColor` at build time and served through the `fileIcon` core slot; core's
-  `components/FileTypeIcon` falls back to a plain Remix glyph when that plugin is off. Remix has no
-  vocabulary for `.kt` vs `.tsx` vs `Dockerfile`, and inventing one per language is not a UI kit's job.
-  **UI primitives: shadcn/ui** (Radix), copied into
-  `apps/web/src/components/ui/` (we own them) and themed with our token utilities — *not* shadcn's
-  default palette. `cn()` lives in `apps/web/src/lib/utils.ts`.
-- The transport's **host endpoint is a parameter** (default same-origin); `server.welcome` carries a
-  protocol version so an independently-shipped UI can detect host drift.
+- Every package and meaningful directory-level sub-module has a `SPEC.md` stating its responsibility,
+  public surface, allowed dependencies, and forbidden reaches.
+- A sub-module exposes an `index.ts` barrel as its only public surface; siblings import through the
+  barrel, never internals. Per-file imports remain only where a barrel would defeat code-splitting or a
+  library convention, such as `apps/web/src/panels` and `components/ui`.
+- Dependency edges between sibling sub-modules live in the parent module's `SPEC.md`, not each leaf.
+- A change that moves or blurs a boundary updates the owning spec first. Cover public surfaces and
+  boundary rules with tests where practical, but do not manufacture coverage for a localized change.
 
-## Chat UI (the conversation renderers)
+## Engine and architecture
 
-The agent conversation is rendered by **hand-rolled React primitives** in `apps/web/src/chat/` — pi ships
-no web UI, and the official `@earendil-works/pi-web-ui` (MIT) is **Lit + runs the agent in-browser**, so
-it's a *reference* for the event→render mapping, not a dependency. The primitives render **pi's canonical
-message / content-block model** (`AssistantMessage.content`: `text` / `thinking` / `toolCall`), so they're
-reusable by any pi UI (extraction-ready as a future `packages/chat-ui`).
-- **Presentational renderers are props-driven** (no store/transport) so they stay reusable; `ChatView` is
-  the only app-integration piece (wires store + transport). Theme **only via token utilities** so the
-  primitives wear any theme.
-- **Adding a tool = two decoupled sides, joined by tool name:** the **capability** is a pi **custom tool /
-  extension/skill** (server-side, passed to `createAgentSession`) or a plugin's pi-free `PluginToolDefinition`
-  (`packages/plugin-api`, adapted to a pi tool by the server's plugin loader); the **presentation** is a UI
-  renderer registered via **`registerToolRenderer("<name>", …)`** (`chat/toolRegistry`) — reached from a
-  plugin's web half through its own context (`ctx.toolRenderer`) rather than by importing the chat module.
-  Unregistered tools fall back to `DefaultToolRenderer`. Interactive tools route through the
-  `pi.extensionUi` bridge.
-- Full module spec: `apps/web/src/chat/SPEC.md`.
+- Run `pi` in-process through `@earendil-works/pi-coding-agent` (`createAgentSession`), never as a
+  subprocess and never through a second agent runtime. Fatal provider/agent faults can take down the
+  host; that lack of crash isolation is accepted.
+- The three rings are engine host (`packages/server` + `packages/shared`), typed wire
+  (`packages/contracts`), and independently shippable UI (`apps/web`). `apps/cli` and `apps/desktop`
+  are thin launchers over the same host.
+- Use only the `@earendil-works/*` package scope. `@mariozechner/*` is deprecated.
 
-## Verification (run for every app-affecting change)
+## Repo-wide invariants
 
-Every change that touches the app is verified by the **complete e2e suite once before it is considered
-done**. During implementation, iterate with the affected spec
-(`bun run e2e -- e2e/<feature>.spec.ts`) or `bun run e2e -- --last-failed`; do not rerun the full gate
-after every edit.
+- `apps/web` depends on `packages/contracts` only, never `server` or `shared`.
+- Never value-import `pi` into browser-bundled code. Import types only from the `pi-ai` /
+  `pi-agent-core` package roots; `@earendil-works/pi-coding-agent` is server-only.
+- One id model: UI tab id versus `session.sessionId`; there is no separate pi UUID.
+- `pi` owns state. The host exposes what pi reports rather than recomputing cost, stats, or state.
+- Streaming semantics: `text_delta` / `thinking_delta` append;
+  `tool_execution_update.partialResult` replaces.
+- `prompt()` throws while a session is streaming; use `steer()` / `followUp()`. Forward errors through
+  the event stream and thrown method result rather than treating them as a crash signal.
+- Automatic work ends at `agent_settled`, never `agent_end`; retries, compaction, recovery, or queued
+  continuations may follow an attempt-level `agent_end`.
+- UI panels are layout-agnostic; the shell arranges them.
+- The transport host endpoint is a parameter, defaulting to same-origin; `server.welcome` carries the
+  protocol version.
 
-`bun run e2e` is **fully self-contained and machine-adaptive**: it builds the web app once, then runs the
-no-agent tests across isolated Playwright shard processes (automatic count = half the available CPUs,
-clamped to 1–8). Every lane owns one serial worker + host and its own per-worktree-qualified ports, state,
-HOME, pi-agent dir, fixture repo, and control files; reports merge into one result. Override with
-`THINKRAIL_E2E_SHARDS=N` or `--shards=N` (1–16); use `bun run e2e:serial` for one-lane debugging. The
-paths derive in `e2e/fixtures/paths.ts`, never touch `~/.thinkrail`, and parallel runs from different
-worktrees never collide. Two complete invocations in the same worktree remain sequential. Every public
-browser E2E runner holds one macOS idle-system-sleep assertion for its lifetime while still allowing display
-sleep; composed full-run phases inherit the parent's assertion. Focused
-`e2e:full` runs preflight both modes and skips a mode with no selected tests; selecting nothing fails, while
-an argument-free run and `--list` retain both phases. Cancellation in the no-agent, agent, and full runners
-signals their complete child trees (POSIX snapshot; Windows tree-aware termination), then force-kills
-survivors after a bounded grace; this does not describe the separate binary or desktop artifact runners. Each
-lane seeds fixtures (`globalSetup`), drives the real web UI, then tears its host down and cleans up
-(`globalTeardown`). Tests live in `e2e/` and
-assert via `data-testid` / `data-status` hooks. Design: `e2e/SPEC.md`. The same suite also has
-packaged CLI-binary and Electrobun-desktop host modes.
+### Web UI context
 
-**Agent tests are tagged, not faked.** Specs that drive a real `pi` agent are tagged `@agent` (Playwright
-`{ tag: "@agent" }`). `bun run e2e:agent` enables the dedicated real-Central mode: setup copies the user's
-global Central extension into the lane's isolated HOME, gives the isolated `PI_CODING_AGENT_DIR` only a
-`settings.json`, and requires `provider.status` plus `model.default` to prove the exact configured model
-before a test starts. The web build alone preserves the caller environment; before Playwright and every
-Central-mode host, the harness removes PI provider API/token variables plus Google and AWS ambient credential
-sources. Central test execution must use the public `e2e:agent` or `e2e:full` runner (direct Playwright is
-limited to `--list`) so the build finishes before that sanitization. It never copies `auth.json` or
-`models.json`, and the host resolves only the read-only test Central CLI. Override the deterministic default
-with `THINKRAIL_E2E_MODEL=<provider>/<modelId>`. Do not let an `@agent` test select a model — it would pin a
-default mid-run. `bun run e2e` runs the fast **no-agent** suite; `bun run e2e:full` runs no-agent first,
-then the isolated Central agent suite. There is **no fake agent** — agent coverage runs against a real
-provider. The separate `bun run test:workflows` harness deliberately retains local PI-auth seeding in its
-per-worker isolated agent directories.
+For web UI work, read `apps/web/SPEC.md` and the owning sub-module spec. Styling uses Tailwind v4
+utilities mapped to generated semantic CSS-var tokens: never inline style objects, raw hex, internal
+palette names, or unknown token utilities. Read `apps/web/src/styles/COLOR.md` for color work and
+`apps/web/src/styles/SPACING.md` for spacing work. Use `@remixicon/react` icons (Line by default, Fill
+when active) and owned shadcn/Radix primitives from `apps/web/src/components/ui/`; `cn()` lives in
+`apps/web/src/lib/utils.ts`.
 
-**`bun run e2e:binary`** (after `bun run build:binary`) runs the no-agent suite against the **compiled
-single-file binary** instead of the dev host (skipping the `@dev-seam` fake-login specs — those fakes live
-only in the dev boot): the gate for the regression class that only exists inside the artifact (e.g. pi's
-dynamic imports resolving from `node_modules`), alongside the targeted probes in `smoke:binary`.
+For conversation rendering or tool presentation, read `apps/web/src/chat/SPEC.md`. Presentational
+renderers remain props-driven; only `ChatView` integrates store and transport. A server capability and
+its UI renderer are joined by tool name through `registerToolRenderer`; unregistered tools use the
+default renderer.
 
-Separate from the browser suite: `bun run test:workflows` — the headless **workflow-skill suite**
-(`e2e/workflows/`, own Playwright config, no browser/webServer; drives a real in-process pi agent
-through the workflow skills). On-demand only: needs pi auth and spends real provider tokens — never a
-commit/CI gate. Design: `e2e/workflows/SPEC.md`.
+## Specs and comments
 
-Fast gates (also the husky pre-commit): `bun run check:deps` (dependency pins) +
-`bun run check:boundaries` (workspace dependency/import edges) + `bun run check:seams`
-(the pi binary-seam canary — fails when a pi bump adds a bundler-opaque dynamic import that
-`registerBundledRuntime` doesn't statically register) + `bun run lint` (biome) + `bun run typecheck`. Unit tests:
-`bun run test` (the repo-root `scripts/` tests, then bun test per workspace via turbo — root scripts live
-outside every workspace, so turbo cannot see them). One-time setup for a fresh machine: `bunx playwright install chromium`.
+Specs are the durable home for intent, decisions, invariants, trade-offs, and post-mortems. Keep them
+concise and avoid restating code or another spec. Comments are near-zero: lint/type directives and a
+rare one-line hazard note are acceptable; rationale and narrative belong in the owning spec.
 
-`bun run check:spec-surface` holds specs tagged `public-surface-checked` to their barrels: the public-surface
-bullet must remain a bare list of backticked identifiers, and the TypeScript compiler's effective export
-names must match it exactly across type-only, default/CommonJS-assignment, named, namespace, and transitive re-exports. A tagged
-missing/prose surface, missing barrel, or unresolved re-export fails rather than becoming a skip. Untagged
-specs remain descriptive; `--list-skipped` names them and why. The contract lives in `module-repo-scripts`.
-The check runs in CI, not in the pre-commit hook.
+## Verification
 
-## Handoff hygiene (before any commit, PR, or "done" summary)
+Local tests use disposable fixtures and have no production access. Run affected tests, fix failures
+caused by the requested change, and rerun them without asking for approval at each step.
 
-Green gates are necessary, not sufficient — they can't see duplication, suppressions, or leftovers.
-Before committing, opening/updating a PR, or declaring work done, re-read the full diff
-(`git diff origin/main...HEAD` + working tree) as a reviewer would, and enforce:
+- Iterate with the smallest relevant unit or focused E2E target.
+- For shipped app behavior or integration changes, run the complete browser E2E suite once after the
+  combined implementation and before final handoff or PR — not once per TODO item or commit. Use
+  `bun run e2e:full` when the change touches real agent behavior; otherwise use `bun run e2e`.
+- Documentation/spec-only changes and test-harness-only changes use targeted checks unless they can
+  affect the shipped runtime.
+- Fast gates: `bun run check:deps`, `bun run check:boundaries`, `bun run check:seams`, `bun run lint`,
+  and `bun run typecheck`. Unit tests are `bun run test`; `bun run check:spec-surface` validates enrolled
+  spec/barrel public surfaces.
+- `bun run test:workflows` is on-demand: it uses real provider tokens and is not a commit/CI gate.
+- Binary and desktop artifact modes have separate gates; use them when changing those artifacts.
 
-- **Simplicity is a separate gate.** Before a commit or PR, ask what can be deleted, reused from the
-  existing code or framework, or assigned to an existing owner. Each new abstraction, state owner,
-  dependency, compatibility layer, and fallback must earn its place through a current requirement.
-  After parallel work, do a subtraction pass across the combined change, not just a correctness review
-  of each piece. Preserve behavior, module boundaries, and meaningful tests; fewer responsibilities and
-  sources of truth matter more than fewer files or denser code. Report what was removed and justify
-  the layers that remain — do not wait for the user to request this review.
-- **No silent suppressions.** Never add `biome-ignore` / `@ts-expect-error` / `@ts-ignore` /
-  `eslint-disable` / `as any` to make a gate pass. A lint/type error is a design signal: first ask
-  whether the state, dependency, or structure it flags should exist at all — prefer deleting the cause
-  over guarding it. If a suppression still seems genuinely right, stop and get user sign-off first; an
-  unrequested suppression must never be discovered in review. Audit before handoff:
-  `git diff origin/main...HEAD -U0 | rg '^\+.*(biome-ignore|eslint-disable|@ts-ignore|@ts-expect-error|as any)'`
-  → must come back empty.
-- **No comment creep.** New comments in the diff are suspect by default (see the near-zero rule under
-  *Spec graph*): a rationale paragraph added as a comment gets moved to the owning `SPEC.md` before
-  handoff. Audit: `git diff origin/main...HEAD -U0 | rg '^\+\s*(//|/\*|\*)'` → every hit is a lint
-  directive or a one-line hazard note, nothing else.
-- **No duplicated derivations.** The same nontrivial expression/lookup landing in 2+ places means
-  centralize it first. Web specifics: derived state belongs in store selectors
-  (`apps/web/src/store/selectors.ts`), components never inline multi-step derivations from store state;
-  store writes that always travel together are one atomic store action, not two calls at each call site.
-- **Refactor sweep.** When a change replaces a pattern or state model, `rg` the repo for the old
-  pattern and migrate every occurrence — or name the survivors and why in the handoff. Never leave call
-  sites half-migrated.
-- **End analyses with an offer.** When the user questions your recent work and your analysis concludes a
-  change is warranted, finish with the concrete change + "apply?" (or just apply it if it's within the
-  approved scope) — never with prose that makes the user say "do the cleanup then please".
-- **UI-visible changes:** offer before/after screenshots alongside the PR without being asked.
-- **PRs and issues follow their templates.** `gh pr create` / `gh issue create` do not apply
-  `.github/PULL_REQUEST_TEMPLATE.md` or `.github/ISSUE_TEMPLATE/*.md`, so anything opened
-  programmatically must reproduce the template by hand: same sections in the same order, every
-  checklist item kept and ticked only when actually done. For a PR, drop the `Related issues` line
-  only when it closes nothing. For an issue, pick the template that fits (bug report / feature
-  request) and pass its frontmatter `labels` via `--label`.
+All runner modes, isolation guarantees, credential handling, cancellation behavior, and debugging
+commands live in `e2e/SPEC.md`; workflow harness details live in `e2e/workflows/SPEC.md`.
+
+## Handoff hygiene
+
+Green gates are necessary but not sufficient:
+
+- Before a local handoff, review the task-scoped working tree and commits. Before opening or updating a
+  PR, review the full branch diff against its base plus the working tree.
+- For nontrivial implementation, do a subtraction pass: remove avoidable abstractions, state owners,
+  dependencies, compatibility layers, and fallbacks. Report material removals and justify layers that
+  remain; do not add ceremony for a localized edit.
+- Never add `biome-ignore`, `@ts-expect-error`, `@ts-ignore`, `eslint-disable`, or `as any` merely to make
+  a gate pass. Treat the error as a design signal. If a suppression is genuinely required, get explicit
+  user approval first.
+- Audit newly added comments and suppressions in the same diff range being reviewed. Do not let prior,
+  unrelated branch history contaminate a task-local handoff.
+- Centralize duplicated nontrivial derivations. In the web app, derived store state belongs in
+  selectors and writes that always travel together belong in one atomic action.
+- When replacing a pattern or state model, search for every old occurrence and migrate it, or name the
+  intentional survivors.
+- Apply safe cleanup that is inside the approved scope. Ask only for destructive, out-of-scope, or
+  product-level decisions.
+- Use the `shipping-a-pr` skill for PR lifecycle work, including screenshot expectations and PR
+  templates. When creating an issue programmatically, reproduce the selected issue template and pass
+  its frontmatter labels.
 
 ## Stack
 
-Bun + Turbo monorepo · TypeScript (strict) · React 19 + Zustand + Tailwind v4 (web) · in-process `pi`
-via `@earendil-works/pi-coding-agent` (Node ≥ 22.19). On-disk app state under `~/.thinkrail`.
+Bun + Turbo monorepo · TypeScript strict · React 19 + Zustand + Tailwind v4 · in-process `pi`
+(Node >= 22.19). App state lives under `~/.thinkrail`.
 
-- **Dependencies pin exact versions — no ranges** (`^`/`~`/`.x`/`*`). Cross-cutting deps are pinned once in
-  the root `workspaces.catalog` and referenced via `catalog:`. Enforced by `bun run check:deps`
-  (`scripts/check-catalog.ts`, in pre-commit + CI); `peerDependencies` + local protocols are exempt. See
-  `architecture.md` Decision #10 for the why.
+Dependencies pin exact versions. Cross-cutting dependencies are pinned once in the root
+`workspaces.catalog` and referenced through `catalog:`; peer dependencies and local protocols are the
+only exemptions. `architecture.md` Decision #10 owns the rationale.
