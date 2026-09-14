@@ -1,11 +1,13 @@
 import { spawnSync } from "node:child_process";
-import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, type Page, test } from "@playwright/test";
 import {
 	createWorkspaceViaDialog,
 	openAppFresh,
 	openFixtureProject,
+	requestOverWire,
+	setPluginEnabled,
 	worktreeRows,
 } from "./fixtures/app";
 import { git, gitAs, gitText } from "./fixtures/git";
@@ -198,6 +200,54 @@ test("folder-mode Start with an empty prompt lands in a fresh chat in the Defaul
 	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(1);
 	await expect(page.getByTestId("chat-input")).toBeVisible();
 	await expect(page.locator('[data-testid="chat-message"][data-role="user"]')).toHaveCount(0);
+});
+
+test("Claude Code can be the agent, and Start hands it the prompt in a terminal", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	await page.getByTestId("add-workspace").first().click();
+	const dialog = page.getByTestId("new-workspace-dialog");
+	await expect(dialog).toBeVisible();
+	const claude = dialog.locator('[data-testid="ws-agent"][data-agent="claude"]');
+	// The plugin is off by default, so it offers no launcher at all — not a disabled chip.
+	await expect(claude).toHaveCount(0);
+	await page.keyboard.press("Escape");
+	await expect(dialog).toBeHidden();
+
+	// A stand-in `claude` that records its argv: the launch is a real PTY command line.
+	const log = join(E2E_DATA_DIR, "start-work-claude.log");
+	const fake = join(E2E_DATA_DIR, "fake-claude-start");
+	writeFileSync(fake, `#!/bin/sh\necho "$@" >> ${JSON.stringify(log)}\n`);
+	chmodSync(fake, 0o755);
+	writeFileSync(log, "");
+	await setPluginEnabled(page, "claude-code", true);
+	await requestOverWire(page, "settings.update", {
+		config: { plugins: { "claude-code": { command: fake } } },
+	});
+
+	await page.getByTestId("add-workspace").first().click();
+	await expect(dialog).toBeVisible();
+	await expect(claude).toBeEnabled();
+	await dialog.getByTestId("ws-target-default").click();
+	await claude.click();
+	await expect(dialog.getByTestId("ws-claude-model")).toHaveText("Default model");
+	await dialog.getByTestId("ws-claude-model").click();
+	await page.getByTestId("ws-claude-model-opus").click();
+	await expect(dialog.getByTestId("ws-claude-model")).toHaveText("Opus");
+	await dialog.getByTestId("ws-prompt").fill("probe the build");
+	await page.getByTestId("create-workspace").click();
+	await expect(dialog).toBeHidden();
+
+	await expect(page.getByTestId("center-group").getByTestId("terminal-tab")).toHaveCount(1);
+	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(0);
+	await expect
+		.poll(() => readFileSync(log, "utf8"), { timeout: 30_000 })
+		.toContain("--model opus probe the build");
+
+	await requestOverWire(page, "settings.update", {
+		config: { plugins: { "claude-code": { enabled: false, command: "claude" } } },
+	});
 });
 
 test("a project's committed skills are gated behind trust, then autocomplete", async ({ page }) => {
