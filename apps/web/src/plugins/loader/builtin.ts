@@ -1,6 +1,7 @@
 import type { PluginManifest } from "@thinkrail/plugin-api";
 import type { PluginWebModule } from "@thinkrail/plugin-api/web";
 import { manifest as blueprintManifest } from "@thinkrail/plugin-blueprint/manifest";
+import { manifest as branchGraphManifest } from "@thinkrail/plugin-branch-graph/manifest";
 import { manifest as claudeCodeManifest } from "@thinkrail/plugin-claude-code/manifest";
 import { manifest as discordManifest } from "@thinkrail/plugin-discord/manifest";
 import { manifest as pdfPreviewManifest } from "@thinkrail/plugin-pdf-preview/manifest";
@@ -43,6 +44,13 @@ export const BUILTIN_WEB_PLUGINS: readonly BuiltinWebPlugin[] = [
 		load: () =>
 			import("@thinkrail/plugin-discord/web").then(
 				(module) => module.default as unknown as PluginWebModule,
+			),
+	},
+	{
+		manifest: branchGraphManifest,
+		load: () =>
+			import("@thinkrail/plugin-branch-graph/web").then(
+				(module) => module.default as PluginWebModule,
 			),
 	},
 ];

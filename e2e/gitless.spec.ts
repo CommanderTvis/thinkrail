@@ -61,7 +61,7 @@ async function offeredTools(page: Page): Promise<string[]> {
 
 async function expectGitToolsWithheld(page: Page, vcs: "none" | "unborn"): Promise<void> {
 	// A tab a layout preset already placed says why, rather than showing a red git error.
-	for (const tool of ["changes", "review"] as const) {
+	for (const tool of ["changes", "review", "plugin:branch-graph:graph"] as const) {
 		const tab = page.getByTestId(`tab-${tool}`);
 		if ((await tab.count()) === 0) continue;
 		await tab.first().click();
@@ -80,6 +80,7 @@ async function expectGitToolsWithheld(page: Page, vcs: "none" | "unborn"): Promi
 	const offered = await offeredTools(page);
 	expect(offered).not.toContain("changes");
 	expect(offered).not.toContain("review");
+	expect(offered).not.toContain("plugin:branch-graph:graph");
 	expect(offered).toContain("files");
 }
 

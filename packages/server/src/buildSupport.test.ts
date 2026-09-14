@@ -29,6 +29,7 @@ test("runtime source manifest covers the launcher artifact surface", () => {
 		"blueprint",
 		"claude-code",
 		"discord",
+		"branch-graph",
 	]);
 	const specDialect = sources.plugins[0];
 	expect(specDialect?.assets).toBeNull();
