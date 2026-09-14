@@ -1,5 +1,6 @@
 import { RiFileTransferLine as FileSymlink } from "@remixicon/react";
 import { pluginMethodName } from "@thinkrail/plugin-api";
+import { CLAUDE_CODE_ID } from "@thinkrail/plugin-claude-code/manifest";
 import { OutlineColumn, OutlineToggle, scrollToHeading, ToggleSegment } from "@thinkrail/plugin-ui";
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { abbreviateHomePath, isMarkdownPath } from "@/lib/utils";
@@ -16,8 +17,6 @@ import { reviewFlagFor } from "./reviewModel";
 import { SendReviewButton } from "./SendReviewButton";
 import { useLiveTabContent } from "./useLiveTabContent";
 import { useFileReview } from "./useReviewCommenting";
-
-const CLAUDE_CODE_ID = "claude-code";
 
 const MonacoEditor = lazy(() => import("./MonacoEditor"));
 const MarkdownPreview = lazy(() => import("./MarkdownPreview"));

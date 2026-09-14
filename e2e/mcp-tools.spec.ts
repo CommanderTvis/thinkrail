@@ -6,6 +6,7 @@ import {
 	openFixtureProject,
 	openTerminal,
 	runInTerminal,
+	setPluginEnabled,
 	waitTerminalReady,
 } from "./fixtures/app";
 
@@ -19,10 +20,15 @@ function mcpCall(method: string, params: string, extract: string): string {
 	return `curl -s -X POST -H 'Content-Type: application/json' -d '${body}' "$THINKRAIL_MCP_URL" | jq -r '${extract}'`;
 }
 
+test.afterEach(async ({ page }) => {
+	await setPluginEnabled(page, "claude-code", false);
+});
+
 test("a terminal's MCP address serves the spec tools, scoped to its own worktree", async ({
 	page,
 }) => {
 	await openFixtureProject(page);
+	await setPluginEnabled(page, "claude-code", true);
 	const workspace = await createWorkspaceViaDialog(page);
 	await openTerminal(page);
 	await waitTerminalReady(page);

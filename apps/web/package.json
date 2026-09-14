@@ -27,6 +27,7 @@
 		"@thinkrail/contracts": "workspace:*",
 		"@thinkrail/plugin-api": "workspace:*",
 		"@thinkrail/plugin-blueprint": "workspace:*",
+		"@thinkrail/plugin-claude-code": "workspace:*",
 		"@thinkrail/plugin-spec-dialect": "workspace:*",
 		"@thinkrail/plugin-ui": "workspace:*",
 		"@xterm/addon-clipboard": "0.2.0",

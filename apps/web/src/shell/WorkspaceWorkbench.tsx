@@ -7,6 +7,7 @@ import {
 } from "@remixicon/react";
 import { pluginMethodName } from "@thinkrail/plugin-api";
 import type { TabDecoration } from "@thinkrail/plugin-api/web";
+import { CLAUDE_CODE_ID } from "@thinkrail/plugin-claude-code/manifest";
 import { DropdownMenuItem, IconTooltip } from "@thinkrail/plugin-ui";
 import {
 	lazy,
@@ -91,8 +92,6 @@ import { decorateTab } from "./tabDecoration";
 import { useTerminalPlacementReconciliation } from "./terminalReconciliation";
 import { useReportedActiveFile } from "./useReportedActiveFile";
 import { WorkspaceChatHistory } from "./WorkspaceChatHistory";
-
-const CLAUDE_CODE_ID = "claude-code";
 
 const PlanPane = lazy(() => import("../panels/PlanPane"));
 

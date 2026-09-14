@@ -340,3 +340,29 @@ test("shutdown clears periodic checks and makes a late result inert", async () =
 		collector.frames.filter((frame) => frame.channel === WS_CHANNELS.hostUpdateAvailable),
 	).toHaveLength(0);
 });
+
+test("a connected client is subscribed to the plugin roster push, not just its own request's echo", async () => {
+	const b = await boot({ port: grabFreePort(), host: "localhost", portMode: "exact" });
+	const collector = await collectSocket(b.port, "roster-push");
+	await socketBarrier(collector, "hello");
+
+	// A builtin plugin off by default (the Claude Code integration) — toggling it through the wire, the
+	// way Settings › Plugins does, must reach every connected client, not only the one that asked.
+	collector.socket.send(
+		JSON.stringify({
+			id: "enable",
+			method: "settings.update",
+			params: { config: { plugins: { "claude-code": { enabled: true } } } },
+		}),
+	);
+	const pushed = await collector.waitForFrame(
+		(frame) =>
+			frame.channel === WS_CHANNELS.pluginsChanged &&
+			Array.isArray(frame.data) &&
+			(frame.data as { id: string }[]).some((entry) => entry.id === "claude-code"),
+	);
+	const entry = (pushed.data as { id: string; status: string }[]).find(
+		(candidate) => candidate.id === "claude-code",
+	);
+	expect(entry?.status).not.toBe("disabled");
+});

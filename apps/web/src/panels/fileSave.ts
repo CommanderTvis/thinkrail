@@ -1,11 +1,10 @@
 import type { FileWriteResult } from "@thinkrail/contracts";
 import { pluginMethodName } from "@thinkrail/plugin-api";
+import { CLAUDE_CODE_ID } from "@thinkrail/plugin-claude-code/manifest";
 import { isAbsolutePath, mergeText } from "../lib";
 import { type EditorTab, toast, useAppStore } from "../store";
 import { errorText, getTransport } from "../transport";
 import { emitEditorEvent, findEditorRef } from "./editorEvents";
-
-const CLAUDE_CODE_ID = "claude-code";
 
 interface Buffer {
 	workspaceId: string;

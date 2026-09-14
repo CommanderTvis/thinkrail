@@ -1,9 +1,8 @@
 import { beforeEach, expect, mock, test } from "bun:test";
 import type { Workspace } from "@thinkrail/contracts";
 import { pluginMethodName } from "@thinkrail/plugin-api";
+import { CLAUDE_CODE_ID } from "@thinkrail/plugin-claude-code/manifest";
 import { diffTabId } from "./changesModel";
-
-const CLAUDE_CODE_ID = "claude-code";
 
 let pending: { resolve: (value: unknown) => void } | null = null;
 const requests: { method: string; params: unknown }[] = [];

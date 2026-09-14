@@ -1,5 +1,6 @@
 import type { GitDiffScope } from "@thinkrail/contracts";
 import { pluginMethodName } from "@thinkrail/plugin-api";
+import { CLAUDE_CODE_ID } from "@thinkrail/plugin-claude-code/manifest";
 import type { LayoutOpenOptions } from "@/store";
 import {
 	DOUBLE_CLICK_SETTLE_MS,
@@ -24,8 +25,6 @@ import {
 import { getTransport } from "../transport";
 import { diffTabId, diffTabName } from "./changesModel";
 import { emitEditorEvent, findEditorRef } from "./editorEvents";
-
-const CLAUDE_CODE_ID = "claude-code";
 
 function baseName(path: string): string {
 	return path.split("/").pop() || path;
