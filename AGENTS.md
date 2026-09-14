@@ -82,6 +82,7 @@ packages/
   plugin-blueprint/ builtin plugin: interactive-spec format, author, reactor (SPEC.md)
   pi-delegation/ portable pure-pi delegation core: child sessions from sessions (SPEC.md)
   pi-subagents/  portable pure-pi extension: Agent tools over pi-delegation (SPEC.md)
+  plugin-claude-code/ builtin plugin: Claude Code config, IDE bridge, terminal status (SPEC.md)
 ```
 
 ## Spec graph (how decisions are recorded)

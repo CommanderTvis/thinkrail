@@ -62,7 +62,8 @@ import {
 	RiTimerFill,
 	RiTimerLine,
 } from "@remixicon/react";
-import type { ComponentType } from "react";
+import { type ComponentType, createElement, type ReactElement } from "react";
+import { selectSlot, usePluginRegistry } from "./store";
 
 type Icon = ComponentType<{ className?: string | undefined }>;
 
@@ -103,7 +104,18 @@ const ICONS: Record<string, { line: Icon; fill?: Icon }> = {
 
 const FALLBACK = RiPuzzle2Line;
 
+function ClaudeIcon({ className }: { className?: string | undefined }): ReactElement {
+	const slots = usePluginRegistry((s) => selectSlot(s, "fileIcon"));
+	const props = className !== undefined ? { className } : {};
+	for (const resolve of slots) {
+		const Resolved = resolve("CLAUDE.md", "file");
+		if (Resolved) return createElement(Resolved, props);
+	}
+	return createElement(RiRobot2Line, props);
+}
+
 export function pluginIcon(name: string, active = false): Icon {
+	if (name === "claude") return ClaudeIcon;
 	const entry = ICONS[name];
 	if (!entry) return FALLBACK;
 	return (active && entry.fill) || entry.line;

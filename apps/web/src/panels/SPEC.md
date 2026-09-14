@@ -1196,10 +1196,8 @@ the two paths cannot drift into two formats.
 An editor tab is a buffer, not a viewer. There is **no autosave**: Ctrl/Cmd+S writes, and until then
 nothing on disk moves — the tab shows an unsaved dot and closing it asks first.
 
-- **A save is a compare-and-swap** (`fileSave.ts`, `fs.writeFile` for a worktree path,
-  `@thinkrail/plugin-claude-code`'s `readFile`/`writeFile` for an external one — reached by
-  `pluginMethodName`, since a core panel calls a specific plugin's method by name here rather than through
-  a generic capability; `plugins/claude-code/SPEC.md` names this a known gap) against the
+- **A save is a compare-and-swap** (`fileSave.ts`, `fs.readFile`/`fs.writeFile` for both worktree files
+  and external files explicitly exposed by an active plugin) against the
   content the editor last read. A file that moved underneath is never overwritten: what is on disk comes
   back and is merged into the buffer with `lib`'s three-way merge, leaving conflict markers where both
   sides changed the same lines. Saving again is then an ordinary write against the newer base. The user

@@ -1,5 +1,4 @@
 import { RiFileTransferLine as FileSymlink } from "@remixicon/react";
-import { pluginMethodName } from "@thinkrail/plugin-api";
 import { OutlineColumn, OutlineToggle, scrollToHeading, ToggleSegment } from "@thinkrail/plugin-ui";
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { abbreviateHomePath, isMarkdownPath } from "@/lib/utils";
@@ -16,8 +15,6 @@ import { reviewFlagFor } from "./reviewModel";
 import { SendReviewButton } from "./SendReviewButton";
 import { useLiveTabContent } from "./useLiveTabContent";
 import { useFileReview } from "./useReviewCommenting";
-
-const CLAUDE_CODE_ID = "claude-code";
 
 const MonacoEditor = lazy(() => import("./MonacoEditor"));
 const MarkdownPreview = lazy(() => import("./MarkdownPreview"));
@@ -65,15 +62,13 @@ function FilePaneBody({ tab }: { tab: FileTab | ExternalFileTab }) {
 	}, [binary, fsChange, tab.path]);
 
 	useLiveTabContent(tab, {
-		// A binary viewer renders from its own bytes over its own route, never from tab.content. An
-		// external tab's path is outside the worktree, so the worktree-scoped read cannot refresh it.
 		read: (): Promise<{ content: string; hash: string }> =>
 			binary
 				? Promise.resolve({ content: "", hash: "" })
-				: (getTransport().request(
-						external ? pluginMethodName(CLAUDE_CODE_ID, "readFile") : "fs.readFile",
-						{ workspaceId: tab.workspaceId, path: tab.path },
-					) as Promise<{ content: string; hash: string }>),
+				: getTransport().request("fs.readFile", {
+						workspaceId: tab.workspaceId,
+						path: tab.path,
+					}),
 		applyFresh: ({ content, hash }, tick) =>
 			useAppStore.getState().updateFileTabContent(tab.workspaceId, tab.id, content, hash, tick),
 		keepCurrent: (tick) =>
