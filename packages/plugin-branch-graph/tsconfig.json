@@ -1,0 +1,11 @@
+{
+	"extends": "../../tsconfig.base.json",
+	"compilerOptions": {
+		"lib": ["ES2023"],
+		"types": ["bun"],
+		"noEmit": true,
+		"allowImportingTsExtensions": true,
+		"rootDir": "."
+	},
+	"include": ["manifest.ts", "contracts.ts", "build-support.ts", "host"]
+}

@@ -1,6 +1,7 @@
 import type { PluginManifest } from "@thinkrail/plugin-api";
 import type { PluginHostModule } from "@thinkrail/plugin-api/host";
 import blueprintHost from "@thinkrail/plugin-blueprint/host";
+import branchGraphHost from "@thinkrail/plugin-branch-graph/host";
 import claudeCodeHost from "@thinkrail/plugin-claude-code/host";
 import discordHost from "@thinkrail/plugin-discord/host";
 import specDialectHost from "@thinkrail/plugin-spec-dialect/host";
@@ -10,6 +11,7 @@ export const BUILTIN_PLUGINS: readonly PluginHostModule[] = [
 	blueprintHost as PluginHostModule,
 	claudeCodeHost as unknown as PluginHostModule,
 	discordHost as unknown as PluginHostModule,
+	branchGraphHost as PluginHostModule,
 ];
 
 /** Builtin plugins that ship no host half at all — see {@link PluginRegistry.registerBuiltinManifest}. */
