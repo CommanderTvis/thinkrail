@@ -73,6 +73,11 @@ const MODULE_RULES: readonly ModuleRule[] = [
 		internal: PLUGIN_WEB_MUST_NOT_REACH_HOST,
 	},
 	{
+		root: "packages/plugin-branch-graph",
+		allowed: ["packages/plugin-api", "packages/contracts", "packages/plugin-ui"],
+		internal: PLUGIN_WEB_MUST_NOT_REACH_HOST,
+	},
+	{
 		root: "packages/plugin-blueprint",
 		allowed: [
 			"packages/plugin-api",
@@ -112,7 +117,13 @@ const MODULE_RULES: readonly ModuleRule[] = [
 			"packages/contracts",
 			"packages/plugin-api",
 			...(
-				["plugin-blueprint", "plugin-claude-code", "plugin-discord", "plugin-spec-dialect"] as const
+				[
+					"plugin-blueprint",
+					"plugin-claude-code",
+					"plugin-discord",
+					"plugin-spec-dialect",
+					"plugin-branch-graph",
+				] as const
 			).flatMap((plugin) =>
 				(["./host", "./manifest", "./contracts", "./build-support"] as const).map((subpath) => ({
 					target: `packages/${plugin}`,
@@ -136,7 +147,13 @@ const MODULE_RULES: readonly ModuleRule[] = [
 			"packages/plugin-ui",
 			"packages/plugin-api",
 			...(
-				["plugin-blueprint", "plugin-claude-code", "plugin-discord", "plugin-spec-dialect"] as const
+				[
+					"plugin-blueprint",
+					"plugin-claude-code",
+					"plugin-discord",
+					"plugin-spec-dialect",
+					"plugin-branch-graph",
+				] as const
 			).flatMap((plugin) => [
 				{ target: `packages/${plugin}`, subpath: "./manifest" },
 				{ target: `packages/${plugin}`, subpath: "./web" },
@@ -152,7 +169,13 @@ const MODULE_RULES: readonly ModuleRule[] = [
 			"packages/server",
 			"packages/shared",
 			...(
-				["plugin-blueprint", "plugin-claude-code", "plugin-discord", "plugin-spec-dialect"] as const
+				[
+					"plugin-blueprint",
+					"plugin-claude-code",
+					"plugin-discord",
+					"plugin-spec-dialect",
+					"plugin-branch-graph",
+				] as const
 			).map((plugin) => ({ target: `packages/${plugin}`, subpath: "./build-support" })),
 		],
 	},
@@ -163,7 +186,13 @@ const MODULE_RULES: readonly ModuleRule[] = [
 			"packages/shared",
 			"packages/contracts",
 			...(
-				["plugin-blueprint", "plugin-claude-code", "plugin-discord", "plugin-spec-dialect"] as const
+				[
+					"plugin-blueprint",
+					"plugin-claude-code",
+					"plugin-discord",
+					"plugin-spec-dialect",
+					"plugin-branch-graph",
+				] as const
 			).map((plugin) => ({ target: `packages/${plugin}`, subpath: "./build-support" })),
 		],
 	},

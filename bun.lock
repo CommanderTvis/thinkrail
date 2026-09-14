@@ -65,6 +65,7 @@
         "@thinkrail/contracts": "workspace:*",
         "@thinkrail/plugin-api": "workspace:*",
         "@thinkrail/plugin-blueprint": "workspace:*",
+        "@thinkrail/plugin-branch-graph": "workspace:*",
         "@thinkrail/plugin-claude-code": "workspace:*",
         "@thinkrail/plugin-discord": "workspace:*",
         "@thinkrail/plugin-pdf-preview": "workspace:*",
@@ -269,6 +270,29 @@
         "react-dom": "*",
       },
     },
+    "packages/plugin-branch-graph": {
+      "name": "@thinkrail/plugin-branch-graph",
+      "version": "0.1.0",
+      "dependencies": {
+        "@remixicon/react": "4.9.0",
+        "@thinkrail/contracts": "workspace:*",
+        "@thinkrail/plugin-api": "workspace:*",
+        "@thinkrail/plugin-ui": "workspace:*",
+        "typebox": "catalog:",
+      },
+      "devDependencies": {
+        "@types/bun": "catalog:",
+        "@types/react": "catalog:",
+        "@types/react-dom": "catalog:",
+        "react": "catalog:",
+        "react-dom": "catalog:",
+        "typescript": "catalog:",
+      },
+      "peerDependencies": {
+        "react": "*",
+        "react-dom": "*",
+      },
+    },
     "packages/plugin-claude-code": {
       "name": "@thinkrail/plugin-claude-code",
       "version": "0.2.0",
@@ -414,6 +438,7 @@
         "@thinkrail/contracts": "workspace:*",
         "@thinkrail/plugin-api": "workspace:*",
         "@thinkrail/plugin-blueprint": "workspace:*",
+        "@thinkrail/plugin-branch-graph": "workspace:*",
         "@thinkrail/plugin-claude-code": "workspace:*",
         "@thinkrail/plugin-discord": "workspace:*",
         "@thinkrail/plugin-pdf-preview": "workspace:*",
@@ -1150,6 +1175,8 @@
     "@thinkrail/plugin-api": ["@thinkrail/plugin-api@workspace:packages/plugin-api"],
 
     "@thinkrail/plugin-blueprint": ["@thinkrail/plugin-blueprint@workspace:packages/plugin-blueprint"],
+
+    "@thinkrail/plugin-branch-graph": ["@thinkrail/plugin-branch-graph@workspace:packages/plugin-branch-graph"],
 
     "@thinkrail/plugin-claude-code": ["@thinkrail/plugin-claude-code@workspace:packages/plugin-claude-code"],
 
