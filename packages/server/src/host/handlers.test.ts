@@ -9,6 +9,7 @@ import { ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
 import type {
 	AppConfig,
 	PluginRosterEntry,
+	ResourceMeta,
 	Template,
 	TemplateInfo,
 	WireModel,
@@ -676,10 +677,11 @@ test("external text files require plugin ownership and retain compare-and-swap s
 			allowsExternalFile: (id, candidate) => id === workspace.id && candidate === path,
 		}),
 	);
-	const read = (await handleRequest("fs.readFile", params, CTX)) as {
+	const { content: readContent, meta } = (await handleRequest("fs.readFile", params, CTX)) as {
 		content: string;
-		hash: string;
+		meta: ResourceMeta;
 	};
+	const read = { content: readContent, hash: meta.hash ?? "" };
 	expect(read.content).toBe('model = "fixture"\n');
 	const content = 'model = "updated"\n';
 	expect(

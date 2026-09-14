@@ -1,9 +1,6 @@
 import { beforeEach, expect, mock, test } from "bun:test";
 import type { Workspace } from "@thinkrail/contracts";
-import { pluginMethodName } from "@thinkrail/plugin-api";
 import { diffTabId } from "./changesModel";
-
-const CLAUDE_CODE_ID = "claude-code";
 
 let pending: { resolve: (value: unknown) => void } | null = null;
 const requests: { method: string; params: unknown }[] = [];
@@ -382,7 +379,7 @@ test("an external-scope path a plugin viewer claims is read like any other file"
 	const open = openFileInTab("w1", "/outside/logo.png", "keep");
 	expect(requests).toEqual([
 		{
-			method: pluginMethodName(CLAUDE_CODE_ID, "readFile"),
+			method: "fs.readFile",
 			params: { workspaceId: "w1", path: "/outside/logo.png" },
 		},
 	]);

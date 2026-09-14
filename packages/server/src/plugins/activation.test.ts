@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { join } from "node:path";
 import { activate, DRAIN_TIMEOUT_MS, deactivate } from "./activation";
 import { beginCall, drain, endCall, PluginRegistry } from "./registry";
 import { fixtureModule, fixtureSeams } from "./testFixtures";
@@ -54,6 +55,23 @@ test("a builtin plugin's assetsDir resolves through bundledPluginRuntime when it
 		}),
 	);
 	expect(captured.assetsDir).toBe("/staged/assets");
+});
+
+test("a builtin plugin's assetsDir falls back to its own build-support in dev", async () => {
+	const registry = new PluginRegistry();
+	const captured: { assetsDir: string | null } = { assetsDir: null };
+	registry.registerBuiltin(
+		fixtureModule("claude-code", {
+			activate: (ctx) => {
+				captured.assetsDir = ctx.assetsDir;
+				return undefined;
+			},
+		}),
+	);
+	await activate("claude-code", registry, fixtureSeams());
+	expect(captured.assetsDir).toBe(
+		join(import.meta.dir, "..", "..", "..", "plugin-claude-code", "assets"),
+	);
 });
 
 test("a contract that declares enabled in its settings is refused, not activated", async () => {
