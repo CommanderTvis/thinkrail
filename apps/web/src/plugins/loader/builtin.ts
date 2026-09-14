@@ -5,6 +5,7 @@ import { manifest as branchGraphManifest } from "@thinkrail/plugin-branch-graph/
 import { manifest as claudeCodeManifest } from "@thinkrail/plugin-claude-code/manifest";
 import { manifest as discordManifest } from "@thinkrail/plugin-discord/manifest";
 import { manifest as specDialectManifest } from "@thinkrail/plugin-spec-dialect/manifest";
+import { manifest as visualizeManifest } from "@thinkrail/plugin-visualize/manifest";
 
 export interface BuiltinWebPlugin {
 	manifest: PluginManifest;
@@ -35,6 +36,13 @@ export const BUILTIN_WEB_PLUGINS: readonly BuiltinWebPlugin[] = [
 		manifest: discordManifest,
 		load: () =>
 			import("@thinkrail/plugin-discord/web").then(
+				(module) => module.default as unknown as PluginWebModule,
+			),
+	},
+	{
+		manifest: visualizeManifest,
+		load: () =>
+			import("@thinkrail/plugin-visualize/web").then(
 				(module) => module.default as unknown as PluginWebModule,
 			),
 	},
