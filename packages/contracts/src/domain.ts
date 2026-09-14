@@ -464,6 +464,7 @@ export type LayoutToolId = BuiltinLayoutToolId | PluginToolId;
 export const LEGACY_LAYOUT_TOOL_IDS: Readonly<Record<string, PluginToolId>> = {
 	specs: "plugin:spec-dialect:specs",
 	claude: "plugin:claude-code:config",
+	graph: "plugin:branch-graph:graph",
 };
 
 export type LayoutBottomAlignment = "center" | "center-left" | "center-right" | "full";

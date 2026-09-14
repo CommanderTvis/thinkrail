@@ -294,6 +294,59 @@ describe("frontend-local layout state", () => {
 		expect(restored.bottom.visible).toBe(true);
 	});
 
+	test("a persisted frame naming the legacy specs/claude/graph tool ids reads back under the plugin ids", async () => {
+		const local = new MemoryStorage();
+		const session = new MemoryStorage();
+		session.setItem("thinkrail:layout-surface-id", "surface-a");
+		local.setItem(
+			localLayoutStorageKey(endpoint, "surface-a"),
+			JSON.stringify({
+				version: 1,
+				frame: {
+					version: 1,
+					center: { kind: "group", id: "center" },
+					left: { visible: false, width: 0.2, groups: [] },
+					right: {
+						visible: true,
+						width: 0.2,
+						groups: [
+							{
+								id: "right-a",
+								weight: 1,
+								folded: false,
+								tools: [
+									{ kind: "tool", id: "tool:specs", name: "Specs", tool: "specs" },
+									toolTab("claude"),
+									toolTab("graph"),
+								],
+							},
+						],
+					},
+					bottom: { visible: false, height: 0.3, alignment: "center", groups: [] },
+					toolRestoreTargets: {
+						specs: { region: "right", index: 0 },
+						claude: { region: "right", index: 1 },
+						graph: { region: "right", index: 2 },
+					},
+				},
+				framesByProject: {},
+				viewsByWorkspace: {},
+				attentionByWorkspace: {},
+				preferences: DEFAULT_LOCAL_LAYOUT_PREFERENCES,
+			}),
+		);
+		setLayoutStateStorageForTests({ local, session }, endpoint);
+
+		const restored = await ensureWorkspaceLayoutState("workspace");
+		expect(
+			restored.right.groups[0]?.tabs.map((tab) => (tab.kind === "tool" ? tab.tool : tab.kind)),
+		).toEqual([
+			"plugin:spec-dialect:specs",
+			"plugin:claude-code:config",
+			"plugin:branch-graph:graph",
+		]);
+	});
+
 	test("reload restores the same surface without another host read", async () => {
 		const local = new MemoryStorage();
 		const session = new MemoryStorage();
