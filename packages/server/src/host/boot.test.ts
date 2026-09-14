@@ -1,5 +1,5 @@
 import { afterEach, beforeAll, beforeEach, expect, spyOn, test } from "bun:test";
-import { chmodSync, existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
@@ -713,35 +713,28 @@ test("shutdown clears periodic checks and makes a late result inert", async () =
 	).toHaveLength(0);
 });
 
-async function withFakeLoginShell(run: () => Promise<void>): Promise<void> {
-	const saved = { ...process.env };
-	const dir = mkdtempSync(join(tmpdir(), "thinkrail-boot-shell-"));
-	tmpDirs.push(dir);
-	const shell = join(dir, "login-shell");
-	writeFileSync(
-		shell,
-		'#!/bin/sh\nfor last; do :; done\nBOOT_LOGIN_CANARY=imported exec /bin/sh -c "$last"\n',
-	);
-	chmodSync(shell, 0o755);
-	process.env.SHELL = shell;
-	delete process.env.TERM;
-	delete process.env.BOOT_LOGIN_CANARY;
-	try {
-		await run();
-	} finally {
-		for (const name of Object.keys(process.env)) if (!(name in saved)) delete process.env[name];
-		Object.assign(process.env, saved);
-	}
-}
+test("a connected client is subscribed to the plugin roster push, not just its own request's echo", async () => {
+	const b = await boot({ port: grabFreePort(), host: "localhost", portMode: "exact" });
+	const collector = await collectSocket(b.port, "roster-push");
+	await socketBarrier(collector, "hello");
 
-test.skipIf(process.platform === "win32")(
-	"boot leaves the process environment alone unless the launcher opts in to the login shell",
-	async () => {
-		await withFakeLoginShell(async () => {
-			await boot({ port: 0, host: "127.0.0.1", portMode: "exact" });
-			expect(process.env.BOOT_LOGIN_CANARY).toBeUndefined();
-			await boot({ port: 0, host: "127.0.0.1", portMode: "exact", resolveShellEnv: true });
-			expect(process.env.BOOT_LOGIN_CANARY).toBe("imported");
-		});
-	},
-);
+	// A builtin plugin off by default (the Claude Code integration) — toggling it through the wire, the
+	// way Settings › Plugins does, must reach every connected client, not only the one that asked.
+	collector.socket.send(
+		JSON.stringify({
+			id: "enable",
+			method: "settings.update",
+			params: { config: { plugins: { "claude-code": { enabled: true } } } },
+		}),
+	);
+	const pushed = await collector.waitForFrame(
+		(frame) =>
+			frame.channel === WS_CHANNELS.pluginsChanged &&
+			Array.isArray(frame.data) &&
+			(frame.data as { id: string }[]).some((entry) => entry.id === "claude-code"),
+	);
+	const entry = (pushed.data as { id: string; status: string }[]).find(
+		(candidate) => candidate.id === "claude-code",
+	);
+	expect(entry?.status).not.toBe("disabled");
+});

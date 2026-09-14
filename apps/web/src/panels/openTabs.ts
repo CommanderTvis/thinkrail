@@ -1,5 +1,4 @@
-import type { GitDiffScope, ResourceMeta } from "@thinkrail/contracts";
-import { pluginMethodName } from "@thinkrail/plugin-api";
+import type { GitDiffScope } from "@thinkrail/contracts";
 import type { LayoutOpenOptions } from "@/store";
 import {
 	DOUBLE_CLICK_SETTLE_MS,
@@ -19,31 +18,14 @@ import {
 	selectWorkspaceNavTick,
 	selectWorkspaceTick,
 	type TabIntent,
+	toast,
 	useAppStore,
 } from "../store";
-import { getTransport } from "../transport";
+import { errorText, getTransport } from "../transport";
 import { diffTabId, diffTabName } from "./changesModel";
 import { emitEditorEvent, findEditorRef } from "./editorEvents";
 
-const CLAUDE_CODE_ID = "claude-code";
 const SOURCE_RENDERER_ID = "thinkrail/code";
-
-/** A file outside the worktree is read by the plugin that can name it; it is always text. */
-export function readTabFile(
-	workspaceId: string,
-	path: string,
-	external: boolean,
-): Promise<{ content: string; meta: ResourceMeta }> {
-	if (!external) return getTransport().request("fs.readFile", { workspaceId, path });
-	const read = getTransport().request(pluginMethodName(CLAUDE_CODE_ID, "readFile"), {
-		workspaceId,
-		path,
-	}) as Promise<{ content: string; hash: string }>;
-	return read.then(({ content, hash }) => ({
-		content,
-		meta: { hash, byteLength: new TextEncoder().encode(content).length, text: true },
-	}));
-}
 
 function baseName(path: string): string {
 	return path.split("/").pop() || path;
@@ -168,7 +150,8 @@ async function openReadTab<T>(
 					? { ...options, ...extraOptions, claimPreview: true }
 					: { ...options, ...extraOptions },
 			);
-	} catch {
+	} catch (cause) {
+		toast.error(errorText(cause), "Couldn't open the file");
 	} finally {
 		inFlight.delete(id);
 	}
@@ -198,7 +181,7 @@ export function openFileInTab(
 		id,
 		layoutResourceIdentity({ kind, id, name: baseName(path), path }),
 		intent,
-		() => readTabFile(workspaceId, path, external),
+		() => getTransport().request("fs.readFile", { workspaceId, path }),
 		({ content, meta }, loadedTick) => ({
 			kind,
 			id,
