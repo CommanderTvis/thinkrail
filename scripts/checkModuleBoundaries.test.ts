@@ -13,6 +13,7 @@ const modules = {
 	"packages/plugin-blueprint": "@thinkrail/plugin-blueprint",
 	"packages/plugin-claude-code": "@thinkrail/plugin-claude-code",
 	"packages/plugin-discord": "@thinkrail/plugin-discord",
+	"packages/plugin-pdf-preview": "@thinkrail/plugin-pdf-preview",
 	"packages/plugin-spec-dialect": "@thinkrail/plugin-spec-dialect",
 	"packages/plugin-ui": "@thinkrail/plugin-ui",
 	"packages/shared": "@thinkrail/shared",
@@ -62,6 +63,11 @@ function fixture(): string {
 			"@thinkrail/contracts": "workspace:*",
 			"@thinkrail/shared": "workspace:*",
 		},
+		"packages/plugin-pdf-preview": {
+			"@thinkrail/plugin-api": "workspace:*",
+			"@thinkrail/contracts": "workspace:*",
+			"@thinkrail/plugin-ui": "workspace:*",
+		},
 		"packages/plugin-discord": {
 			"@thinkrail/plugin-api": "workspace:*",
 			"@thinkrail/contracts": "workspace:*",
@@ -74,6 +80,7 @@ function fixture(): string {
 			"@thinkrail/plugin-spec-dialect": "workspace:*",
 			"@thinkrail/plugin-blueprint": "workspace:*",
 			"@thinkrail/plugin-claude-code": "workspace:*",
+			"@thinkrail/plugin-pdf-preview": "workspace:*",
 			"@thinkrail/plugin-discord": "workspace:*",
 			"pi-delegation": "workspace:*",
 			"pi-background-commands": "workspace:*",
@@ -84,6 +91,7 @@ function fixture(): string {
 			"@thinkrail/plugin-spec-dialect": "workspace:*",
 			"@thinkrail/plugin-blueprint": "workspace:*",
 			"@thinkrail/plugin-claude-code": "workspace:*",
+			"@thinkrail/plugin-pdf-preview": "workspace:*",
 			"@thinkrail/plugin-discord": "workspace:*",
 		},
 		"apps/cli": {

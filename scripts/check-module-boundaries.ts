@@ -95,6 +95,10 @@ const MODULE_RULES: readonly ModuleRule[] = [
 		internal: PLUGIN_WEB_MUST_NOT_REACH_HOST,
 	},
 	{
+		root: "packages/plugin-pdf-preview",
+		allowed: ["packages/plugin-api", "packages/contracts", "packages/plugin-ui"],
+	},
+	{
 		root: "packages/plugin-discord",
 		allowed: ["packages/plugin-api", "packages/contracts", "packages/shared", "packages/plugin-ui"],
 		internal: PLUGIN_WEB_MUST_NOT_REACH_HOST,
@@ -117,6 +121,7 @@ const MODULE_RULES: readonly ModuleRule[] = [
 					subpath,
 				})),
 			),
+			{ target: "packages/plugin-pdf-preview", subpath: "./manifest" },
 			"packages/shared",
 			"packages/spec-graph",
 			"packages/pi-delegation",
@@ -140,6 +145,8 @@ const MODULE_RULES: readonly ModuleRule[] = [
 				{ target: `packages/${plugin}`, subpath: "./web" },
 				{ target: `packages/${plugin}`, subpath: "./contracts", typesOnly: true },
 			]),
+			{ target: "packages/plugin-pdf-preview", subpath: "./manifest" },
+			{ target: "packages/plugin-pdf-preview", subpath: "./web" },
 		],
 	},
 	{

@@ -23,6 +23,7 @@
 		"@thinkrail/plugin-blueprint": "workspace:*",
 		"@thinkrail/plugin-claude-code": "workspace:*",
 		"@thinkrail/plugin-discord": "workspace:*",
+		"@thinkrail/plugin-pdf-preview": "workspace:*",
 		"@thinkrail/plugin-spec-dialect": "workspace:*",
 		"@thinkrail/shared": "workspace:*",
 		"bun-pty": "0.4.10",
