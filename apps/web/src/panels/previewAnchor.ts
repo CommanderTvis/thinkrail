@@ -1,4 +1,4 @@
-import type { LineSelection } from "./reviewGutter";
+import type { LineSelection } from "@/panels/reviewGutter";
 
 export function normalizeFragment(text: string): string {
 	return text

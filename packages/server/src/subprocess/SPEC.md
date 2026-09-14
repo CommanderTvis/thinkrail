@@ -4,7 +4,7 @@ type: submodule-design
 status: active
 title: subprocess — bounded child processes
 parent: module-server
-depends-on: []
+depends-on: [module-shared]
 tags: [v1, host, public-surface-checked]
 ---
 
@@ -16,7 +16,9 @@ never what a particular child's output means.
 
 ## Boundary
 
-- **Owns:** `runBounded(argv, { timeoutMs, cwd?, env? })` →
+- **Owns:** nothing of its own — `runBounded` itself lives in `@thinkrail/shared/runBounded` (no
+  server-only dep: only Bun/Node process APIs), and this module re-exports it so existing server callers
+  keep importing from `subprocess`. `runBounded(argv, { timeoutMs, cwd?, env? })` →
   `{ ok, out, err, timedOut, launchFailed, waitedMs }`: capture both streams and complete on the child's
   **exit**; POSIX children are detached process-group leaders, while Windows children retain a nonvisual
   console. Expiry kills the POSIX group or the direct Windows child. A failed launch is a result

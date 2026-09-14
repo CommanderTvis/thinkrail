@@ -17,7 +17,12 @@ event stream as a chat-centric, multi-session IDE shell.
 
 - **Owns:** the browser UI — client-local navigation and workbench state, transport client, store, panels, the responsive shell, branding tokens.
 - **Public surface:** the built static bundle (`dist/`) — a deployable artifact that dials a host.
-- **Allowed deps:** `@thinkrail/contracts` (types + WS constants) ONLY; React / Zustand / Vite / etc.
+- **Allowed deps:** `@thinkrail/contracts` (types + WS constants), `@thinkrail/plugin-api` (the plugin
+  plugin package's `./manifest` and `./web` subpaths (today, `@thinkrail/plugin-spec-dialect`,
+  `@thinkrail/plugin-pdf-preview` — `plugins/loader/builtin.ts`) ONLY; React / Zustand / Vite / etc.
+  contract — both the root types and its `/web` runtime, see `plugins/SPEC.md`), and `@thinkrail/plugin-ui`
+  (the shared presentational kit — primitives, markdown, editor, visualization card) ONLY; React / Zustand /
+  Vite / etc.
 - **Deployment obligation:** one built client serves every launcher and future deployment. Endpoint selection
   belongs to the transport bootstrap; panels, stores, and feature flows never branch on `cli`, `desktop`, or
   a deployment name.
@@ -27,25 +32,31 @@ event stream as a chat-centric, multi-session IDE shell.
 ## Internal modules
 
 Each is a bounded sub-module; `navigation`/`transport`/`store`/`updates`/`prompt`/`lib` expose an `index.ts` **barrel** (their only public
-surface). `panels`/`components/ui`/`chat` are imported **per-file by design** — barreling them would pull
-the lazily-loaded Monaco/shiki/xterm chunks into the eager bundle and break the shadcn per-primitive
-convention; their boundary is held by convention + spec. Sibling edges live here, not in the leaves.
+surface). `panels`/`chat` are imported **per-file by design** — barreling them would pull
+the lazily-loaded xterm chunks into the eager bundle; their boundary is held by convention + spec.
+Sibling edges live here, not in the leaves.
 
 | module | owns | barrel | spec |
 | --- | --- | --- | --- |
 | `navigation` | backend-relative location model + fragment driver/validated restore | yes | [navigation/SPEC.md](src/navigation/SPEC.md) |
 | `transport` | the WS client + its singleton/store wiring | yes | [transport/SPEC.md](src/transport/SPEC.md) |
 | `store` | Zustand: domain projections, one local workbench frame, per-workspace views/attention, chat runtimes | yes | [store/SPEC.md](src/store/SPEC.md) |
+| `plugins` | the web half of the plugin loader: `registry` (contribution state, a leaf) + `loader` (composition root, `main.tsx`-only) | see child specs | [plugins/SPEC.md](src/plugins/SPEC.md) |
 | `panels` | layout-agnostic, store-driven feature views | no | [panels/SPEC.md](src/panels/SPEC.md) |
 | `chat` | pi conversation UI primitives: content-block renderers + the tool-renderer registry | no | [chat/SPEC.md](src/chat/SPEC.md) |
 | `prompt` | lifecycle-neutral slash completion + prompt-template slot editing | yes | [prompt/SPEC.md](src/prompt/SPEC.md) |
 | `auth` | in-app provider login: the presentational OAuth dialog + its client-side state reducer | yes | [auth/SPEC.md](src/auth/SPEC.md) |
 | `shell` | responsive composition + frontend-local workbench ownership (bounded `layout/` and `layoutState/` children) | no | [shell/SPEC.md](src/shell/SPEC.md) |
 | `updates` | optional native/host update shell hook and props-driven controls | yes | [updates/SPEC.md](src/updates/SPEC.md) |
-| `components` | dependency-light shared React primitives: error isolation, custom icons, quiet scroll frames (contains `ui/`) | no | [components/SPEC.md](src/components/SPEC.md) |
-| `components/ui` | shadcn primitives, themed with our tokens | no | [components/ui/SPEC.md](src/components/ui/SPEC.md) |
+| `components` | dependency-light shared React primitives: error isolation, custom icons, quiet scroll frames | no | [components/SPEC.md](src/components/SPEC.md) |
 | `themes` | validated single-file manifests, bundled catalog + atomic token application | yes | [themes/SPEC.md](src/themes/SPEC.md) |
-| `lib` | `cn()` + the shared UI/path/array primitives + highlighting | yes | [lib/SPEC.md](src/lib/SPEC.md) |
+| `lib` | the shared UI/path/array primitives (`cn` now re-exported from `@thinkrail/plugin-ui`) | yes | [lib/SPEC.md](src/lib/SPEC.md) |
+
+The shadcn primitives, markdown renderer, code editor, and visualization card that used to live in
+`components/ui`, `chat/Markdown.tsx`, `panels/MonacoEditor.tsx`'s internals, and
+`chat/tools/visualize/*` now live in `packages/plugin-ui` (`@thinkrail/plugin-ui`) — see its own
+`SPEC.md`. `components/ui/SPEC.md` stays as a pointer for old links; there is no code left under
+`components/ui`.
 
 Leaf utilities without their own spec: `constants/` (branding), `clientPreferences.ts` (feature-neutral
 access to the optional native stable string adapter), and `styles/` — which holds the three
@@ -76,18 +87,23 @@ return to stable.
 ### Dependency graph
 
 - `navigation` → `store`, `transport`, `contracts` (type-only); neither dependency imports it, and `main.tsx` initializes the integration
-- `shell` → children `shell/layout` + `shell/layoutState`, `updates` (one optional-capability hook + props-driven Settings content and ready affordance), `panels`, `chat` (app-integration render/hydration only), `store`, `transport` (domain hydration + endpoint identity), `contracts` (type-only), `components/ui`, `components` (`ErrorBoundary` around each mounted region + `QuietScrollArea` around shell-owned tool bodies), `constants`, `lib` (platform shortcut semantics), `themes` (the single owner of catalog/media resolution and atomic theme application, driven by the hydrated store preference or pre-hydration hint)
+- `shell` → children `shell/layout` + `shell/layoutState`, `updates` (one optional-capability hook + props-driven Settings content and ready affordance), `panels`, `chat` (app-integration render/hydration only), `store`, `transport` (domain hydration + endpoint identity), `contracts` (type-only), `@thinkrail/plugin-ui`, `components` (`ErrorBoundary` around each mounted region + `QuietScrollArea` around shell-owned tool bodies), `constants`, `lib` (platform shortcut semantics), `themes` (the single owner of catalog/media resolution and atomic theme application, driven by the hydrated store preference or pre-hydration hint)
 - `shell/layout` → `contracts` (`LayoutPreset` + `GitDiffScope` types only), `lib` (attention/id primitives), and React / `react-resizable-panels` / `@dnd-kit/core`; `shell/layoutState` → `shell/layout`, `store`, `transport` (browser endpoint identity + error normalization), `clientPreferences` (native-stable persistence), `contracts` (`LayoutPreset` type only), `lib`, and React. The parent injects store state and feature renderers, so the pure layout child has no feature-module runtime edge
-- `updates` → `contracts` (native bridge + host notice types), `store` (host notice), `components/ui`, React, and Remix Icon; native snapshots remain shell-local
-- `panels` → `store`, `transport`, `components/ui`, `components` (`ErrorBoundary` for feature bodies + quiet scroll surfaces for panel-owned lists/xterm), `lib`, `contracts`, `constants` (`WelcomePanel`'s wordmark), `prompt` (`NewWorkspaceDialog` consumes the shared slash/template behavior), `chat` (`NewWorkspaceDialog` eagerly reuses `chat/ModelSelector`+`ThinkingSelector`+`useModelCatalog` — these are shiki-free, so the eager import stays split-safe; `TemplatesSettings` reuses `chat/TemplateEditorDialog` for its New/Edit flows — see `panels/SPEC.md`'s `TemplatesSettings` paragraph), `auth` (`ProvidersSettings` mounts `auth/LoginDialog`), `themes` (`AppearanceSettings` consumes the live catalog; code surfaces consume generic theme variables/syntax mapping)
-- `chat` → `contracts` (pi message types, **type-only**), `components/ui`, `prompt` (shared slash/template behavior), `lib`, `clientPreferences`; `store` + `transport`
+- `updates` → `contracts` (native bridge + host notice types), `store` (host notice), `@thinkrail/plugin-ui`, React, and Remix Icon; native snapshots remain shell-local
+- `panels` → `store`, `transport`, `@thinkrail/plugin-ui`, `components` (`ErrorBoundary` for feature bodies + quiet scroll surfaces for panel-owned lists/xterm), `lib`, `contracts`, `constants` (`WelcomePanel`'s wordmark), `prompt` (`NewWorkspaceDialog` consumes the shared slash/template behavior), `chat` (`NewWorkspaceDialog` eagerly reuses `chat/ModelSelector`+`ThinkingSelector`+`useModelCatalog` — these are shiki-free, so the eager import stays split-safe; `TemplatesSettings` reuses `chat/TemplateEditorDialog` for its New/Edit flows — see `panels/SPEC.md`'s `TemplatesSettings` paragraph), `auth` (`ProvidersSettings` mounts `auth/LoginDialog`), `themes` (`AppearanceSettings` consumes the live catalog; code surfaces consume generic theme variables/syntax mapping)
+- `chat` → `contracts` (pi message types, **type-only**), `@thinkrail/plugin-ui`, `prompt` (shared slash/template behavior), `lib`, `clientPreferences`; `store` + `transport`
   (**app-integration files only** — the renderers stay store-free; see `chat/SPEC.md` for the current set)
 - `prompt` → `contracts` (slash/template types only), `lib`, and React; it has no lifecycle integration dependency
-- `auth` → `components/ui` (the dialog is store/transport-free — the panel integrates it; the state types need no imports)
+- `auth` → `@thinkrail/plugin-ui` (the dialog is store/transport-free — the panel integrates it; the state types need no imports)
 - `store` → `transport` (**type-only** — `ConnectionStatus`), `chat` (**type-only** — `ChatTurn`/`ToolResultState`), `auth` (**type-only** — `LoginState`; the `foldLoginFrame` reducer lives in `store`, like `reduceExtUi`), `contracts` (domain + custom-preset types, never current-layout DTOs), `lib` (shared path/array primitives — a leaf, so no cycle), and `shell/layout` (**type-only** for web-local frame/view state)
 - `transport` → `contracts`, `store` (welcome routing; the `store → transport` back-edge is type-only, so
   the runtime graph is acyclic), `lib` (plain-HTTP-safe random page identity)
-- `components` (`ErrorBoundary`) → `lib` only (`shallowEqualArrays` for its reset keys — a leaf, so any region can still wrap in it); `components/ui` → `lib`
+- `plugins/registry` → `@thinkrail/plugin-api` (types), `contracts` (types), `zustand`, React, `@remixicon/react`
+  — a pure leaf, readable by `store`/`shell`/`panels`/`chat` with no cycle;
+  `plugins/loader` → `plugins/registry`, `@thinkrail/plugin-api` (`/web`), `store`, `transport`,
+  `chat/toolRegistry`, `panels/{openTabs,fileSave,defaultWorkspace,filesUrl,editorEvents}`,
+  `clientPreferences`, `lib` — a composition root imported only by `main.tsx`
+- `components` (`ErrorBoundary`) → `lib` only (`shallowEqualArrays` for its reset keys — a leaf, so any region can still wrap in it)
 - `lib` → `themes` (the lazy highlighter uses the one generic CSS-variable Shiki registration)
 - `themes` → `constants` (the branding storage prefix scopes the first-paint hint), `clientPreferences` (native-stable hint storage)
 - leaves (`clientPreferences`, `constants`, `utils`, `styles`) → none internal
@@ -239,14 +255,25 @@ themselves.
   code-only mono, the two prose systems, and how to add or change a style — is specced in
   [src/styles/TYPOGRAPHY.md](src/styles/TYPOGRAPHY.md)** (`web-typography`); check changes against it. The
   generator that turns it into CSS is [scripts/SPEC.md](scripts/SPEC.md).
-- **Icons: `@remixicon/react` (Line default, Fill when active/selected). Components: shadcn/ui** (Radix primitives), copy-in under `src/components/ui/`
-  and themed with our token utilities (`cn()` in `src/lib/utils.ts`) — never shadcn's default oklch
-  palette. Use these for accessible menus / dialogs / tooltips; icon-only controls label themselves with
+- **Icons: `@remixicon/react` (Line default, Fill when active/selected). Components: shadcn/ui** (Radix primitives), copy-in owned by
+  `packages/plugin-ui` (imported here from `@thinkrail/plugin-ui`) and themed with our token utilities
+  (`cn()`, re-exported from the kit through `src/lib/utils.ts`) — never shadcn's default oklch palette.
+  Use these for accessible menus / dialogs / tooltips; icon-only controls label themselves with
   `IconTooltip`, never native `title`.
+  - **A third-party *brand mark* is the one exception**: the Claude Code plugin's own `ClaudeGlyph`
+    identifies the agent on a terminal tab the way Warp does, and no generic glyph reads as that vendor.
+    It draws the vendor's own mark — the glyph a `CLAUDE.md` already wears in the file-icons plugin's set —
+    from its own `assets/claude.svg` via `ctx.assetUrl` and the kit's `SvgAsset`, and wears the
+    `agent-claude` token: a palette entry of its own, since a vendor identity is neither a status colour
+    nor the theme accent, but still wants per-theme adjustment for contrast. Core's own roster/tab-icon
+    lookup (`plugins/registry/icons.ts`'s `pluginIcon("claude")`) resolves the same mark through the
+    `fileIcon` slot instead, falling back to a plain Remix glyph when the file-icons plugin is off.
 
 ## Get right
 
-- **`apps/web` depends on `packages/contracts` only.** Never value-import `pi`; never import `server`/`shared`.
+- **`apps/web` depends on `packages/contracts`, `packages/plugin-api`, and `packages/plugin-ui`, plus a
+  builtin plugin package's `./manifest` and `./web`.** Never value-import `pi`; never import
+  `server`/`shared`; never a plugin's `host` half.
 - Streaming invariant: `text_delta` / `thinking_delta` **APPEND**; `tool_execution_update.partialResult`
   **REPLACE**. Attempt-level `agent_end` never means idle; automatic work ends only at `agent_settled`.
 - Panels stay arrangement-agnostic so the mobile shell is an additive layer, not a rewrite.
