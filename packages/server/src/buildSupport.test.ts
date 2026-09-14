@@ -31,6 +31,7 @@ test("runtime source manifest covers the launcher artifact surface", () => {
 		"discord",
 		"visualize",
 		"branch-graph",
+		"file-icons",
 	]);
 	const specDialect = sources.plugins[0];
 	expect(specDialect?.assets).toBeNull();

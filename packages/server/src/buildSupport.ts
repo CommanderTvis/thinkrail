@@ -5,6 +5,7 @@ import { buildSupport as blueprintBuildSupport } from "@thinkrail/plugin-bluepri
 import { buildSupport as branchGraphBuildSupport } from "@thinkrail/plugin-branch-graph/build-support";
 import { buildSupport as claudeCodeBuildSupport } from "@thinkrail/plugin-claude-code/build-support";
 import { buildSupport as discordBuildSupport } from "@thinkrail/plugin-discord/build-support";
+import { buildSupport as fileIconsBuildSupport } from "@thinkrail/plugin-file-icons/build-support";
 import { buildSupport as specDialectBuildSupport } from "@thinkrail/plugin-spec-dialect/build-support";
 import { buildSupport as visualizeBuildSupport } from "@thinkrail/plugin-visualize/build-support";
 
@@ -47,6 +48,7 @@ const BUILTIN_PLUGIN_BUILD_SUPPORT = [
 	discordBuildSupport,
 	visualizeBuildSupport,
 	branchGraphBuildSupport,
+	fileIconsBuildSupport,
 ];
 
 const require = createRequire(import.meta.url);

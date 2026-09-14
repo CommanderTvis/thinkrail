@@ -1,0 +1,39 @@
+{
+	"name": "@thinkrail/plugin-file-icons",
+	"version": "0.1.0",
+	"private": true,
+	"type": "module",
+	"sideEffects": false,
+	"exports": {
+		".": "./manifest.ts",
+		"./manifest": "./manifest.ts",
+		"./web": "./web/index.tsx",
+		"./build-support": "./build-support.ts",
+		"./package.json": "./package.json"
+	},
+	"scripts": {
+		"typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.web.json",
+		"test": "bun test",
+		"build": "bun scripts/generate-file-icons.ts",
+		"icons:generate": "bun scripts/generate-file-icons.ts",
+		"icons:check": "bun scripts/generate-file-icons.ts --check"
+	},
+	"dependencies": {
+		"@remixicon/react": "4.9.0",
+		"@thinkrail/plugin-api": "workspace:*",
+		"@thinkrail/plugin-ui": "workspace:*",
+		"material-icon-theme": "5.38.1"
+	},
+	"peerDependencies": {
+		"react": "*",
+		"react-dom": "*"
+	},
+	"devDependencies": {
+		"@types/bun": "catalog:",
+		"@types/react": "catalog:",
+		"@types/react-dom": "catalog:",
+		"react": "catalog:",
+		"react-dom": "catalog:",
+		"typescript": "catalog:"
+	}
+}

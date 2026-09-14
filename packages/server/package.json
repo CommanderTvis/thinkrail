@@ -24,6 +24,7 @@
 		"@thinkrail/plugin-branch-graph": "workspace:*",
 		"@thinkrail/plugin-claude-code": "workspace:*",
 		"@thinkrail/plugin-discord": "workspace:*",
+		"@thinkrail/plugin-file-icons": "workspace:*",
 		"@thinkrail/plugin-pdf-preview": "workspace:*",
 		"@thinkrail/plugin-spec-dialect": "workspace:*",
 		"@thinkrail/plugin-visualize": "workspace:*",
