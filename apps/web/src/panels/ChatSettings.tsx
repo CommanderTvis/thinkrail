@@ -14,6 +14,7 @@ import { LineWidthControl } from "./LineWidthSettings";
 import { SegmentedControl, type SegmentedControlOption } from "./SegmentedControl";
 import { SettingsGroup, SettingsPageContainer } from "./SettingsGroup";
 import { SettingsRow } from "./SettingsRow";
+import { SettingsSwitch } from "./SettingsSwitch";
 import { SubagentSettings } from "./SubagentSettings";
 
 type OptionSpec<T extends string> = SegmentedControlOption<T> & { label: MessageKey };
@@ -148,6 +149,7 @@ export function ChatSettings() {
 	const growthLimit = useAppStore((state) => state.composerGrowthLimit);
 	const streamingResponseMovement = useAppStore((state) => state.streamingResponseMovement);
 	const protocolVersion = useAppStore((state) => state.protocolVersion);
+	const restoreLatestChat = useAppStore((state) => state.restoreLatestChat);
 	const subagentsEnabled = useAppStore((state) => state.subagentsEnabled);
 	const subagentMaxConcurrent = useAppStore((state) => state.subagentMaxConcurrent);
 	const activeWorkspace = useAppStore(selectActiveWorkspace);
@@ -213,6 +215,20 @@ export function ChatSettings() {
 							value={growthLimit}
 							onSelect={selectGrowthLimit}
 							testId="composer-growth-control"
+						/>
+					}
+				/>
+				<SettingsRow
+					label={t("settings.chat.restoreLatest")}
+					description={t("settings.chat.restoreLatestDescription")}
+					control={
+						<SettingsSwitch
+							checked={restoreLatestChat}
+							label={t("settings.chat.restoreLatest")}
+							testId="restore-latest-chat-toggle"
+							onChange={(enabled) =>
+								saveSetting({ restoreLatestChat: enabled }, t("settings.chat.restoreLatestFailed"))
+							}
 						/>
 					}
 				/>

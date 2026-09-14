@@ -1,8 +1,11 @@
+import type { ToolRenderProps } from "@/chat/toolRegistry";
+import { strArg } from "@/chat/tools/toolHelpers";
+import { MermaidView } from "@/chat/tools/visualize/MermaidView";
 import { strArg, type ToolRenderProps } from "@thinkrail/extension-api/web";
 import { useT } from "@thinkrail/locales/react";
 import { MermaidView } from "./MermaidView";
 
-export function DiagramCard({ args, status }: ToolRenderProps) {
+export function DiagramCard({ args, status, interactive = false, onRender }: ToolRenderProps) {
 	const t = useT();
 	const source = strArg(args, "mermaid");
 	const title = strArg(args, "title");
@@ -12,6 +15,18 @@ export function DiagramCard({ args, status }: ToolRenderProps) {
 			<span className="text-text-muted tr-text-metadata italic">
 				{status === "running" ? t("visualize.diagram.rendering") : t("visualize.diagram.empty")}
 			</span>
+		);
+	}
+	if (interactive) {
+		return (
+			<div data-testid="tool-visualize-diagram" className="flex h-full min-h-0 flex-col">
+				<MermaidView
+					source={source}
+					title={title}
+					interactive
+					{...(onRender ? { onRender } : {})}
+				/>
+			</div>
 		);
 	}
 	return (

@@ -6,19 +6,23 @@ import {
 } from "@remixicon/react";
 import { useT } from "@thinkrail/locales/react";
 import {
+	editorFontSize,
 	RendererToggles,
 	ResourcePreview,
 	rendererImplementationKey,
 } from "@thinkrail/resource-renderers";
 import { withIconClass } from "@thinkrail/ui/button";
+import { OutlineColumn, OutlineToggle, scrollToHeading } from "@thinkrail/ui/Outline";
 import { useMemo, useState } from "react";
-import { copyText, isPhoneViewport } from "@/lib";
+import { copyText, isPhoneViewport, useElementSize } from "@/lib";
 import type { DiffTab, FileComparisonTab, GitDiffTab } from "../store";
 import { isFileComparison, selectDiffTabTargetRef, useAppStore } from "../store";
 import { getTransport } from "../transport";
 import { splitPath } from "./changesModel";
 import { DiffSurfaceBody, useDiffSurface } from "./DiffSurface";
+import { narrowForSplit } from "./diffLayout";
 import { HeaderIconButton } from "./HeaderIconButton";
+import { sourceHeadings } from "./outlineTree";
 import { useResetViewStateOnImplementationChange } from "./resourcePane";
 import { SendReviewButton } from "./SendReviewButton";
 import { useLiveTabContent } from "./useLiveTabContent";
@@ -66,6 +70,7 @@ function GitDiffPane({ tab }: { tab: GitDiffTab }) {
 	const setTabRenderer = useAppStore((state) => state.setTabRenderer);
 	const setDiffTabView = useAppStore((state) => state.setDiffTabView);
 	const setDiffTabIgnoreWhitespace = useAppStore((state) => state.setDiffTabIgnoreWhitespace);
+	const setDiffTabOutline = useAppStore((state) => state.setDiffTabOutline);
 	const [copied, setCopied] = useState(false);
 	const targetRef = useAppStore((state) => selectDiffTabTargetRef(state, tab));
 
@@ -129,8 +134,16 @@ function GitDiffPane({ tab }: { tab: GitDiffTab }) {
 	const { renderer, candidates, implementationKey, mobile, hunkActions } = surface;
 	useResetViewStateOnImplementationChange(tab.workspaceId, tab.id, implementationKey);
 
-	const view = mobile ? "inline" : (tab.view ?? "split");
+	const [paneRef, { width: paneWidth }] = useElementSize();
+	const view = mobile
+		? "inline"
+		: (tab.view ?? (narrowForSplit(paneWidth, editorFontSize()) ? "inline" : "split"));
 	const ignoreWhitespace = tab.ignoreWhitespace ?? false;
+	const outlineOpen = renderer.id === "thinkrail/markdown" && (tab.outlineOpen ?? false);
+	const headings = useMemo(
+		() => (outlineOpen ? sourceHeadings(tab.modified) : []),
+		[outlineOpen, tab.modified],
+	);
 	const { dir, base } = splitPath(tab.path);
 	const copy = async () => {
 		if (!(await copyText(tab.modified))) return;
@@ -151,7 +164,7 @@ function GitDiffPane({ tab }: { tab: GitDiffTab }) {
 	};
 
 	return (
-		<div data-testid="diff-pane" className="flex h-full min-h-0 flex-col">
+		<div ref={paneRef} data-testid="diff-pane" className="flex h-full min-h-0 flex-col">
 			<div
 				data-testid="diff-view-toggle"
 				role="toolbar"
@@ -175,6 +188,13 @@ function GitDiffPane({ tab }: { tab: GitDiffTab }) {
 						{base}
 					</span>
 				</span>
+				{renderer.id === "thinkrail/markdown" ? (
+					<OutlineToggle
+						active={outlineOpen}
+						onClick={() => setDiffTabOutline(tab.id, !outlineOpen)}
+						testid="diff-toggle-outline"
+					/>
+				) : null}
 				<SendReviewButton workspaceId={tab.workspaceId} path={tab.path} />
 				{hunkActions ? (
 					<HeaderIconButton
@@ -211,14 +231,19 @@ function GitDiffPane({ tab }: { tab: GitDiffTab }) {
 					}}
 				/>
 			</div>
-			<DiffSurfaceBody
-				surface={surface}
-				view={view}
-				ignoreWhitespace={ignoreWhitespace}
-				viewState={tab.viewState}
-				onViewState={saveViewState}
-				onSelectRenderer={(rendererId) => setTabRenderer(tab.workspaceId, tab.id, rendererId)}
-			/>
+			<div className="flex min-h-0 flex-1">
+				{outlineOpen ? <OutlineColumn headings={headings} onSelect={scrollToHeading} /> : null}
+				<div className="flex min-h-0 min-w-0 flex-1 flex-col">
+					<DiffSurfaceBody
+						surface={surface}
+						view={view}
+						ignoreWhitespace={ignoreWhitespace}
+						viewState={tab.viewState}
+						onViewState={saveViewState}
+						onSelectRenderer={(rendererId) => setTabRenderer(tab.workspaceId, tab.id, rendererId)}
+					/>
+				</div>
+			</div>
 		</div>
 	);
 }

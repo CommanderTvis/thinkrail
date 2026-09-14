@@ -10,7 +10,7 @@ import {
 	revealWorkbenchTool,
 } from "./fixtures/app";
 import { installChannelHold } from "./fixtures/channelHold";
-import { pierreDeletionsSide } from "./fixtures/pierre";
+import { chooseSplitDiff, pierreDeletionsSide } from "./fixtures/pierre";
 import { LONG_LINE } from "./fixtures/repo";
 
 type LineWidthKind = "chat" | "file";
@@ -164,6 +164,7 @@ test("Pierre renders both sides of a long-line diff", async ({ page }) => {
 
 	await revealWorkbenchTool(page, "changes");
 	await page.getByTestId("change-item").filter({ hasText: "LONG_LINE.txt" }).dblclick();
+	await chooseSplitDiff(page);
 	const diff = page.getByTestId("diff-view");
 	await expect(
 		pierreDeletionsSide(diff).getByText(LONG_LINE.trim(), { exact: false }).last(),

@@ -30,7 +30,7 @@ import { ChangesScopeMenu } from "./ChangesScopeMenu";
 import { ChangesTree } from "./ChangesTree";
 import { changesTabId, scopeKey, splitPath, statusNameClass } from "./changesModel";
 import { DiffStatBadge } from "./DiffStatBadge";
-import { openChangesTab, openDiffInTab } from "./openTabs";
+import { openChangesTab, openDiffInTab, openFileInTab } from "./openTabs";
 import { RememberedScrollArea } from "./RememberedScrollArea";
 import { ViewedMark } from "./ViewedMark";
 
@@ -223,6 +223,7 @@ export function ChangesPanel({
 					<ChangesTree
 						changes={status.changes}
 						onOpen={(path, intent, claimPreview) => openDiff(path, intent, undefined, claimPreview)}
+						onJumpToSource={(path) => void openFileInTab(workspaceId, path, "keep")}
 						isActive={isActive}
 						isViewed={isViewed}
 						isCollapsed={(path) => collapsed.has(path)}
@@ -241,6 +242,7 @@ export function ChangesPanel({
 										active={isActive(change.path)}
 										onView={() => openDiff(change.path, "preview")}
 										onOpenTab={() => openDiff(change.path, "keep")}
+										onJumpToSource={() => void openFileInTab(workspaceId, change.path, "keep")}
 									>
 										{({ onContextMenu }) => (
 											<button

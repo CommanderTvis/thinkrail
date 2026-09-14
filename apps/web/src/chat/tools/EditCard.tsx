@@ -1,8 +1,8 @@
 import { RiPencilLine as Pencil } from "@remixicon/react";
 import { resultText, strArg, type ToolRenderProps } from "@thinkrail/extension-api/web";
 import { useT } from "@thinkrail/locales/react";
+import { ToolFileLink } from "@thinkrail/ui/ToolFileLink";
 import { Collapsible } from "./Collapsible";
-import { ToolFileLink } from "./ToolFileLink";
 
 export function EditCard({
 	toolCallId,

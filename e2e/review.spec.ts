@@ -10,6 +10,7 @@ import {
 } from "./fixtures/app";
 import { E2E_DATA_DIR } from "./fixtures/paths";
 import {
+	chooseSplitDiff,
 	pierreDeletionsSide,
 	pierreGutterUtilityCell,
 	pierreHighlightedTokens,
@@ -731,6 +732,7 @@ test("the diff's ORIGINAL (left) side is its own anchor space — base, never re
 	await expect(page.getByTestId("rendered-diff")).toContainText("renamed");
 	await page.getByTestId("view-toggle-code").click();
 	await expect(page.getByTestId("view-toggle-code")).toHaveAttribute("data-active", "true");
+	await chooseSplitDiff(page);
 
 	const diff = page.getByTestId("diff-view");
 	await expect(diff.getByText("renamed", { exact: false }).last()).toBeVisible();
@@ -808,6 +810,7 @@ test("the diff's ORIGINAL (left) side is its own anchor space — base, never re
 		page.locator('[data-testid="editor-tab"][data-active="true"][data-kind="diff"]'),
 	).toContainText("README.md");
 	await page.getByTestId("view-toggle-code").click();
+	await chooseSplitDiff(page);
 	const pinnedDiff = page.getByTestId("diff-view");
 	await expect(
 		pierreDeletionsSide(pinnedDiff).getByText("# sample-project", { exact: false }).last(),
@@ -1001,6 +1004,7 @@ test("opening a far-off base-side comment scrolls its card into view in the virt
 	writeFileSync(join(worktree(), "FAR.txt"), `${lines.slice(0, 5).join("\n")}\n`);
 	await revealWorkbenchTool(page, "changes");
 	await page.getByTestId("change-item").filter({ hasText: "FAR.txt" }).dblclick();
+	await chooseSplitDiff(page);
 	const diff = page.getByTestId("diff-view");
 	const deletions = pierreDeletionsSide(diff);
 	await expect(deletions.getByText("far line 6", { exact: false }).first()).toBeVisible();

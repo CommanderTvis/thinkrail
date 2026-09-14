@@ -263,6 +263,8 @@ test("native open-settings opens Settings, keeps it as is, and yields to other d
 
 	await page.locator("body").click();
 	await page.keyboard.press("Meta+Comma");
+	await expect(settings).toBeVisible();
+	await page.keyboard.press("Escape");
 	await expect(settings).toHaveCount(0);
 
 	await openSettingsCommand(page);

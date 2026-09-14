@@ -81,7 +81,8 @@ primitive. The shared shadcn primitives live in [[module-ui]] (`@thinkrail/ui/*`
   next `preload()` does. Known limit: on a slow link, or when the revealing data is already in the store
   at mount, the first mount still takes the `lazy` path.
 - **Public surface:** `ErrorBoundary`, `isChunkLoadError` — imported directly via
-  `@/components/ErrorBoundary` (no barrel; the placeholders come from `@thinkrail/ui/skeleton`); `AttentionDot` via
+  `@/components/ErrorBoundary` (no barrel; the placeholders come from `@thinkrail/ui/skeleton`); `FileTypeIcon` via
+  `@/components/FileTypeIcon`; `AttentionDot` via
   `@/components/AttentionDot`; `RunningIcon` via `@/components/RunningIcon`; `CustomIcon`,
   `CustomIconName` via `@/components/CustomIcon`; `QuietScrollArea`, `QuietScrollFrame`, and the
   `QuietScrollEdges` type via `@/components/QuietScrollArea`; `preloadedLazy` via

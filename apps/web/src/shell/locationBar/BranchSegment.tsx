@@ -17,9 +17,11 @@ import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { cn } from "@thinkrail/ui/utils";
 import { type ReactNode, useRef, useState } from "react";
 import { copyText } from "../../lib";
+import { BranchList } from "../../panels/BranchList";
 import { BranchPicker } from "../../panels/BranchPicker";
 import { useBranchList } from "../../panels/branches";
 import type { BranchFacts } from "../../panels/branchStatusState";
+import { NewWorkspaceDialog } from "../../panels/NewWorkspaceDialog";
 import { isOpenBranchReview, openReviewLabel } from "../../panels/useBranchStatus";
 import { isUserOwnedWorkspace, selectDiffBaseRef, toast, useAppStore } from "../../store";
 import { errorText, getTransport } from "../../transport";
@@ -94,6 +96,7 @@ export function BranchSegment({
 	const t = useT();
 	const [open, setOpen] = useState(false);
 	const contentRef = useRef<HTMLDivElement>(null);
+	const [startFromRef, setStartFromRef] = useState<string | null>(null);
 	const diffBase = useAppStore((s) => selectDiffBaseRef(s, workspace.id));
 	const { branches, failed, refreshing, refresh } = useBranchList(
 		open ? workspace.projectId : null,
@@ -123,204 +126,232 @@ export function BranchSegment({
 		}
 	};
 
+	const onWorkspaceCreated = async (created: Workspace) => {
+		const store = useAppStore.getState();
+		store.setWorkspaces(
+			created.projectId,
+			await getTransport().request("workspace.list", { projectId: created.projectId }),
+		);
+		store.activateWorkspace(created);
+	};
+
 	return (
-		<Popover open={open} onOpenChange={setOpen}>
-			<Segment
-				testid="scope-branch-segment"
-				className="hidden max-w-[440px] shrink-[4] md:flex"
-				caption={
-					<>
-						{t("shell.location.branch.caption")}
-						{userOwned ? null : (
-							<span className="truncate">
-								<T
-									i18nKey="shell.location.branch.fromBase"
-									values={{ base: workspace.baseBranch }}
-									components={[<span key="base" data-testid="scope-base" />]}
-								/>
-							</span>
-						)}
-					</>
-				}
-			>
-				<PopoverTrigger
-					data-testid="scope-branch-trigger"
-					aria-label={t("shell.location.branch.label", { branch: workspace.branch })}
-					className={pillClass}
-				>
-					<GitBranch aria-hidden="true" className="size-14 shrink-0" />
-					<span data-testid="scope-branch" className="truncate tr-title-section">
-						{workspace.branch}
-					</span>
-					<PillChevron />
-				</PopoverTrigger>
-			</Segment>
-			{remote ? (
+		<>
+			<Popover open={open} onOpenChange={setOpen}>
 				<Segment
-					testid="scope-remote-segment"
-					caption={t("shell.location.remote.caption")}
-					className="hidden shrink-0 md:flex"
-				>
-					{remote.unpushed > 0 ? (
-						<button
-							type="button"
-							data-testid="scope-remote-unpushed"
-							className={chipClass("warning", true)}
-							onClick={() => setOpen(true)}
-						>
-							<ArrowUp aria-hidden="true" />
-							{t("shell.location.remote.unpushedChip", { count: remote.unpushed })}
-						</button>
-					) : null}
-					{remote.behind > 0 ? (
-						<button
-							type="button"
-							data-testid="scope-remote-behind"
-							className={chipClass("info", true)}
-							onClick={() => setOpen(true)}
-						>
-							<ArrowDown aria-hidden="true" />
-							{t("shell.location.remote.behindChip", { count: remote.behind })}
-						</button>
-					) : null}
-				</Segment>
-			) : null}
-			<PopoverContent
-				align="start"
-				data-testid="scope-branch-popover"
-				className="flex w-[380px] flex-col py-8"
-				onOpenAutoFocus={(event) => {
-					event.preventDefault();
-					contentRef.current?.focus();
-				}}
-				ref={contentRef}
-			>
-				<Row
-					label={t("shell.location.branch.caption")}
-					action={
-						<IconButton
-							variant="ghost"
-							size="m"
-							icon={Copy}
-							label={t("shell.location.branch.copyName")}
-							data-testid="scope-branch-copy"
-							className="shrink-0"
-							onClick={copyBranch}
-						/>
+					testid="scope-branch-segment"
+					className="hidden max-w-[440px] shrink-[4] md:flex"
+					caption={
+						<>
+							{t("shell.location.branch.caption")}
+							{userOwned ? null : (
+								<span className="truncate">
+									<T
+										i18nKey="shell.location.branch.fromBase"
+										values={{ base: workspace.baseBranch }}
+										components={[<span key="base" data-testid="scope-base" />]}
+									/>
+								</span>
+							)}
+						</>
 					}
 				>
-					<span className="truncate tr-code-text">{workspace.branch}</span>
-				</Row>
-				{userOwned ? null : (
-					<Row label={t("shell.location.branch.basedOn")}>
-						<span className="truncate tr-code-text">{workspace.baseBranch}</span>
-					</Row>
-				)}
-				<Row label={t("shell.location.branch.compareTo")}>
-					<BranchPicker
-						branches={branches}
-						failed={failed}
-						selected={diffBase}
-						refreshing={refreshing}
-						label=""
-						testid="scope-diff-base"
-						onSelect={(ref) => void pointDiffBaseAt(ref)}
-						onRefresh={refresh}
-					/>
-				</Row>
-				{summary ? (
-					<Row label={t("shell.location.remote.caption")}>
-						<span
-							data-testid="scope-remote-summary"
-							className={cn(
-								summary.diverges ? "text-text-default" : "text-text-muted",
-								"truncate tr-text-ui",
-							)}
-						>
-							{summary.text}
+					<PopoverTrigger
+						data-testid="scope-branch-trigger"
+						aria-label={t("shell.location.branch.label", { branch: workspace.branch })}
+						className={pillClass}
+					>
+						<GitBranch aria-hidden="true" className="size-14 shrink-0" />
+						<span data-testid="scope-branch" className="truncate tr-title-section">
+							{workspace.branch}
 						</span>
-					</Row>
+						<PillChevron />
+					</PopoverTrigger>
+				</Segment>
+				{remote ? (
+					<Segment
+						testid="scope-remote-segment"
+						caption={t("shell.location.remote.caption")}
+						className="hidden shrink-0 md:flex"
+					>
+						{remote.unpushed > 0 ? (
+							<button
+								type="button"
+								data-testid="scope-remote-unpushed"
+								className={chipClass("warning", true)}
+								onClick={() => setOpen(true)}
+							>
+								<ArrowUp aria-hidden="true" />
+								{t("shell.location.remote.unpushedChip", { count: remote.unpushed })}
+							</button>
+						) : null}
+						{remote.behind > 0 ? (
+							<button
+								type="button"
+								data-testid="scope-remote-behind"
+								className={chipClass("info", true)}
+								onClick={() => setOpen(true)}
+							>
+								<ArrowDown aria-hidden="true" />
+								{t("shell.location.remote.behindChip", { count: remote.behind })}
+							</button>
+						) : null}
+					</Segment>
 				) : null}
-				{review ? (
+				<PopoverContent
+					align="start"
+					data-testid="scope-branch-popover"
+					className="flex w-[380px] flex-col py-8"
+					onOpenAutoFocus={(event) => {
+						event.preventDefault();
+						contentRef.current?.focus();
+					}}
+					ref={contentRef}
+				>
 					<Row
-						label={
-							review.kind === "pull-request"
-								? t("shell.location.review.pullRequest")
-								: t("shell.location.review.mergeRequest")
-						}
+						label={t("shell.location.branch.caption")}
 						action={
-							review.url ? (
-								<IconTooltip
-									label={t("shell.location.review.openLink", { label: openReviewLabel(review) })}
-								>
-									<a
-										data-testid="scope-review-open"
-										aria-label={t("shell.location.review.openLink", {
-											label: openReviewLabel(review),
-										})}
-										href={review.url}
-										target="_blank"
-										rel="noreferrer"
-										className={buttonVariants({
-											variant: "ghost",
-											size: "m",
-											shape: "icon",
-											className: "shrink-0",
-										})}
-									>
-										<ExternalLink aria-hidden />
-									</a>
-								</IconTooltip>
-							) : null
+							<IconButton
+								variant="ghost"
+								size="m"
+								icon={Copy}
+								label={t("shell.location.branch.copyName")}
+								data-testid="scope-branch-copy"
+								className="shrink-0"
+								onClick={copyBranch}
+							/>
 						}
 					>
-						<PullRequest
-							aria-hidden="true"
-							className={cn(
-								"size-14 shrink-0",
-								reviewTone(review) === "success"
-									? "text-feedback-success"
-									: reviewTone(review) === "info"
-										? "text-feedback-info"
-										: "text-text-muted",
-							)}
+						<span className="truncate tr-code-text">{workspace.branch}</span>
+					</Row>
+					{userOwned ? null : (
+						<Row label={t("shell.location.branch.basedOn")}>
+							<span className="truncate tr-code-text">{workspace.baseBranch}</span>
+						</Row>
+					)}
+					<Row label={t("shell.location.branch.compareTo")}>
+						<BranchPicker
+							branches={branches}
+							failed={failed}
+							selected={diffBase}
+							refreshing={refreshing}
+							label=""
+							testid="scope-diff-base"
+							onSelect={(ref) => void pointDiffBaseAt(ref)}
+							onRefresh={refresh}
 						/>
-						<span className="truncate" data-testid="scope-review-state">
-							{t("shell.location.review.stateLine", {
-								label: openReviewLabel(review),
-								state: reviewStateLabel(t, review),
-							})}
-						</span>
 					</Row>
-				) : null}
-				{openDetails?.checks ? (
-					<Row label={t("shell.location.review.checksCaption")}>
-						<ChecksGlyph checks={openDetails.checks} />
-						<span data-testid="scope-review-checks" className="truncate">
-							{checksSummary(t, openDetails.checks)}
-						</span>
-					</Row>
-				) : null}
-				{decision ? (
-					<Row label={t("shell.location.review.decisionCaption")}>
-						<span
-							data-testid="scope-review-decision"
-							data-tone={decision.tone}
-							className={cn(
-								"truncate",
-								decision.tone === "success"
-									? "text-feedback-success"
-									: decision.tone === "warning"
-										? "text-feedback-warning"
-										: "text-text-muted",
-							)}
+					{summary ? (
+						<Row label={t("shell.location.remote.caption")}>
+							<span
+								data-testid="scope-remote-summary"
+								className={cn(
+									summary.diverges ? "text-text-default" : "text-text-muted",
+									"truncate tr-text-ui",
+								)}
+							>
+								{summary.text}
+							</span>
+						</Row>
+					) : null}
+					{review ? (
+						<Row
+							label={
+								review.kind === "pull-request"
+									? t("shell.location.review.pullRequest")
+									: t("shell.location.review.mergeRequest")
+							}
+							action={
+								review.url ? (
+									<IconTooltip
+										label={t("shell.location.review.openLink", { label: openReviewLabel(review) })}
+									>
+										<a
+											data-testid="scope-review-open"
+											aria-label={t("shell.location.review.openLink", {
+												label: openReviewLabel(review),
+											})}
+											href={review.url}
+											target="_blank"
+											rel="noreferrer"
+											className={buttonVariants({
+												variant: "ghost",
+												size: "m",
+												shape: "icon",
+												className: "shrink-0",
+											})}
+										>
+											<ExternalLink aria-hidden />
+										</a>
+									</IconTooltip>
+								) : null
+							}
 						>
-							{decision.text}
-						</span>
-					</Row>
-				) : null}
-			</PopoverContent>
-		</Popover>
+							<PullRequest
+								aria-hidden="true"
+								className={cn(
+									"size-14 shrink-0",
+									reviewTone(review) === "success"
+										? "text-feedback-success"
+										: reviewTone(review) === "info"
+											? "text-feedback-info"
+											: "text-text-muted",
+								)}
+							/>
+							<span className="truncate" data-testid="scope-review-state">
+								{t("shell.location.review.stateLine", {
+									label: openReviewLabel(review),
+									state: reviewStateLabel(t, review),
+								})}
+							</span>
+						</Row>
+					) : null}
+					{openDetails?.checks ? (
+						<Row label={t("shell.location.review.checksCaption")}>
+							<ChecksGlyph checks={openDetails.checks} />
+							<span data-testid="scope-review-checks" className="truncate">
+								{checksSummary(t, openDetails.checks)}
+							</span>
+						</Row>
+					) : null}
+					{decision ? (
+						<Row label={t("shell.location.review.decisionCaption")}>
+							<span
+								data-testid="scope-review-decision"
+								data-tone={decision.tone}
+								className={cn(
+									"truncate",
+									decision.tone === "success"
+										? "text-feedback-success"
+										: decision.tone === "warning"
+											? "text-feedback-warning"
+											: "text-text-muted",
+								)}
+							>
+								{decision.text}
+							</span>
+						</Row>
+					) : null}
+					<BranchList
+						projectId={workspace.projectId}
+						open={open}
+						onClose={() => setOpen(false)}
+						onStartFrom={setStartFromRef}
+					/>
+				</PopoverContent>
+			</Popover>
+			{startFromRef !== null ? (
+				<NewWorkspaceDialog
+					open
+					projectId={workspace.projectId}
+					initialBaseRef={startFromRef}
+					onOpenChange={(next) => {
+						if (!next) setStartFromRef(null);
+					}}
+					onCreated={(created) => void onWorkspaceCreated(created)}
+				/>
+			) : null}
+		</>
 	);
 }
 

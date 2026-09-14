@@ -22,7 +22,7 @@ import {
 } from "../git";
 import { ghSetupProblem } from "../github";
 import { generateTodoSummary, listTodos } from "../todos";
-import { getWorkspace, refreshUserOwnedWorkspace } from "../workspaces";
+import { getWorkspace, refreshWorkspaceBranch } from "../workspaces";
 import { flatItems, renderPrBody } from "./prBody";
 
 const COMPARE_BODY_LIMIT = 4_000;
@@ -415,7 +415,7 @@ async function pushToOrigin(cwd: string, branch: string): Promise<string> {
 }
 
 export function refreshedWorkspace(workspaceId: string, expectedBranch: string | undefined) {
-	refreshUserOwnedWorkspace(workspaceId);
+	refreshWorkspaceBranch(workspaceId);
 	const ws = getWorkspace(workspaceId);
 	assertSafeRef(ws.branch);
 	if (expectedBranch !== undefined && ws.branch !== expectedBranch) {

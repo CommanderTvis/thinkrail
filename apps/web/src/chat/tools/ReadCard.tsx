@@ -7,9 +7,9 @@ import {
 	type ToolRenderProps,
 } from "@thinkrail/extension-api/web";
 import { useT } from "@thinkrail/locales/react";
-import { CodeBlock } from "./CodeBlock";
+import { CodeBlock } from "@thinkrail/ui/markdown";
+import { ToolFileLink } from "@thinkrail/ui/ToolFileLink";
 import { Collapsible, countLines } from "./Collapsible";
-import { ToolFileLink } from "./ToolFileLink";
 
 export function ReadCard({
 	toolCallId,

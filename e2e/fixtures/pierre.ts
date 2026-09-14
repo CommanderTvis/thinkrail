@@ -1,4 +1,4 @@
-import type { Locator } from "@playwright/test";
+import type { Locator, Page } from "@playwright/test";
 
 const LINE = "[data-line]";
 const LINE_NUMBER = (line: string, type: string | null) =>
@@ -70,4 +70,8 @@ export async function selectPierreLine(
 	const { line, type } = await pierreLineRef(surface, text, which);
 	const gutter = surface.locator(LINE_NUMBER(line, type));
 	await (which === "first" ? gutter.first() : gutter.last()).click({ modifiers });
+}
+
+export async function chooseSplitDiff(page: Page): Promise<void> {
+	await page.getByRole("button", { name: "Split", exact: true }).click();
 }
