@@ -59,7 +59,7 @@ test("folding, hiding, and showing regions keep the center and the other panes m
 	await expect(page.getByTestId("chat-input")).toBeVisible();
 	await expect(page.getByTestId("plan-rail-pane")).toBeVisible();
 	const center = ["center-tabs", "chat-input", "terminal-instance"] as const;
-	const specs = page.getByTestId("tool-rail-specs");
+	const specs = page.getByTestId("tool-rail-plugin:spec-dialect:specs");
 	const toggle = async (
 		survivors: readonly string[],
 		action: () => Promise<void>,
@@ -120,7 +120,7 @@ test("edge tools hide only their pane while terminal sessions stay grouped", asy
 		expect(box.y).toBeGreaterThanOrEqual(bounds.y);
 		expect(box.y + box.height).toBeLessThanOrEqual(bounds.y + bounds.height);
 	}
-	const specs = page.getByTestId("tool-rail-specs");
+	const specs = page.getByTestId("tool-rail-plugin:spec-dialect:specs");
 	await expect(specs).toHaveAttribute("aria-pressed", "true");
 	await specs.click();
 	await expect(specs).toHaveAttribute("aria-pressed", "false");
@@ -237,7 +237,7 @@ test("rail clusters include unplaced tools, boundary drops create panes, and too
 	await addTerminal(page, page.getByTestId("bottom-group"));
 	await expect(page.getByTestId("terminal-tab")).toHaveCount(2);
 	expect(await railClusters(page, "right-layout-rail")).toEqual([
-		["tool-rail-specs", "tool-rail-files"],
+		["tool-rail-plugin:spec-dialect:specs", "tool-rail-files"],
 		["tool-rail-plan", "tool-rail-review"],
 		["tool-rail-plugin:branch-graph:graph"],
 	]);
@@ -250,7 +250,7 @@ test("rail clusters include unplaced tools, boundary drops create panes, and too
 	await finishDrag(page, page.locator('[data-drop-label="New right pane here"]').nth(1));
 	await expect(page.locator('[data-side="right"][data-group-id]')).toHaveCount(3);
 	expect(await railClusters(page, "right-layout-rail")).toEqual([
-		["tool-rail-specs"],
+		["tool-rail-plugin:spec-dialect:specs"],
 		["tool-rail-files"],
 		["tool-rail-plan", "tool-rail-review"],
 		["tool-rail-plugin:branch-graph:graph"],
@@ -260,7 +260,7 @@ test("rail clusters include unplaced tools, boundary drops create panes, and too
 	await expect(page.locator('[data-drop-label="New right pane here"]')).toHaveCount(2);
 	await finishDrag(page, page.locator('[data-drop-label="Insert after Review"]'));
 	expect(await railClusters(page, "right-layout-rail")).toEqual([
-		["tool-rail-specs"],
+		["tool-rail-plugin:spec-dialect:specs"],
 		["empty-rail-group"],
 		["tool-rail-plan", "tool-rail-review", "tool-rail-files"],
 		["tool-rail-plugin:branch-graph:graph"],
@@ -279,7 +279,7 @@ test("rail clusters include unplaced tools, boundary drops create panes, and too
 	await page.getByTestId("tab-review").click({ button: "right" });
 	await page.getByRole("menuitem", { name: "Remove tool from group", exact: true }).click();
 	expect(await railClusters(page, "right-layout-rail")).toEqual([
-		["tool-rail-specs"],
+		["tool-rail-plugin:spec-dialect:specs"],
 		["empty-rail-group"],
 		["tool-rail-plan"],
 		["tool-rail-review", "tool-rail-plugin:branch-graph:graph"],
@@ -319,7 +319,7 @@ test("rail keyboard navigation changes focus without selection and keeps collaps
 	const rail = page.getByTestId("right-layout-rail");
 	await expect(rail).toHaveAttribute("role", "toolbar");
 	await expect(rail).toHaveAttribute("aria-orientation", "vertical");
-	const specs = page.getByTestId("tool-rail-specs");
+	const specs = page.getByTestId("tool-rail-plugin:spec-dialect:specs");
 	const files = page.getByTestId("tool-rail-files");
 	await specs.focus();
 	await page.keyboard.press("ArrowDown");
@@ -352,7 +352,7 @@ test("the plan rail entry is reachable by keyboard, exposes aria-controls, and l
 	await expect(plan).toBeVisible();
 	await expect(plan).toHaveAttribute("aria-pressed", "true");
 
-	await page.getByTestId("tool-rail-specs").focus();
+	await page.getByTestId("tool-rail-plugin:spec-dialect:specs").focus();
 	for (let i = 0; i < 10 && !(await plan.evaluate((el) => el === document.activeElement)); i += 1) {
 		await page.keyboard.press("ArrowDown");
 	}

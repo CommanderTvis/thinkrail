@@ -45,7 +45,7 @@ test("bottom measurement reconnects after a frame transition and viewport resize
 	page,
 }) => {
 	await openDefault(page);
-	await page.getByTestId("tool-rail-specs").click();
+	await page.getByTestId("tool-rail-plugin:spec-dialect:specs").click();
 	await page.getByRole("button", { name: "Bottom panel alignment" }).click();
 	await page.getByRole("menuitemradio", { name: "Full width", exact: true }).click();
 	await page.setViewportSize({ width: 1440, height: 680 });
@@ -108,7 +108,7 @@ test("a terminal dropped on a rail boundary beside a folded tool pane gets its o
 	page,
 }) => {
 	await openDefault(page);
-	const specs = page.getByTestId("tool-rail-specs");
+	const specs = page.getByTestId("tool-rail-plugin:spec-dialect:specs");
 	const specsGroupId = await specs.evaluate(
 		(button) => button.closest<HTMLElement>("[data-group-id]")?.dataset.groupId,
 	);

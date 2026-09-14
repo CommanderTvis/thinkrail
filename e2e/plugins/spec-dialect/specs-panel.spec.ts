@@ -1,7 +1,7 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, type Page, test } from "@playwright/test";
-import { createWorkspaceViaDialog, openFixtureProject } from "./fixtures/app";
+import { createWorkspaceViaDialog, openFixtureProject } from "../../fixtures/app";
 
 async function proxyOneSpecGraphFailure(page: Page) {
 	let armed = false;
@@ -18,7 +18,7 @@ async function proxyOneSpecGraphFailure(page: Page) {
 				server.send(message);
 				return;
 			}
-			if (frame.id && frame.method === "spec.graph") {
+			if (frame.id && frame.method === "plugin.spec-dialect.graph") {
 				readCount += 1;
 				if (armed && !injected) {
 					injected = true;
@@ -45,9 +45,14 @@ test("Specs tab renders the worktree's spec tree and opens a spec as an editor t
 	await openFixtureProject(page);
 	const workspace = await createWorkspaceViaDialog(page);
 
-	const tabs = page.locator('[data-testid="tab-specs"], [data-testid="tab-files"]');
-	await expect(tabs.first()).toHaveAttribute("data-testid", "tab-specs");
-	await expect(page.getByTestId("tab-specs")).toHaveAttribute("data-active", "true");
+	const tabs = page.locator(
+		'[data-testid="tab-plugin:spec-dialect:specs"], [data-testid="tab-files"]',
+	);
+	await expect(tabs.first()).toHaveAttribute("data-testid", "tab-plugin:spec-dialect:specs");
+	await expect(page.getByTestId("tab-plugin:spec-dialect:specs")).toHaveAttribute(
+		"data-active",
+		"true",
+	);
 
 	const root = page.locator('[data-testid="spec-node"][data-spec-id="sample-root"]');
 	const child = page.locator('[data-testid="spec-node"][data-spec-id="sample-module"]');

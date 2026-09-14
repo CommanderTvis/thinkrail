@@ -6,7 +6,6 @@ import {
 	enterDefaultWorkspace,
 	openFixtureProject,
 	pressPlatformShortcut,
-	requestOverWire,
 	revealFirstProjectWorkspaces,
 	revealWorkbenchTool,
 	runInTerminal,
@@ -109,6 +108,48 @@ async function setBottomAlignment(page: Page, name: string): Promise<void> {
 	await page.getByRole("button", { name: "Bottom panel alignment" }).click();
 	await page.getByRole("menuitemradio", { name, exact: true }).click();
 	await waitForLayoutSettled(page);
+}
+
+async function requestOverWire<T>(
+	page: Page,
+	method: string,
+	params: Record<string, unknown>,
+): Promise<T> {
+	return page.evaluate(
+		async ({ requestMethod, requestParams }) => {
+			const protocol = location.protocol === "https:" ? "wss:" : "ws:";
+			const socket = new WebSocket(`${protocol}//${location.host}/ws`);
+			await new Promise<void>((resolve) => {
+				socket.onopen = () => resolve();
+			});
+			const id = `bottom_${Math.random()}`;
+			try {
+				return await new Promise<unknown>((resolve, reject) => {
+					socket.addEventListener("message", (event: MessageEvent<string>) => {
+						const message = JSON.parse(event.data) as {
+							id?: string;
+							result?: unknown;
+							error?: string | { message?: string };
+						};
+						if (message.id !== id) return;
+						if (message.error) {
+							reject(
+								new Error(
+									typeof message.error === "string"
+										? message.error
+										: (message.error.message ?? "request failed"),
+								),
+							);
+						} else resolve(message.result);
+					});
+					socket.send(JSON.stringify({ id, method: requestMethod, params: requestParams }));
+				});
+			} finally {
+				socket.close();
+			}
+		},
+		{ requestMethod: method, requestParams: params },
+	) as Promise<T>;
 }
 
 async function readPersistedSideWidths(page: Page): Promise<{ left: number; right: number }> {
@@ -650,11 +691,13 @@ test("bottom groups arrange left-to-right, resize, fold to the edge rail, restor
 	await page.getByRole("menuitem", { name: "New bottom group at left", exact: true }).click();
 	await expect(bottomGroups(page)).toHaveCount(3);
 	await expect(bottomGroups(page).nth(0)).toContainText("Files");
-	await page.getByTestId("tab-specs").click({ button: "right" });
-	const atLeft = page.getByRole("menuitem", { name: "New bottom group at left" });
-	await expect(atLeft).toBeDisabled();
-	await expect(atLeft).toHaveAttribute("title", "The bottom region is limited to 3 groups");
-	await expect(page.getByRole("menuitem", { name: "New bottom group at right" })).toBeDisabled();
+	await page.getByTestId("tab-plugin:spec-dialect:specs").click({ button: "right" });
+	await expect(
+		page.getByRole("menuitem", { name: /New bottom group at left — limited to 3/ }),
+	).toBeDisabled();
+	await expect(
+		page.getByRole("menuitem", { name: /New bottom group at right — limited to 3/ }),
+	).toBeDisabled();
 });
 
 test("a narrow viewport locally compresses bottom groups without rewriting their topology", async ({

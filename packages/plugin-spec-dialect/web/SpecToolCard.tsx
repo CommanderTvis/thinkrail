@@ -1,11 +1,6 @@
+import type { ToolRenderProps } from "@thinkrail/plugin-api/web";
 import { ToolFileLink } from "@thinkrail/ui/ToolFileLink";
-import { resultText, strArg, type ToolRenderProps } from "@thinkrail/extension-api/web";
-import { type Translator, useT } from "@thinkrail/locales/react";
 import type { ReactNode } from "react";
-import type { ToolRenderProps } from "../toolRegistry";
-import { Collapsible, countLines } from "./Collapsible";
-import { resultText, strArg } from "./toolHelpers";
-import { ToolFileLink } from "./ToolFileLink";
 
 interface LinkedTextSegment {
 	text: string;
@@ -14,6 +9,28 @@ interface LinkedTextSegment {
 
 const PATH_PREFIX_BOUNDARY = /[\s([{"'=]/;
 const PATH_SUFFIX_BOUNDARY = /[\s)\]}"',;:]/;
+
+function strArg(args: Record<string, unknown>, key: string): string {
+	const value = args[key];
+	return typeof value === "string" ? value : "";
+}
+
+/** Spec tools never return images, so this is the plain-text half of `toolResultContent`'s parsing. */
+function resultText(result: unknown): string {
+	if (result == null || typeof result === "string") return result ?? "";
+	if (typeof result !== "object" || !("content" in result)) return "";
+	const content = (result as { content: unknown }).content;
+	if (!Array.isArray(content)) return "";
+	return content
+		.filter(
+			(block): block is { type: "text"; text: string } =>
+				typeof block === "object" &&
+				block !== null &&
+				(block as { type?: unknown }).type === "text",
+		)
+		.map((block) => block.text)
+		.join("");
+}
 
 function boundedPathIndex(text: string, path: string, cursor: number): number {
 	let from = cursor;
@@ -40,7 +57,7 @@ function objectValue(value: unknown): Record<string, unknown> | null {
 
 function stringField(value: unknown, key: string): string | null {
 	const object = objectValue(value);
-	return object && typeof object[key] === "string" ? object[key] : null;
+	return object && typeof object[key] === "string" ? (object[key] as string) : null;
 }
 
 function objectsField(value: unknown, key: string): Record<string, unknown>[] {
@@ -139,10 +156,13 @@ function LinkedResultText({
 	workspaceRoot?: string | undefined;
 	onOpenFile?: ((path: string) => void) | undefined;
 }): ReactNode {
-	return splitKnownPathReferences(text, paths).map((segment, index) =>
-		segment.path ? (
+	let offset = 0;
+	return splitKnownPathReferences(text, paths).map((segment) => {
+		const startsAt = offset;
+		offset += segment.text.length;
+		return segment.path ? (
 			<ToolFileLink
-				key={`${index}:${segment.path}`}
+				key={`${startsAt}:${segment.path}`}
 				path={segment.path}
 				label={segment.text}
 				workspaceRoot={workspaceRoot}
@@ -151,11 +171,11 @@ function LinkedResultText({
 			/>
 		) : (
 			segment.text
-		),
-	);
+		);
+	});
 }
 
-export function specToolSummary({ toolName, args }: ToolRenderProps, t: Translator): string {
+export function specToolSummary({ toolName, args }: ToolRenderProps): string {
 	switch (toolName) {
 		case "spec_grep":
 			return strArg(args, "pattern");
@@ -164,14 +184,14 @@ export function specToolSummary({ toolName, args }: ToolRenderProps, t: Translat
 		case "spec_create":
 			return strArg(args, "path");
 		case "spec_validate":
-			return t("tools.spec.validateSummary");
+			return "graph";
 		default:
 			return strArg(args, "id");
 	}
 }
 
 export function SpecToolCard({
-	toolCallId,
+	toolCallId: _toolCallId,
 	toolName,
 	args,
 	result,
@@ -179,36 +199,28 @@ export function SpecToolCard({
 	workspaceRoot,
 	onOpenFile,
 }: ToolRenderProps) {
-	const t = useT();
 	const output = resultText(result);
 	if (status === "running") {
-		return <span className="text-text-muted tr-text-metadata">{t("tools.spec.inspecting")}</span>;
+		return <span className="text-text-muted tr-text-metadata">Inspecting specs…</span>;
 	}
 	if (!output) {
-		return (
-			<span className="text-text-muted tr-text-metadata italic">{t("tools.spec.noResult")}</span>
-		);
+		return <span className="text-text-muted tr-text-metadata italic">(no result)</span>;
 	}
-	const content = (
-		<pre
-			data-testid="tool-spec-result"
-			className={`overflow-auto whitespace-pre-wrap px-8 py-4 tr-code-text ${
-				status === "error" ? "text-feedback-error" : "text-text-default"
-			}`}
-		>
-			<LinkedResultText
-				text={output}
-				paths={status === "done" ? specToolPaths(toolName, args, result) : []}
-				workspaceRoot={workspaceRoot}
-				onOpenFile={onOpenFile}
-			/>
-		</pre>
-	);
 	return (
 		<div data-testid={`tool-${toolName}`}>
-			<Collapsible id={`${toolCallId}:content`} lines={countLines(output)}>
-				{content}
-			</Collapsible>
+			<pre
+				data-testid="tool-spec-result"
+				className={`overflow-auto whitespace-pre-wrap px-8 py-4 tr-code-text ${
+					status === "error" ? "text-feedback-error" : "text-text-default"
+				}`}
+			>
+				<LinkedResultText
+					text={output}
+					paths={status === "done" ? specToolPaths(toolName, args, result) : []}
+					workspaceRoot={workspaceRoot}
+					onOpenFile={onOpenFile}
+				/>
+			</pre>
 		</div>
 	);
 }

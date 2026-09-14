@@ -6,7 +6,7 @@ import {
 	openFixtureProject,
 	revealWorkbenchTool,
 	waitForAgentSettled,
-} from "./fixtures/app";
+} from "../../fixtures/app";
 
 const SETUP_SKILL = "setting-up-a-project";
 const USER_REQUEST =

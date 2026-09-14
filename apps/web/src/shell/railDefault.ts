@@ -28,7 +28,7 @@ export async function resolvePluginRailDefaults(
 		if (group.location.area === "center") continue;
 		const selectedId = readLayoutSelection(next, group.location.groupId);
 		const selected = group.tabs.find((tab) => tab.id === selectedId);
-		if (selected?.kind !== "tool" || selected.tool === "specs") continue;
+		if (selected?.kind !== "tool") continue;
 		if (await pluginToolRailDefault(selected.tool, workspaceId)) continue;
 		const other = group.tabs.find((tab) => tab.id !== selected.id);
 		if (other) next = selectTab(next, group.location, other.id, false);

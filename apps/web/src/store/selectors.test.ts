@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
 	MODEL_PICKER_PROTOCOL_VERSION,
 	type Project,
+	REVIEW_TERMINAL_PROTOCOL_VERSION,
 	type SessionState,
 	type SessionStateRecord,
 	type WireModel,
@@ -48,9 +49,8 @@ import {
 	selectWorkspaceIsRunning,
 	selectWorkspaceNeedsAttention,
 	selectWorkspaceReadAction,
-	specPathMatcher,
-	workspaceName,
 	workspaceBranchLabel,
+	workspaceName,
 } from "./selectors";
 
 const projects: Project[] = [
@@ -808,6 +808,7 @@ test("the file the user is in is whatever the focused group shows, and nothing f
 			"ws",
 		),
 	).toBeNull();
+});
 
 describe("selectSupportsModelPicker", () => {
 	test("requires a connected host at or above the picker protocol", () => {
@@ -840,6 +841,14 @@ describe("file change signal", () => {
 		expect(selectFileChangeSince(next, previous, "ws")).toEqual(["b.html"]);
 		expect(selectFileChangeSince(next, previous, "other")).toBeUndefined();
 	});
+	expect(selectCanSendReviewToTerminal({ protocolVersion: 67 })).toBe(false);
+	expect(
+		selectCanSendReviewToTerminal({ protocolVersion: REVIEW_TERMINAL_PROTOCOL_VERSION - 1 }),
+	).toBe(false);
+	expect(selectCanSendReviewToTerminal({ protocolVersion: REVIEW_TERMINAL_PROTOCOL_VERSION })).toBe(
+		true,
+	);
+	expect(selectCanSendReviewToTerminal({ protocolVersion: null })).toBe(false);
 });
 
 test("the host-named default workspace shows in the interface language until it is renamed", () => {

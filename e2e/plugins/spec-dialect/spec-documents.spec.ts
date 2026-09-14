@@ -1,8 +1,12 @@
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, test } from "@playwright/test";
-import { createWorkspaceViaDialog, openFixtureProject } from "./fixtures/app";
-import { E2E_DATA_DIR } from "./fixtures/paths";
+import {
+	createWorkspaceViaDialog,
+	openFixtureProject,
+	revealWorkbenchTool,
+} from "../../fixtures/app";
+import { E2E_DATA_DIR } from "../../fixtures/paths";
 
 test("a spec is titled by its frontmatter and its [[links]] reach the spec they name", async ({
 	page,
@@ -27,7 +31,7 @@ test("a spec is titled by its frontmatter and its [[links]] reach the spec they 
 		].join("\n"),
 	);
 
-	await page.getByTestId("tab-files").click();
+	await revealWorkbenchTool(page, "files");
 	await page.getByTestId("file-node").filter({ hasText: "SPEC.md" }).first().dblclick();
 	const preview = page.getByTestId("markdown-preview");
 	await expect(preview.getByTestId("spec-title")).toHaveText("Sample Project");
@@ -56,7 +60,7 @@ test("ordinary markdown keeps its own first heading and leaves [[text]] alone", 
 		),
 	);
 
-	await page.getByTestId("tab-files").click();
+	await revealWorkbenchTool(page, "files");
 	await page.getByTestId("file-node").filter({ hasText: "notes.md" }).dblclick();
 	const preview = page.getByTestId("markdown-preview");
 	await expect(preview).toContainText("[[bracketed]]");

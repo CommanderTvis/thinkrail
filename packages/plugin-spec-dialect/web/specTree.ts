@@ -1,11 +1,25 @@
-import type { SpecGraphNode } from "@thinkrail/contracts";
-import type { Translator } from "@thinkrail/locales/react";
-import { SPEC_ROLES } from "./specDocument";
+import type { SpecGraphNode } from "../contracts";
 
 export interface SpecTreeNode {
 	node: SpecGraphNode;
 	children: SpecTreeNode[];
 }
+
+interface SpecRole {
+	label: string;
+	tag: string;
+}
+
+/** Mirrors `apps/web/src/panels/specDocument.ts`'s `SPEC_ROLES` — that copy stays core for the generic
+ * markdown-preview feature (frontmatter-is-a-spec detection with no graph), so this plugin, which needs
+ * the same role labels for its own tree, keeps a small copy rather than reaching into `panels/`. */
+const SPEC_ROLES = {
+	"goal-and-requirements": { label: "Goal", tag: "GOAL" },
+	"architecture-design": { label: "Architecture", tag: "ARCH" },
+	"module-design": { label: "Module", tag: "MODULE" },
+	"submodule-design": { label: "Submodule", tag: "SUBMODULE" },
+	"task-spec": { label: "Task", tag: "TASK" },
+} as const satisfies Record<string, SpecRole>;
 
 type KnownSpecType = keyof typeof SPEC_ROLES;
 
@@ -13,10 +27,10 @@ function isKnownSpecType(type: string): type is KnownSpecType {
 	return Object.hasOwn(SPEC_ROLES, type);
 }
 
-export function specRoleLabel(t: Translator, type: string): string {
-	if (isKnownSpecType(type)) return t(SPEC_ROLES[type].label);
+export function specRoleLabel(type: string): string {
+	if (isKnownSpecType(type)) return SPEC_ROLES[type].label;
 	const words = type.split(/[-_\s]+/).filter(Boolean);
-	if (words.length === 0) return t("panels.specTree.spec");
+	if (words.length === 0) return "Spec";
 	return words.map((word) => word.charAt(0).toUpperCase() + word.slice(1)).join(" ");
 }
 
@@ -24,8 +38,8 @@ export function specDisplayTitle(title: string): string {
 	return title.replace(/\s+[—–]\s+/g, " · ");
 }
 
-export function specRoleTag(t: Translator, type: string): string {
-	return isKnownSpecType(type) ? t(SPEC_ROLES[type].tag) : specRoleLabel(t, type).toUpperCase();
+export function specRoleTag(type: string): string {
+	return isKnownSpecType(type) ? SPEC_ROLES[type].tag : specRoleLabel(type).toUpperCase();
 }
 
 export function buildSpecTree(nodes: SpecGraphNode[]): SpecTreeNode[] {

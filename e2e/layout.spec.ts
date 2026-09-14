@@ -235,9 +235,7 @@ test("auxiliary panel scrollbars stay quiet at rest and expose only clipped edge
 	await page.setViewportSize({ width: 900, height: 420 });
 	await openDefaultWorkbench(page);
 	for (const tool of ["projects", "specs", "files", "review"] as const) {
-		const tab = page.getByTestId(
-			`tool-rail-${tool === "specs" ? "plugin:spec-dialect:specs" : tool}`,
-		);
+		const tab = page.getByTestId(`tool-rail-${tool}`);
 		await revealWorkbenchTool(page, tool);
 		const panelId = await tab.getAttribute("aria-controls");
 		expect(panelId).toBeTruthy();
@@ -1167,7 +1165,10 @@ test("a narrow viewport compresses locally without rewriting recursive topology"
 	if (!bounds) throw new Error("workbench has no box");
 	expect(bounds.x).toBeGreaterThanOrEqual(0);
 	expect(bounds.x + bounds.width).toBeLessThanOrEqual(390);
-	await page.getByTestId("editor-tab").filter({ hasText: "README.md" }).click({ button: "right" });
+	await page
+		.getByTestId("editor-tab")
+		.filter({ hasText: "README.md" })
+		.click({ button: "right", position: { x: 24, y: 12 } });
 	await expect(page.getByRole("menuitem", { name: /Split right/ })).toBeDisabled();
 	await page.keyboard.press("Escape");
 
@@ -1452,22 +1453,22 @@ test("the side group menu shows tools for its own side and opens terminals in th
 
 	await specsGroup.getByRole("button", { name: "Add to this group" }).click();
 	await page.getByTestId("side-new-terminal").click();
-	await expect(sideGroups(page, "right").getByTestId("terminal-tab")).toHaveCount(1);
+	await expect(specsGroup.getByTestId("terminal-tab")).toHaveCount(1);
 	await expect(page.getByTestId("center-tab-strip").getByTestId("terminal-tab")).toHaveCount(0);
 
 	await page.getByTestId("tab-projects").click({ button: "right" });
-	await page.getByRole("menuitem", { name: "Remove tool from group", exact: true }).click();
-	await page.getByTestId("tab-review").click({ button: "right" });
-	await page.getByRole("menuitem", { name: "Remove tool from group", exact: true }).click();
+	await page.getByRole("menuitem", { name: "Close", exact: true }).click();
+	await page.getByTestId("tab-changes").click({ button: "right" });
+	await page.getByRole("menuitem", { name: "Close", exact: true }).click();
 
 	await specsGroup.getByRole("button", { name: "Add to this group" }).click();
-	await expect(page.getByTestId("show-tool-review")).toBeVisible();
+	await expect(page.getByTestId("show-tool-changes")).toBeVisible();
 	await expect(page.getByTestId("show-tool-projects")).toHaveCount(0);
 
 	// "Show" from a group's own menu lands the tool in that group, not wherever it last lived.
 	const rightGroups = await sideGroups(page, "right").count();
-	await page.getByTestId("show-tool-review").click();
-	await expect(specsGroup).toHaveAttribute("data-tools", /review/);
+	await page.getByTestId("show-tool-changes").click();
+	await expect(specsGroup.getByTestId("tab-changes")).toHaveCount(1);
 	await expect(sideGroups(page, "right")).toHaveCount(rightGroups);
 });
 
@@ -1476,12 +1477,8 @@ test("Layout settings controls keep their container-preset max-widths", async ({
 	await page.getByTestId("open-settings").click();
 	await page.getByTestId("settings-nav-layout").click();
 
-	await page.getByTestId("layout-add-new").click();
-	expect(await width(page.getByTestId("layout-preset-save-row"))).toBeLessThanOrEqual(280);
-	await page.keyboard.press("Escape");
-	await page.getByTestId("layout-advanced-toggle").click();
-	await expect(page.getByTestId("layout-group-limits")).toBeVisible();
-	expect(await width(page.locator("#layout-side-group-limit"))).toBeLessThanOrEqual(128);
+	await expect(page.getByTestId("layout-preset-save-row")).toHaveCSS("max-width", "512px");
+	await expect(page.getByTestId("layout-group-limits")).toHaveCSS("max-width", "384px");
 });
 
 test("a tab tooltip labels without blocking the tab it overlaps", async ({ page }) => {
@@ -1714,26 +1711,36 @@ test("the placement picker draws the workbench: a cell per group, a slot at ever
 	await openDefaultWorkbench(page);
 	await page.getByTestId("tab-files").click({ button: "right" });
 
-	// Every edge of every region offers a slot to start a group, whatever the groups already there.
-	for (const slot of [
-		"New left group at top",
-		"New left group at bottom",
-		"New right group at top",
-		"New right group at bottom",
-		"New bottom group at left",
-		"New bottom group at right",
-	]) {
-		await expect(page.getByRole("menuitem", { name: slot })).toBeVisible();
-	}
+	// Left has one group, right has two, bottom has one — and each gets a slot before it and after it.
+	const slots = page.getByTestId("placement-slot");
+	await expect(slots.first()).toBeVisible();
+	const shape = await slots.evaluateAll((nodes) =>
+		nodes.map((node) => `${node.getAttribute("data-region")}#${node.getAttribute("data-index")}`),
+	);
+	expect(shape).toEqual([
+		"left#0",
+		"left#1",
+		"bottom#0",
+		"bottom#1",
+		"right#0",
+		"right#1",
+		"right#2",
+	]);
 
-	// The group this tab already lives in is where it stands, not somewhere to go: of the two right groups, one is offered.
-	await expect(page.getByRole("menuitem", { name: /^Move to right pane/ })).toHaveCount(1);
-	await expect(page.getByRole("menuitem", { name: /^Move to left pane/ })).toBeEnabled();
+	// The group this tab already lives in is where it stands, not somewhere to go.
+	const current = page.getByTestId("placement-group").and(page.locator("[data-current]"));
+	await expect(current).toHaveCount(1);
+	await expect(current).toBeDisabled();
+	// Named by where it is — the second of the two right groups — with its contents left to the tooltip.
+	await expect(current).toContainText("Right 1");
+	await expect(current).toHaveAttribute("title", "This tab is already here");
+	const other = page.getByRole("menuitem", { name: "Move to right group: Right 2" });
+	await expect(other).toHaveAttribute("title", "Move to Right 2 — Changes");
 
-	// And a destination moves it.
-	await page.getByRole("menuitem", { name: /^Move to left pane/ }).click();
-	await expect(sideGroups(page, "left").first()).toHaveAttribute("data-tools", /files/);
-	await expect(sideGroups(page, "right").first()).not.toHaveAttribute("data-tools", /files/);
+	// And a cell moves it, which is what the six sentences used to say.
+	await page.getByRole("menuitem", { name: "Move to left group: Left" }).click();
+	await expect(sideGroups(page, "left").getByTestId("tab-files")).toBeVisible();
+	await expect(sideGroups(page, "right").getByTestId("tab-files")).toHaveCount(0);
 });
 
 test("a project with no specs opens its rail on Files, not on the empty Specs panel", async ({
@@ -1748,11 +1755,12 @@ test("a project with no specs opens its rail on Files, not on the empty Specs pa
 	await expect(page.getByTestId("center-tabs")).toBeVisible();
 
 	// Specs is still docked and one click away; it just isn't what the rail opens on.
-	await expect(page.getByTestId("tool-rail-plugin:spec-dialect:specs")).toHaveAttribute(
-		"aria-pressed",
-		"false",
+	const specs = page.getByTestId("tab-plugin:spec-dialect:specs").getByRole("tab");
+	await expect(specs).toHaveAttribute("aria-selected", "false");
+	await expect(page.getByTestId("tab-files").getByRole("tab")).toHaveAttribute(
+		"aria-selected",
+		"true",
 	);
-	await expect(page.getByTestId("tool-rail-files")).toHaveAttribute("aria-pressed", "true");
 });
 
 test("vertical tabs at home in Projects hang under the workspace with its start buttons", async ({

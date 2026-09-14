@@ -2,6 +2,14 @@ import { existsSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { buildSupport as blueprintBuildSupport } from "@thinkrail/plugin-blueprint/build-support";
+import { buildSupport as branchGraphBuildSupport } from "@thinkrail/plugin-branch-graph/build-support";
+import { buildSupport as claudeCodeBuildSupport } from "@thinkrail/plugin-claude-code/build-support";
+import { buildSupport as codexBuildSupport } from "@thinkrail/plugin-codex/build-support";
+import { buildSupport as discordBuildSupport } from "@thinkrail/plugin-discord/build-support";
+import { buildSupport as fileIconsBuildSupport } from "@thinkrail/plugin-file-icons/build-support";
+import { buildSupport as specDialectBuildSupport } from "@thinkrail/plugin-spec-dialect/build-support";
+import { buildSupport as visualizeBuildSupport } from "@thinkrail/plugin-visualize/build-support";
 import {
 	resolveExtensionSkillRoots,
 	STAGED_HOST_SKILLS_ROUTE,
@@ -46,7 +54,16 @@ export interface BuildRuntimeSources {
 	readonly plugins: readonly BuildRuntimePlugin[];
 }
 
-const BUILTIN_PLUGIN_BUILD_SUPPORT: readonly BuildRuntimePlugin[] = [];
+const BUILTIN_PLUGIN_BUILD_SUPPORT = [
+	specDialectBuildSupport,
+	blueprintBuildSupport,
+	claudeCodeBuildSupport,
+	codexBuildSupport,
+	discordBuildSupport,
+	visualizeBuildSupport,
+	branchGraphBuildSupport,
+	fileIconsBuildSupport,
+];
 
 const require = createRequire(import.meta.url);
 
@@ -56,11 +73,10 @@ function requiredPath(path: string): string {
 }
 
 export function resolveBuildRuntimeSources(): BuildRuntimeSources {
-	const extensions = [
-		"pi-spec-graph/index.ts",
-		"pi-thinkrail-workflow/index.ts",
-		"pi-todos/index.ts",
-	].map((specifier) => ({ specifier, entry: require.resolve(specifier) }));
+	const extensions = ["pi-thinkrail-workflow/index.ts", "pi-todos/index.ts"].map((specifier) => ({
+		specifier,
+		entry: require.resolve(specifier),
+	}));
 	const skillRoots: StagedSkillRoot[] = [
 		...extensions.map((pkg) => requiredPath(join(dirname(pkg.entry), "skills"))),
 		requiredPath(fileURLToPath(new URL("../skills", import.meta.url))),

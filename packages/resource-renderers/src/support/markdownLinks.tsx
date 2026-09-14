@@ -1,6 +1,6 @@
+import { useT } from "@thinkrail/locales/react";
 import type { ReactNode } from "react";
 import type { Components } from "react-markdown";
-import { useT } from "@thinkrail/locales/react";
 import { type ResourceHost, useOptionalResourceHost } from "../host";
 import { remarkHeadingIds } from "./headingIds";
 import { DOCUMENT_ID_PREFIX } from "./markdownHtml";

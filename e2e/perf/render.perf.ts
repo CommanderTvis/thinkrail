@@ -274,7 +274,7 @@ async function regionToggles(page: Page, run: number): Promise<void> {
 	await openPersistedChat(page, title);
 	await expect(page.getByTestId("chat-scroll")).toBeVisible();
 	await waitTerminalReady(page);
-	const specs = page.getByTestId("tool-rail-specs");
+	const specs = page.getByTestId("tool-rail-plugin:spec-dialect:specs");
 	await expect(specs).toHaveAttribute("aria-pressed", "true");
 
 	await measure(page, "region-toggles", run, async () => {
