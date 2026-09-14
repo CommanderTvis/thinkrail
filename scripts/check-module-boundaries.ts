@@ -94,6 +94,11 @@ const MODULE_RULES: readonly ModuleRule[] = [
 		allowed: ["packages/plugin-api", "packages/contracts", "packages/shared", "packages/plugin-ui"],
 		internal: PLUGIN_WEB_MUST_NOT_REACH_HOST,
 	},
+	{
+		root: "packages/plugin-discord",
+		allowed: ["packages/plugin-api", "packages/contracts", "packages/shared", "packages/plugin-ui"],
+		internal: PLUGIN_WEB_MUST_NOT_REACH_HOST,
+	},
 	{ root: "packages/shared", allowed: ["packages/contracts"] },
 	{ root: "packages/pi-delegation", allowed: [] },
 	{ root: "packages/pi-subagents", allowed: ["packages/pi-delegation"] },
@@ -102,12 +107,13 @@ const MODULE_RULES: readonly ModuleRule[] = [
 		allowed: [
 			"packages/contracts",
 			"packages/plugin-api",
-			...(["plugin-blueprint", "plugin-claude-code", "plugin-spec-dialect"] as const).flatMap(
-				(plugin) =>
-					(["./host", "./manifest", "./contracts", "./build-support"] as const).map((subpath) => ({
-						target: `packages/${plugin}`,
-						subpath,
-					})),
+			...(
+				["plugin-blueprint", "plugin-claude-code", "plugin-discord", "plugin-spec-dialect"] as const
+			).flatMap((plugin) =>
+				(["./host", "./manifest", "./contracts", "./build-support"] as const).map((subpath) => ({
+					target: `packages/${plugin}`,
+					subpath,
+				})),
 			),
 			"packages/shared",
 			"packages/spec-graph",
@@ -124,13 +130,13 @@ const MODULE_RULES: readonly ModuleRule[] = [
 			"packages/contracts",
 			"packages/plugin-ui",
 			"packages/plugin-api",
-			...(["plugin-blueprint", "plugin-claude-code", "plugin-spec-dialect"] as const).flatMap(
-				(plugin) => [
-					{ target: `packages/${plugin}`, subpath: "./manifest" },
-					{ target: `packages/${plugin}`, subpath: "./web" },
-					{ target: `packages/${plugin}`, subpath: "./contracts", typesOnly: true },
-				],
-			),
+			...(
+				["plugin-blueprint", "plugin-claude-code", "plugin-discord", "plugin-spec-dialect"] as const
+			).flatMap((plugin) => [
+				{ target: `packages/${plugin}`, subpath: "./manifest" },
+				{ target: `packages/${plugin}`, subpath: "./web" },
+				{ target: `packages/${plugin}`, subpath: "./contracts", typesOnly: true },
+			]),
 		],
 	},
 	{
@@ -138,9 +144,9 @@ const MODULE_RULES: readonly ModuleRule[] = [
 		allowed: [
 			"packages/server",
 			"packages/shared",
-			...(["plugin-blueprint", "plugin-claude-code", "plugin-spec-dialect"] as const).map(
-				(plugin) => ({ target: `packages/${plugin}`, subpath: "./build-support" }),
-			),
+			...(
+				["plugin-blueprint", "plugin-claude-code", "plugin-discord", "plugin-spec-dialect"] as const
+			).map((plugin) => ({ target: `packages/${plugin}`, subpath: "./build-support" })),
 		],
 	},
 	{
@@ -149,9 +155,9 @@ const MODULE_RULES: readonly ModuleRule[] = [
 			"packages/server",
 			"packages/shared",
 			"packages/contracts",
-			...(["plugin-blueprint", "plugin-claude-code", "plugin-spec-dialect"] as const).map(
-				(plugin) => ({ target: `packages/${plugin}`, subpath: "./build-support" }),
-			),
+			...(
+				["plugin-blueprint", "plugin-claude-code", "plugin-discord", "plugin-spec-dialect"] as const
+			).map((plugin) => ({ target: `packages/${plugin}`, subpath: "./build-support" })),
 		],
 	},
 ];

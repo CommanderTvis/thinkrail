@@ -66,6 +66,7 @@
         "@thinkrail/plugin-api": "workspace:*",
         "@thinkrail/plugin-blueprint": "workspace:*",
         "@thinkrail/plugin-claude-code": "workspace:*",
+        "@thinkrail/plugin-discord": "workspace:*",
         "@thinkrail/plugin-spec-dialect": "workspace:*",
         "@thinkrail/plugin-ui": "workspace:*",
         "@xterm/addon-clipboard": "0.2.0",
@@ -292,6 +293,30 @@
         "react-dom": "*",
       },
     },
+    "packages/plugin-discord": {
+      "name": "@thinkrail/plugin-discord",
+      "version": "0.1.0",
+      "dependencies": {
+        "@remixicon/react": "4.9.0",
+        "@thinkrail/contracts": "workspace:*",
+        "@thinkrail/plugin-api": "workspace:*",
+        "@thinkrail/plugin-ui": "workspace:*",
+        "@thinkrail/shared": "workspace:*",
+        "typebox": "catalog:",
+      },
+      "devDependencies": {
+        "@types/bun": "catalog:",
+        "@types/react": "catalog:",
+        "@types/react-dom": "catalog:",
+        "react": "catalog:",
+        "react-dom": "catalog:",
+        "typescript": "catalog:",
+      },
+      "peerDependencies": {
+        "react": "*",
+        "react-dom": "*",
+      },
+    },
     "packages/plugin-spec-dialect": {
       "name": "@thinkrail/plugin-spec-dialect",
       "version": "0.1.0",
@@ -367,6 +392,7 @@
         "@thinkrail/plugin-api": "workspace:*",
         "@thinkrail/plugin-blueprint": "workspace:*",
         "@thinkrail/plugin-claude-code": "workspace:*",
+        "@thinkrail/plugin-discord": "workspace:*",
         "@thinkrail/plugin-spec-dialect": "workspace:*",
         "@thinkrail/shared": "workspace:*",
         "bun-pty": "0.4.10",
@@ -1078,6 +1104,8 @@
     "@thinkrail/plugin-blueprint": ["@thinkrail/plugin-blueprint@workspace:packages/plugin-blueprint"],
 
     "@thinkrail/plugin-claude-code": ["@thinkrail/plugin-claude-code@workspace:packages/plugin-claude-code"],
+
+    "@thinkrail/plugin-discord": ["@thinkrail/plugin-discord@workspace:packages/plugin-discord"],
 
     "@thinkrail/plugin-spec-dialect": ["@thinkrail/plugin-spec-dialect@workspace:packages/plugin-spec-dialect"],
 
