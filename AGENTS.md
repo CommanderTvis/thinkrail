@@ -103,6 +103,7 @@ packages/
   pi-delegation/ portable pure-pi delegation core: child sessions from sessions (SPEC.md)
   pi-subagents/  portable pure-pi extension: Agent tools over pi-delegation (SPEC.md)
   plugin-claude-code/ builtin plugin: Claude Code config, IDE bridge, terminal status (SPEC.md)
+  plugin-file-icons/ builtin plugin: material-icon-theme file-type glyphs, web only (SPEC.md)
   plugin-discord/ builtin plugin: Discord Rich Presence over local IPC (SPEC.md)
   plugin-branch-graph/ builtin plugin: the project's branch graph side tool (SPEC.md)
   plugin-visualize/ builtin plugin: terminal agent's live drawing surface (SPEC.md)

@@ -35,7 +35,7 @@ test("the roster lists a discovered external plugin as disabled", async ({ page 
 	await expect(row).toHaveAttribute("data-status", "disabled");
 	await expect(row).toContainText("external");
 	await expect(row).toContainText("v0.1.0");
-	await expect(pluginRow(page, "pdf-preview")).not.toContainText(/\bv\d/);
+	await expect(pluginRow(page, "file-icons")).not.toContainText(/\bv\d/);
 	await page.keyboard.press("Escape");
 });
 
