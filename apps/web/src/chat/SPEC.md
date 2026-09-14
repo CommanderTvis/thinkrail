@@ -1099,17 +1099,22 @@ because the alternative is an attachment the user cannot see, which is worse tha
   detached refresh it triggers, so it is never a basis for concluding a model is gone);
   `@thinkrail/plugin-ui` (`Markdown`, `CodeBlock`, `highlightCode`, the eleven primitives) and
   `@thinkrail/plugin-ui/visualization` (the visualization card — `mermaid` itself is a kit-only
-  dependency; chat never imports the package directly); `react-virtuoso`; `@remixicon/react`; `lib`.
+  dependency; chat never imports the package directly); `react-virtuoso`; `@remixicon/react`; `lib`;
+  `panels/openTabs` (`openFileInTab`, `ChatView.tsx` only — the same generic file-open primitive
+  `plugins/loader/context.ts` uses for `PluginWebContext.editors.open`; no plugin-specific state moves
+  through `chat` to reach it).
 - **Forbidden:** value-importing any `pi` package; a **presentational** renderer importing
   `store`/`transport` (only the app-integration files enumerated above may — keep the renderers reusable).
 - **`ChatView`** is the primary app-integration file: wires this session's runtime
   (`store.sessions[sessionId]`), the transport calls, the `ChatActions` + `AskStates` contexts, the
-  divider's deep links (`onOpenChange` → `requestChangesView`, `onOpenSpec` → `requestSpecView`; each
-  receives the single path the user picked) plus its view switch (`onReveal` → the tool-reveal intent), and
-  the `groupFor` resolver it composes for `deriveRows` — every plugin `writtenPathGroup` slot
-  (`selectSlot("writtenPathGroup")`), then the core default built from the `isSpec` classifier over the
-  store's `specsByWorkspace` snapshot (subscribed as the stored array — a stable ref — and memoized into a
-  matcher here, never a fresh Set inside the selector) — together with
+  divider's deep links (`onOpenChange` → `requestChangesView`; `onOpenSpec` reveals the spec-dialect
+  plugin's tool via `requestToolView` and opens the picked path directly with `openFileInTab` — a plugin
+  owns no core store slice to route the request through instead) plus its view switch (`onReveal` → the
+  tool-reveal intent), and the `groupFor` resolver it composes for `deriveRows` — every plugin
+  `writtenPathGroup` slot (`selectSlot("writtenPathGroup")`) in registration order, then one remaining
+  core convention: a `spec_create` call always classifies as a spec, since the write may not have reached
+  the spec-dialect plugin's own graph read yet (that read is async) — a path already in the graph, written
+  via `edit`/`write`, is classified by the plugin's own slot instead — together with
   **`useHistorySearch.ts`** (the Ctrl+R history-recall overlay's store/transport edge),
   **`useSessionStats.ts`** (the guarded read that keeps telemetry live), **`useTranscriptSync.ts`** (the
   guarded authoritative read that converges an existing runtime), and

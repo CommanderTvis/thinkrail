@@ -129,7 +129,7 @@ test("workbench strips and feature toolbars keep one-row geometry with ARIA tabs
 	const centerScroller = centerStrip.getByRole("tablist");
 	await expect(centerScroller).toHaveCSS("overflow-x", "auto");
 	await expect(centerScroller).toHaveCSS("overflow-y", "hidden");
-	for (const tool of ["projects", "specs", "files", "changes", "review"]) {
+	for (const tool of ["projects", "plugin:spec-dialect:specs", "files", "changes", "review"]) {
 		await expect(
 			page.getByTestId(`tab-${tool}`).getByRole("button", { name: /^Close / }),
 		).toHaveCount(0);
@@ -205,7 +205,7 @@ test("auxiliary panel scrollbars stay quiet at rest and expose only clipped edge
 }) => {
 	await page.setViewportSize({ width: 900, height: 420 });
 	await openDefaultWorkbench(page);
-	for (const tool of ["projects", "specs", "files", "changes", "review"]) {
+	for (const tool of ["projects", "plugin:spec-dialect:specs", "files", "changes", "review"]) {
 		const tab = page.getByTestId(`tab-${tool}`).getByRole("tab");
 		await tab.click();
 		const panelId = await tab.getAttribute("aria-controls");
@@ -586,7 +586,7 @@ test("side groups expose broad per-panel above and below split targets", async (
 
 	let groups = sideGroups(page, "right");
 	await expect(groups).toHaveCount(3);
-	await expect(groups.nth(0).getByTestId("tab-specs")).toBeVisible();
+	await expect(groups.nth(0).getByTestId("tab-plugin:spec-dialect:specs")).toBeVisible();
 	await expect(groups.nth(1).getByTestId("tab-files")).toBeVisible();
 	await expect(groups.nth(2).getByTestId("tab-changes")).toBeVisible();
 
@@ -597,7 +597,7 @@ test("side groups expose broad per-panel above and below split targets", async (
 
 	groups = sideGroups(page, "right");
 	await expect(groups).toHaveCount(4);
-	await expect(groups.nth(0).getByTestId("tab-specs")).toBeVisible();
+	await expect(groups.nth(0).getByTestId("tab-plugin:spec-dialect:specs")).toBeVisible();
 	await expect(groups.nth(1)).toContainText("Empty group");
 	await expect(groups.nth(2).getByTestId("tab-changes")).toBeVisible();
 	await expect(groups.nth(3).getByTestId("tab-files")).toBeVisible();
@@ -612,7 +612,7 @@ test("side groups expose broad per-panel above and below split targets", async (
 
 	groups = sideGroups(page, "right");
 	await expect(groups).toHaveCount(5);
-	await expect(groups.nth(0).getByTestId("tab-specs")).toBeVisible();
+	await expect(groups.nth(0).getByTestId("tab-plugin:spec-dialect:specs")).toBeVisible();
 	await expect(groups.nth(2).getByTestId("tab-files")).toBeVisible();
 	await expect(groups.nth(3).getByTestId("tab-changes")).toBeVisible();
 	await expect(groups.nth(3)).toHaveAttribute("data-folded", "true");
@@ -659,12 +659,12 @@ test("keyboard and menu commands reorder, search, recursively split, and explici
 	await page.getByTestId("tab-changes").click({ button: "right" });
 	await page.getByRole("menuitem", { name: "Show Files" }).click();
 	await expect(page.getByTestId("tab-files")).toBeVisible();
-	await page.getByTestId("tab-specs").getByRole("tab").focus();
+	await page.getByTestId("tab-plugin:spec-dialect:specs").getByRole("tab").focus();
 	await page.keyboard.press("Delete");
-	await expect(page.getByTestId("tab-specs")).toHaveCount(0);
+	await expect(page.getByTestId("tab-plugin:spec-dialect:specs")).toHaveCount(0);
 	await page.getByTestId("tab-changes").click({ button: "right" });
 	await page.getByRole("menuitem", { name: "Show Specs" }).click();
-	await expect(page.getByTestId("tab-specs")).toBeVisible();
+	await expect(page.getByTestId("tab-plugin:spec-dialect:specs")).toBeVisible();
 
 	await openKeptFiles(page, ["README.md", "notes.txt", "LINKS.md"]);
 	const tabs = page.getByTestId("editor-tab");
@@ -1608,7 +1608,7 @@ test("a project with no specs opens its rail on Files, not on the empty Specs pa
 	await expect(page.getByTestId("center-tabs")).toBeVisible();
 
 	// Specs is still docked and one click away; it just isn't what the rail opens on.
-	const specs = page.getByTestId("tab-specs").getByRole("tab");
+	const specs = page.getByTestId("tab-plugin:spec-dialect:specs").getByRole("tab");
 	await expect(specs).toHaveAttribute("aria-selected", "false");
 	await expect(page.getByTestId("tab-files").getByRole("tab")).toHaveAttribute(
 		"aria-selected",

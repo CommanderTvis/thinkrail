@@ -366,7 +366,7 @@ describe("workspace layout model", () => {
 	});
 
 	test("buildLayoutToolCatalog composes builtins with plugin-declared side tools", () => {
-		const specsIcon = resolveLayoutTool(BUILTIN_LAYOUT_TOOL_CATALOG, "specs").icon;
+		const specsIcon = resolveLayoutTool(BUILTIN_LAYOUT_TOOL_CATALOG, "files").icon;
 		const pluginEntry = {
 			id: "plugin:spec-dialect:specs" as const,
 			label: "Specs",
@@ -770,7 +770,7 @@ describe("workspace layout model", () => {
 		expect(
 			findTabLocation(
 				mutation(showSide(missingRestoreMetadata, "right", 6)).document,
-				"tool:specs",
+				"tool:files",
 			),
 		).not.toBeNull();
 
@@ -1010,7 +1010,7 @@ describe("workspace layout model", () => {
 
 	test("successful generated mutation sequences preserve every layout invariant", () => {
 		const directions = ["left", "right", "up", "down"] as const;
-		const tools = ["projects", "specs", "files", "changes", "review"] as const;
+		const tools = ["projects", "graph", "files", "changes", "review"] as const;
 		for (const initialSeed of [1, 7, 29, 97, 313]) {
 			let seed = initialSeed;
 			const random = () => {

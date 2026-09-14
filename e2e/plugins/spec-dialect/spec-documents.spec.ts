@@ -1,8 +1,8 @@
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, test } from "@playwright/test";
-import { createWorkspaceViaDialog, openFixtureProject } from "./fixtures/app";
-import { E2E_DATA_DIR } from "./fixtures/paths";
+import { createWorkspaceViaDialog, openFixtureProject } from "../../fixtures/app";
+import { E2E_DATA_DIR } from "../../fixtures/paths";
 
 test("a spec is titled by its frontmatter and its [[links]] reach the spec they name", async ({
 	page,

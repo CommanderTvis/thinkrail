@@ -131,7 +131,7 @@ import {
 	updateComment,
 } from "../reviews";
 import { getConfig, updateConfig } from "../settings";
-import { evictSpecIndex, projectHasSpecs, specGraph } from "../spec";
+import { projectHasSpecs } from "../spec";
 import {
 	deleteTemplate,
 	getTemplate,
@@ -396,7 +396,6 @@ const handlers: Record<string, Handler> = {
 		const id = (params as { id: string }).id;
 		const ws = forgetWorkspace(id);
 		if (ws) {
-			evictSpecIndex(ws.id);
 			removeWorkspaceReviews(ws.id);
 			stopWatch(ws.id);
 			closeWorkspaceTerminals(ws.id);
@@ -472,11 +471,6 @@ const handlers: Record<string, Handler> = {
 		const p = params as { workspaceId: string; path: string; content: string; baseHash: string };
 		void ensureWatch(p.workspaceId);
 		return writeFile(p.workspaceId, p.path, p.content, p.baseHash);
-	},
-	"spec.graph": (params) => {
-		const p = params as { workspaceId: string };
-		void ensureWatch(p.workspaceId);
-		return specGraph(p.workspaceId);
 	},
 	"todo.list": (params) => listTodos(params as { workspaceId: string; sessionId: string }),
 	"todo.add": (params) =>

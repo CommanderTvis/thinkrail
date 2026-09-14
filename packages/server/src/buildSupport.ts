@@ -1,6 +1,7 @@
 import { existsSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
+import { buildSupport as specDialectBuildSupport } from "@thinkrail/plugin-spec-dialect/build-support";
 
 export type DesktopRuntimeTarget =
 	| "darwin-arm64"
@@ -34,7 +35,7 @@ export interface BuildRuntimeSources {
 	readonly plugins: readonly BuildRuntimePlugin[];
 }
 
-const BUILTIN_PLUGIN_BUILD_SUPPORT: readonly BuildRuntimePlugin[] = [];
+const BUILTIN_PLUGIN_BUILD_SUPPORT = [specDialectBuildSupport];
 
 const require = createRequire(import.meta.url);
 
@@ -47,7 +48,6 @@ export function resolveBuildRuntimeSources(): BuildRuntimeSources {
 	const extensions = [
 		{ specifier: "pi-web-access/index.ts" },
 		{ specifier: "pi-visualize/index.ts" },
-		{ specifier: "pi-spec-graph/index.ts", skills: true },
 		{ specifier: "pi-thinkrail-workflow/index.ts", skills: true },
 		{ specifier: "pi-todos/index.ts", skills: true },
 	].map(({ specifier, skills }) => {

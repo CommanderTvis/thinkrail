@@ -168,6 +168,11 @@ wire format (what `Value.Check`/`Value.Errors` accept at runtime), rather than `
 itself — there is no loader-side resolution to add, and no external plugin ships its own
 `node_modules`.
 
+## `piResources()`
+
+`pluginPiResources()` (`piResources.ts`) resolves pi extensions/skills for every active plugin with a
+`pi` manifest block. External plugins resolve real paths under their own directory. A builtin plugin has
+two paths, chosen per-plugin by what `seams.bundledPluginRuntime(id)` returns: in the compiled
 binary/desktop, `agent/extensions.ts`'s `bundledPluginRuntime` (injected as a `PluginHostSeams` member
 rather than imported directly — this module still does not import `agent`) answers with the
 `factories`/`skillsDir`/`assetsDir` `apps/cli/scripts/build-binary.ts` / `apps/desktop/preBuild.ts` staged
@@ -181,18 +186,6 @@ reachable this way (`plugin-spec-dialect/SPEC.md`). `devBuiltinAssetsDir()` reus
 for `PluginHostContext.assetsDir` (`activation.ts`'s getter: `bundledPluginRuntime(id).assetsDir ??
 devBuiltinAssetsDir(id)`), so a builtin plugin's assets resolve the same way in dev, `bun test`, a compiled
 binary, and desktop — no plugin needs its own `import.meta.dir` walk (`plugin-claude-code/SPEC.md`).
-## `piResources()` — a Stage-4/5 shaped gap, honestly empty for now
-
-`pluginPiResources()` (`piResources.ts`) resolves path-based pi extensions/skills (what pi loads
-straight off disk) for every active plugin with a `pi` manifest block — external plugins resolve under
-their own directory, builtin ones resolve dev-style against `@thinkrail/plugin-<id>` via
-`createRequire`. Its returned `factories: ExtensionFactory[]` — real values, for the compiled
-binary/desktop path where there is no file on disk to point at, sourced from
-`registerBundledRuntime`'s per-plugin table — is always `[]` here: that table lives in
-`agent/extensions.ts`, which this module does not import (out of this module's allowed-import list),
-and `BUILTIN_PLUGINS` is empty until Stage 4 gives it something to resolve anyway. Stage 4/5 adds the
-seam once a real builtin plugin package exists to test it against; building it speculatively now would
-be guessing at a shape nothing yet constrains.
 
 ## `PluginRuntime.validateSettings` — the adapter `settings` installs
 

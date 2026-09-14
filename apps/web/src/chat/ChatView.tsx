@@ -13,6 +13,7 @@ import { Popover, PopoverAnchor, PopoverTrigger } from "@thinkrail/plugin-ui";
 import { type RefCallback, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
 import { cn, selectionLines, selectionQuote } from "@/lib";
+import { openFileInTab } from "@/panels/openTabs";
 import { selectSlot, usePluginRegistry } from "@/plugins/registry";
 import { type ParsedTemplate, templateToSlashCommand, useTemplateCommandPicker } from "@/prompt";
 import {
@@ -23,7 +24,6 @@ import {
 	selectCompactionTurnIds,
 	selectSkillsStale,
 	selectWorkspaceById,
-	specPathMatcher,
 	toast,
 	useAppStore,
 } from "@/store";
@@ -210,8 +210,6 @@ export default function ChatView({
 		}
 		return map;
 	}, [workspaces]);
-	const specNodes = useAppStore((s) => s.specsByWorkspace[workspaceId]);
-	const isSpec = useMemo(() => specPathMatcher(specNodes ?? []), [specNodes]);
 	const writtenPathGroupSlots = usePluginRegistry((s) => selectSlot(s, "writtenPathGroup"));
 	const groupFor = useCallback<WrittenPathGroupResolver>(
 		(toolName, path) => {
@@ -219,11 +217,16 @@ export default function ChatView({
 				const group = resolve(workspaceId, path);
 				if (group) return group;
 			}
-			return toolName === "spec_create" || isSpec(path)
-				? { id: "specs", label: (n) => `${n} ${n === 1 ? "spec" : "specs"}`, tool: "specs" }
+			// spec_create's own write may not have reached the plugin's graph read yet; see chat/SPEC.md.
+			return toolName === "spec_create"
+				? {
+						id: "specs",
+						label: (n) => `${n} ${n === 1 ? "spec" : "specs"}`,
+						tool: "plugin:spec-dialect:specs",
+					}
 				: null;
 		},
-		[writtenPathGroupSlots, workspaceId, isSpec],
+		[writtenPathGroupSlots, workspaceId],
 	);
 	const {
 		turns,
@@ -784,7 +787,8 @@ export default function ChatView({
 
 	const onOpenSpec = useCallback(
 		(path: string) => {
-			useAppStore.getState().requestSpecView(workspaceId, path);
+			useAppStore.getState().requestToolView(workspaceId, "plugin:spec-dialect:specs");
+			void openFileInTab(workspaceId, path, "preview");
 		},
 		[workspaceId],
 	);

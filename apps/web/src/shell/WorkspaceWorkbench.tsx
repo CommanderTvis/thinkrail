@@ -21,7 +21,7 @@ import {
 import { ErrorBoundary } from "../components/ErrorBoundary";
 import { QuietScrollArea } from "../components/QuietScrollArea";
 import { LoadingRegion } from "../components/Skeleton";
-import { type LayoutAttention, layoutResourceIdentity, readLayoutSelection } from "../lib";
+import { type LayoutAttention, layoutResourceIdentity } from "../lib";
 import { ChangesPanel } from "../panels/ChangesPanel";
 import { ConfirmDialog } from "../panels/ConfirmDialog";
 import { DiffPane } from "../panels/DiffPane";
@@ -32,10 +32,8 @@ import { openFileInTab } from "../panels/openTabs";
 import { PluginToolBody } from "../panels/PluginToolBody";
 import { ReviewPanel, selectActiveReviewedPath } from "../panels/ReviewPanel";
 import { reviewFlags } from "../panels/reviewModel";
-import { SpecsPanel } from "../panels/SpecsPanel";
 import { TerminalWorkbenchBody, useTerminalClose } from "../panels/TerminalWorkbench";
 import { useWorkspaceReview } from "../panels/useWorkspaceReview";
-import { useWorkspaceSpecs } from "../panels/useWorkspaceSpecs";
 import {
 	selectFileViewer,
 	selectTabDecorators,
@@ -80,7 +78,6 @@ import {
 	type LayoutToolId,
 	type PreparedLayoutClose,
 	resolveLayoutTool,
-	selectTab,
 	VERTICAL_TABS_WIDTH,
 	Workbench,
 	type WorkspaceLayoutDocument,
@@ -249,36 +246,12 @@ function useTerminalReservation(workspaceId: string): void {
 	}, [connectionGeneration, pendingIntent, status, workspaceId]);
 }
 
-/**
- * A project whose spec graph is empty opens its rail on the next tool instead of on Specs — the default
- * selection is seeded before the graph is read, so it is corrected once, when the answer arrives. The
- * same "seeded before the answer is known, corrected once it arrives" shape applies to a plugin tool
- * whose plugin is inactive or whose `SideToolRegistration.railDefault` refuses this workspace. See
- * shell/SPEC.md.
- */
 function useRailDefault(
 	workspaceId: string,
 	document: WorkspaceLayoutDocument | undefined,
 	attention: LayoutAttention | undefined,
 	changeAttention: (next: LayoutAttention) => void,
 ): void {
-	const specless = useAppStore((state) => state.specsByWorkspace[workspaceId]?.length === 0);
-	const specsAnswered = useRef<string | null>(null);
-	useEffect(() => {
-		if (!specless || !document || !attention || specsAnswered.current === workspaceId) return;
-		specsAnswered.current = workspaceId;
-		let next = attention;
-		for (const group of collectAllGroups(document)) {
-			if (group.location.area === "center") continue;
-			const selectedId = readLayoutSelection(next, group.location.groupId);
-			const selected = group.tabs.find((tab) => tab.id === selectedId);
-			if (selected?.kind !== "tool" || selected.tool !== "specs") continue;
-			const other = group.tabs.find((tab) => tab.id !== selected.id);
-			if (other) next = selectTab(next, group.location, other.id, false);
-		}
-		if (next !== attention) changeAttention(next);
-	}, [specless, workspaceId, document, attention, changeAttention]);
-
 	const pluginsAnswered = useRef<string | null>(null);
 	useEffect(() => {
 		if (!document || !attention || pluginsAnswered.current === workspaceId) return;
@@ -354,7 +327,6 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 	const chatStarting = useAppStore((state) => (state.chatStartsByWorkspace[workspaceId] ?? 0) > 0);
 	const deletedSessions = useAppStore((state) => state.deletedSessionsByWorkspace[workspaceId]);
 	const terminalClose = useTerminalClose();
-	const specs = useWorkspaceSpecs(workspaceId);
 	const review = useWorkspaceReview(workspaceId);
 	const reviewComments = useAppStore((state) => state.reviewsByWorkspace[workspaceId]?.comments);
 	const reviewDraftCount = useAppStore((state) => selectReviewDraftCount(state, workspaceId));
@@ -645,13 +617,6 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 						</QuietScrollArea>
 					);
 					break;
-				case "specs":
-					body = (
-						<QuietScrollArea className="h-full" viewportClassName="p-12">
-							<SpecsPanel workspaceId={workspaceId} failed={specs.failed} onRetry={specs.reload} />
-						</QuietScrollArea>
-					);
-					break;
 				case "files":
 					body = (
 						<QuietScrollArea className="h-full" viewportClassName="p-12">
@@ -691,7 +656,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 				</ErrorBoundary>
 			);
 		},
-		[review.failed, specs.failed, specs.reload, workspaceId, vcsGap, catalog],
+		[review.failed, workspaceId, vcsGap, catalog],
 	);
 
 	const isDefault = workspace != null && isDefaultWorkspace(workspace);

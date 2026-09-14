@@ -8,7 +8,6 @@ import {
 	type Project,
 	type SessionEventPayload,
 	type SessionSummary,
-	type SpecGraphNode,
 	type WireModel,
 	type Workspace,
 	type WorkspaceFsChangedPayload,
@@ -2523,7 +2522,6 @@ test("applyWorkspaceRemoved drops the row, clears its tabs, and returns the acti
 			w1: [{ tabKey: "terminal-before-removal", workspaceId: "w1", title: "Terminal" }],
 		},
 		changesRequest: { workspaceId: "w1", path: "a", navTick: 0, navigation: null },
-		specRequest: { workspaceId: "w1", path: "SPEC.md", navigation: null },
 		chatLocationRequest: {
 			workspaceId: "w1",
 			projectId: "p1",
@@ -2563,7 +2561,6 @@ test("applyWorkspaceRemoved drops the row, clears its tabs, and returns the acti
 	expect(s.toasts).toHaveLength(1);
 	expect(s.toasts[0]?.message).toContain("add-login-flow");
 	expect(s.changesRequest).toBeNull();
-	expect(s.specRequest).toBeNull();
 	expect(s.chatLocationRequest).toBeNull();
 	expect(s.historyOpenRequest).toBeNull();
 	expect(s.reviewFocusRequest).toBeNull();
@@ -2584,7 +2581,6 @@ test("applyWorkspaceRemoved drops the row, clears its tabs, and returns the acti
 	});
 	s.setWorkspaceTerminals("w1", [{ tabKey: "late-terminal", title: "Late terminal" }]);
 	s.closeTerminalTab("w1", "late-terminal");
-	s.setWorkspaceSpecs("w1", []);
 	s.noteFsChanged({ workspaceId: "w1", paths: ["late"], truncated: false, skillChange: "none" });
 	s.requestToolView("w1", "files");
 	s.reconcileWorkspaceSessions("w1", ["removed-chat"], []);
@@ -2605,7 +2601,6 @@ test("applyWorkspaceRemoved drops the row, clears its tabs, and returns the acti
 	expect(afterLateArrivals.tabsByWorkspace.w1).toBeUndefined();
 	expect(afterLateArrivals.closedChatsByWorkspace.w1).toBeUndefined();
 	expect(afterLateArrivals.terminalsByWorkspace.w1).toBeUndefined();
-	expect(afterLateArrivals.specsByWorkspace.w1).toBeUndefined();
 	expect(afterLateArrivals.fsChangesByWorkspace.w1).toBeUndefined();
 	expect(afterLateArrivals.chatLocationRequest).toBeNull();
 	expect(afterLateArrivals.activeWorkspaceId).toBeNull();
@@ -2630,27 +2625,10 @@ test("applyWorkspaceRemoved on a non-active workspace drops the row silently (no
 	expect(s.toasts).toHaveLength(0);
 });
 
-test("applyWorkspaceRemoved drops the removed workspace's cached spec graph", () => {
-	const keep = pushedWorkspace({ id: "other", name: "workspace-2", branch: "workspace-2" });
-	useAppStore.setState({
-		workspaces: { p1: [pushedWorkspace(), keep] },
-		activeWorkspaceId: "other",
-		specsByWorkspace: { w1: [], other: [] },
-		toasts: [],
-	});
-
-	useAppStore.getState().applyWorkspaceRemoved("p1", "w1");
-
-	const s = useAppStore.getState();
-	expect(s.specsByWorkspace.w1).toBeUndefined();
-	expect(s.specsByWorkspace.other).toEqual([]);
-});
-
-test("requestChangesView / requestSpecView pair independent path requests with reveal intents", () => {
-	useAppStore.setState({ changesRequest: null, specRequest: null, layoutIntents: [] });
+test("requestChangesView pushes a path request alongside its reveal intent", () => {
+	useAppStore.setState({ changesRequest: null, layoutIntents: [] });
 
 	useAppStore.getState().requestChangesView("w1", "src/a.ts");
-	useAppStore.getState().requestSpecView("w1", ".thinkrail/context/TASK-x.md");
 
 	const s = useAppStore.getState();
 	expect(s.changesRequest).toEqual({
@@ -2659,57 +2637,24 @@ test("requestChangesView / requestSpecView pair independent path requests with r
 		navTick: 1,
 		navigation: null,
 	});
-	expect(s.specRequest).toEqual({
-		workspaceId: "w1",
-		path: ".thinkrail/context/TASK-x.md",
-		navigation: null,
-	});
 	expect(
 		s.layoutIntents.map(({ kind, workspaceId, ...intent }) => ({ kind, workspaceId, ...intent })),
-	).toMatchObject([
-		{ kind: "reveal-tool", workspaceId: "w1", tool: "changes" },
-		{ kind: "reveal-tool", workspaceId: "w1", tool: "specs" },
-	]);
-
-	const first = useAppStore.getState().specRequest;
-	useAppStore.getState().requestSpecView("w1", ".thinkrail/context/TASK-x.md");
-	expect(useAppStore.getState().specRequest).not.toBe(first);
-	expect(useAppStore.getState().specRequest).toEqual(first);
+	).toMatchObject([{ kind: "reveal-tool", workspaceId: "w1", tool: "changes" }]);
 });
 
 test("requestToolView reveals a tool without fabricating a path request", () => {
-	useAppStore.setState({ layoutIntents: [], changesRequest: null, specRequest: null });
+	useAppStore.setState({ layoutIntents: [], changesRequest: null });
 
-	useAppStore.getState().requestToolView("w1", "specs");
+	useAppStore.getState().requestToolView("w1", "files");
 
 	const first = useAppStore.getState().layoutIntents[0];
-	expect(first).toMatchObject({ kind: "reveal-tool", workspaceId: "w1", tool: "specs" });
-	expect(useAppStore.getState().specRequest).toBeNull();
+	expect(first).toMatchObject({ kind: "reveal-tool", workspaceId: "w1", tool: "files" });
 	expect(useAppStore.getState().changesRequest).toBeNull();
 
-	useAppStore.getState().requestToolView("w1", "specs");
+	useAppStore.getState().requestToolView("w1", "files");
 	const second = useAppStore.getState().layoutIntents[1];
-	expect(second).toMatchObject({ kind: "reveal-tool", workspaceId: "w1", tool: "specs" });
+	expect(second).toMatchObject({ kind: "reveal-tool", workspaceId: "w1", tool: "files" });
 	expect(second?.id).not.toBe(first?.id);
-});
-
-test("clearSpecRequest consumes the spec intent once — it opens a tab, so it must not replay", () => {
-	useAppStore.setState({ specRequest: null, changesRequest: null });
-	useAppStore.getState().requestSpecView("w1", "docs/SPEC.md");
-
-	useAppStore.getState().clearSpecRequest();
-
-	expect(useAppStore.getState().specRequest).toBeNull();
-	useAppStore.getState().clearSpecRequest();
-	expect(useAppStore.getState().specRequest).toBeNull();
-	useAppStore.getState().requestChangesView("w1", "src/a.ts");
-	useAppStore.getState().clearSpecRequest();
-	expect(useAppStore.getState().changesRequest).toEqual({
-		workspaceId: "w1",
-		path: "src/a.ts",
-		navTick: 2,
-		navigation: null,
-	});
 });
 
 test("the Changes deep link stamps the nav count at the click, so a later navigation still wins", () => {
@@ -2853,62 +2798,14 @@ test("a request-time center navigation is not counted again when its chat cache 
 });
 
 test("clearChangesRequest consumes the Changes intent once — it opens a diff tab, so it must not replay", () => {
-	useAppStore.setState({ specRequest: null, changesRequest: null });
+	useAppStore.setState({ changesRequest: null });
 	useAppStore.getState().requestChangesView("w1", "src/a.ts");
 
 	useAppStore.getState().clearChangesRequest();
 
 	expect(useAppStore.getState().changesRequest).toBeNull();
-	useAppStore.getState().requestSpecView("w1", "docs/SPEC.md");
 	useAppStore.getState().clearChangesRequest();
 	expect(useAppStore.getState().changesRequest).toBeNull();
-	expect(useAppStore.getState().specRequest).toEqual({
-		workspaceId: "w1",
-		path: "docs/SPEC.md",
-		navigation: null,
-	});
-});
-
-const specNode = (over: Partial<SpecGraphNode> = {}): SpecGraphNode => ({
-	id: "task-x",
-	type: "task-spec",
-	title: "X",
-	path: ".thinkrail/context/TASK-x.md",
-	dependsOn: [],
-	references: [],
-	implements: [],
-	tags: [],
-	...over,
-});
-
-test("setWorkspaceSpecs records a snapshot per workspace without touching its siblings", () => {
-	const node = specNode();
-	useAppStore.setState({ specsByWorkspace: { other: [] } });
-
-	useAppStore.getState().setWorkspaceSpecs("w1", [node]);
-
-	const s = useAppStore.getState();
-	expect(s.specsByWorkspace.w1).toEqual([node]);
-	expect(s.specsByWorkspace.other).toEqual([]);
-});
-
-test("setWorkspaceSpecs keeps the previous array identity when the re-read found no change", () => {
-	useAppStore.setState({ specsByWorkspace: {} });
-	useAppStore.getState().setWorkspaceSpecs("w1", [specNode()]);
-	const first = useAppStore.getState().specsByWorkspace.w1;
-
-	useAppStore.getState().setWorkspaceSpecs("w1", [specNode()]);
-	expect(useAppStore.getState().specsByWorkspace.w1).toBe(first);
-
-	useAppStore.getState().setWorkspaceSpecs("w1", [specNode({ status: "active" })]);
-	expect(useAppStore.getState().specsByWorkspace.w1).not.toBe(first);
-
-	const withStatus = useAppStore.getState().specsByWorkspace.w1;
-	useAppStore.getState().setWorkspaceSpecs("w1", [specNode({ status: "active", tags: ["v1"] })]);
-	expect(useAppStore.getState().specsByWorkspace.w1).not.toBe(withStatus);
-
-	useAppStore.getState().setWorkspaceSpecs("w1", []);
-	expect(useAppStore.getState().specsByWorkspace.w1).toEqual([]);
 });
 
 test("beginLogin opens a fresh active login; frames accumulate (url + paste prompt coexist)", () => {

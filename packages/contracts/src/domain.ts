@@ -458,27 +458,12 @@ export function isSystemThemePair(value: unknown): value is SystemThemePair {
 	);
 }
 
-export interface SpecGraphNode {
-	id: string;
-	type: string;
-	title: string;
-	status?: string;
-	path: string;
-	parent?: string;
-	dependsOn: string[];
-	references: string[];
-	implements: string[];
-	tags: string[];
-}
-
-export interface SpecGraphSnapshot {
-	nodes: SpecGraphNode[];
-}
-
-export type BuiltinLayoutToolId = "projects" | "specs" | "files" | "changes" | "review";
+export type BuiltinLayoutToolId = "projects" | "files" | "changes" | "review";
 export type LayoutToolId = BuiltinLayoutToolId | PluginToolId;
 
-export const LEGACY_LAYOUT_TOOL_IDS: Readonly<Record<string, PluginToolId>> = {};
+export const LEGACY_LAYOUT_TOOL_IDS: Readonly<Record<string, PluginToolId>> = {
+	specs: "plugin:spec-dialect:specs",
+};
 
 export type LayoutBottomAlignment = "center" | "center-left" | "center-right" | "full";
 
