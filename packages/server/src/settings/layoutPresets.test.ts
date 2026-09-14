@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import type { LayoutPreset } from "@thinkrail/contracts";
-import { validateLayoutPreset } from "./layoutPresets";
+import { normalizeStoredCustomLayoutPresets, validateLayoutPreset } from "./layoutPresets";
 
 function preset(tools: string[]): LayoutPreset {
 	return {
@@ -23,4 +23,12 @@ test("validateLayoutPreset accepts a plugin tool id", () => {
 
 test("validateLayoutPreset rejects a tool id that is neither builtin nor plugin-shaped", () => {
 	expect(() => validateLayoutPreset(preset(["not-a-real-tool"]))).toThrow();
+});
+
+test("normalizeStoredCustomLayoutPresets migrates the legacy specs and claude tool ids", () => {
+	const [migrated] = normalizeStoredCustomLayoutPresets([preset(["specs", "claude"])]);
+	expect(migrated?.right.groups[0]?.tools).toEqual([
+		"plugin:spec-dialect:specs",
+		"plugin:claude-code:config",
+	]);
 });
