@@ -84,7 +84,7 @@ internals**. The edges between them are owned here (see the dependency graph), n
 | `fs` | read dirs/files inside a worktree (path-contained) + the one byte classification (text/mime/sha-256) | [fs/SPEC.md](src/fs/SPEC.md) |
 | `changes` | host-owned revert of a hunk or a file's whole change in the worktree, with undo receipts | [changes/SPEC.md](src/changes/SPEC.md) |
 | `trash` | move a path to the OS trash through the bundled helpers (never `unlink`) | [trash/SPEC.md](src/trash/SPEC.md) |
-| `spec` | the worktree's spec-graph snapshot (`spec.graph`) + project-level `projectHasSpecs`, via `pi-spec-graph/core` | [spec/SPEC.md](src/spec/SPEC.md) |
+| `spec` | project-level `projectHasSpecs`, via `pi-spec-graph/core` (the worktree spec-graph read moved to `@thinkrail/plugin-spec-dialect`) | [spec/SPEC.md](src/spec/SPEC.md) |
 | `todos` | a chat's per-session TODO plan read/write (`todo.*`), via `pi-todos/core` | [todos/SPEC.md](src/todos/SPEC.md) |
 | `reviews` | draft review comments on files/diffs: store + anchoring + context-package render | [reviews/SPEC.md](src/reviews/SPEC.md) |
 | `watch` | per-worktree fs watcher → debounced `workspace.fsChanged` invalidation push | [watch/SPEC.md](src/watch/SPEC.md) |
@@ -119,24 +119,22 @@ the host from env via `bootHost` for dev/e2e.
 - `git` → `subprocess` (every child that talks to a network or another CLI), `fs` (`resourceMeta`/`decodeText` — a diff side's content classification is the same one `fs.readFile` reports)
 - `changes` → `git` (the scope→range resolver + the original side's blob at its resolved oid), `fs` (path containment + byte identity), `persistence` (workspace lookup), `trash` (a revert that removes a file)
 - `github` → `subprocess` (both `gh auth status` probes run under the same bounded runner as `git`/`branch-review`)
+- `mcp` → nothing beyond its own files; the tool table is entirely caller-supplied (`serveMcp(body,
+  tools)`). `host` mounts its `/mcp/<token>` route, resolving the token through `terminal` and the
+  workspace through `workspaces` before any protocol handling, and builds the table from `visualize`'s
   tool handle plus `plugins.mcpTools(owner, cwd)` — the seven `spec_*` tools and `blueprint_check` reach
   it as `@thinkrail/plugin-spec-dialect`'s and `@thinkrail/plugin-blueprint`'s contributions now, not a
   fixed import here
 - `visualize` → `contracts` + `pi-visualize/schema`/`validate` + `typebox` (external only); no sibling
   edges — `host` installs its publisher and serves its `visualization.get` read
+- `plugins` → `contracts`, `plugin-api` (+`/host`), `log`, `persistence`, and each builtin plugin package's
   own `./host`/`./manifest`/`./build-support` (`@thinkrail/plugin-spec-dialect`, `@thinkrail/plugin-blueprint`,
   and `@thinkrail/plugin-claude-code`), plus a manifest-only builtin's `./manifest`
   (`@thinkrail/plugin-pdf-preview`) — no other sibling edges. `host` is the
-- `mcp` → `pi-spec-graph/tools` + `typebox` (external only — the agent-free tool definitions and their
-  schema check); no sibling edges. `host` mounts its `/mcp/<token>` route, resolving the token through
-  `terminal` and the workspace through `workspaces` before any protocol handling, and adds
-  `visualize`'s tool handle to the table
-- `plugins` → `contracts`, `plugin-api` (+`/host`), `log`, `persistence` only — no other sibling edges;
-  builtin plugin packages' own `./host`/`./manifest` join this list as Stage 4 adds each. `host` is the
   sole caller of `installPlugins(seams)`: every core capability a plugin can reach (terminal, sessions,
   workspaces, git, config, settings validation, the pi resource loader) arrives as an injected
   `PluginHostSeams` closure, never a direct import — see plugins/SPEC.md, "the boundary"
-- `git`, `fs`, `spec`, `watch`, `terminal`, `settings`, `analytics`, `feedback` → `persistence` (`spec` also → `pi-spec-graph/core`, external; `analytics` also → the pi-ai built-in provider/model catalog + `posthog-node`, external—the identity-bucketing vocabulary and delivery SDK)
+- `git`, `fs`, `spec`, `watch`, `terminal`, `settings`, `analytics`, `feedback` → `persistence` (`spec` also → `pi-spec-graph/core`, external, for `projectHasSpecs` only; analytics also → the pi-ai built-in provider/model catalog + `posthog-node`, external—the identity-bucketing vocabulary and delivery SDK)
 - `log` → `persistence` (`dataDir`) — and **any feature module (+ `host`) may → `log`**: it is the one
   cross-cutting edge, like `persistence`, exempt from the never-each-other rule (today: `host`,
   `agent`, `workspaces`, `watch`, `git`, `todos`, `reviews`, `analytics`). `persistence` never imports

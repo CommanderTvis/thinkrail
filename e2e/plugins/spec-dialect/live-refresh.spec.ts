@@ -2,8 +2,8 @@ import { execFileSync } from "node:child_process";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, type Locator, test } from "@playwright/test";
-import { createWorkspaceViaDialog, openFixtureProject, worktreeRows } from "./fixtures/app";
-import { commitFile } from "./fixtures/git";
+import { createWorkspaceViaDialog, openFixtureProject, worktreeRows } from "../../fixtures/app";
+import { commitFile } from "../../fixtures/git";
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 

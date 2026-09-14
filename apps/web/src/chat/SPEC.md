@@ -1358,12 +1358,14 @@ Unknown custom messages retain their existing behavior.
   `store`/`transport` (only the app-integration files enumerated above may — keep the renderers reusable).
 - **`ChatView`** is the primary app-integration file: wires this session's runtime
   (`store.sessions[sessionId]`), the transport calls, the `ChatActions` + `AskStates` contexts, the
-  divider's deep links (`onOpenChange` → `requestChangesView`, `onOpenSpec` → `requestSpecView`; each
-  receives the single path the user picked) plus its view switch (`onReveal` → the tool-reveal intent), and
-  the `groupFor` resolver it composes for `deriveRows` — every plugin `writtenPathGroup` slot
-  (`selectSlot("writtenPathGroup")`), then the core default built from the `isSpec` classifier over the
-  store's `specsByWorkspace` snapshot (subscribed as the stored array — a stable ref — and memoized into a
-  matcher here, never a fresh Set inside the selector) — together with
+  divider's deep links (`onOpenChange` → `requestChangesView`; `onOpenSpec` reveals the spec-dialect
+  plugin's tool via `requestToolView` and opens the picked path directly with `openFileInTab` — a plugin
+  owns no core store slice to route the request through instead) plus its view switch (`onReveal` → the
+  tool-reveal intent), and the `groupFor` resolver it composes for `deriveRows` — every plugin
+  `writtenPathGroup` slot (`selectSlot("writtenPathGroup")`) in registration order, then one remaining
+  core convention: a `spec_create` call always classifies as a spec, since the write may not have reached
+  the spec-dialect plugin's own graph read yet (that read is async) — a path already in the graph, written
+  via `edit`/`write`, is classified by the plugin's own slot instead — together with
   **`useHistorySearch.ts`** (the Ctrl+R history-recall overlay's store/transport edge),
   **`useSessionStats.ts`** (the guarded read that keeps telemetry live), **`useTranscriptSync.ts`** (the
   guarded authoritative read that converges an existing runtime), and
