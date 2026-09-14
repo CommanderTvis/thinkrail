@@ -10,6 +10,7 @@ import { runUninstall } from "./uninstall";
 import { createCliHostUpdate, runUpdate } from "./update";
 
 const DEFAULT_STATIC_DIR = resolve(import.meta.dir, "../../web/dist");
+const BROWSER_HOLD_MS = 2000;
 
 function openBrowser(url: string): void {
 	const command =
@@ -85,7 +86,13 @@ async function bootstrap(build: BuildKind): Promise<void> {
 	const url = `http://${openHost}:${port}`;
 	printStartupMark({ status: "host ready", endpoint: url });
 	console.log(`thinkrail → ${url}`);
-	openUiThenStartAttribution(options.open, url, openBrowser, server.startAttributionClaim);
+	await openUiThenStartAttribution(
+		options.open,
+		url,
+		openBrowser,
+		server.startAttributionClaim,
+		() => server.waitForClient(BROWSER_HOLD_MS),
+	);
 }
 
 export async function launch(build: BuildKind): Promise<void> {
