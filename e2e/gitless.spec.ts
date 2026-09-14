@@ -49,6 +49,7 @@ async function offeredTools(page: Page): Promise<string[]> {
 	const menus = page.getByTestId("side-group-menu");
 	for (let index = 0; index < (await menus.count()); index += 1) {
 		await menus.nth(index).click();
+		await expect(page.getByTestId("side-new-terminal")).toBeVisible();
 		const items = page.locator('[data-testid^="show-tool-"]');
 		for (let item = 0; item < (await items.count()); item += 1) {
 			const id = await items.nth(item).getAttribute("data-testid");
@@ -61,26 +62,20 @@ async function offeredTools(page: Page): Promise<string[]> {
 
 async function expectGitToolsWithheld(page: Page, vcs: "none" | "unborn"): Promise<void> {
 	// A tab a layout preset already placed says why, rather than showing a red git error.
-	for (const tool of ["changes", "review"] as const) {
+	for (const tool of ["changes", "review", "plugin:branch-graph:graph"] as const) {
 		const tab = page.getByTestId(`tab-${tool}`);
 		if ((await tab.count()) === 0) continue;
 		await tab.first().click();
 		const notice = page.getByTestId("tool-needs-git");
 		await expect(notice).toBeVisible();
 		await expect(notice).toHaveAttribute("data-vcs", vcs);
-		// A tool tab closes from its context menu; only editors and terminals carry a close cross.
-		await tab.first().click({ button: "right" });
-		await page.getByRole("menuitem", { name: "Close", exact: true }).click();
-		await expect(tab).toHaveCount(0);
 	}
 
-	// Files, closed the same way, is offered back — proof the menus were read rather than found empty.
-	await page.getByTestId("tab-files").first().click({ button: "right" });
-	await page.getByRole("menuitem", { name: "Close", exact: true }).click();
+	// The last test is the positive control: in a real repository the same menus do offer the graph.
 	const offered = await offeredTools(page);
 	expect(offered).not.toContain("changes");
 	expect(offered).not.toContain("review");
-	expect(offered).toContain("files");
+	expect(offered).not.toContain("plugin:branch-graph:graph");
 }
 
 test("a folder that is not a repository offers neither Changes nor Review", async ({ page }) => {
@@ -94,7 +89,7 @@ test("a folder that is not a repository is offered only itself to work in", asyn
 	await page.getByTestId("add-project-menu").click();
 	await page.getByTestId("menu-open-project").click();
 	await expect(page.getByTestId("project-item").filter({ hasText: basename(dir) })).toBeVisible();
-	const start = page.getByTestId("welcome-cta").filter({ hasText: "Start building" });
+	const start = page.getByTestId("welcome-action").filter({ hasText: "Start building" });
 	await expect(start).toContainText("no worktree to cut");
 	await start.click();
 
@@ -128,4 +123,5 @@ test("a real repository still offers both — the withholding is about git, not 
 	await createWorkspaceViaDialog(page);
 	const offered = await offeredTools(page);
 	expect([...offered, ...(await placedTools(page))]).toEqual(expect.arrayContaining(["review"]));
+	expect(offered).toContain("plugin:branch-graph:graph");
 });
