@@ -26,40 +26,25 @@ adapter over the same tool definitions, so a capability is written once and reac
   message; an unknown tool or method is a protocol error (`-32602` / `-32601`). No SSE stream, no
   `Mcp-Session-Id`: every tool here is request/response, so the server is deliberately stateless and a
   `GET` is answered 405 by the host route.
+- **The tool table is entirely caller-supplied.** `serveMcp(body, tools)` is a thin wrapper over
+  `protocol.ts`'s `handleMcpMessage` — this module bakes in no tool table of its own any more. The host
   route builds `tools` fresh per request from the resolved token's owner as
+  `plugins.mcpTools(owner, worktreePath)`, the plugin registry's per-terminal table of every active
   plugin's `"mcp"`-surface tools — including `visualize` (`plugin-visualize/SPEC.md`) and
   `blueprint_check` (`plugin-blueprint/SPEC.md`), both plugin tools now, structural to no module here.
   The seven `spec_*` tools reach this table that way now — as
-- **The tool table** (`tools.ts`) is built per request from `pi-spec-graph/tools`' agent-free
-  `SPEC_TOOLS` definitions — the same objects pi registers natively. The typebox `parameters` schema
-  *is* the published `inputSchema`, served verbatim, and the same schema validates incoming arguments
-  (`Value.Check`) before `run(params, cwd)` — a mismatch is an `isError` result naming the first bad
-  path, so the schema an agent read is exactly the contract enforced. A tool outcome whose details
-  carry `error` is reported with `isError: true`.
-- **A terminal's table can carry more than the spec tools.** `serveMcp` accepts `extraTools` — handles
-  already bound to the calling terminal — which is how `visualize` joins the table
-  ([[submodule-server-visualize]]): the host builds the handle from the resolved token owner, so a
-  drawing lands beside the very terminal that asked for it. `blueprint_check` joins the same way, bound
-  to the worktree the token resolved to ([[submodule-server-blueprint]]). Both handles are *structural* —
-  neither module imports this one, and neither is named here.
-- **`serveMcp`'s table is caller-supplied, not baked in.** The plugin loader passes `tools`, the complete
-  table for that call — spec tools included, if the spec-dialect plugin is active — because once the spec
-  dialect is a plugin, this module cannot assume `SPEC_TOOLS` belongs on every table any more than it can
-  assume any other plugin's tools do. `extraTools` is a **transitional compatibility fallback**: a caller
-  that has not moved to `tools` yet gets the old behaviour (`mcpToolsFor(cwd)` unconditionally, plus
-  `extraTools`) — kept only because this module may not edit `host`; it is removed once every caller
-  passes `tools`. `mcpToolsFor` (`tools.ts`) stays exported for that fallback and for the spec-dialect
-  plugin's own use, until Stage 4a deletes it along with the plugin's `pi-spec-graph` absorption.
+  `@thinkrail/plugin-spec-dialect`'s contribution, not a fixed import here — so a disabled spec-dialect
+  plugin means no spec tools on the table, exactly like any other plugin. (History: this module used to
+  build `SPEC_TOOLS` from `pi-spec-graph/tools` itself, via a since-removed `tools.ts` and an
+  `extraTools` transitional fallback; both are gone as of the plugin-api move.)
 - **Identity comes from the route, not the payload.** The host mounts this at `/mcp/<token>` using the
   **same per-terminal token as `/agent-status/`** (terminal/SPEC.md): one identity per terminal, two
   things it can say. The host resolves token → workspace and hands this module only a `cwd`; a request
   with an unknown token or workspace dies at the route with 404 and never reaches the protocol.
-- **Public surface (barrel):** `serveMcp(body, { cwd, tools?, extraTools? }) → Promise<McpHttpReply>`,
-  the `McpHttpReply` type, and `McpToolHandle`. `mcpToolsFor` (`tools.ts`) is exported for the transitional
-  fallback above and for the spec-dialect plugin, until Stage 4a removes it; `protocol.ts`'s generic
-  handler is otherwise internal — tests reach it by file.
-- **Allowed deps:** `pi-spec-graph/tools` (the agent-free tool definitions), `typebox` (schema check).
-  Nothing else — no siblings, no pi runtime, no Bun APIs.
+- **Public surface (barrel):** `serveMcp(body, tools) → Promise<McpHttpReply>`, the `McpHttpReply` type,
+  and `McpToolHandle`. `protocol.ts`'s generic handler is otherwise internal — tests reach it by file.
+- **Allowed deps:** none beyond its own files — no siblings, no pi runtime, no Bun APIs. Each caller's
+  `McpToolHandle`s carry their own schema validation.
 - **Forbidden:** `host` (it mounts this, never the reverse); `agent` (pi's native registration path is
   its own); any pi runtime import.
 

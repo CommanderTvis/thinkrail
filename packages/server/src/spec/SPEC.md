@@ -2,45 +2,37 @@
 id: submodule-server-spec
 type: submodule-design
 status: active
-title: spec — worktree spec-graph reads
+title: spec — the repository-level "does this project have specs" signal
 parent: module-server
 depends-on: [module-contracts]
-references: [module-spec-graph]
+references: [module-spec-graph, module-plugin-spec-dialect]
 tags: [v1, spec-viewer, public-surface-checked]
 ---
 
 ## Responsibility
 
-Serve the read-only Specs viewer: a whole-graph snapshot of the active worktree's spec-graph
-(`spec.graph`), mapped to the wire DTOs. Read-on-demand — every call re-reads through the derived index
-(revalidate-on-read), so specs edited by the agent, the editor, or git are current on the next fetch.
-(The sibling `watch` module separately nudges clients to re-fetch — an invalidation push, not a data
-push; this module's read path stays pull-only.) Also answers the project-level **`projectHasSpecs(root)`** — does a repo carry *any
-durable* spec (any node whose `type` is not the ephemeral `task-spec`) — which `host` exposes via the **lazy `project.hasSpecs`** method (a full-tree walk, so
-requested only for the one project the Welcome screen renders, never eagerly for every project).
+Answers the project-level **`projectHasSpecs(root)`** — does a repo carry *any durable* spec (any node
+whose `type` is not the ephemeral `task-spec`) — which `host` exposes via the **lazy `project.hasSpecs`**
+method (a full-tree walk, so requested only for the one project the Welcome screen renders, never eagerly
+for every project). This stays a core, plugin-independent signal: the Welcome screen asking whether a
+repository carries specs is a question about the repository, and core should not render differently
+depending on whether the spec-dialect plugin is switched on (`plugin-adoption.md`).
 
-The read is **synchronous** (core's walk is sync-fs, O(worktree dirs) per call). That's acceptable —
-fetches are on-demand (workspace activation / a `workspace.fsChanged` nudge / an error-state Retry, no
-polling) and the per-file parse cache skips re-reads. If
-the walk ever dominates, the escalation is core's **watcher-as-dirty-flag** (see `pi-spec-graph`
-core/SPEC.md), not an async wrapper — that would still block the loop in one piece.
+The read-only Specs *viewer* (the per-workspace spec graph the Specs panel and the `spec_*` agent tools
+use) moved to `@thinkrail/plugin-spec-dialect` — see that package's `SPEC.md` for `specGraph`'s new home
+and history.
 
 ## Boundary
 
-- **Owns:** `specGraph(workspaceId) → SpecGraphSnapshot` — reads the workspace's worktree through a
-  per-workspace `SpecIndex` (reused across calls so the parse cache pays off — same pattern as the
-  agent tools) and maps core's `SpecNode`s to the `contracts` DTOs (the field set lives there; `title`
-  falls back to `id` so the wire never carries an untitled node). **Mapping only** — no traversal
-  logic; the client builds the tree. `evictSpecIndex(workspaceId)` — drops the cached index; `host`
-  calls it on `workspace.remove` so an archived workspace's parse cache doesn't outlive it (a later
-  read would just rebuild). **`projectHasSpecs(root) → boolean`** — whether a repo **root** (not a
-  worktree) carries any **durable** spec (any node whose `type` isn't `task-spec` — an ephemeral scratch
-  task-spec, e.g. under `.thinkrail/context/`, must never signal "set up"), through a per-root reused `SpecIndex`; the
+- **Owns:** **`projectHasSpecs(root) → boolean`** — whether a repo **root** (not a worktree) carries any
+  **durable** spec (any node whose `type` isn't `task-spec` — an ephemeral scratch task-spec, e.g. under
+  `.thinkrail/context/`, must never signal "set up"), through a per-root reused `SpecIndex`; the
   project-level signal behind the Welcome screen's "Set up project" suggestion. Degrades to `false` on a
-  glob/parse failure so it can never break `project.open` / `project.list`.
-- **Public surface (barrel):** `specGraph`, `evictSpecIndex`, `projectHasSpecs`.
-- **Allowed deps:** `persistence` (workspace lookup); `contracts` (DTOs); **`pi-spec-graph/core`** (the
-  pi-free read model — the one host-side value-import of the extension package, sanctioned in
-  `module-spec-graph`).
-- **Forbidden:** `host`; sibling features; `pi-spec-graph`'s extension entry or `tools/` (pi-coupled);
-  any pi package.
+  glob/parse failure so it can never break `project.open` / `project.list`. `projectIndexes`, the
+  per-root `SpecIndex` cache backing it, has no eviction path — a closed/removed project's index is
+  retained for the process lifetime, a known gap independent of the plugin split.
+- **Public surface (barrel):** `projectHasSpecs`.
+- **Allowed deps:** **`pi-spec-graph/core`** (the pi-free read model — the one host-side value-import of
+  the extension package outside its own plugin, sanctioned in `module-spec-graph`).
+- **Forbidden:** `host`; sibling features; `pi-spec-graph`'s extension entry or `tools/` (pi-coupled); any
+  pi package.

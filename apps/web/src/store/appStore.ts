@@ -24,7 +24,6 @@ import type {
 	SessionStats,
 	SessionSummary,
 	SlashCommandInfo,
-	SpecGraphNode,
 	SystemThemePair,
 	TerminalAgentRecord,
 	TerminalTabInfo,
@@ -70,7 +69,6 @@ import {
 	parseSkillInvocation,
 	randomId,
 	readLayoutNavigationClock,
-	shallowEqualArrays,
 	tupleKey,
 	userText,
 } from "../lib";
@@ -878,12 +876,6 @@ interface AppState {
 	composerFocusRequest: { id: string; sessionId: string } | null;
 	/** What the editor has highlighted per workspace, and whether the chat is still carrying it. */
 	editorSelectionByWorkspace: Record<string, { selection: EditorSelection; attached: boolean }>;
-	specRequest: {
-		workspaceId: string;
-		path: string;
-		navigation: CenterNavigationStamp | null;
-	} | null;
-	specsByWorkspace: Record<string, SpecGraphNode[]>;
 	reviewsByWorkspace: Record<string, ReviewSnapshot>;
 	/** Per host resource (terminal tab / chat session): which companions the user closed, and which leads. */
 	embeddedPanes: Record<string, Record<string, EmbeddedPaneEntry>>;
@@ -1142,9 +1134,6 @@ interface AppState {
 	clearChatLocation: () => void;
 	requestHistoryOpen: (target: HistoryTarget) => void;
 	clearHistoryOpen: () => void;
-	requestSpecView: (workspaceId: string, path: string) => void;
-	clearSpecRequest: () => void;
-	setWorkspaceSpecs: (workspaceId: string, nodes: SpecGraphNode[]) => void;
 	setWorkspaceReview: (workspaceId: string, snapshot: ReviewSnapshot) => void;
 	requestReviewFocus: (workspaceId: string, commentId: string) => void;
 	clearReviewFocus: (commentId?: string) => void;
@@ -1416,21 +1405,6 @@ function patchDiffTab(
 	};
 }
 
-function sameSpecNode(a: SpecGraphNode, b: SpecGraphNode): boolean {
-	return (
-		a.id === b.id &&
-		a.type === b.type &&
-		a.title === b.title &&
-		a.status === b.status &&
-		a.path === b.path &&
-		a.parent === b.parent &&
-		shallowEqualArrays(a.dependsOn, b.dependsOn) &&
-		shallowEqualArrays(a.references, b.references) &&
-		shallowEqualArrays(a.implements, b.implements) &&
-		shallowEqualArrays(a.tags, b.tags)
-	);
-}
-
 function bumpNav(s: AppState, workspaceId: string): Record<string, number> {
 	return { ...s.navTickByWorkspace, [workspaceId]: selectWorkspaceNavTick(s, workspaceId) + 1 };
 }
@@ -1663,14 +1637,6 @@ function withoutChat(
 	};
 }
 
-function sameSpecGraph(prev: SpecGraphNode[] | undefined, next: SpecGraphNode[]): boolean {
-	if (!prev || prev.length !== next.length) return false;
-	return prev.every((node, i) => {
-		const candidate = next[i];
-		return candidate !== undefined && sameSpecNode(node, candidate);
-	});
-}
-
 function sameReviewSnapshot(prev: ReviewSnapshot | undefined, next: ReviewSnapshot): boolean {
 	return prev !== undefined && JSON.stringify(prev) === JSON.stringify(next);
 }
@@ -1884,8 +1850,6 @@ export const useAppStore = create<AppState>((set, get) => ({
 	modelsRefreshing: false,
 	modelsFresh: false,
 	changesRequest: null,
-	specRequest: null,
-	specsByWorkspace: {},
 	reviewsByWorkspace: {},
 	embeddedPanes: {},
 	terminalInputByWorkspace: {},
@@ -2047,13 +2011,11 @@ export const useAppStore = create<AppState>((set, get) => ({
 				fsChangesByWorkspace: omitKey(state.fsChangesByWorkspace, workspaceId),
 				activityByWorkspace: omitKey(state.activityByWorkspace, workspaceId),
 				skillChangeTickByWorkspace: omitKey(state.skillChangeTickByWorkspace, workspaceId),
-				specsByWorkspace: omitKey(state.specsByWorkspace, workspaceId),
 				diffScopeByWorkspace: omitKey(state.diffScopeByWorkspace, workspaceId),
 				reviewsByWorkspace: omitKey(state.reviewsByWorkspace, workspaceId),
 				embeddedPanes: omitKey(state.embeddedPanes, workspaceId),
 				changesRequest:
 					state.changesRequest?.workspaceId === workspaceId ? null : state.changesRequest,
-				specRequest: state.specRequest?.workspaceId === workspaceId ? null : state.specRequest,
 				chatLocationRequest:
 					state.chatLocationRequest?.workspaceId === workspaceId ? null : state.chatLocationRequest,
 				routeChatTarget:
@@ -3538,27 +3500,6 @@ export const useAppStore = create<AppState>((set, get) => ({
 			};
 		}),
 	clearHistoryOpen: () => set({ historyOpenRequest: null }),
-	requestSpecView: (workspaceId, path) =>
-		set((s) => {
-			if (s.removedWorkspaceIds[workspaceId]) return {};
-			const advanced = advanceCenterNavigation(s, workspaceId);
-			return {
-				layoutIntents: appendLayoutIntent(s.layoutIntents, {
-					kind: "reveal-tool",
-					workspaceId,
-					tool: "specs",
-				}),
-				specRequest: { workspaceId, path, navigation: advanced.stamp },
-				...advanced.patch,
-			};
-		}),
-	clearSpecRequest: () => set({ specRequest: null }),
-	setWorkspaceSpecs: (workspaceId, nodes) =>
-		set((s) =>
-			s.removedWorkspaceIds[workspaceId] || sameSpecGraph(s.specsByWorkspace[workspaceId], nodes)
-				? {}
-				: { specsByWorkspace: { ...s.specsByWorkspace, [workspaceId]: nodes } },
-		),
 	requestReviewFocus: (workspaceId, commentId) =>
 		set((state) =>
 			state.removedWorkspaceIds[workspaceId]

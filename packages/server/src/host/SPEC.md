@@ -77,8 +77,8 @@ channel fan-out, and the process-boot wrapper both launchers share.
   it hasn't; everyone else stays asleep)
   without touching a worktree file; call
   `ensureWatch(workspaceId)` from the
-  workspace-read handlers (`fs.*`, `git.status`/`git.diffFile`, `spec.graph`) — a read is the "a client is
-  looking" signal; `stopWatch` in `workspace.remove`'s fast path beside `evictSpecIndex`;
+  workspace-read handlers (`fs.*`, `git.status`/`git.diffFile`) — a read is the "a client is
+  looking" signal; `stopWatch` in `workspace.remove`'s fast path;
   `stopAllWatches()` in `stop()`), `stopJbcentralRuntime()` and `cancelAllLogins()` in `stop()` before the
   socket close,
   an optional boot-time `openProject(projectPath)` (best-effort — a launcher convenience), the
@@ -360,7 +360,8 @@ channel fan-out, and the process-boot wrapper both launchers share.
     reaps *everything* rooted in the worktree (for a user-owned `kind: "external"` one, everything except
     the checkout itself) but is **non-blocking**:
     it does the fast part synchronously — `forgetWorkspace` (drop the record → gone from `workspace.list`
-    immediately) → `evictSpecIndex` (drop the spec cache) → `closeWorkspaceTerminals` (kill its PTYs) —
+    immediately, and fans the `WorkspaceEvent` that lets a plugin's own lifecycle observer — the
+    spec-dialect plugin's cache eviction among them — react) → `closeWorkspaceTerminals` (kill its PTYs) —
     **acks**, then runs the slow reclamation in the **background** (`archiveTeardown`, fire-and-forget):
     `removeWorkspaceSessions` (abort a streaming turn, dispose the live sessions, **and** purge pi's
     on-disk transcripts for the cwd) → `reclaimWorktree` (`git worktree remove`; a hard no-op for an

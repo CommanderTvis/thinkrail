@@ -153,27 +153,23 @@ reopened chat hydrates. Workspace removal drops the counter with the rest of the
 ## A rail that opens on something worth reading
 
 The Balanced preset puts Specs first in the right rail, which is right for a repository that has a spec
-graph and wrong for one that has none — the pane opens on its own empty state, and that is the first thing
-a new project shows. So a workspace whose spec graph comes back empty moves the rail's default selection
-on to the next tool in that group. Specs stays docked and one click away; only what opens by default
-changes.
+graph and wrong for one that has none — the pane opens on its own empty state, and that is the first
+thing a new project shows you. So a workspace whose spec graph comes back empty moves the rail's default
+selection on to the next tool in that group. Specs stays docked and one click away; only what opens by
+default changes. This is no longer a case core knows about by name: the spec-dialect plugin declares it
+through the same `SideToolRegistration.railDefault(workspaceId)` any plugin tool uses (its own
+`(await graph(workspaceId)).nodes.length > 0`), so a rail seeded onto a tool whose plugin never mounted,
+or whose `railDefault` explicitly refuses this workspace, moves on to the next tab in that group —
+`useRailDefault` (`WorkspaceWorkbench.tsx`) runs one such correction, `resolvePluginRailDefaults`
+(`railDefault.ts`), once per workspace.
 
 It is a correction rather than a preference because the default is *seeded*: `reconcileAttention` records
-the first tab of every group as its selection when the document is reconciled, well before the spec graph
-has been read. So the answer is applied once per workspace, when the graph first arrives, and only to a
-group still showing what was seeded. Anything the user selects afterwards is theirs and is never touched.
-The graph is already loaded for every workspace (`useWorkspaceSpecs` sits in the workbench, not in the
-panel), so this costs no extra read.
-
-A plugin tool gets the same treatment for the same reason: a rail seeded onto a tool whose plugin never
-mounted, or whose `SideToolRegistration.railDefault(workspaceId)` explicitly refuses this workspace, moves
-on to the next tab in that group. `useRailDefault` (`WorkspaceWorkbench.tsx`) keeps the specs correction
-as its own once-per-workspace effect and adds a second, independent one for plugin tools — independent
-because "is this workspace specless" and "is this plugin tool wanted here" become knowable at different
-times, and gating both corrections on the same readiness signal would block whichever answer arrives
-second. The plugin decision itself (`resolvePluginRailDefaults`, `railDefault.ts`) is a plain async
-function with no store subscription of its own: it reads `plugins/registry`'s `active` set and the tool's
-registration once, at the moment it runs, which is what makes it unit-testable without mounting anything.
+the first tab of every group as its selection when the document is reconciled, well before any plugin's
+`railDefault` has answered. So the correction is applied once per workspace, when the answer arrives, and
+only to a group still showing the tab that was seeded. Anything the user selects afterwards is theirs and
+is never touched. The plugin decision itself is a plain async function with no store subscription of its
+own: it reads `plugins/registry`'s `active` set and the tool's registration once, at the moment it runs,
+which is what makes it unit-testable without mounting anything.
 
 The one-shot guard is only marked once a run actually lands, not when it starts: `document`/`attention`
 routinely change again (terminal placement settling, other reconciliation) while `resolvePluginRailDefaults`

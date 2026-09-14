@@ -29,7 +29,6 @@ import {
 	selectLayoutTabPlacement,
 	selectReviewDiscussionOpen,
 	selectSkillsStale,
-	specPathMatcher,
 	workspaceActivityRollup,
 	workspaceBranchLabel,
 } from "./selectors";
@@ -400,27 +399,6 @@ test("matchesWorktreePath does not let a RELATIVE report match a shorter entry b
 	expect(matchesWorktreePath("module-b/SPEC.md", "SPEC.md")).toBe(false);
 	expect(matchesWorktreePath("packages/server/SPEC.md", "SPEC.md")).toBe(false);
 	expect(matchesWorktreePath("/wt/ws/SPEC.md", "SPEC.md")).toBe(true);
-});
-
-test("specPathMatcher recognizes a spec by graph membership, in either reported form", () => {
-	const nodes = [
-		{
-			id: "task-x",
-			type: "task-spec",
-			title: "X",
-			path: ".thinkrail/context/TASK-x.md",
-			dependsOn: [],
-			references: [],
-			implements: [],
-			tags: [],
-		},
-	];
-	const isSpec = specPathMatcher(nodes);
-
-	expect(isSpec(".thinkrail/context/TASK-x.md")).toBe(true);
-	expect(isSpec("/wt/ws/.thinkrail/context/TASK-x.md")).toBe(true);
-	expect(isSpec("packages/server/src/todos/todos.ts")).toBe(false);
-	expect(specPathMatcher([])(".thinkrail/context/TASK-x.md")).toBe(false);
 });
 
 const catalogModel = (

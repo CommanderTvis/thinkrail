@@ -204,7 +204,7 @@ treatment.
   cached push is correctly treated as the read baseline. Only explicit `terminal.close` kills a PTY, with the existing busy-shell confirmation; confirming a force-close retains
   the active request until it settles (the dialog may close, but a second request cannot orphan it), failures
   surface to the user, and an authoritative catalog removal dismisses a now-stale confirmation instead of
-  leaving a modal for a terminal another client already closed. Also `FileTree`, `SpecsPanel`, `ReviewPanel`,
+  leaving a modal for a terminal another client already closed. Also `FileTree`, `ReviewPanel`,
   `ChangesPanel` (the changed files under a fixed **panel-header row** — `h-panel-header-row`
   (`--panel-header-row-height`, currently 32px), shared structural geometry with workbench Group Headers
   and the chat header, not a value pinned here — that says **what** is being diffed via the
@@ -1469,7 +1469,8 @@ they must not receive chat's trimmed endpoint paired with an untrimmed column an
   (overall-note) composer was removed for
   now (the `review` comment kind stays in the model, UI-less). The `review.get` hydration read is **owned by
   the workbench tool integration**, outside the conditionally mounted Review body (`useWorkspaceReview`, the
-  `useWorkspaceSpecs` pattern — the read also re-anchors server-side): tab flags and the Review badge need
+  same read-independent-of-mount pattern `@thinkrail/plugin-spec-dialect`'s own `useWorkspaceSpecs` uses —
+  the read also re-anchors server-side): tab flags and the Review badge need
   the snapshot even while the panel body is unmounted.
   Every client converges on `review.changed` pushes folded into the store; nothing here
   mutates optimistically. Comment *authoring* is **selection-triggered, no mode toggle** (`reviewWidgets.ts`,
@@ -1619,9 +1620,11 @@ they must not receive chat's trimmed endpoint paired with an untrimmed column an
   *paused* read. A visible `FileTree` directory probes while collapsed only as far as needed to identify
   its compact single-directory run; descendants below the run's deepest directory mount and read only
   when that compact row is expanded. No tick has to be threaded down as a prop.
-  Its users — `FileTree` (root + each visible directory chain), `ChangesPanel` (`git.status`),
-  `useWorkspaceSpecs` (`spec.graph`) — plus `FilePane`/`DiffPane`, which follow the same tick contract per
-  open tab. Agent edits,
+  Its users — `FileTree` (root + each visible directory chain), `ChangesPanel` (`git.status`) — plus
+  `FilePane`/`DiffPane`, which follow the same tick contract per open tab
+  (`@thinkrail/plugin-spec-dialect`'s own `useWorkspaceSpecs` follows the same shape against
+  `ctx.useFileRevision`, the web-context projection of this same fs tick, rather than this hook directly).
+  Agent edits,
   terminal commands, and Finder changes all land without a manual step.
   Three shapes keep its effect's dependency list **honest** (no exhaustive-deps exemption anywhere in it):
   the fs tick is consumed as an **event** (`useAppStore.subscribe`) rather than selected into the component —
@@ -1649,8 +1652,7 @@ they must not receive chat's trimmed endpoint paired with an untrimmed column an
   above individual rows and is keyed by every directory path a compact row represents, so shortening or
   lengthening a chain cannot hide descendants that were visible before the refetch; vanished dirs drop out
   via their parent. `ChangesPanel` re-reads
-  `git.status` (list-only — the diff renders as a center resource, not under the list), `SpecsPanel`
-  refetches without remounting (expansion survives), and `FilePane`/`DiffPane` re-read an
+  `git.status` (list-only — the diff renders as a center resource, not under the list), and `FilePane`/`DiffPane` re-read an
   open resource's content when the workspace ticked past its loaded tick (live while visible;
   background tabs catch up on local selection — only each group's selected body is mounted; a failed re-read — file
   deleted — keeps the last content, no auto-close; a diff tab whose file left the change set likewise
@@ -1676,45 +1678,17 @@ they must not receive chat's trimmed endpoint paired with an untrimmed column an
   the one the user is waiting for. Panels are mounted only for the active workspace,
   so scoping is natural. A degraded host watcher pauses automatic invalidations until the next workspace
   read re-establishes it; editable-file conflict handling waits for `fs.writeFile` (the viewer is read-only today).
-- **`useWorkspaceSpecs` owns the `spec.graph` read** (one fetcher, one definition of "this file is a spec"):
-  the snapshot lands in the store (`specsByWorkspace`), not panel state, because the chat's turn divider
-  needs the same answer to route its chips. It is called by **the workbench tool integration**, not by `SpecsPanel` — the
-  panel body only exists while its tab is showing, so owning the read there would mean a user sitting on
-  Changes stops the graph tracking the worktree, and every spec the agent writes gets counted as a changed
-  file (the split silently undone by a tab selection). Being keyed per workspace, a switch shows that
-  workspace's last known tree while the re-read is in flight (there is nothing to reset), and the failed-read
-  flag is workspace-scoped so it can't leak a hint over a sibling's good tree. It returns `{ failed, reload }`
-  — `SpecsPanel`'s error-only Retry calls `reload` directly, so no retry counter has to be held in panel state.
-- `SpecsPanel` is the read-only spec-graph viewer — a pure reader of that snapshot. One fetch per
-  workspace activation, refetched automatically on the fs tick, rendered as the **`parent` tree** (roots =
-  no/dangling parent; default-expanded). There is **no persistent Refresh control or panel toolbar row**:
-  routine synchronization is automatic. A fetch **failure renders a distinct inline error hint with Retry**,
-  never the "No specs" empty state — offline and empty are different answers. With a previous snapshot, the
-  hint sits above the retained tree; without one, it replaces the loading state. The tree build (`specTree.ts`)
-  assumes a well-formed graph — **parent cycles are `spec_validate`'s problem, not the viewer's** (cycle
-  members are unreachable from any root and simply don't render) — but the walk is **visited-guarded**,
-  so a malformed graph can never hang or loop the UI. Tree only in this slice — no cross-edge display,
-  no editing, no validation badges, no graph canvas.
-- `SpecsPanel` is a compact **document-first tree**: spec nodes are container **and** document, so the
-  controls make both roles explicit. Hierarchy uses fixed per-depth indentation + chevrons, deliberately
-  **without connector rails or branch elbows** (persistent lines overloaded the narrow rail). The padded
-  **chevron alone** expands/collapses, while the rest of the row is a native document button whose
-  **single click previews** the rendered spec — and whose **double click keeps** it — through the same
-  `fs.readFile` → `openTab` flow as `FileTree` (see the Preview tabs bullet; reading down a spec graph is
-  the case the reusable slot exists for). Every row stays on one line: indentation → chevron →
-  shape-coded role icon → truncated title → trailing role (`ARCH` / `MODULE` / `SUBMODULE` / `TASK`;
-  unknown types degrade compactly). The role is **revealed on row hover/focus**, untruncated, and the
-  `aria-label` carries it unconditionally. Titles render through `specDisplayTitle`, which collapses a
-  title's ` — ` / ` – ` separator to **` · `**. The top-level `goal-and-requirements` row
-  instead carries the exact **`Main spec`** label and distinct root icon; a locally selected file resource's row has a persistent selected
-  treatment. **Lifecycle status is not presented at all** — future lint health arrives with a real linter
-  feature, not speculative dots or reused status chrome. This remains a restrained hierarchy — no hero,
-  duplicate root, preview pane, or graph canvas. `FileTree` shares the same file gesture model
-  (preview/keep) but keeps its own directory behaviour — a whole-row click toggles dirs, no collision
-  there.
+- **The spec-graph viewer moved to `@thinkrail/plugin-spec-dialect`.** `useWorkspaceSpecs`, `SpecsPanel`,
+  and `specTree.ts` no longer live in this module — see that package's `SPEC.md` for the read, the tree
+  build, and the document-first row presentation (unchanged in substance: one fetch per workspace
+  activation refetched on the fs tick, a distinct inline error-with-Retry state, a compact `parent` tree
+  with chevron-only expand and single-click-preview/double-click-keep rows). What stays here is the
+  boundary the plugin reaches through: `openFileInTab` (the same `fs.readFile` → `openTab` flow
+  `FileTree` uses) and the `documentLink`/`writtenPathGroup` slots (`plugins/SPEC.md`) the plugin
+  registers into.
 - **Chat deep-links remain arrangement-agnostic.** A shell-owned **`LayoutIntent`** names the singleton tool;
   the shell resolves its current side/group, reveals it in place, and selects it locally. `changesRequest`
-  and `specRequest` add the one path to focus/open without naming a layout destination. A divider chip that
+  adds the one path to focus/open without naming a layout destination. A divider chip that
   only reveals a tool therefore needs no fabricated path or fixed-right-panel assumption.
   `ChangesPanel` watches `changesRequest` (set by a chat turn-divider's "files changed" chip),
   **highlights** the requested file's row (resolved with `matchesWorktreePath` against `git.status`) **and
@@ -1729,21 +1703,17 @@ they must not receive chat's trimmed endpoint paired with an untrimmed column an
   navigation clock stamped at the click are what it compares against, so a tab the user picked while
   the list was loading is the later navigation and keeps focus. The
   intent is **consumed** (`clearChangesRequest`) once handled — it opens a center resource, so a git-status
-  re-read replaying it would yank the user's tab back. `SpecsPanel` watches **`specRequest`** (the "N specs"
-  chip) and **opens the rendered spec**, likewise in the destination group's preview slot
-  (`openFileInTab`, which canonicalizes the reported path — pi may report it absolute or `./`-prefixed — to
-  the worktree-relative **tab identity**, so a deep link can never open a second tab for a file already open
-  under its relative path; that lives in the choke point, not in each caller, and it means a spec created
-  seconds ago and not yet in the graph opens just the same) — a spec has nothing to preview short of its
-  content, and the tree row lights up from the local selected-resource identity. That intent is
-  **consumed** (`clearSpecRequest`) once handled: like the Changes link, it opens a center tab, so
-  replaying it on a remount or a graph refetch would yank the user's tab back mid-edit. Two intents, two
-  effects: a spec chip must never land in the git-derived Changes view, which structurally cannot show a
-  gitignored `.thinkrail/context/` scratch spec — the empty-Changes bug that motivated the split.
-  Both intents carry **exactly one path**: a round that wrote several artifacts resolves the ambiguity in the
-  chat (the chip expands into a list there — see chat/SPEC.md), so no panel ever has to mark a *set*. That is
-  deliberate — a second, round-scoped marking vocabulary over these workspace-scoped trees would reintroduce
-  the two-rows-read-as-selected ambiguity the single-selection rule above exists to prevent.
+  re-read replaying it would yank the user's tab back. The equivalent for a spec's "N specs" chip
+  (`ChatView`'s `onOpenSpec`, chat/SPEC.md) reveals the spec-dialect plugin's tool and opens the picked
+  path with the same `openFileInTab` (which canonicalizes the reported path — pi may report it absolute
+  or `./`-prefixed — to the worktree-relative **tab identity**, so a deep link can never open a second tab
+  for a file already open under its relative path, and it means a spec created seconds ago and not yet in
+  the graph opens just the same); it carries no request state of its own to consume, since a plugin owns
+  no core store slice. A spec chip must never land in the git-derived Changes view, which structurally
+  cannot show a gitignored `.thinkrail/context/` scratch spec — the reason the two views are split.
+  Both a Changes and a specs chip carry **exactly one path**: a round that wrote several artifacts resolves
+  the ambiguity in the chat (the chip expands into a list there — see chat/SPEC.md), so no panel ever has
+  to mark a *set*.
 - **The diff scope is chosen in the Changes header, and enters the tab's identity.** Two header controls say
   what is being diffed: the **`ChangesScopeMenu`** pill — *All
   changes* (the workspace's work since diverging from the target branch — measured from the merge-base,

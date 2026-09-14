@@ -10,6 +10,7 @@ const modules = {
 	"packages/artifact-tests": "@thinkrail/artifact-tests",
 	"packages/contracts": "@thinkrail/contracts",
 	"packages/plugin-api": "@thinkrail/plugin-api",
+	"packages/plugin-spec-dialect": "@thinkrail/plugin-spec-dialect",
 	"packages/plugin-ui": "@thinkrail/plugin-ui",
 	"packages/shared": "@thinkrail/shared",
 	"packages/pi-delegation": "pi-delegation",
@@ -41,14 +42,20 @@ function fixture(): string {
 		},
 		"packages/shared": { "@thinkrail/contracts": "workspace:*" },
 		"packages/pi-subagents": { "pi-delegation": "workspace:*" },
+		"packages/plugin-spec-dialect": {
+			"@thinkrail/plugin-api": "workspace:*",
+			"@thinkrail/contracts": "workspace:*",
+		},
 		"packages/server": {
 			"@thinkrail/contracts": "workspace:*",
 			"@thinkrail/shared": "workspace:*",
+			"@thinkrail/plugin-spec-dialect": "workspace:*",
 			"pi-delegation": "workspace:*",
 			"pi-subagents": "workspace:*",
 		},
 		"apps/web": {
 			"@thinkrail/contracts": "workspace:*",
+			"@thinkrail/plugin-spec-dialect": "workspace:*",
 		},
 		"apps/cli": {
 			"@thinkrail/server": "workspace:*",

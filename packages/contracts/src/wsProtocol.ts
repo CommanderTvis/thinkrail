@@ -42,7 +42,6 @@ import type {
 	ReviewSnapshot,
 	SearchHits,
 	SessionActivity,
-	SpecGraphSnapshot,
 	SubagentOverride,
 	Template,
 	TemplateInfo,
@@ -214,7 +213,6 @@ export const WS_METHODS = {
 	fsReadDir: "fs.readDir",
 	fsReadFile: "fs.readFile",
 	fsWriteFile: "fs.writeFile",
-	specGraph: "spec.graph",
 	terminalRename: "terminal.rename",
 	todoList: "todo.list",
 	todoAdd: "todo.add",
@@ -488,7 +486,6 @@ export interface WsMethodMap {
 	};
 	"fs.revealPath": { params: { workspaceId: string; path: string }; result: Ack };
 	"fs.trashPath": { params: { workspaceId: string; path: string }; result: Ack };
-	"spec.graph": { params: { workspaceId: string }; result: SpecGraphSnapshot };
 	"fs.createPath": { params: { workspaceId: string; path: string; kind: FileKind }; result: Ack };
 	"fs.renamePath": { params: { workspaceId: string; path: string; to: string }; result: Ack };
 	"todo.list": {

@@ -20,6 +20,7 @@
 		"@stroncium/procfs": "1.2.1",
 		"@thinkrail/contracts": "workspace:*",
 		"@thinkrail/plugin-api": "workspace:*",
+		"@thinkrail/plugin-spec-dialect": "workspace:*",
 		"@thinkrail/shared": "workspace:*",
 		"bun-pty": "0.4.10",
 		"pi-delegation": "workspace:*",

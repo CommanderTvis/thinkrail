@@ -14,7 +14,6 @@ import {
 	type Skill,
 } from "@earendil-works/pi-coding-agent";
 import type { SkillCatalogEntry, SlashCommandInfo } from "@thinkrail/contracts";
-import specGraphExtension from "pi-spec-graph";
 import {
 	type AskUserQuestionWaiters,
 	askUserQuestionExtension,
@@ -103,7 +102,6 @@ export async function registerBundledRuntime(extensions: BundledExtensions): Pro
 export const PI_EXTENSION_PACKAGES = [
 	"pi-web-access",
 	"pi-visualize",
-	"pi-spec-graph",
 	"pi-thinkrail-workflow",
 	"pi-todos",
 ] as const;
@@ -121,16 +119,11 @@ function resolveDevPaths(): { extensionPaths: string[]; skillPaths: string[] } {
 	const resolveEntry = piExtensionResolver();
 	const webAccessPath = resolveEntry("pi-web-access");
 	const visualizePath = resolveEntry("pi-visualize");
-	const specGraphPath = resolveEntry("pi-spec-graph");
 	const workflowPath = resolveEntry("pi-thinkrail-workflow");
 	const todosPath = resolveEntry("pi-todos");
 	devPaths = {
-		extensionPaths: [webAccessPath, visualizePath, specGraphPath, workflowPath, todosPath],
-		skillPaths: [
-			join(dirname(specGraphPath), "skills"),
-			join(dirname(workflowPath), "skills"),
-			join(dirname(todosPath), "skills"),
-		],
+		extensionPaths: [webAccessPath, visualizePath, workflowPath, todosPath],
+		skillPaths: [join(dirname(workflowPath), "skills"), join(dirname(todosPath), "skills")],
 	};
 	return devPaths;
 }
@@ -245,12 +238,7 @@ function webAccessFactory(): BundledExtensionFactory {
 }
 
 export function childExtensionFactories(): ExtensionFactory[] {
-	return [
-		headlessSearchPolicy,
-		webAccessFactory(),
-		specGraphExtension,
-		...pluginResourcesProvider().childFactories,
-	];
+	return [headlessSearchPolicy, webAccessFactory(), ...pluginResourcesProvider().childFactories];
 }
 
 export async function buildResourceLoader(
