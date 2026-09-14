@@ -3,6 +3,7 @@ import type { PluginHostModule } from "@thinkrail/plugin-api/host";
 import blueprintHost from "@thinkrail/plugin-blueprint/host";
 import claudeCodeHost from "@thinkrail/plugin-claude-code/host";
 import discordHost from "@thinkrail/plugin-discord/host";
+import { manifest as pdfPreviewManifest } from "@thinkrail/plugin-pdf-preview/manifest";
 import specDialectHost from "@thinkrail/plugin-spec-dialect/host";
 
 export const BUILTIN_PLUGINS: readonly PluginHostModule[] = [
@@ -13,4 +14,4 @@ export const BUILTIN_PLUGINS: readonly PluginHostModule[] = [
 ];
 
 /** Builtin plugins that ship no host half at all — see {@link PluginRegistry.registerBuiltinManifest}. */
-export const BUILTIN_MANIFEST_ONLY_PLUGINS: readonly PluginManifest[] = [];
+export const BUILTIN_MANIFEST_ONLY_PLUGINS: readonly PluginManifest[] = [pdfPreviewManifest];
