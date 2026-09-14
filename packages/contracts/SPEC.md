@@ -613,6 +613,10 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   v64 advisory). `host.updateAvailable` publishes full replacements. Protocol v70 adds parameterless
   `host.update`; no output, arbitrary diagnostic, feed URL, artifact, platform path, or shell command crosses
   the wire.
+- **The interactive-spec wire moved to `@thinkrail/plugin-blueprint`.** `BlueprintDoc`, `BlueprintControl`,
+  `BlueprintEdit`, `BlueprintSource`, `BlueprintState` and the nine `blueprint.*` methods are no longer
+  part of this package — they are the plugin's own typebox schemas under its `plugin.blueprint.*`
+  namespace, vendored rather than shared through core contracts. See [[module-plugin-blueprint]].
 - **wsProtocol.ts** — `WS_METHODS` (`project.*` — incl. **`project.close`** (mark the stable record
   closed without deleting associated state), **`project.rename`** (`{ id, name }` → the updated `Project`;
   changes only the display `name` — path, slug, and id stay — and broadcasts the full `project.updated`;
