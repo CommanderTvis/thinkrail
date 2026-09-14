@@ -370,6 +370,18 @@ export default function syntheticExternalExtension(pi) {
 		assert(health.ok && (await health.text()) === "ok", `/health answered ${health.status}`);
 		const index = await within(fetch(customHost.origin), 10_000, "GET /");
 		assert(index.ok && (await index.text()).includes("ThinkRail"), "web UI was not served");
+		// A file-type icon is one of ~1250 assets the file-icons builtin plugin embeds one by one; if the
+		// packaging ever stops carrying them, every file row silently loses its icon. See
+		// plugin-file-icons/SPEC.md.
+		const icon = await within(
+			fetch(`${customHost.origin}/plugin/file-icons/assets/file-icons/markdown.svg`),
+			10_000,
+			"GET /plugin/file-icons/assets/file-icons/markdown.svg",
+		);
+		assert(
+			icon.ok && (await icon.text()).includes("currentColor"),
+			"file-type icons were not served",
+		);
 		socket = await within(connectRpc(customHost.origin), 10_000, "custom host WebSocket");
 		const models = await within(rpc(socket, "model.list", {}), 20_000, "custom model.list");
 		assertExternalModel(models);

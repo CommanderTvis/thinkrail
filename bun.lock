@@ -68,6 +68,7 @@
         "@thinkrail/plugin-branch-graph": "workspace:*",
         "@thinkrail/plugin-claude-code": "workspace:*",
         "@thinkrail/plugin-discord": "workspace:*",
+        "@thinkrail/plugin-file-icons": "workspace:*",
         "@thinkrail/plugin-pdf-preview": "workspace:*",
         "@thinkrail/plugin-spec-dialect": "workspace:*",
         "@thinkrail/plugin-ui": "workspace:*",
@@ -343,6 +344,28 @@
         "react-dom": "*",
       },
     },
+    "packages/plugin-file-icons": {
+      "name": "@thinkrail/plugin-file-icons",
+      "version": "0.1.0",
+      "dependencies": {
+        "@remixicon/react": "4.9.0",
+        "@thinkrail/plugin-api": "workspace:*",
+        "@thinkrail/plugin-ui": "workspace:*",
+        "material-icon-theme": "5.38.1",
+      },
+      "devDependencies": {
+        "@types/bun": "catalog:",
+        "@types/react": "catalog:",
+        "@types/react-dom": "catalog:",
+        "react": "catalog:",
+        "react-dom": "catalog:",
+        "typescript": "catalog:",
+      },
+      "peerDependencies": {
+        "react": "*",
+        "react-dom": "*",
+      },
+    },
     "packages/plugin-pdf-preview": {
       "name": "@thinkrail/plugin-pdf-preview",
       "version": "0.1.0",
@@ -468,6 +491,7 @@
         "@thinkrail/plugin-branch-graph": "workspace:*",
         "@thinkrail/plugin-claude-code": "workspace:*",
         "@thinkrail/plugin-discord": "workspace:*",
+        "@thinkrail/plugin-file-icons": "workspace:*",
         "@thinkrail/plugin-pdf-preview": "workspace:*",
         "@thinkrail/plugin-spec-dialect": "workspace:*",
         "@thinkrail/plugin-visualize": "workspace:*",
@@ -1210,6 +1234,8 @@
 
     "@thinkrail/plugin-discord": ["@thinkrail/plugin-discord@workspace:packages/plugin-discord"],
 
+    "@thinkrail/plugin-file-icons": ["@thinkrail/plugin-file-icons@workspace:packages/plugin-file-icons"],
+
     "@thinkrail/plugin-pdf-preview": ["@thinkrail/plugin-pdf-preview@workspace:packages/plugin-pdf-preview"],
 
     "@thinkrail/plugin-spec-dialect": ["@thinkrail/plugin-spec-dialect@workspace:packages/plugin-spec-dialect"],
@@ -1465,6 +1491,8 @@
     "character-reference-invalid": ["character-reference-invalid@2.0.1", "", {}, "sha512-iBZ4F4wRbyORVsu0jPV7gXkOsGYjGHPmAyv+HiHG8gi5PtC9KI2j1+v8/tlibRvjoWX027ypmG/n0HtO5t7unw=="],
 
     "chokidar": ["chokidar@5.0.0", "", { "dependencies": { "readdirp": "^5.0.0" } }, "sha512-TQMmc3w+5AxjpL8iIiwebF73dRDF4fBIieAqGn9RGCWaEVwQ6Fb2cGe31Yns0RRIzii5goJ1Y7xbMwo1TxMplw=="],
+
+    "chroma-js": ["chroma-js@3.2.0", "", {}, "sha512-os/OippSlX1RlWWr+QDPcGUZs0uoqr32urfxESG9U93lhUfbnlyckte84Q8P1UQY/qth983AS1JONKmLS4T0nw=="],
 
     "chunkify": ["chunkify@5.0.0", "", {}, "sha512-G8dj/3/Gm+1yL4oWSdwIxihZWFlgC4V2zYtIApacI0iPIRKBHlBGOGAiDUBZgrj4H8MBA8g8fPFwnJrWF3wl7Q=="],
 
@@ -1869,6 +1897,8 @@
     "markdown-table": ["markdown-table@3.0.4", "", {}, "sha512-wiYz4+JrLyb/DqW2hkFJxP7Vd7JuTDm77fvbM8VfEQdmSMqcImWeeRbHwZjBjIFki/VaMK2BhFi7oUUZeM5bqw=="],
 
     "marked": ["marked@16.4.2", "", { "bin": { "marked": "bin/marked.js" } }, "sha512-TI3V8YYWvkVf3KJe1dRkpnjs68JUPyEa5vjKrp1XEEJUAOaQc+Qj+L1qWbPd0SJuAdQkFU0h73sXXqwDYxsiDA=="],
+
+    "material-icon-theme": ["material-icon-theme@5.38.1", "", { "dependencies": { "chroma-js": "^3.2.0" } }, "sha512-14cFM4NJGdbuo68rIZTq9TSX0f5BtA6VF+eNX3zq23Z5NoEeVtM4Zn4PpZ0ERl++50jCBrywKFWXmOjbxf0xTA=="],
 
     "mdast-util-find-and-replace": ["mdast-util-find-and-replace@3.0.2", "", { "dependencies": { "@types/mdast": "^4.0.0", "escape-string-regexp": "^5.0.0", "unist-util-is": "^6.0.0", "unist-util-visit-parents": "^6.0.0" } }, "sha512-Tmd1Vg/m3Xz43afeNxDIhWRtFZgM2VLyaf4vSTYwudTyeuTneoL3qtWMA5jeLyz/O1vDJmmV4QuScFCA2tBPwg=="],
 
