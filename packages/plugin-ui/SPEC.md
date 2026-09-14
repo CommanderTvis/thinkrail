@@ -85,7 +85,7 @@ It excludes tests and never traverses dependency trees: the former recursive pac
   `THINKRAIL_SHIKI_THEME`, `THINKRAIL_SHIKI_THEME_NAME`.
 - **Public surface (`./editor`):** `applyCodeFont`, `cssVar`, `editorFontSize`, `editorWrappingOptions`,
   `EditorSelectionChange`, `MonacoEditor`, `decorateEditorContextMenus`, `defineThinkrailTheme`,
-  `EDITOR_THEME`, `gpuAcceleration`, `languageForPath`, `sharedEditorOptions`, `THEME`,
+  `EDITOR_THEME`, `editorGpuUsable`, `gpuAcceleration`, `languageForPath`, `sharedEditorOptions`, `THEME`,
   `watchThemeSwap`, `applyReviewDecorations`, `LineSelection`, `EditorReview`, `SideReview`,
   `attachReviewCommenting`, `attachReviewThreads`, `ReviewCommentingCallbacks`, `ReviewThreadActions`,
   `ReviewThreadData`, `threadLabel`.

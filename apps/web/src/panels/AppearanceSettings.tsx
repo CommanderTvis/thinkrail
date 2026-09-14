@@ -21,6 +21,7 @@ import {
 	DropdownMenuRadioItem,
 	DropdownMenuTrigger,
 } from "@thinkrail/plugin-ui";
+import { editorGpuUsable } from "@thinkrail/plugin-ui/editor";
 import { useEffect, useState } from "react";
 import { cn } from "@/lib";
 import { toast, useAppStore } from "@/store";
@@ -124,6 +125,10 @@ export function AppearanceSettings() {
 
 	const themes = getThemes();
 	const editorGpu = useAppStore((state) => state.editorGpuRendering);
+	const [gpuUsable, setGpuUsable] = useState(false);
+	useEffect(() => {
+		void editorGpuUsable.then(setGpuUsable);
+	}, []);
 	const codeFont = useAppStore((state) => state.codeFontFamily);
 	const ligatures = useAppStore((state) => state.codeFontLigatures);
 	const systemSupported = (protocolVersion ?? 0) >= THEME_SYSTEM_PROTOCOL_VERSION;
@@ -296,20 +301,26 @@ export function AppearanceSettings() {
 					</span>
 				</span>
 			</label>
-			<label className="flex w-full items-start gap-8 tr-text-ui text-text-default">
+			<label
+				className={cn(
+					"flex w-full items-start gap-8 tr-text-ui",
+					gpuUsable ? "text-text-default" : "text-control-disabled-text",
+				)}
+			>
 				<input
 					type="checkbox"
 					data-testid="editor-gpu"
 					checked={editorGpu}
+					disabled={!gpuUsable}
 					onChange={(event) => setEditorGpu(event.target.checked)}
-					className="mt-2 size-16 shrink-0 accent-primary"
+					className="mt-2 size-16 shrink-0 accent-primary disabled:cursor-not-allowed"
 				/>
 				<span className="min-w-0 flex-1">
 					Draw the editor on the GPU
 					<span className="block tr-text-metadata text-text-muted">
-						The editor's own graphics-card rendering, still experimental: quicker to scroll a large
-						file, with known gaps around ligatures and some highlighting. Ignored on a machine that
-						cannot run it. Applies to files opened from now on.
+						{gpuUsable
+							? "The editor's own graphics-card rendering, still experimental: quicker to scroll a large file, with known gaps around ligatures and some highlighting. Applies to files opened from now on."
+							: "This machine cannot run the editor's graphics-card rendering, so the setting has no effect here."}
 					</span>
 				</span>
 			</label>

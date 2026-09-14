@@ -428,7 +428,10 @@ gate is an adapter that actually answers — `requestAdapter()` once at startup,
 `ResizeObserver` that accepts `device-pixel-content-box`, which Monaco's GPU path needs and throws
 without: WebKit, which the desktop app runs on, has the adapter and not the observer, so the editor came
 up as an error panel there. Everything that fails either check falls back to the renderer that works. A file opened before that probe settles gets the ordinary
-renderer, which is the safe direction to be wrong in.
+renderer, which is the safe direction to be wrong in. The same probe (`editorGpuUsable`, a promise from
+`plugin-ui/editor`) greys the **Draw the editor on the GPU** switch out where it fails, with the
+description saying why, so a machine that cannot run it never offers a setting that would silently
+change nothing; the stored value is kept, not cleared, so it applies again on a machine that can.
 
 **The Start work dialog phrases its own refusals.** The Isolated option a plain folder cannot offer wore a
 native `title`, so the reason arrived on the OS's schedule, in the OS's styling, over a themed dialog. It is
