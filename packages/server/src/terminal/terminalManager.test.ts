@@ -15,6 +15,8 @@ import {
 	resetTerminalState,
 	resizeTerminal,
 	reviveTerminalSessions,
+	setAgentRecord,
+	setRevivePrefillHook,
 	setTerminalPublisher,
 	setTerminalTabsPublisher,
 	writeTerminal,
@@ -520,4 +522,98 @@ describe("membership survives an ungraceful exit", () => {
 
 		expect(listTerminals(WS)).toHaveLength(0);
 	});
+});
+
+describe("resuming an agent a surface promised to bring back", () => {
+	// Composing the actual offer text (--resume/--continue) is Claude-CLI-shaped and lives in the Claude
+	// Code plugin now (`agentResume.ts`, pinned by that package's own tests). This module only owns the
+	// generic plumbing — persisting the pair, offering it once, letting a plugin's hook claim it — so
+	// these tests install a canned hook rather than depending on any one plugin's composition.
+	function persistAgentTab(tabKey: string): void {
+		saveTerminalSessions({
+			[WS]: [{ tabKey, title: "agent", agent: { kind: "demo", command: "demo-cli" } }],
+		});
+	}
+
+	afterEach(() => {
+		setRevivePrefillHook(null);
+	});
+
+	test("no installed hook makes no offer at all", () => {
+		persistAgentTab("plain");
+		reviveTerminalSessions();
+		const attached = attachTerminal(WS, "plain", "client-1");
+		expect(attached.prefill).toBeUndefined();
+		expect(attached.prefillSubmit).toBeUndefined();
+	});
+
+	test("an offer nobody claimed is typed, never run — the user spends the resume", () => {
+		persistAgentTab("plain");
+		setRevivePrefillHook((terminal) =>
+			terminal.tabKey === "plain" ? { text: "demo-cli --resume" } : null,
+		);
+		reviveTerminalSessions();
+		const attached = attachTerminal(WS, "plain", "client-1");
+		expect(attached.prefill).toBe("demo-cli --resume");
+		expect(attached.prefillSubmit).toBeUndefined();
+	});
+
+	test("a plugin's own revive hook can run its offer, so the agent is actually back", () => {
+		persistAgentTab("blueprint-author");
+		setRevivePrefillHook((terminal) =>
+			terminal.workspaceId === WS && terminal.tabKey === "blueprint-author"
+				? { text: "demo-cli --resume", submit: true }
+				: null,
+		);
+		reviveTerminalSessions();
+		const attached = attachTerminal(WS, "blueprint-author", "client-1");
+		expect(attached.prefill).toBe("demo-cli --resume");
+		expect(attached.prefillSubmit).toBe(true);
+	});
+
+	test("an offer the user did not answer is still there after the next restart", () => {
+		persistAgentTab("plain");
+		setRevivePrefillHook(() => ({ text: "demo-cli --resume" }));
+		reviveTerminalSessions();
+		expect(attachTerminal(WS, "plain", "client-1").prefill).toBe("demo-cli --resume");
+
+		// The shell was handed the invocation and never ran it; closing the app keeps nothing of a line
+		// typed at a prompt, so the offer has to survive the write instead.
+		persistTerminalSessions();
+		resetTerminalState();
+		reviveTerminalSessions();
+		expect(attachTerminal(WS, "plain", "client-2").prefill).toBe("demo-cli --resume");
+	});
+
+	test("a claimed tab in another workspace is still only an offer", () => {
+		persistAgentTab("blueprint-author");
+		setRevivePrefillHook((terminal) =>
+			terminal.workspaceId === "some-other-workspace" ? { submit: true } : null,
+		);
+		reviveTerminalSessions();
+		expect(attachTerminal(WS, "blueprint-author", "client-1").prefillSubmit).toBeUndefined();
+	});
+
+	test(
+		"a shell that dies out from under a live agent still leaves the pair to offer",
+		async () => {
+			// A plugin's own detection (a `ps` poll, an agent's own status report) writes the record; this
+			// module never detects an agent itself, so the test stands one in directly via `setAgentRecord`.
+			const attached = attachTerminal(WS, "plain", "client-1");
+			await waitForTerminalOutput(attached.id);
+			setAgentRecord({ workspaceId: WS, tabKey: "plain" }, { kind: "demo", command: "demo-cli" });
+
+			writeTerminal(attached.id, "exit\r", "client-1");
+			await waitForTerminalExit(attached.id);
+
+			persistTerminalSessions();
+			resetTerminalState();
+			setRevivePrefillHook((terminal) =>
+				terminal.tabKey === "plain" ? { text: "demo-cli --resume" } : null,
+			);
+			reviveTerminalSessions();
+			expect(attachTerminal(WS, "plain", "client-2").prefill).toBe("demo-cli --resume");
+		},
+		TERMINAL_TEST_TIMEOUT_MS,
+	);
 });

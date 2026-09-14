@@ -1,4 +1,4 @@
-import { VisualizationCard } from "@/chat/tools/visualize/VisualizationCard";
+import { VisualizationCard } from "@thinkrail/plugin-ui/visualization";
 import { registerToolRenderer } from "../../toolRegistry";
 import { strArg } from "../toolHelpers";
 

@@ -1,0 +1,349 @@
+// ---- index.d.ts ----
+/**
+ * @packageDocumentation
+ * The shared root of `@thinkrail/plugin-api`: identity helpers, the manifest, the wire contract
+ * vocabulary, and the pi-free tool-definition shape. Both a plugin's host half and its web half
+ * import from here; ring-specific capabilities live in `./host` and `./web`.
+ */
+/**
+ * The shape of the plugin API this package's types and helpers were built against. A plugin
+ * declares the generation it was built against in its manifest's `apiGeneration`; a mismatch
+ * against this constant is refused before the plugin loads, rather than allowed to half-load.
+ * Incremented with any breaking change to this package.
+ */
+export declare const PLUGIN_API_GENERATION = 1;
+/**
+ * The roster and contribution shapes a plugin shares with the wire, re-exported from
+ * `@thinkrail/contracts` so a plugin never depends on that package directly; each is documented where
+ * it is declared.
+ */
+export type { PluginContributions, PluginFileViewerContribution, PluginOrigin, PluginRosterEntry, PluginSideToolContribution, PluginStatus, TerminalAgentRecord, } from "@thinkrail/contracts";
+export type { ChannelPayload, MethodParams, MethodResult, PluginChannelSpec, PluginContract, PluginMethodSpec, PluginSettings, } from "./contract";
+export { definePluginContract } from "./contract";
+export { isPluginId, PLUGIN_ID_PATTERN, parsePluginToolId, pluginChannelName, pluginMethodName, pluginPreferenceKey, pluginRoute, pluginStateFile, pluginToolId, } from "./identity";
+export type { PluginDependency, PluginManifest, PluginPiBlock } from "./manifest";
+export { definePluginManifest } from "./manifest";
+export type { PluginToolContext, PluginToolDefinition, PluginToolResult, PluginToolSurface, TerminalRef, } from "./tool";
+export { definePluginTool } from "./tool";
+
+// ---- contract.d.ts ----
+import type { Static, TObject, TSchema } from "typebox";
+/**
+ * One wire method's validated shape: a typebox object schema for its params and a typebox schema
+ * for its result. The loader validates a call's params against `params` at dispatch, before the
+ * registered handler runs; this is the first server-side validation in the codebase.
+ */
+export interface PluginMethodSpec<P extends TObject = TObject, R extends TSchema = TSchema> {
+    /** Typebox schema the method's params are validated against. */
+    params: P;
+    /** Typebox schema of the method's result. Not validated per call; pinned by fixture tests instead. */
+    result: R;
+}
+/**
+ * One wire channel's shape, declared as a state channel or an event channel.
+ *
+ * A state channel names the method that returns its current value (`snapshot`) and the param
+ * fields that key a subscription to one scope (`key`), so a subscriber can read the snapshot for
+ * its own pane on mount and on reconnect rather than replaying from a cache.
+ *
+ * An event channel has no snapshot and is documented as lossy: it exists for host-to-client
+ * requests that time out on their own, not for state a late subscriber must recover.
+ */
+export type PluginChannelSpec<T extends TSchema = TSchema, Methods extends string = string> = {
+    kind: "state";
+    payload: T;
+    snapshot: Methods;
+    key: readonly string[];
+} | {
+    kind: "event";
+    payload: T;
+};
+/**
+ * A plugin's one wire contract: its declared methods, channels, and settings schema under a
+ * single wire version. A host half imports the contract value (wrapped in
+ * {@link definePluginContract}) and validates against it; a web half never imports the value,
+ * only its shape via `import type` and the `MethodParams`/`MethodResult`/`ChannelPayload`/
+ * `PluginSettings` projections below, which is what keeps typebox out of the browser bundle.
+ */
+export interface PluginContract<Id extends string = string, M extends Record<string, PluginMethodSpec> = Record<string, PluginMethodSpec>, C extends Record<string, PluginChannelSpec> = Record<string, PluginChannelSpec>, S extends TObject = TObject> {
+    /** The plugin's id; every method and channel name is namespaced under it. */
+    id: Id;
+    /** Incremented whenever `methods` or `channels` change; a web half at a different version stays dormant. */
+    wireVersion: number;
+    /** The plugin's WS request methods, keyed by name. */
+    methods: M;
+    /** The plugin's channels, keyed by name. */
+    channels: C;
+    /** Typebox object schema for the plugin's settings namespace. */
+    settings: S;
+}
+/**
+ * Identity helper that returns `contract` unchanged while inferring its literal method, channel,
+ * and settings types. A plugin's host half wraps its contract value in this and passes the result
+ * to {@link PluginHostModule.contract}.
+ * @param contract the plugin's wire contract
+ * @returns `contract`, unchanged
+ * @example
+ * ```ts
+ * export const contract = definePluginContract({
+ *   id: "todo-board",
+ *   wireVersion: 1,
+ *   methods: {
+ *     listTodos: { params: Type.Object({}), result: Type.Array(Type.String()) },
+ *   },
+ *   channels: {
+ *     todos: { kind: "state", payload: Type.Array(Type.String()), snapshot: "listTodos", key: [] },
+ *   },
+ *   settings: Type.Object({ showDone: Type.Boolean({ default: false }) }),
+ * });
+ * ```
+ */
+export declare function definePluginContract<const C extends PluginContract>(contract: C): C;
+/** The validated param type of contract `C`'s method `M`, projected from its typebox `params` schema. */
+export type MethodParams<C extends PluginContract, M extends keyof C["methods"]> = Static<C["methods"][M]["params"]>;
+/** The result type of contract `C`'s method `M`, projected from its typebox `result` schema. */
+export type MethodResult<C extends PluginContract, M extends keyof C["methods"]> = Static<C["methods"][M]["result"]>;
+/** The payload type of contract `C`'s channel `K`, projected from its typebox `payload` schema. */
+export type ChannelPayload<C extends PluginContract, K extends keyof C["channels"]> = Static<C["channels"][K]["payload"]>;
+/** The settings type of contract `C`, projected from its typebox `settings` schema. */
+export type PluginSettings<C extends PluginContract> = Static<C["settings"]>;
+
+// ---- identity.d.ts ----
+/**
+ * The shape a plugin id must have: lowercase alphanumeric segments joined by hyphens.
+ * For an external plugin the id must equal its directory name under `<dataDir>/plugins`, so an
+ * id cannot claim more than the user placed there. Every namespaced name below is built from an
+ * id matching this pattern.
+ */
+export declare const PLUGIN_ID_PATTERN: RegExp;
+/**
+ * Reports whether `value` is a well-formed plugin id.
+ * @param value the candidate id
+ * @returns `true` when `value` matches {@link PLUGIN_ID_PATTERN}
+ */
+export declare function isPluginId(value: string): boolean;
+/**
+ * Builds the wire name of one of a plugin's WS request methods, `plugin.<id>.<name>`. Use this on
+ * both sides of a call: registering the handler with {@link PluginHostContext.method} and issuing
+ * the request from a web half's {@link PluginWebContext}.
+ * @param id the plugin's id
+ * @param name the method name declared in the plugin's {@link PluginContract}
+ * @returns the wire method name
+ */
+export declare function pluginMethodName<I extends string, N extends string>(id: I, name: N): `plugin.${I}.${N}`;
+/**
+ * Builds the wire name of one of a plugin's channels, `plugin.<id>.<name>`. Use this to publish
+ * from {@link PluginHostContext.publish} and to subscribe from a web half.
+ * @param id the plugin's id
+ * @param name the channel name declared in the plugin's {@link PluginContract}
+ * @returns the wire channel name
+ */
+export declare function pluginChannelName<I extends string, N extends string>(id: I, name: N): `plugin.${I}.${N}`;
+/**
+ * Builds a plugin's HTTP route, `/plugin/<id>` or `/plugin/<id>/<subpath>`. This is the path a
+ * host route registered with {@link PluginHostContext.route} is mounted under, and the path an
+ * external plugin's served web module, stylesheet, and assets are read from.
+ * @param id the plugin's id
+ * @param subpath the path segment under the plugin's route, omitted for the route root
+ * @returns the HTTP route
+ */
+export declare function pluginRoute(id: string, subpath?: string): `/plugin/${string}`;
+/**
+ * Builds the id of a plugin-contributed side tool as it appears in the layout, `plugin:<id>:<tool>`.
+ * The tool name must match one declared in the manifest's `contributes.sideTools`.
+ * @param id the plugin's id
+ * @param tool the tool name from the manifest's `contributes.sideTools`
+ * @returns the layout tool id
+ */
+export declare function pluginToolId<I extends string, T extends string>(id: I, tool: T): `plugin:${I}:${T}`;
+/**
+ * Parses a layout tool id built by {@link pluginToolId} back into its plugin id and tool name.
+ * Used by the layout engine to route a `plugin:` tab to its owning plugin, including one whose
+ * plugin has since been removed.
+ * @param value the layout tool id to parse
+ * @returns the plugin id and tool name, or `null` when `value` is not a plugin tool id
+ */
+export declare function parsePluginToolId(value: string): {
+    pluginId: string;
+    tool: string;
+} | null;
+/**
+ * Builds a client-local preference key namespaced to a plugin, `plugin:<id>:<key>`. The key is
+ * further endpoint-qualified by the stable-preference adapter it is stored through; nothing
+ * plugin-local crosses the wire.
+ * @param id the plugin's id
+ * @param key the preference name, chosen by the plugin
+ * @returns the preference key
+ */
+export declare function pluginPreferenceKey(id: string, key: string): `plugin:${string}:${string}`;
+/**
+ * Builds the path of a plugin's host state file, relative to the data directory:
+ * `plugin-state/<id>/<name>.json`. This is the path {@link PluginHostContext.readState} and
+ * {@link PluginHostContext.writeState} resolve `name` against; it survives the plugin being
+ * replaced, since code and state live in sibling trees.
+ * @param id the plugin's id
+ * @param name the state file name, chosen by the plugin
+ * @returns the state file's path relative to the data directory
+ */
+export declare function pluginStateFile(id: string, name: string): string;
+
+// ---- manifest.d.ts ----
+import type { PluginContributions } from "@thinkrail/contracts";
+/**
+ * Declares that a plugin is built on another plugin, by id and exact wire version. A plugin whose
+ * dependency is absent, disabled, failed, or at a different `wireVersion` is refused, naming this
+ * dependency as the reason. Activation runs dependency-first and disposal dependent-first; a cycle
+ * among declared dependencies is refused at load. See {@link PluginHostContext.dependency} for what
+ * the dependency then grants at runtime.
+ */
+export interface PluginDependency {
+    /** The id of the plugin depended on. */
+    id: string;
+    /** The exact `wireVersion` the dependency must be running for this plugin to load. */
+    wireVersion: number;
+}
+/**
+ * Declares the pi resources a plugin contributes to agent sessions, loaded alongside the host's
+ * own resources. Shown in Settings on the row where the user enables the plugin, so the trust
+ * decision is made with this information in front of them.
+ */
+export interface PluginPiBlock {
+    /** Extension entries fed to pi's resource loader (value-imported for a builtin plugin, real paths for an external one). */
+    extensions: readonly string[];
+    /** Skill directories fed to pi's resource loader; loaded skills carry `group = <plugin id>`. */
+    skills: readonly string[];
+    /** Whether these extensions and skills also reach delegated sub-agent sessions. Off by default. */
+    reachesSubagents: boolean;
+    /** Whether any extension appends to the system prompt via `before_agent_start`. Surfaced to the user next to the enable toggle. */
+    modifiesSystemPrompt: boolean;
+}
+/**
+ * The static description of a plugin: identity, versioning, its two entry points, and what it
+ * declares up front without running any code. The same fields are carried by a builtin plugin's
+ * `definePluginManifest`-wrapped export and by an external plugin's `thinkrail-plugin.json`.
+ * `contributes` exists because the file-open dispatcher and the layout engine each need a
+ * contribution to be known before the plugin's own code runs; a contribution's component or finer
+ * predicate is registered separately by the web half during activation.
+ */
+export interface PluginManifest {
+    /** The plugin's namespace for every wire method, channel, route, tool id, and settings key. For an external plugin this must equal its directory name. */
+    id: string;
+    /** Shown in the roster, the Settings list, and a dormant tool placeholder. */
+    label: string;
+    /** One sentence on what the plugin does, shown under its label in Settings. */
+    description?: string;
+    /** A Remix Icon name; an unrecognised name falls back to a generic glyph. */
+    icon: string;
+    /** The plugin's own version, informational only. */
+    version: string;
+    /** The {@link PLUGIN_API_GENERATION} this manifest was built against; a mismatch is refused before load. */
+    apiGeneration: number;
+    /** Incremented whenever the plugin's methods or channels change, so a separately shipped web half can detect drift. */
+    wireVersion: number;
+    /** Honoured for a builtin plugin; an external plugin always arrives disabled regardless of this value. */
+    enabledByDefault: boolean;
+    /** Other plugins this one is built on, by id and exact wire version; see {@link PluginDependency}. */
+    dependsOn: readonly PluginDependency[];
+    /** Relative path to the host half's ES module entry. Absent when the plugin has no host half. */
+    host?: string;
+    /** Relative path to the web half's ES module entry. Absent when the plugin has no web half. */
+    web?: string;
+    /** Relative path to the web half's compiled stylesheet. */
+    styles?: string;
+    /** Relative path to an assets directory the host serves or hands to the plugin. */
+    assets?: string;
+    /** The statically known parts of what the plugin contributes: side tools and file viewers. */
+    contributes: PluginContributions;
+    /** Agent-facing resources this plugin loads into sessions; see {@link PluginPiBlock}. */
+    pi?: PluginPiBlock;
+}
+/**
+ * Identity helper that returns `manifest` unchanged while inferring its literal types. Wrap a
+ * plugin's manifest value in this so downstream consumers (the roster, the loader) see the exact
+ * literal shape rather than a widened `PluginManifest`.
+ * @param manifest the plugin's manifest
+ * @returns `manifest`, unchanged
+ * @example
+ * ```ts
+ * export const manifest = definePluginManifest({
+ *   id: "todo-board",
+ *   label: "Todo Board",
+ *   icon: "checkbox-circle-line",
+ *   version: "1.0.0",
+ *   apiGeneration: PLUGIN_API_GENERATION,
+ *   wireVersion: 1,
+ *   enabledByDefault: false,
+ *   dependsOn: [],
+ *   host: "./host.js",
+ *   web: "./web.js",
+ *   styles: "./web.css",
+ *   contributes: { sideTools: [], fileViewers: [] },
+ * });
+ * ```
+ */
+export declare function definePluginManifest<const M extends PluginManifest>(manifest: M): M;
+
+// ---- tool.d.ts ----
+import type { Static, TObject } from "typebox";
+/** Identifies one terminal tab: the workspace it belongs to and its tab key within that workspace. */
+export type TerminalRef = {
+    workspaceId: string;
+    tabKey: string;
+};
+/** Where a registered tool is exposed: to the agent (`"agent"`) or over the per-terminal MCP table (`"mcp"`). */
+export type PluginToolSurface = "agent" | "mcp";
+/** Passed to a {@link PluginToolDefinition.run} function, describing the call site the tool ran from. */
+export interface PluginToolContext {
+    /** The resolved working directory for the call. */
+    cwd: string;
+    /** The workspace the call ran in, or `null` outside any workspace. */
+    workspaceId: string | null;
+    /** The terminal that owns the call, when the tool ran on the MCP surface. */
+    terminal?: TerminalRef;
+    /** The pi session id, when the tool ran on the agent surface. */
+    sessionId?: string;
+}
+/** The value a {@link PluginToolDefinition.run} function returns. */
+export interface PluginToolResult {
+    /** The tool's textual result, shown to the agent or the MCP caller. */
+    text: string;
+    /** Marks `text` as an error message rather than a normal result. */
+    isError?: boolean;
+    /** Structured detail alongside `text`, for a renderer registered against this tool's name. */
+    details?: unknown;
+}
+/**
+ * A pi-free declaration of one tool, registered with {@link PluginHostContext.tool}. The loader
+ * adapts it to a pi tool through a core extension and, for the `"mcp"` surface, to a handle on the
+ * per-terminal MCP table bound to the token owner — a plugin never imports a `pi` package to
+ * declare a tool. A renderer joins by `name` through `registerToolRenderer`, reached from the web
+ * context rather than by importing the chat module.
+ */
+export interface PluginToolDefinition<P extends TObject = TObject> {
+    /** The tool's name; also what a `registerToolRenderer` call joins against. */
+    name: string;
+    /** Shown wherever the tool is listed to the user. */
+    label: string;
+    /** Shown to the agent alongside the tool's schema. */
+    description: string;
+    /** Optional text appended to the system prompt introducing this tool, when the plugin needs more than `description` conveys. */
+    promptSnippet?: string;
+    /** Typebox object schema the tool's params are validated against. */
+    parameters: P;
+    /** Which surfaces the tool is exposed on; see {@link PluginToolSurface}. */
+    surfaces: readonly PluginToolSurface[];
+    /**
+     * Runs the tool.
+     * @param params the call's params, validated against `parameters`
+     * @param ctx the call site the tool ran from
+     * @returns the tool's result, or a promise of one
+     */
+    run(params: Static<P>, ctx: PluginToolContext): PluginToolResult | Promise<PluginToolResult>;
+}
+/**
+ * Identity helper that returns `tool` unchanged while inferring its literal `parameters` type, so
+ * `run`'s `params` argument is typed from `parameters` rather than widened to `unknown`.
+ * @param tool the tool declaration
+ * @returns `tool`, unchanged
+ */
+export declare function definePluginTool<P extends TObject>(tool: PluginToolDefinition<P>): PluginToolDefinition<P>;

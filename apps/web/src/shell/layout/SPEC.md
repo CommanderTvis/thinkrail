@@ -251,7 +251,8 @@ rounded, bordered box). A tab group (pane) renders as one unified bubble enclosi
 left accent bar, rather than multiple separate bubbles. On hover, the group highlights as a whole, distinguishing a single
 tab from a tab group at a glance; when active, the entire group bubble wears the selected box. The centre group keeps only its editor. The strip is the same
 `CenterGroupStrip` in either home — same drag-and-drop, panes, context menu, keyboard, and the same trailing
-row of start actions (new chat, new terminal, chat history, every `renderCenterActions` contribution) — so
+row of start actions (new chat, new terminal, chat history, every `renderCenterActions` contribution; in a vertical strip and in the Projects
+navigator the row wraps onto further rows rather than overflowing, since plugins add to it) — so
 grouping and every other vertical-strip gesture work unchanged there; only where it is drawn moves. The
 engine hands the strips out through `useCenterTabsInProjects()` (a context the `Workbench` provides), and
 the shell's Projects tool renders them under the matching workspace row; the engine never learns what the

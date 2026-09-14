@@ -13,15 +13,15 @@ import {
 	type ThemeId,
 	type ThemeMode,
 } from "@thinkrail/contracts";
-import { useEffect, useState } from "react";
-import { Button } from "@/components/ui/button";
 import {
+	Button,
 	DropdownMenu,
 	DropdownMenuContent,
 	DropdownMenuRadioGroup,
 	DropdownMenuRadioItem,
 	DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+} from "@thinkrail/plugin-ui";
+import { useEffect, useState } from "react";
 import { cn } from "@/lib";
 import { toast, useAppStore } from "@/store";
 import {

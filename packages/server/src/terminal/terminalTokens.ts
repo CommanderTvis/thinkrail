@@ -1,9 +1,5 @@
 import { randomUUID } from "node:crypto";
-
-export interface TerminalRef {
-	workspaceId: string;
-	tabKey: string;
-}
+import type { TerminalRef } from "@thinkrail/plugin-api";
 
 const owners = new Map<string, TerminalRef>();
 const tokens = new Map<string, string>();

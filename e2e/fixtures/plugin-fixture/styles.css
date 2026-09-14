@@ -1,0 +1,5 @@
+/* Checked-in external plugin fixture for e2e/plugins/fixture — see e2e/SPEC.md. */
+
+[data-testid="e2e-fixture-panel"] {
+	color: var(--text-default);
+}

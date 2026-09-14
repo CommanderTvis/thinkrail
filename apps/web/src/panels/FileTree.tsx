@@ -4,13 +4,13 @@ import {
 	RiDeleteBin6Line as Trash2,
 } from "@remixicon/react";
 import type { FileNode } from "@thinkrail/contracts";
-import { useRef, useState } from "react";
 import {
 	ContextMenu,
 	ContextMenuContent,
 	ContextMenuItem,
 	ContextMenuTrigger,
-} from "@/components/ui/context-menu";
+} from "@thinkrail/plugin-ui";
+import { useRef, useState } from "react";
 import { startFileDrag } from "@/lib";
 import { copyText } from "@/lib/utils";
 import { LoadingRegion } from "../components/Skeleton";

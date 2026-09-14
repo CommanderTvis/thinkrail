@@ -23,6 +23,7 @@ const bundledRuntimeKeys = {
 	skillsDir: "skillsDir",
 	trashHelpers: "trashHelpers",
 	webAccessFactory: "webAccessFactory",
+	plugins: "plugins",
 } as const satisfies { [Key in keyof BundledExtensions]-?: Key };
 
 function runBun(args: string[]): void {
@@ -66,10 +67,56 @@ for (const helper of Object.values(sources.trashHelpers)) {
 }
 if (process.platform !== "win32") chmodSync(join(runtimeDir, "macos-trash"), 0o755);
 
+// Per builtin plugin: stage its skills/assets under runtimeDir/plugins/<id>/{skills,assets} and
+// value-import its pi extensions as count-driven factories, next to the fixed extensions above.
+const pluginFactoryImports: string[] = [];
+const pluginEntries: string[] = [];
+sources.plugins.forEach((plugin, pluginIndex) => {
+	const factoryNames = plugin.pi.extensions.map((extension, extensionIndex) => {
+		const name = `p${pluginIndex}x${extensionIndex}`;
+		pluginFactoryImports.push(`import ${name} from ${JSON.stringify(extension.entry)};`);
+		return name;
+	});
+
+	let skillsDirExpr = "null";
+	if (plugin.pi.skills.length > 0) {
+		const routes = new Set<string>();
+		for (const dir of plugin.pi.skills) {
+			for (const source of listFiles(dir).sort()) {
+				const route = relative(dir, source).split(sep).join("/");
+				if (routes.has(route)) {
+					throw new Error(`duplicate staged plugin skill route: ${plugin.id}/${route}`);
+				}
+				routes.add(route);
+				const destination = join(runtimeDir, "plugins", plugin.id, "skills", route);
+				mkdirSync(join(destination, ".."), { recursive: true });
+				copyFileSync(source, destination);
+			}
+		}
+		skillsDirExpr = `options.runtimeDir + ${JSON.stringify(`/plugins/${plugin.id}/skills`)}`;
+	}
+
+	let assetsDirExpr = "null";
+	if (plugin.assets) {
+		for (const source of listFiles(plugin.assets).sort()) {
+			const route = relative(plugin.assets, source).split(sep).join("/");
+			const destination = join(runtimeDir, "plugins", plugin.id, "assets", route);
+			mkdirSync(join(destination, ".."), { recursive: true });
+			copyFileSync(source, destination);
+		}
+		assetsDirExpr = `options.runtimeDir + ${JSON.stringify(`/plugins/${plugin.id}/assets`)}`;
+	}
+
+	pluginEntries.push(
+		`      ${JSON.stringify(plugin.id)}: { factories: [${factoryNames.join(", ")}], skillsDir: ${skillsDirExpr}, assetsDir: ${assetsDirExpr} },`,
+	);
+});
+
 try {
 	writeFileSync(
 		generatedEntry,
 		`${sources.extensions.map((extension, index) => `import factory${index} from ${JSON.stringify(extension.entry)};`).join("\n")}
+${pluginFactoryImports.join("\n")}
 import { bootHost, registerBundledRuntime } from "@thinkrail/server";
 
 export async function startDesktopHost(options) {
@@ -81,6 +128,9 @@ export async function startDesktopHost(options) {
       windows: options.runtimeDir + "/windows-trash.exe",
     },
     ${bundledRuntimeKeys.webAccessFactory}: factory0,
+    ${bundledRuntimeKeys.plugins}: {
+${pluginEntries.join("\n")}
+    },
   });
   return bootHost({
     port: options.port ?? 0,

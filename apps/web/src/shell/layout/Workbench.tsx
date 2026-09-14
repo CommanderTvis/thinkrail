@@ -33,6 +33,33 @@ import {
 	RiCloseLine as X,
 } from "@remixicon/react";
 import {
+	Command,
+	CommandEmpty,
+	CommandInput,
+	CommandItem,
+	CommandList,
+	ContextMenu,
+	ContextMenuContent,
+	ContextMenuItem,
+	ContextMenuSeparator,
+	ContextMenuTrigger,
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuRadioGroup,
+	DropdownMenuRadioItem,
+	DropdownMenuSeparator,
+	DropdownMenuTrigger,
+	IconTooltip,
+	type ImperativePanelGroupHandle,
+	Popover,
+	PopoverContent,
+	PopoverTrigger,
+	ResizableHandle,
+	ResizablePanel,
+	ResizablePanelGroup,
+} from "@thinkrail/plugin-ui";
+import {
 	createContext,
 	Fragment,
 	type ReactNode,
@@ -44,37 +71,6 @@ import {
 	useRef,
 	useState,
 } from "react";
-import {
-	Command,
-	CommandEmpty,
-	CommandInput,
-	CommandItem,
-	CommandList,
-} from "@/components/ui/command";
-import {
-	ContextMenu,
-	ContextMenuContent,
-	ContextMenuItem,
-	ContextMenuSeparator,
-	ContextMenuTrigger,
-} from "@/components/ui/context-menu";
-import {
-	DropdownMenu,
-	DropdownMenuContent,
-	DropdownMenuItem,
-	DropdownMenuRadioGroup,
-	DropdownMenuRadioItem,
-	DropdownMenuSeparator,
-	DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import {
-	type ImperativePanelGroupHandle,
-	ResizableHandle,
-	ResizablePanel,
-	ResizablePanelGroup,
-} from "@/components/ui/resizable";
-import { IconTooltip } from "@/components/ui/tooltip";
 import { FileTypeIcon } from "../../components/FileTypeIcon";
 import {
 	abbreviateHomePath,
@@ -178,6 +174,8 @@ const UnofferedToolsContext = createContext<readonly LayoutToolId[]>(NO_TOOLS);
 
 /** The active tool catalog (builtins + plugin side tools), read wherever a tool label/icon is resolved. */
 const LayoutToolCatalogContext = createContext<LayoutToolCatalog>(BUILTIN_LAYOUT_TOOL_CATALOG);
+
+const WRAPPING_ACTIONS = "flex shrink-0 flex-wrap items-stretch [&>*]:h-panel-header-row";
 
 function revealable(tools: readonly LayoutToolId[], unoffered: readonly LayoutToolId[]) {
 	return unoffered.length === 0 ? tools : tools.filter((tool) => !unoffered.includes(tool));
@@ -960,9 +958,9 @@ function TabStrip({
 			<div
 				className={
 					nested
-						? "mt-4 flex h-panel-header-row shrink-0 items-stretch [&_button]:border-l-0"
+						? `mt-4 ${WRAPPING_ACTIONS} [&_button]:border-l-0`
 						: vertical
-							? "flex h-panel-header-row shrink-0 items-stretch border-border-default border-t"
+							? `${WRAPPING_ACTIONS} border-border-default border-t`
 							: "contents"
 				}
 			>

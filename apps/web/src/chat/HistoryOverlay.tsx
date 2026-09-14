@@ -5,14 +5,14 @@ import {
 	RiDeleteBin6Line as Trash2,
 } from "@remixicon/react";
 import type { HistoryScope, MessageHit, PromptHit } from "@thinkrail/contracts";
-import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
 	DropdownMenuItem,
 	DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { IconTooltip } from "@/components/ui/tooltip";
+	IconTooltip,
+} from "@thinkrail/plugin-ui";
+import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
 import { platformShortcutLabel, relativeTime } from "@/lib";
 import {
 	type ChatLocationRequest,

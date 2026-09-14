@@ -582,11 +582,8 @@ branch's review — a commit sha means nothing in another worktree — and dropp
   a fresh offer; `detachEditorSelection` is the user declining it, or a send consuming it.
   A third transient in the same family is **`fileFocusRequest { workspaceId, path, keyPath }`** — set by
   **`requestFileFocus`**, cleared by **`clearFileFocus(path?)`** once the editor has revealed it. Its one
-  caller, before the plugin-api migration, was the Claude configuration pane opening a file at one of its entries; that pane
-  is now `@thinkrail/plugin-claude-code`'s, and `PluginWebContext`'s `editors.open()` has no `keyPath`
-  option, so this mechanism currently has no caller (`FilePane` still reads `fileFocusRequest` and resolves
-  it, so it works the moment something calls `requestFileFocus` again — nothing here was removed, only its
-  one caller moved somewhere that cannot reach it yet; see `module-plugin-claude-code`'s SPEC.md). It
+  caller is the plugin loader, forwarding `editors.open()` requests with a JSON `keyPath`, including
+  Claude configuration source links. It
   carries a *key path*, never a line: the
   line is resolved in `FilePane` against the text the editor holds, so nothing here can go stale against
   an edited file (`panels/SPEC.md`). Like its siblings it stays out of the tab and the layout document —

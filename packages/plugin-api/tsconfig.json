@@ -1,0 +1,17 @@
+{
+	"extends": "../../tsconfig.base.json",
+	"compilerOptions": {
+		"lib": ["ES2023"],
+		"types": [],
+		"noEmit": true,
+		"rootDir": "./src"
+	},
+	"include": [
+		"src/index.ts",
+		"src/host",
+		"src/identity.ts",
+		"src/manifest.ts",
+		"src/contract.ts",
+		"src/tool.ts"
+	]
+}

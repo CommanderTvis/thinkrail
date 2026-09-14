@@ -28,14 +28,60 @@ import { type BundledTrashHelpers, setBundledTrashHelpers } from "./trash";
 
 export type BundledExtensionFactory = ExtensionFactory;
 
+export interface BundledPluginRuntime {
+	factories: ExtensionFactory[];
+	skillsDir: string | null;
+	assetsDir: string | null;
+}
+
 export interface BundledExtensions {
 	factories: BundledExtensionFactory[];
 	skillsDir: string;
 	trashHelpers: BundledTrashHelpers;
 	webAccessFactory: BundledExtensionFactory;
+	plugins?: Record<string, BundledPluginRuntime>;
 }
 
 let bundled: BundledExtensions | undefined;
+
+const EMPTY_BUNDLED_PLUGIN_RUNTIME: BundledPluginRuntime = {
+	factories: [],
+	skillsDir: null,
+	assetsDir: null,
+};
+
+/** A builtin plugin's staged runtime in the compiled binary/desktop, or the empty runtime in dev. */
+export function bundledPluginRuntime(id: string): BundledPluginRuntime {
+	return bundled?.plugins?.[id] ?? EMPTY_BUNDLED_PLUGIN_RUNTIME;
+}
+
+/** What the plugin loader contributes to every session's resources. */
+export interface PluginPiResources {
+	factories: ExtensionFactory[];
+	extensionPaths: string[];
+	skillPaths: string[];
+	childFactories: ExtensionFactory[];
+	toolsExtension: ExtensionFactory;
+}
+
+const noopToolsExtension: ExtensionFactory = () => {};
+
+function defaultPluginResources(): PluginPiResources {
+	return {
+		factories: [],
+		extensionPaths: [],
+		skillPaths: [],
+		childFactories: [],
+		toolsExtension: noopToolsExtension,
+	};
+}
+
+let pluginResourcesProvider: () => PluginPiResources = defaultPluginResources;
+
+/** Installed by the plugin loader: what every session's resource loader should add for active plugins. */
+export function setPluginResourcesProvider(fn: (() => PluginPiResources) | null): void {
+	pluginResourcesProvider = fn ?? defaultPluginResources;
+}
 
 export async function registerBundledRuntime(extensions: BundledExtensions): Promise<void> {
 	bundled = extensions;
@@ -195,7 +241,12 @@ function webAccessFactory(): BundledExtensionFactory {
 }
 
 export function childExtensionFactories(): ExtensionFactory[] {
-	return [headlessSearchPolicy, webAccessFactory(), specGraphExtension];
+	return [
+		headlessSearchPolicy,
+		webAccessFactory(),
+		specGraphExtension,
+		...pluginResourcesProvider().childFactories,
+	];
 }
 
 export async function buildResourceLoader(
@@ -205,11 +256,14 @@ export async function buildResourceLoader(
 	excludedExtensionPaths: readonly string[] = [],
 	extraFactories: ExtensionFactory[] = [],
 ): Promise<ResourceLoader> {
+	const pluginResources = pluginResourcesProvider();
 	const sharedFactories = [
 		headlessSearchPolicy,
 		askUserQuestionExtension,
 		reviewToolExtension,
 		oversizedImageGuard,
+		pluginResources.toolsExtension,
+		...pluginResources.factories,
 		...extraFactories,
 	];
 	const skillInputs = resolveSkillInputs(cwd, getAdmission);
@@ -219,7 +273,7 @@ export async function buildResourceLoader(
 		agentDir,
 		settingsManager,
 		...skillInputs,
-		additionalSkillPaths: skillInputs.additionalSkillPaths,
+		additionalSkillPaths: [...skillInputs.additionalSkillPaths, ...pluginResources.skillPaths],
 	};
 
 	const excluded = new Set(excludedExtensionPaths.map((path) => resolve(path)));
@@ -242,6 +296,7 @@ export async function buildResourceLoader(
 	const additionalExtensionPaths = [
 		...(bundled ? [] : resolveDevPaths().extensionPaths),
 		...discoveredExtensionPaths,
+		...pluginResources.extensionPaths,
 	];
 	const loader = new DefaultResourceLoader(
 		bundled

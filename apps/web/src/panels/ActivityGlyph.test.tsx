@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import type { ActivityStatus } from "@thinkrail/contracts";
+import { TooltipProvider } from "@thinkrail/plugin-ui";
 import { renderToStaticMarkup } from "react-dom/server";
-import { TooltipProvider } from "@/components/ui/tooltip";
 import { projectActivityRollup, workspaceActivityRollup } from "@/store";
 import { ActivityGlyph, activityBreakdown, activityChatCount } from "./ActivityGlyph";
 

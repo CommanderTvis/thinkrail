@@ -6,7 +6,6 @@ import {
 	RiRefreshLine as RefreshCw,
 } from "@remixicon/react";
 import { isModelHidden, matchesModelPattern, type WireModel } from "@thinkrail/contracts";
-import { useRef, useState } from "react";
 import {
 	Command,
 	CommandEmpty,
@@ -14,9 +13,14 @@ import {
 	CommandInput,
 	CommandItem,
 	CommandList,
-} from "@/components/ui/command";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+	Popover,
+	PopoverContent,
+	PopoverTrigger,
+	Tooltip,
+	TooltipContent,
+	TooltipTrigger,
+} from "@thinkrail/plugin-ui";
+import { useRef, useState } from "react";
 import { cn } from "@/lib";
 import { toast, useAppStore } from "@/store";
 import { getTransport } from "@/transport";

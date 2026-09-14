@@ -603,7 +603,7 @@ of the host.
   which `WsMethodMap` carries as a template-literal index signature alongside the fixed method rows —
   their `params`/`result` are `unknown` on the wire, typed only by the owning plugin's own
   `PluginContract`; `WsChannel` is widened the same way. **`PLUGIN_ROSTER_PROTOCOL_VERSION`** pins the
-  roster + `plugins.*` methods/channel to their v66 introduction.
+  roster + `plugins.*` methods/channel to v67, above upstream’s v66 chat-renaming protocol.
   The `WsMethodMap` typed request/result map +
   `WsParams`/`WsResult` helpers, and `PROTOCOL_VERSION`. Request ids are also the reconnect idempotency key:
   an unresolved client replays the same frame/id, and the host returns the one cached result for

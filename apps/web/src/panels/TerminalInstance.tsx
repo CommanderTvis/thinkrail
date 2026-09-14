@@ -19,8 +19,9 @@ import {
 	useState,
 } from "react";
 import "@xterm/xterm/css/xterm.css";
+import type { TerminalAccessoryApi } from "@thinkrail/plugin-api/web";
+import { Button } from "@thinkrail/plugin-ui";
 import { type QuietScrollEdges, QuietScrollFrame } from "@/components/QuietScrollArea";
-import { Button } from "@/components/ui/button";
 import { carriesFileDrag, cssColorToHex, draggedFile, shellQuotePath } from "@/lib";
 import { tupleKey } from "@/lib/utils";
 import { SettingsSection, selectWorkspaceById, useAppStore } from "../store";
@@ -129,11 +130,10 @@ interface Props {
 	initialCommand?: string;
 }
 
-export interface TerminalInstanceHandle {
-	write(data: string): void;
-	bufferTail(lines: number): string[];
-	setKeyEncoding(mode: "default" | "agent-newline"): void;
-}
+export type TerminalInstanceHandle = Pick<
+	TerminalAccessoryApi,
+	"write" | "bufferTail" | "setKeyEncoding"
+>;
 
 function TerminalInstance(
 	{ tabKey, workspaceId, initialCommand }: Props,
@@ -371,7 +371,7 @@ function TerminalInstance(
 			prebind = attemptPrebind;
 			void getTransport()
 				.request("terminal.attach", { workspaceId, tabKey, ...spawnedAt })
-				.then(({ id, created, replay }) => {
+				.then(({ id, created, replay, prefill, prefillSubmit }) => {
 					if (disposed) return;
 					if (attachGeneration !== startedAt || prebind !== attemptPrebind) {
 						attemptPrebind.stop();
@@ -414,6 +414,16 @@ function TerminalInstance(
 						}
 						if (buffered.exit) handleExit(buffered.exit);
 						applyFit();
+						// Typed, never submitted: the user decides whether to spend a resume — unless the
+						// surface that owns this terminal promised to bring its agent back. See SPEC.md.
+						if (prefill && serverIdRef.current === id) {
+							sendTerminalWrite(
+								getTransport().request("terminal.write", {
+									id,
+									data: prefillSubmit ? `${prefill}\r` : prefill,
+								}),
+							);
+						}
 						if (created && serverIdRef.current === id && initialCommandRef.current) {
 							sendTerminalWrite(
 								getTransport().request("terminal.write", {

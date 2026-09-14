@@ -1,5 +1,5 @@
 import type { GitDiffScope, ReviewAnchor, ReviewComment } from "@thinkrail/contracts";
-import type { ReviewThreadData } from "@/panels/reviewWidgets";
+import type { ReviewThreadData } from "@thinkrail/plugin-ui/editor";
 
 export type ReviewSurface = { kind: "file" } | { kind: "diff"; scope?: GitDiffScope };
 

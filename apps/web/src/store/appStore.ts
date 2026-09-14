@@ -11,6 +11,8 @@ import type {
 	LoginFrame,
 	LoginPush,
 	PiEvent,
+	PluginRosterEntry,
+	PluginSettingsNamespace,
 	Project,
 	RefreshedModels,
 	ReviewChangedPayload,
@@ -24,6 +26,7 @@ import type {
 	SlashCommandInfo,
 	SpecGraphNode,
 	SystemThemePair,
+	TerminalAgentRecord,
 	TerminalTabInfo,
 	TerminalWindowsShell,
 	ThemeId,
@@ -45,6 +48,7 @@ import {
 	isTerminalWindowsShell,
 	normalizeThemePreference,
 } from "@thinkrail/contracts";
+import type { EditorRef } from "@thinkrail/plugin-api/web";
 import { create } from "zustand";
 import type { LoginState } from "../auth";
 import { assistantFailureText } from "../chat/assistantFailure";
@@ -70,7 +74,6 @@ import {
 	tupleKey,
 	userText,
 } from "../lib";
-import type { EditorRef } from "../panels/editorEvents";
 import { emitEditorEvent } from "../panels/editorEvents";
 import type {
 	LayoutAuxiliaryRegion,
@@ -118,6 +121,7 @@ export interface FileTab {
 	view?: "rendered" | "source" | "split";
 	outlineOpen?: boolean;
 	loadedTick?: number;
+	raw?: boolean;
 }
 /** Same payload as a FileTab, but addressed by absolute path — see contracts' LayoutExternalFileTab. */
 export interface ExternalFileTab {
@@ -136,6 +140,7 @@ export interface ExternalFileTab {
 	view?: "rendered" | "source" | "split";
 	outlineOpen?: boolean;
 	loadedTick?: number;
+	raw?: boolean;
 }
 export interface ChatTab {
 	kind: "chat";
@@ -353,6 +358,7 @@ export const SettingsSection = {
 	Review: "review",
 	Privacy: "privacy",
 	Feedback: "feedback",
+	Plugins: "plugins",
 } as const;
 export type SettingsSection = string;
 
@@ -377,6 +383,7 @@ export interface TerminalTab {
 	initialCommand?: string;
 	reservationPending?: true;
 	attachPending?: true;
+	agent?: TerminalAgentRecord;
 }
 
 export interface ClosedChat {
@@ -914,7 +921,10 @@ interface AppState {
 	reviewAutoFix: boolean;
 	hiddenModels: string[];
 	customLayoutPresets: LayoutPreset[];
+	plugins: Record<string, PluginSettingsNamespace>;
+	pluginPaths: string[];
 	toasts: Toast[];
+	pluginRoster: PluginRosterEntry[];
 	setStatus: (status: ConnectionStatus) => void;
 	installWelcomeSnapshot: (
 		protocolVersion: number,
@@ -1147,6 +1157,7 @@ interface AppState {
 	focusEmbeddedPane: (workspaceId: string, hostKey: string, kind: EmbeddedPaneKind) => void;
 	pushToast: (toast: Omit<Toast, "id">) => string;
 	dismissToast: (id: string) => void;
+	applyPluginRoster: (roster: PluginRosterEntry[]) => void;
 }
 
 function sortProjects(projects: Project[]): Project[] {
@@ -1201,6 +1212,8 @@ function configPatch(config: AppConfig) {
 					(id): id is string => typeof id === "string" && id.trim().length > 0,
 				)
 			: DEFAULT_CONFIG.hiddenModels,
+		plugins: config.plugins ?? DEFAULT_CONFIG.plugins,
+		pluginPaths: config.pluginPaths ?? DEFAULT_CONFIG.pluginPaths,
 	};
 }
 
@@ -1911,7 +1924,10 @@ export const useAppStore = create<AppState>((set, get) => ({
 	reviewEffort: DEFAULT_CONFIG.reviewEffort,
 	reviewAutoFix: DEFAULT_CONFIG.reviewAutoFix,
 	hiddenModels: DEFAULT_CONFIG.hiddenModels,
+	plugins: DEFAULT_CONFIG.plugins,
+	pluginPaths: DEFAULT_CONFIG.pluginPaths,
 	toasts: [],
+	pluginRoster: [],
 	setStatus: (status) =>
 		set((state) => ({
 			status,
@@ -2651,6 +2667,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 						workspaceId,
 						title: tab.title,
 						...(existing?.initialCommand ? { initialCommand: existing.initialCommand } : {}),
+						...(tab.agent ? { agent: tab.agent } : {}),
 					};
 				}),
 				...pending,
@@ -3613,6 +3630,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 		set((s) =>
 			s.toasts.some((t) => t.id === id) ? { toasts: s.toasts.filter((t) => t.id !== id) } : {},
 		),
+	applyPluginRoster: (roster) => set({ pluginRoster: roster }),
 }));
 
 export const toast = {

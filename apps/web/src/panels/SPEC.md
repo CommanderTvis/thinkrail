@@ -1256,13 +1256,11 @@ opening at line 1 leaves the reader hunting for the row they just clicked.
 
 - **A key path names a value; the line is computed here.** A `{ workspaceId, path, keyPath }` focus
   request names the value as JSON object keys (`["mcpServers", "git"]`), and `FilePane` turns it into a
-  line with `jsonKeyLine` against `tab.content` — the text the editor is about to show. A line resolved by
+  line with `jsonKeyLine` against `tab.draft ?? tab.content` — including unsaved edits. A line resolved by
   whoever requested the focus would be measured against the file as it stood when they last read it, and
   would be wrong for every row below an edit made since. Resolving here also costs one lookup per click
-  instead of a scan per resolved key, and adds no round trip. **Currently unproduced**: the Claude
-  configuration pane was the one caller (`ClaudeConfigOrigin.keyPath`), and `PluginWebContext`'s
-  `editors.open()` has no `keyPath` option, so nothing calls `requestFileFocus` with one today — the
-  mechanism works the moment something does; see `store/SPEC.md`.
+  instead of a scan per resolved key, and adds no round trip. Plugin source links supply the key path
+  through `editors.open()`; the plugin loader forwards it to `requestFileFocus`.
 - **A markdown file has no editor to land in, so the block lands instead.** Markdown opens rendered, and
   the request carries a source line — a line nothing on screen is numbered by. The preview resolves it
   through the same `data-md-line-*` stamps the review path already puts on every block, scrolls the block
@@ -1364,6 +1362,11 @@ opening at line 1 leaves the reader hunting for the row they just clicked.
   (`reportIdeSelection`); `fileSave` emits `"saved"` once a write actually lands; `openTabs` emits
   `"opened"` as described above. Nothing emits `"closed"`/`"activated"` yet — those are tab-lifecycle
   events the shell's own tab-close/-focus paths will need to raise, not a panel concern.
+
+Monaco selection events retain the exact one-based range, including empty cursor positions and
+an endpoint at column one on the next line. Only the chat-store projection trims that trailing
+line for its displayed line span. IDE consumers convert the raw positions to their own protocol;
+they must not receive chat's trimmed endpoint paired with an untrimmed column and text.
 
 ## Get right
 

@@ -13,6 +13,7 @@ import {
 	type ThinkingLevel,
 	type WireModel,
 } from "@thinkrail/contracts";
+import { Popover, PopoverContent, PopoverTrigger } from "@thinkrail/plugin-ui";
 import {
 	type ClipboardEvent,
 	type DragEvent,
@@ -26,7 +27,6 @@ import {
 	useState,
 } from "react";
 import { FileTypeIcon } from "@/components/FileTypeIcon";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn, draggedFile } from "@/lib";
 import {
 	applyTemplateSlotEdit,

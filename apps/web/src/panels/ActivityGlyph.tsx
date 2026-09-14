@@ -5,7 +5,7 @@ import {
 	RiTimeLine as Timer,
 } from "@remixicon/react";
 import type { ActivityStatus } from "@thinkrail/contracts";
-import { IconTooltip } from "@/components/ui/tooltip";
+import { IconTooltip } from "@thinkrail/plugin-ui";
 import { ACTIVITY_STATUS_ORDER } from "@/store";
 
 const PRESENTATION: Record<

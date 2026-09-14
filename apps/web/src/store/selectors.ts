@@ -2,6 +2,7 @@ import {
 	type ActivityStatus,
 	ANALYTICS_CONSENT_PROTOCOL_VERSION,
 	type GitDiffScope,
+	type PluginRosterEntry,
 	type Project,
 	SESSION_RENAME_PROTOCOL_VERSION,
 	type SpecGraphNode,
@@ -424,6 +425,20 @@ export function selectCompactionTurnIds(
 	);
 }
 
+/**
+ * Whether Claude Code is what runs in this terminal, by the host's process-table watch (`agent`, a tick
+ * behind) — the plugin's own live-reported status is no longer store state a core selector can reach; see
+ * plugin-claude-code/SPEC.md.
+ */
+export function selectTerminalRunsClaude(
+	state: { terminalsByWorkspace: Record<string, TerminalTab[]> },
+	workspaceId: string,
+	tabKey: string,
+): boolean {
+	const terminal = state.terminalsByWorkspace[workspaceId]?.find((tab) => tab.tabKey === tabKey);
+	return terminal?.agent?.kind === "claude";
+}
+
 export function selectWorkspaceTick(
 	state: { fsChangesByWorkspace: Record<string, { tick: number }> },
 	workspaceId: string,
@@ -563,6 +578,12 @@ export function workspaceActivityRollup(
 ): ActivityRollup | null {
 	const entry = activityByWorkspace[workspaceId];
 	return entry ? rollUp([entry.sessions]) : null;
+}
+
+export function selectPluginRoster(state: {
+	pluginRoster: PluginRosterEntry[];
+}): PluginRosterEntry[] {
+	return state.pluginRoster;
 }
 
 export function projectActivityRollup(
