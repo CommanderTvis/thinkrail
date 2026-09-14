@@ -40,7 +40,7 @@ them ahead of this one landing), verified rather than re-added.
 
 ## Manifest-only builtins (no host half)
 
-A builtin plugin whose manifest declares no `host` — `pdf-preview` is the first — is registered with
+A builtin plugin whose manifest declares no `host` — `file-icons` is one — is registered with
 `registry.registerBuiltinManifest(manifest)` instead of `registerBuiltin(module)`: the entry carries a
 manifest and no `module` at all. `activation.ts`'s `activate()` checks `!entry.manifest.host` before
 its builtin-specific "no host module registered" failure, so such an entry goes straight to `"active"`

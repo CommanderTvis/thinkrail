@@ -130,7 +130,7 @@ the host from env via `bootHost` for dev/e2e.
 - `plugins` → `contracts`, `plugin-api` (+`/host`), `log`, `persistence`, and each builtin plugin package's
   own `./host`/`./manifest`/`./build-support` (`@thinkrail/plugin-spec-dialect`, `@thinkrail/plugin-blueprint`,
   and `@thinkrail/plugin-claude-code`), plus a manifest-only builtin's `./manifest`
-  (`@thinkrail/plugin-pdf-preview`) — no other sibling edges. `host` is the
+  (`@thinkrail/plugin-file-icons`) — no other sibling edges. `host` is the
   sole caller of `installPlugins(seams)`: every core capability a plugin can reach (terminal, sessions,
   workspaces, git, config, settings validation, the pi resource loader) arrives as an injected
   `PluginHostSeams` closure, never a direct import — see plugins/SPEC.md, "the boundary"
