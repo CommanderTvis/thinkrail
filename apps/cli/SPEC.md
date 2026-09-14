@@ -28,6 +28,13 @@ and process-boot logic lives in `packages/server`.
    status + the resolved endpoint, retain the parse-stable `thinkrail → <url>` line, and open the browser
    there (cross-platform: `open` / `start` / `xdg-open`, best-effort), unless `--no-open`. Exit-only
    commands and redirected output omit the mark.
+   **The open waits a beat for a tab that is already there.** A restart usually lands back on the same
+   port while the previous browser tab is still open and retrying, and opening a second tab onto the same
+   host leaves two live clients fighting over the same terminals ("This terminal is open somewhere else").
+   So the launch holds up to `BROWSER_HOLD_MS` on `server.waitForClient` and opens only if nobody
+   connected — the URL is printed before the wait, so the hold is invisible unless you are watching for
+   it. A tab whose reconnect backoff has grown past the hold still gets a second tab; the alternative is
+   delaying every cold start by the full backoff ceiling.
 5. SIGINT / SIGTERM await the shared idempotent `server.shutdown()` before exit; they do not duplicate
    agent, analytics, or resource teardown.
 
@@ -189,9 +196,8 @@ and `trash`'s **native helper sidecars** (which macOS/Windows must execute from 
     *server package's* module context (absolute paths — they aren't deps of `cli`), so Bun compiles the
     raw `.ts` and their real deps (`yaml`, `linkedom`, `unpdf`, …) into the binary; plus the
     `pi-spec-graph`/`pi-thinkrail-workflow`/`pi-todos` `skills/` files embedded like web assets (matching what dev
-    wires via `additionalSkillPaths` — parity, not a superset). Its `.d.ts` types the factories via the
-    server's exported `BundledExtensionFactory`, so `cli` still never imports
-    `@earendil-works/pi-coding-agent`.
+    wires via `additionalSkillPaths` — parity, not a superset). Its `.d.ts` types the factories via the server's exported `BundledExtensionFactory`,
+    so `cli` still never imports `@earendil-works/pi-coding-agent`.
   - `src/runtime-assets.generated.ts` — embeds `trash`'s `macos-trash` and `windows-trash.exe` helper
     binaries, resolved from the server package's dependency context, as a content-hashed manifest.
 - `src/compiled-entry.ts` is the binary's entry: on startup it stages the embedded web + skills +
@@ -199,9 +205,13 @@ and `trash`'s **native helper sidecars** (which macOS/Windows must execute from 
   then a sibling `<dir>.complete` marker written **last** — readiness is gated on the marker, so a killed
   first run leaves an incomplete cache that's re-extracted next launch. **No stage-then-rename**: Bun's
   `renameSync` of a fresh non-empty dir `EPERM`s on Windows, so the marker replaces the directory-rename
-  publish), makes the macOS helper executable, sets `THINKRAIL_STATIC_DIR`, then **awaits** the server's
+  publish; the plugin runtime files stage the same way, under their own `plugins/<version>` cache dir),
+  makes the macOS helper executable, sets `THINKRAIL_STATIC_DIR`, then **awaits** the server's
   **`registerBundledRuntime`** seam — which injects the factories + staged skills dir + real trash-helper
-  paths **and** performs pi's binary-only registrations (the
+  paths + a `plugins` map (per builtin plugin id: its factories, and its staged skills/assets dirs, or
+  `null` where it has none — `packages/server/src/plugins/piResources.ts`'s `bundledPluginRuntime(id)` and
+  `packages/server/src/plugins/activation.ts`'s `assetsDir` getter read this map) **and** performs pi's
+  binary-only registrations (the
   statically-bundled OAuth flows + the Bedrock provider module, replacing pi's binary-hostile dynamic
   imports — see the server agent SPEC) — then hands off to `index.ts`. (`bun-pty` self-extracts
   automatically; **no photon wasm** — the agent's read tool is set to send images raw, server-side.
@@ -230,7 +240,9 @@ and `trash`'s **native helper sidecars** (which macOS/Windows must execute from 
   because the host stores git's symlink-resolved root — macOS `/var` → `/private/var`, Windows' 8.3 `TEMP`
   — so a fixture written at an unresolved path lands in an encoded session dir the host never scans, and
   the delete then truthfully no-ops while the file stays put), creates an offline session so every bundled
-  factory is evaluated, verifies both macOS/Windows helpers were staged from the artifact, and SIGTERM
+  factory is evaluated, verifies both macOS/Windows helpers were staged from the artifact, asserts the
+  three builtin plugins' roster entries and staged skills/assets and that claude-code's route answers once
+  enabled (`assertBuiltinPlugins`, [[module-artifact-tests]]'s SPEC.md), and SIGTERM
   exits 0. CI builds + smokes the binary on every PR on **ubuntu and windows** (each its host target), with
   `e2e:binary` on ubuntu; macOS binary coverage stays release-matrix-only. The Windows leg is not optional
   polish: the host reaches that extension only when its Central inspection says *installed and supported*,
