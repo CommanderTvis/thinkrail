@@ -104,6 +104,10 @@ const MODULE_RULES: readonly ModuleRule[] = [
 		allowed: ["packages/plugin-api", "packages/contracts", "packages/plugin-ui"],
 	},
 	{
+		root: "packages/plugin-file-icons",
+		allowed: ["packages/plugin-api", "packages/contracts", "packages/plugin-ui"],
+	},
+	{
 		root: "packages/plugin-discord",
 		allowed: ["packages/plugin-api", "packages/contracts", "packages/shared", "packages/plugin-ui"],
 		internal: PLUGIN_WEB_MUST_NOT_REACH_HOST,
@@ -143,6 +147,8 @@ const MODULE_RULES: readonly ModuleRule[] = [
 				})),
 			),
 			{ target: "packages/plugin-pdf-preview", subpath: "./manifest" },
+			{ target: "packages/plugin-file-icons", subpath: "./manifest" },
+			{ target: "packages/plugin-file-icons", subpath: "./build-support" },
 			"packages/shared",
 			"packages/spec-graph",
 			"packages/pi-delegation",
@@ -174,6 +180,8 @@ const MODULE_RULES: readonly ModuleRule[] = [
 			]),
 			{ target: "packages/plugin-pdf-preview", subpath: "./manifest" },
 			{ target: "packages/plugin-pdf-preview", subpath: "./web" },
+			{ target: "packages/plugin-file-icons", subpath: "./manifest" },
+			{ target: "packages/plugin-file-icons", subpath: "./web" },
 		],
 	},
 	{
