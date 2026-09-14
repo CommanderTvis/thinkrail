@@ -10,9 +10,25 @@ tags: [v1, ui, resilience]
 ## Responsibility
 
 The app's dependency-light shared React primitives: the error boundary that keeps one failed region from
-unmounting the root, project-custom icons, the quiet-scroll frame used by shell and feature panels, and
-the shared loading-skeleton primitive. Also houses the `ui/` sub-module (shadcn primitives), which has
-its own spec.
+unmounting the root, project-custom icons, `FileTypeIcon` (what a file wears), the quiet-scroll frame
+used by shell and feature panels, and the shared loading-skeleton primitive. Also houses the `ui/`
+sub-module (shadcn primitives), which has its own spec.
+
+## File-type icons
+
+`FileTypeIcon` is now a thin core primitive: it consults the plugin registry's `fileIcon` slot
+(`selectSlot("fileIcon")`, `(path, kind) => ComponentType | null`, first non-null wins) and, if no
+plugin claims the path, falls back to a plain Remix glyph (`RiFileLine`/`RiFolderLine`). The
+material-icon-theme glyph set, the filename/extension lookup, and the generator that recolours the SVGs
+all moved to the builtin `packages/plugin-file-icons` plugin — see its own `SPEC.md`. Disabling that
+plugin degrades every file row to the Remix fallback rather than losing the icon entirely.
+
+- **`ClaudeMark` is gone.** The `claude` glyph a `CLAUDE.md` wears is now resolved by
+  `plugins/registry/icons.ts`'s `pluginIcon("claude")` through the same `fileIcon` slot (path
+  `"CLAUDE.md"`), falling back to `RiRobot2Line` when the file-icons plugin is off.
+- **`data-testid="file-type-icon"` and `data-icon` are preserved** on both the plugin-drawn glyph and
+  the Remix fallback, so `e2e/file-icons.spec.ts` and `e2e/plugins/file-icons/` assert against the same
+  hooks regardless of which one rendered.
 
 ## Boundary
 
@@ -49,13 +65,16 @@ its own spec.
   `role="status"` region rather than opening a second one, and an optional `testId`). The full loading
   vocabulary and its rules are below.
 - **Public surface:** `ErrorBoundary`, `isChunkLoadError`, `SkeletonRows`, `LoadingRegion` — imported
-  directly via `@/components/ErrorBoundary` / `@/components/Skeleton` (no barrel); `CustomIcon`,
-  `CustomIconName` via `@/components/CustomIcon`; `QuietScrollArea`, `QuietScrollFrame`, and the
-  `QuietScrollEdges` type via `@/components/QuietScrollArea`. The `ui/` primitives are their own sub-module
+  directly via `@/components/ErrorBoundary` / `@/components/Skeleton` (no barrel); `FileTypeIcon` via
+  `@/components/FileTypeIcon`; `CustomIcon`, `CustomIconName` via
+  `@/components/CustomIcon`; `QuietScrollArea`, `QuietScrollFrame`, and the `QuietScrollEdges` type via
+  `@/components/QuietScrollArea`. The `ui/` primitives are their own sub-module
   ([components/ui/SPEC.md](ui/SPEC.md)).
 - **Allowed deps:** React, `@remixicon/react`, `lib` (`shallowEqualArrays` — the reset-keys comparison, shared
-  rather than re-stated). Kept dependency-light on purpose, and `lib` is a leaf, so *any* region (shell,
-  panels, `main.tsx`) can still wrap in it without creating a cycle.
+  rather than re-stated), and `plugins/registry` (`FileTypeIcon`'s `fileIcon` slot lookup only — the registry
+  is itself a store-free leaf, so this stays a leaf-to-leaf edge, not a route into `store`). Kept
+  dependency-light on purpose, and `lib` is a leaf, so *any* region (shell, panels, `main.tsx`) can still
+  wrap in it without creating a cycle.
 - **Forbidden:** `store`/`transport`/`panels`/`shell`/`chat`/`contracts`; `server`/`shared`/`pi`; inline
   `style` objects or raw hex (fallback is themed with token utilities only).
 

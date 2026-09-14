@@ -409,6 +409,7 @@ export default function syntheticExternalExtension(pi) {
 			);
 		}
 		assert(existsSync(join(customHost.resources.skillsDir, "SPEC.md")), "workflow SPEC is missing");
+
 		socket.close();
 		socket = undefined;
 		await customHost.stop();

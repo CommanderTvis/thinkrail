@@ -39,6 +39,15 @@ with their owning modules.
 Shared probes boot the real artifact, load a synthetic external PI extension with no pi executable,
 exercise the bundled factories/skills, reach an OAuth URL without a provider turn, verify health/UI and
 transcript trash, and shut down. CLI-specific probes also check its exit-only and embedded-cache behavior.
+`assertBuiltinPlugins` (`artifactProbes.ts`) is the pinning-class regression this class of bug hides in
+(a builtin plugin degrading to no pi resources, or its assets never reaching a compiled artifact, both
+fail silently otherwise): it asserts `plugins.list`'s roster names all three builtin plugins with
+spec-dialect/blueprint active by default, that spec-dialect's `pi-spec-graph` skill and claude-code's
+hook-plugin assets landed under each adapter's staged plugin resources (`ArtifactResources.pluginSkillsDir`
+/ `pluginAssetsDir`, which the CLI adapter resolves from the staged `plugins/<version>` cache dir and the
+desktop adapter from `runtimeDir/plugins/<id>/...`), and — after enabling it, since it defaults off — that
+claude-code's own route handler answers a request under `/plugin/claude-code/status/<token>` rather than
+the plugin loader's generic 404.
 Native desktop smoke loads the real UI and verifies route/preload messaging plus the production external
 navigation handler. Desktop-backed Playwright uses the launcher's opt-in neutral-window seam so it is the
 only hydrated client. The live-window ready/control seam remains in the launcher, never a runtime import

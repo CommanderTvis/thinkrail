@@ -9,7 +9,9 @@ import {
 	isPromptCommitted,
 	isSettledTurn,
 	maybeAutoRenameWorkspace,
+	maybeAutoRenameWorkspaceFromTurn,
 	maybeNaiveNameWorkspace,
+	maybeNaiveNameWorkspaceFromPrompt,
 } from "./autoRename";
 
 async function worktrees(projectId = "p1") {
@@ -246,6 +248,31 @@ test("the agentic pass refines a provisional naive name and locks it", async () 
 
 	expect(await maybeNaiveNameWorkspace("s1", ws.id, firstTurn)).toBeNull();
 	expect((await worktrees())[0]?.name).toBe("Add Login Flow");
+});
+
+test("a Claude terminal names the workspace from its reported prompt, then refines on its stop", async () => {
+	const ws = await createWorkspace("p1");
+	const runner = fakeRunner("Add Login Flow");
+
+	const provisional = await maybeNaiveNameWorkspaceFromPrompt(
+		ws.id,
+		"add a login form to the settings page",
+	);
+	expect(provisional?.name).toBe("Add A Login Form To");
+	expect(provisional?.renamed).toBeUndefined();
+
+	const refined = await maybeAutoRenameWorkspaceFromTurn(ws.id, {
+		prompt: "add a login form to the settings page",
+		answer: "Done — added the form.",
+	});
+	expect(refined?.name).toBe("Add Login Flow");
+	expect(refined?.renamed).toBe(true);
+	expect(runner.prompts[0]).toContain("add a login form");
+
+	expect(
+		await maybeAutoRenameWorkspaceFromTurn(ws.id, { prompt: "now remove it", answer: "" }),
+	).toBeNull();
+	expect(runner.calls()).toBe(1);
 });
 
 test("naive-rename resolves null when the first prompt is blank or unusable", async () => {
