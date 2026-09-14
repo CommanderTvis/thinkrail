@@ -6,6 +6,7 @@ import { buildSupport as branchGraphBuildSupport } from "@thinkrail/plugin-branc
 import { buildSupport as claudeCodeBuildSupport } from "@thinkrail/plugin-claude-code/build-support";
 import { buildSupport as discordBuildSupport } from "@thinkrail/plugin-discord/build-support";
 import { buildSupport as specDialectBuildSupport } from "@thinkrail/plugin-spec-dialect/build-support";
+import { buildSupport as visualizeBuildSupport } from "@thinkrail/plugin-visualize/build-support";
 
 export type DesktopRuntimeTarget =
 	| "darwin-arm64"
@@ -44,6 +45,7 @@ const BUILTIN_PLUGIN_BUILD_SUPPORT = [
 	blueprintBuildSupport,
 	claudeCodeBuildSupport,
 	discordBuildSupport,
+	visualizeBuildSupport,
 	branchGraphBuildSupport,
 ];
 
