@@ -1,6 +1,6 @@
 import { RiLinksLine as LinkIcon } from "@remixicon/react";
+import { ToolFileLink } from "@/chat/tools/ToolFileLink";
 import type { ToolRenderProps } from "../../toolRegistry";
-import { ToolFileLink } from "../ToolFileLink";
 import { resultText, strArg } from "../toolHelpers";
 import { WebResultBody } from "./WebResultBody";
 

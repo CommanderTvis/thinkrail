@@ -1,8 +1,8 @@
 import { RiFileTextLine as FileText } from "@remixicon/react";
+import { CodeBlock } from "@/chat/tools/CodeBlock";
+import { ToolFileLink } from "@/chat/tools/ToolFileLink";
 import type { ToolRenderProps } from "../toolRegistry";
-import { CodeBlock } from "./CodeBlock";
 import { Collapsible, countLines } from "./Collapsible";
-import { ToolFileLink } from "./ToolFileLink";
 import { languageFromPath, numArg, resultText, strArg } from "./toolHelpers";
 
 export function ReadCard({

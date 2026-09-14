@@ -222,6 +222,39 @@ A sandboxed home is handed to every host as **both `HOME` and `USERPROFILE`**: `
 resolution — reads `USERPROFILE` on Windows and ignores `HOME`, so `HOME` alone would silently leak a
 Windows lane into the real profile (see `module-shared`).
 
+## Plugin coverage
+
+`e2e/plugins/<id>/` holds the specs for each plugin, builtin or external — the moved specs for
+`spec-dialect`, `blueprint`, and `claude-code`, plus a hot-toggle spec per builtin covering the
+one behavior every plugin shares: disabling swaps its side-tool tab for the dormant placeholder, and
+re-enabling restores it, without disturbing the tab's place in the layout.
+
+`e2e/plugins/fixture/` exercises the external path almost every plugin in scope takes:
+`e2e/fixtures/plugin-fixture/` is a checked-in external plugin, id `e2e-fixture` — a `thinkrail-plugin.json`
+declaring one side tool, one settings section (a settings schema with one string field), and a contract
+with one method (`echo`) and one event channel; `host.js` and `web.js` are plain, dependency-free ES
+modules rather than built artifacts, because a host module imported from a directory outside the repo
+cannot resolve bare specifiers (`packages/server/src/plugins/SPEC.md`) — `host.js` hand-writes the
+contract's method/settings schemas as the plain JSON-schema-shaped objects this `typebox` build's
+`Value.Check` accepts at runtime (this version carries no `Kind` symbol; `Type.Object(...)` already *is*
+a plain `{ type: "object", ... }` value), and `web.js` reads React and the kit off
+`window.__thinkrailPluginRuntime` (`apps/web/src/plugins/loader/runtimeRegistry.ts`) instead of bundling
+its own, exactly as a real external web half must. `E2E_PLUGIN_DIR` (`e2e/fixtures/paths.ts`,
+`<dataDir>/plugins` sibling under the lane's data dir) is seeded once per lane by
+`e2e/fixtures/pluginFixture.ts`, next to `seedFixtureRepo`, as `E2E_PLUGIN_DIR/e2e-fixture/` — the
+directory name an external plugin's id must match. It ships outside the isolated `HOME` a normal boot
+never scans (`AppConfig.pluginPaths` is empty by default), so `external-plugin.spec.ts` points a running
+host at it with a `settings.update` over `requestOverWire` before rescanning, and hands `pluginPaths`
+back to `[]` afterward. A generation-mismatch and a since-removed-directory case each write their own
+throwaway manifest directly under `E2E_PLUGIN_DIR` rather than mutating the checked-in fixture, and a
+manifest that never validates is asserted under its own `__refused:<directory>` roster id — an untrusted
+manifest's own `id` field is not trusted as a row key either (`registry.ts`).
+
+`setPluginEnabled` (`e2e/fixtures/app.ts`) drives the Settings › Plugins switch itself rather than a
+throwaway `settings.update`, so a test also waits out the real dynamically-imported web module; the wait
+for the plugin's own settings-nav entry is best-effort, since a plugin need not contribute a settings
+section at all (`spec-dialect` does not).
+
 ## Boundary
 
 - **Owns:** browser scenarios and fixtures under `e2e/`, their Playwright configuration/runner entrypoints,
@@ -236,6 +269,15 @@ Windows lane into the real profile (see `module-shared`).
 - **Forbidden:** fake application backends, provider fakes in production boot paths, browser imports into
   product modules, default/no-agent tests depending on developer state, agent tests reading anything beyond
   the explicitly authorized Central artifact, or parallel workers sharing one mutable host.
+
+## Git identity in the isolated HOME
+
+The suite's `HOME` is a throwaway directory, so git finds **no** global config there — which is
+deliberate (the developer's signing key must never be reachable from a test) but leaves a repository the
+host creates itself with no identity to commit as. `globalSetup` therefore writes a `.gitconfig` into
+that HOME with a test identity and `commit.gpgsign = false`. Without it `project.init`'s root commit
+silently degrades to its no-identity fallback and every assertion downstream of "a new project is
+immediately usable" fails for a reason that has nothing to do with the code under test.
 
 ## Verification policy
 
@@ -264,3 +306,19 @@ no `pi` executable on `PATH` for default and custom `PI_CODING_AGENT_DIR`; deskt
 staged `.ts` PI runtime and physical resources. Real Central acceptance remains explicitly authorized and
 isolated: the dedicated `@agent` suite stages the opaque artifact, validates the exact model, and proves a
 real turn rather than accepting another provider or a fake agent.
+
+`blueprint.spec.ts` drives the whole loop — brief → streamed document → change a decision → reactor →
+accept — on the **`pi` host only**, tagged `@agent`. The document is asserted through `data-phase` on the
+blueprint root and `data-value` on each decision's control, never through the generated prose, which is a
+model's free text.
+
+**The Claude host is deliberately not driven here, and that is a harness boundary rather than a gap in
+the feature.** This suite's host runs on a sanitized PATH (`E2E_FAKE_BIN_DIR` + `/usr/bin` + `/bin` +
+`/usr/sbin` + `/sbin`) with a throwaway `HOME`, so `claude` is unreachable by construction and would have
+no credentials if it were. Faking one would test the fake. What the suite *can* assert without an agent —
+and does, untagged — is that the host still **offers** the Claude pill and reports the reason it is
+unavailable, which is the wiring that would rot silently. The Claude runner's own risk surface, decoding
+document text out of `stream-json` frames while ignoring thinking deltas and the CLI's other traffic, is
+pinned by `blueprint/runners.test.ts`; the end-to-end proof that the format survives that host is a manual
+run of the real app.
+

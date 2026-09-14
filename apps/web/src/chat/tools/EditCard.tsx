@@ -1,7 +1,7 @@
 import { RiPencilLine as Pencil } from "@remixicon/react";
+import { ToolFileLink } from "@/chat/tools/ToolFileLink";
 import type { ToolRenderProps } from "../toolRegistry";
 import { Collapsible } from "./Collapsible";
-import { ToolFileLink } from "./ToolFileLink";
 import { resultText, strArg } from "./toolHelpers";
 
 export function EditCard({
