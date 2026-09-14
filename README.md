@@ -1,221 +1,150 @@
-# ThinkRail
+# ThinkRail — CommanderTvis fork
 
-[![JetBrains incubator project](https://jb.gg/badges/incubator-plastic.svg)](https://confluence.jetbrains.com/display/ALL/JetBrains+on+GitHub)
+A fork of [JetBrains/thinkrail](https://github.com/JetBrains/thinkrail). Upstream is a desktop-and-mobile
+client for the [`pi`](https://www.npmjs.com/package/@earendil-works/pi-coding-agent) coding agent. This
+fork turns it into a workbench for more than one agent: Claude Code runs in its terminals as a first-class
+agent, with its own configuration pane, IDE bridge, hooks, launcher and the workspace's spec tools reachable
+over MCP.
 
-A ThinkRail-branded desktop-and-mobile client for the [`pi`](https://www.npmjs.com/package/@earendil-works/pi-coding-agent)
-coding agent. ThinkRail is a thin host that runs `pi` in-process and bridges it to a rich, mobile-first
-UI — `pi` owns models, skills, compaction, cost, and session state; the app owns the workspace, the
-editor, and the wire.
+An early-work Codex plugin adds another terminal agent integration, and a plugin API lets
+further integrations live outside core. The fork also carries a stream of fixes and features that are
+sent upstream one commit at a time.
 
-**Website:** [thinkrail.ai](https://thinkrail.ai/) — a landing page that *is* the IDE, its blog,
-and the [vibecoder-focused experience](https://thinkrail.ai/vibecoding/) (see
-[`apps/website`](apps/website)).
+![ThinkRail workbench with Claude Code running in the terminal](assets/screenshots/workbench-claude-code.png)
 
-**V1 is a Worktree IDE:** open a git repo as a project, spin up workspaces as `git worktree`s (each its
-own branch and cwd), and work across a tabbed Monaco editor, git Changes view, terminals, a read-only
-spec-graph viewer, and multiple concurrent `pi` chat sessions — all scoped to the active worktree.
+The workbench combines project and worktree navigation on the left, an embedded Claude Code terminal session in the center, and the workspace file tree alongside the Claude Code side panel on the right.
+
+## What the fork has that upstream does not
+
+**A plugin API.** `packages/plugin-api` is the contract: a manifest, typed methods, channels and settings, a
+pi-free tool definition for the agent and MCP surfaces, and host and web contexts. The server loads builtin
+and external plugins, validates their wire traffic, serves their assets and feeds their pi resources into
+every session; the web client loads a plugin's UI half, at build time for builtins or over the wire for an
+external one. `packages/plugin-ui` is the shared UI kit plugins draw with. External plugins live under
+`~/.thinkrail/plugins/<id>/` or at the paths `AppConfig.pluginPaths` lists. See [`packages/plugin-api/SPEC.md`](packages/plugin-api/SPEC.md) and
+[`packages/server/src/plugins/SPEC.md`](packages/server/src/plugins/SPEC.md).
+
+![Plugins settings dialog](assets/screenshots/plugin-settings.png)
+
+The plugin settings panel lists registered plugins, their origin (builtin or external), and their declared contributions: side tools, file viewers, and system prompt modifiers. Plugins can be toggled on or off individually.
+
+**Nine builtin plugins**, each one commit, each extractable to its own repository. Claude Code and Codex
+integrate terminal agents; the others add specification tools, viewers or presence:
+
+| Plugin | What it adds |
+| --- | --- |
+| [`plugin-spec-dialect`](packages/plugin-spec-dialect) | the spec-graph read, the Specs side tool and the `spec_*` tool renderers |
+| [`plugin-blueprint`](packages/plugin-blueprint) | the Blueprint interactive-spec format, its author and reactor |
+| [`plugin-claude-code`](packages/plugin-claude-code) | Claude Code as the terminal agent: config pane, IDE bridge, hook status, launcher, terminal facts and picker driving, the shipped Claude marketplace |
+| [`plugin-codex`](packages/plugin-codex) | Early work: OpenAI Codex as a terminal agent, with a config pane, launcher, hook status and ThinkRail MCP tools |
+| [`plugin-discord`](packages/plugin-discord) | Discord Rich Presence over local IPC |
+| [`plugin-pdf-preview`](packages/plugin-pdf-preview) | a PDF file viewer |
+| [`plugin-branch-graph`](packages/plugin-branch-graph) | the project's Git Graph side tool |
+| [`plugin-visualize`](packages/plugin-visualize) | the terminal agent's live drawing surface, surfaced as an MCP tool |
+| [`plugin-file-icons`](packages/plugin-file-icons) | material-icon-theme file-type glyphs |
+
+### Claude Code
+
+The Claude Code plugin bridges terminal agent sessions to ThinkRail's workspace and UI. An IDE bridge feeds terminal events and facts into the app, drives terminal pickers from native UI controls, and manages context and capabilities:
+
+![Claude Code model picker in the terminal status bar](assets/screenshots/claude-code-model-picker.png)
+
+Terminal facts and picker driving: selecting a model or effort level from the terminal bar drives Claude Code's interactive `/model` picker behind the scenes. The adjacent Attach File button inserts workspace-relative `@file` paths directly into the prompt.
+
+![Claude Code persistent context tab](assets/screenshots/claude-code-context.png)
+
+The Context tab displays active instructions across global `~/.claude/CLAUDE.md`, project `CLAUDE.md`, and referenced `AGENTS.md` files with live size accounting, making context weight immediately visible.
+
+![Claude Code capabilities tab and MCP bridge](assets/screenshots/claude-code-capabilities.png)
+
+The Capabilities tab lists what Claude Code can reach: installed plugins, skills, hooks, and ThinkRail's loopback MCP server (`plugin:thinkrail:thinkrail`). The local MCP bridge exposes the workspace's spec tools directly to Claude Code.
+
+![Claude Code capability scope actions](assets/screenshots/claude-code-scope-actions.png)
+
+Scope management for plugins, skills, and MCP servers: switch, move, or promote any capability between User (global), Project (checked in for all collaborators), and Local (private to this repo) directly from the action menu.
+
+### Codex (early work)
+
+The builtin Codex plugin is an early integration of the Codex CLI into the workbench. It launches Codex
+in a terminal, offers session resume and fork actions, reports hook-driven status, and connects launched
+sessions to ThinkRail's MCP tools. Its side pane shows instruction files, layered settings, hooks and MCP
+servers, plus account and usage information.
+
+The integration is still developing. Configuration discovery currently covers the user, system and
+worktree-root files; profiles and nested project configuration are not modelled. See
+[`packages/plugin-codex/SPEC.md`](packages/plugin-codex/SPEC.md) for the current scope and limitations.
+
+### Blueprint interactive specifications
+
+The Blueprint plugin pairs agent authoring with an interactive spec viewer, for both terminal agents and regular `pi` chats:
+
+![Blueprint interactive spec editor with Claude Code authoring BLUEPRINT.md](assets/screenshots/blueprint-interactive-spec.png)
+
+Claude Code or a `pi` chat writes and edits `BLUEPRINT.md`, verifying changes using ThinkRail's `blueprint_check` MCP tool. Side-by-side, the Blueprint viewer renders interactive decision cards, option selectors, and rationale blocks live.
+
+### Improvements that apply to upstream directly
+
+Kept as atomic commits so each can become a pull request: open a plain folder as a project without git,
+clone a repository URL into a project, search the whole workspace from one popup, drag and trash files in
+the tree, send an editor selection into a pi chat, the spec tools reachable by any terminal agent over MCP,
+an outline column that drives preview and source, frontmatter as an Obsidian-style properties block, a
+code font of your choice with ligatures, Cmd+F in every preview, a terminal that thaws after a lost drain
+event, a pty that no longer inherits a stale utmpx user, and TypeScript 7.
 
 ## Install
 
-ThinkRail ships in two additive forms: a native desktop installer and the self-contained `thinkrail`
-CLI, which opens the same app in your browser. Both embed the same in-process agent host and are
-published with `SHA256SUMS` on the [releases page](https://github.com/JetBrains/thinkrail/releases).
-
-JetBrains signs the Windows CLI and desktop setup executable. The macOS CLI is signed but not yet
-notarized. Signed/notarized desktop DMGs require the coordinated JetBrains service pipeline; older
-published DMGs and local Electrobun packages may still be unsigned and blocked by Gatekeeper. Linux
-artifacts are unsigned. Local installer smoke is not notarization verification.
-
-### Desktop
-
-Download the matching `thinkrail-desktop-*` asset: a DMG for macOS Apple Silicon, a setup ZIP for Windows
-x64, or a setup tarball for Linux x64/ARM64. Extract the complete Windows ZIP before running its setup
-executable, keeping its adjacent payload; extract the Linux tarball and run `installer`. Electrobun 2.0.1
-does not provide a macOS Intel desktop build. The coordinated macOS release pipeline uses Electrobun's
-expanded app archive for JetBrains signing and SRE DMG finalization; that intermediate archive is not a
-public download. The signing limitation above remains until that private pipeline update is deployed.
-
-Linux desktop builds require Ubuntu 24.04 or another glibc 2.38+ distribution with GTK 3, WebKitGTK 4.1,
-Ayatana AppIndicator 3, and librsvg 2. On Ubuntu 24.04:
+Nightly builds of the fork ship through the
+[`CommanderTvis/homebrew-thinkrail`](https://github.com/CommanderTvis/homebrew-thinkrail) tap:
 
 ```bash
-sudo apt install libgtk-3-0 libwebkit2gtk-4.1-0 libayatana-appindicator3-1 librsvg2-2
+brew trust --tap commandertvis/thinkrail   # Homebrew 7+ refuses untrusted taps
+brew tap commandertvis/thinkrail
+brew install --cask thinkrail-desktop   # the Electrobun desktop app (ThinkRail-canary.app)
+brew install thinkrail                  # or: the CLI host, `thinkrail` opens the browser client
 ```
 
-### CLI / browser
+The builds are unsigned and not notarized; the cask strips the quarantine flag after install so Gatekeeper
+does not report the app as damaged. To run from source instead, see below.
 
-The CLI installer downloads the right binary, verifies its SHA-256 checksum, and puts `thinkrail` on
-your PATH.
+## Clone and run
 
-**macOS / Linux** (also Windows under Git Bash):
+The fork is developed and tested on macOS only. Other platforms build, but nothing here has been run on
+them.
+
+Prerequisites: Bun 1.4, Node.js 22.19 or newer, `git` on PATH, and an authenticated `pi` provider. App
+state lives under `~/.thinkrail`.
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.sh | bash
-```
-
-**Windows** — the same command works from cmd and PowerShell:
-
-```powershell
-powershell -c "irm https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.ps1 | iex"
-```
-
-Nightly builds and pinned versions:
-
-```bash
-# macOS / Linux
-curl -fsSL https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.sh | bash -s -- --channel nightly
-curl -fsSL https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.sh | bash -s -- --version 0.2.0
-```
-
-```powershell
-# Windows — options are env vars (THINKRAIL_CHANNEL, THINKRAIL_VERSION, THINKRAIL_PREFIX, THINKRAIL_NO_MODIFY_PATH)
-$env:THINKRAIL_CHANNEL='nightly'; irm https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.ps1 | iex   # PowerShell
-set "THINKRAIL_VERSION=0.2.0" && powershell -c "irm https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.ps1 | iex"   # cmd
-```
-
-Then run `thinkrail` (add a git repo path to open it as a project: `thinkrail ~/code/my-repo`). To update
-later, run `thinkrail update` on any platform — it re-runs the installer for your channel (on Windows it
-replaces the running `thinkrail.exe` in place). To remove it, run `thinkrail uninstall`: it takes out the
-executable, the PATH entry the installer added, and the install metadata, and asks whether to delete your
-`~/.thinkrail` app state (kept by default — pass `--remove-data` to delete it, `-y` to skip the
-questions). `thinkrail --help` lists the flags; `thinkrail --version` prints the build.
-
-**Prebuilt platforms:** macOS (Apple Silicon), Linux arm64 + x64, Windows x64 (`.exe`). Intel macOS isn't
-prebuilt — use Apple Silicon or build from source.
-
-> Prefer a manual CLI install? Download a binary + `SHA256SUMS` from the releases page, verify the
-> checksum, `chmod +x`, and move it onto your PATH.
-
-**Runtime prerequisites:** `git` on PATH, and an authenticated `pi` provider (the agent runs against your
-real provider credentials). App state lives under `~/.thinkrail`.
-
-## Quick start
-
-### Prerequisites (developing ThinkRail)
-
-- **Bun** 1.4.0 (the repository's pinned package manager and runtime)
-- **Node.js** ≥ 22.19 (required by the in-process `pi` engine)
-- An authenticated `pi` provider (the agent runs against your real provider credentials)
-
-### For developers
-
-```bash
-git clone <repo-url>
+git clone git@github.com:CommanderTvis/thinkrail.git
 cd thinkrail
 bun install
-bun run dev
+bun run desktop:dev
 ```
 
-`bun run dev` boots the host and the web client together. Press `Ctrl+C` to stop.
-
-To run the V1 launchers:
+`bun run desktop:dev` packages the Electrobun desktop app with the host inside it and opens it. This is the
+normal way to use the fork. Alternative:
 
 ```bash
-bun run --filter @thinkrail/cli dev  # browser launcher
-bun run build:binary                 # standalone CLI artifact
-bun run desktop:dev                  # package and open the Electrobun app
-bun run desktop:build                # package without opening it
+bun run dev # host + web client in the browser, with hot reload
 ```
 
-Desktop commands use the standard Electrobun CLI/configuration. Its pre-build hook builds the shared UI
-and stages ThinkRail's PI/native resources; Electrobun owns preload bundling and installer creation.
-Create host-native installers with `bun run desktop:package:stable` or `bun run desktop:package:canary`.
-Native/installer smoke and shared CLI/desktop probes live in `packages/artifact-tests`, outside the
-application packages. Run `bun run smoke:desktop` after a dev build; installer smoke takes an artifact
-path and channel via `bun run smoke:desktop:installer <path> <stable|canary>`.
+## Updating
 
-On-disk app state (projects, workspaces, worktrees) lives under `~/.thinkrail`.
+A Homebrew install updates with `brew upgrade thinkrail` / `brew upgrade --cask thinkrail-desktop`.
 
-## Architecture (three rings)
-
-- **Engine host** — `packages/server` (+ `packages/shared`), launched by `apps/cli` or
-  `apps/desktop`. `createServer()` is a `Bun.serve` HTTP+WS host with an `AgentSessionManager` (one
-  in-process `pi` `AgentSession` per tab).
-- **The wire** — `packages/contracts`: the typed, versioned protocol (types-only).
-- **UI client** — `apps/web`: mobile-first React 19 + Zustand + Tailwind v4, ships independently and
-  dials a host over the wire.
-
-The engine is **`pi` only, run in-process** via `@earendil-works/pi-coding-agent`. `apps/web` depends on
-`packages/contracts` only — never on the server — which is what makes the UI shippable on its own.
-
-See [`goal-and-requirements.md`](goal-and-requirements.md) and [`architecture.md`](architecture.md) for
-the canonical product and design specs.
-
-## Repo layout
-
-```
-apps/
-  cli/        V1 entrypoint: boot host + open browser
-  web/        mobile-first UI client
-  desktop/    Electrobun local-host launcher + native packaging
-  website/    public landing + blog + vibecoding site (Cloudflare Pages)
-packages/
-  artifact-tests/ source-only CLI/desktop artifact and installer tests
-  server/     createServer(): Bun.serve + AgentSessionManager
-  contracts/  the wire (types-only)
-  shared/     server-side helpers (shellEnv, freePort)
-  spec-graph/ portable pi extension: spec_* tools + skill
-```
-
-## Development
-
-Fast gates (also the husky pre-commit hook):
+A checkout: the branch is force-pushed very often. A plain `git pull` will not fast-forward. Update by
+taking the remote branch as it is:
 
 ```bash
-bun run lint        # biome
-bun run typecheck   # tsc across all packages
-bun run test        # unit tests (root tooling + each package)
+git fetch origin
+git reset --hard origin/claude-code-integration-plugin-api
+bun install
+bun run desktop:dev
 ```
-
-End-to-end tests drive the real web UI against isolated hosts. The no-agent gate builds once and
-uses a machine-adaptive number of independent shards (half the available CPUs, capped at eight):
-
-```bash
-bunx playwright install chromium                    # one-time
-bun run e2e                                         # complete no-agent gate
-bun run e2e -- e2e/changes.spec.ts                  # focused iteration
-bun run e2e -- --last-failed                        # repair loop
-bun run e2e:serial                                  # one-host debugging fallback
-bun run e2e -- --shards=12                          # explicit 1–16 override
-bun run e2e:binary                                  # packaged CLI host (build first)
-bun run e2e:desktop                                 # packaged desktop host (build first)
-bun run e2e:full                                    # everything; needs pi auth
-bun run e2e:agent                                   # only @agent; remains serial
-```
-
-On macOS, every public browser E2E command prevents idle system sleep while its runner is alive; the
-display may still sleep normally.
-
-## Specification-driven development
-
-ThinkRail is developed spec-first: hierarchical, interconnected specs live in the repo alongside the
-code — top-level specs at the root (`goal-and-requirements.md`, `architecture.md`) and a co-located
-`SPEC.md` for every module. When you change a boundary, contract, or decision, update the corresponding
-spec in the same change. See [`AGENTS.md`](AGENTS.md) for the spec workflow.
 
 ## Analytics & Privacy
 
-ThinkRail sends basic usage events to [PostHog EU](https://posthog.com): launches, chat creation,
-accepted message sends, and provider connections. These are always on in desktop, CLI, and source runs;
-CI and automated tests are silent. Events include a random installation ID, version/channel, build kind,
-OS/architecture, send mode, catalog-bucketed provider/model names, and the observed authentication
-category (API key, subscription sign-in, OAuth, Central, or other/unknown)—never credential values or
-account/plan details. First observed launch measures first use, not a completed OS installation.
-
-Additional setup, run-outcome, task, review, and PR statistics require explicit consent in the first-launch
-window. Its switch starts from your saved analytics preference; confirming records your choice. Change it
-later in **Settings → Privacy**. `--no-analytics` or `THINKRAIL_NO_ANALYTICS=1` suppresses additional events
-for that run only; basic reporting remains on.
-
-Neither tier collects prompts, code, transcripts, file/repository names or paths, credentials, or token/cost
-counts. The installation ID links usage over time, but no person profiles are created and GeoIP enrichment
-is disabled. The [analytics spec](packages/server/src/analytics/SPEC.md) defines the event boundaries.
-
-## Contributing
-
-Contributions are welcome — see [`CONTRIBUTING.md`](CONTRIBUTING.md). This project and community are
-governed by the [Code of Conduct](CODE_OF_CONDUCT.md).
-
-## License
-
-Licensed under the [Apache License 2.0](LICENSE).
+Unchanged from upstream: basic usage events (launches, chat creation, accepted message sends, provider
+connections) are always on; additional setup, run-outcome, task, review, and PR statistics require explicit
+consent in the first-launch window and change later in **Settings → Privacy**. `thinkrail --no-analytics` or
+`THINKRAIL_NO_ANALYTICS=1` suppresses additional events for that run only. Upstream's README describes details.

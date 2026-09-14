@@ -5,6 +5,7 @@ export { decorateEditorContextMenus } from "./monacoMenuIcons";
 export {
 	defineThinkrailTheme,
 	EDITOR_THEME,
+	editorGpuUsable,
 	gpuAcceleration,
 	languageForPath,
 	sharedEditorOptions,

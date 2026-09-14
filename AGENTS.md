@@ -7,6 +7,60 @@ Canonical specs (read these first):
 - `goal-and-requirements.md` — product goal + V1/V2 scope
 - `architecture.md` — top-level architecture, decisions, invariants
 
+## Fork workflow
+
+This is CommanderTvis's fork of JetBrains/thinkrail (`upstream`). Upstream is a client for `pi`; the fork
+makes ThinkRail a workbench for more than one agent (Claude Code in the terminal, through the plugin API)
+while keeping every commit that upstream could take separate from the ones it could not. Its default branch,
+`claude-code-integration-plugin-api`, is a rebased chain on `upstream/main` in three parts, in this order:
+
+1. **General improvements** — one commit per change that applies to upstream directly, each the unit of
+   a future upstream PR. Original subject, body and `Fixes JetBrains/thinkrail#<n>` trailer where an issue
+   exists.
+2. **The plugin API** — one commit: `packages/plugin-api`, `packages/plugin-ui`, the server loader, the web
+   registry, no plugins.
+3. **One commit per builtin plugin**, so each can be extracted to its own repository: spec-dialect,
+   blueprint, claude-code, discord, pdf-preview, branch-graph, visualize, file-icons, codex.
+
+Fork-only files (this README, this section) sit in one commit at the top.
+
+- **Amend, don't append.** A fix to something that already exists goes into the commit that owns it:
+  `git commit --fixup=<sha>` then `GIT_SEQUENCE_EDITOR=true git rebase -i --autosquash upstream/main`,
+  and `git push --force-with-lease`. A change that touches two parts is two fixups. The branch is
+  force-pushed aggressively; checkouts update with `git fetch && git reset --hard origin/<branch>`.
+- **New commits only for new things:** a new fix or feature for upstream (part 1, placed after the
+  commits it depends on), a new plugin (part 3), or a new core capability of the API (part 2 only if the
+  API commit would otherwise be incomplete without it; a capability a plugin introduced stays in that
+  plugin's commit until it is generalised).
+- **A part-1 commit is inserted into part 1, never appended at the tip.** The tip is the fork-only
+  commit; a new upstream-applicable fix or feature landing after it (or after the plugin commits) is
+  a placement bug, not a valid new commit — rebase it to sit with the other part-1 commits, before the
+  plugin API commit. One user-facing change is one commit: don't leave a feature and its own follow-up
+  fixes as separate commits once work on it is done — amend/squash them into that single commit
+  before moving on, per "amend, don't append" above.
+- **Every commit is green on its own:** `bun run typecheck`, `bun run lint` and `bun run test` pass at
+  each step, and the lockfile matches that step's manifests (`bun install --frozen-lockfile`). Test
+  files land with the code they test, never ahead of it.
+- **Upstream sync** is a rebase of the whole chain onto `upstream/main`; conflicts are resolved in the
+  commit that owns the file, and the final tree is compared against the pre-rebase tree before pushing.
+- **`electrobun prepare` is a single machine-wide lock, not a per-project one.** `bun scripts/prepare-devkit.ts`
+  (and anything that runs it: `apps/desktop`'s own `typecheck`, therefore the repo's `typecheck` gate and the
+  pre-commit hook) hangs indefinitely, with no output, while any `electrobun dev`/`bun run desktop:dev`
+  session is running anywhere on the machine — `hutch-engine` serializes every `prepare` behind a live
+  `dev`'s hold on the engine. This reproduces identically from a completely separate `git worktree` in
+  `/tmp`; the lock is not scoped to the project path, so an isolated disposable checkout does **not** avoid
+  it. Diagnosis: `hutch-engine status` (fast, unaffected) lists every registered project and its lock state.
+  Workaround: either stop the live `dev` session first, or skip that one step —
+  `CI=true bunx turbo run typecheck --filter='!@thinkrail/desktop'` plus `git commit --no-verify` — and
+  verify `apps/desktop` separately once a `dev` session is not running. Never `rm -rf .hutch` to "fix" a
+  hang: there is no tracked backup, and regenerating it hits the same lock.
+- **A single `git commit` invocation runs the full hook once.** If a commit hangs on the desktop step,
+  killing only *your own* spawned process tree (`prepare-devkit.ts` / `electrobun prepare`, found by
+  their start time) is safe; never touch a `dev` process you did not start — it is very likely the
+  live app someone is using to look at the result.
+- **Sending upstream:** a PR is one part-1 commit cherry-picked onto a branch from `upstream/main`; its
+  message is the commit message. Once merged, the rebase drops the commit.
+
 ## Module structure & boundaries (top-priority requirement)
 
 The app is built as a set of **clearly bounded modules**. This is a primary design requirement, not a
