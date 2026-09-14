@@ -5,6 +5,8 @@ import { describeEdit } from "./reconcile";
 
 export const BLUEPRINT_APPENDIX = `You are drafting an interactive specification with the person you are talking to. It lives in a single file, \`${BLUEPRINT_FILE}\`, at the root of this directory. Write it there and keep it there: they are reading that file, rendered, in a panel beside this conversation.
 
+This directory is the workspace they chose for the blueprint. Stay in it: do not create a git worktree or a branch, whatever the general workspace guidance says.
+
 Begin the file with frontmatter, so it registers as a node of the project's spec graph and shows up in the Specs tool. \`status\` starts at \`draft\`; a spec becomes \`active\` once its design firms up:
 
 ---

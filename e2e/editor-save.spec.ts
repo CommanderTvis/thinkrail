@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, type Page, test } from "@playwright/test";
-import { enterDefaultWorkspace, openFixtureProject } from "./fixtures/app";
+import { enterDefaultWorkspace, openFixtureProject, requestOverWire } from "./fixtures/app";
 import { E2E_FIXTURE_REPO } from "./fixtures/paths";
 
 const NOTES = join(E2E_FIXTURE_REPO, "notes.txt");
@@ -111,7 +111,7 @@ test("closing a tab with unsaved edits asks first", async ({ page }) => {
 	expect(readFileSync(NOTES, "utf8")).not.toContain("unsaved");
 });
 
-test("the editor's GPU renderer is a setting, and a browser without WebGPU is not left blank", async ({
+test("the editor's GPU renderer is a setting only where the machine can run it, and never blanks the file", async ({
 	page,
 }) => {
 	await openFixtureProject(page);
@@ -119,9 +119,30 @@ test("the editor's GPU renderer is a setting, and a browser without WebGPU is no
 	await page.getByTestId("open-settings").click();
 	await page.getByTestId("settings-nav-appearance").click();
 	// Off by default: it is experimental upstream, with gaps around ligatures and some decorations.
-	await expect(page.getByTestId("editor-gpu")).not.toBeChecked();
-	await page.getByTestId("editor-gpu").click();
-	await expect(page.getByTestId("editor-gpu")).toBeChecked();
+	const gpu = page.getByTestId("editor-gpu");
+	await expect(gpu).not.toBeChecked();
+	const usable = await page.evaluate(async () => {
+		const nav = navigator as Navigator & { gpu?: { requestAdapter(): Promise<unknown> } };
+		if (!nav.gpu) return false;
+		try {
+			new ResizeObserver(() => {}).observe(document.createElement("div"), {
+				box: "device-pixel-content-box",
+			});
+		} catch {
+			return false;
+		}
+		return (await nav.gpu.requestAdapter().catch(() => null)) !== null;
+	});
+	if (usable) {
+		await expect(gpu).toBeEnabled();
+		await gpu.click();
+		await expect(gpu).toBeChecked();
+	} else {
+		// A machine that cannot draw on the GPU is not offered the switch, so nothing silently no-ops.
+		await expect(gpu).toBeDisabled();
+		await requestOverWire(page, "settings.update", { config: { editorGpuRendering: true } });
+		await expect(gpu).toBeChecked();
+	}
 	await page.getByRole("dialog").getByRole("button", { name: "Close" }).click();
 
 	// Whether this browser has WebGPU or not, the file is readable — the option degrades, never blanks.
@@ -131,8 +152,8 @@ test("the editor's GPU renderer is a setting, and a browser without WebGPU is no
 	await expect(page.getByTestId("editor-pane")).toContainText("plain-text-fixture");
 
 	// The setting is the host's and outlives this test.
+	await requestOverWire(page, "settings.update", { config: { editorGpuRendering: false } });
 	await page.getByTestId("open-settings").click();
 	await page.getByTestId("settings-nav-appearance").click();
-	await page.getByTestId("editor-gpu").click();
-	await expect(page.getByTestId("editor-gpu")).not.toBeChecked();
+	await expect(gpu).not.toBeChecked();
 });
