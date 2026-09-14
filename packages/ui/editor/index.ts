@@ -4,6 +4,7 @@ export { type EditorSelectionChange, MonacoEditor } from "./MonacoEditor";
 export { decorateEditorContextMenus } from "./monacoMenuIcons";
 export {
 	EDITOR_THEME,
+	editorGpuUsable,
 	fileEditorOptions,
 	gpuAcceleration,
 	languageForPath,
