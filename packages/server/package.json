@@ -21,6 +21,7 @@
 		"@thinkrail/contracts": "workspace:*",
 		"@thinkrail/plugin-api": "workspace:*",
 		"@thinkrail/plugin-blueprint": "workspace:*",
+		"@thinkrail/plugin-branch-graph": "workspace:*",
 		"@thinkrail/plugin-claude-code": "workspace:*",
 		"@thinkrail/plugin-discord": "workspace:*",
 		"@thinkrail/plugin-pdf-preview": "workspace:*",
