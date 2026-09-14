@@ -31,6 +31,12 @@ bundled into `apps/web`. Exposed through explicit subpath exports, not a barrel.
   a child process ran from goes through;
   `@thinkrail/shared/spawn` → `spawnSyncCaptured()` + `spawnDetached()`, the hidden-child-process seam every
   console child the host or CLI launches goes through;
+  `@thinkrail/shared/runBounded` → `runBounded()` + `BoundedRun`/`BoundedRunOptions`, run one child
+  process to completion under a wall-clock budget and return what it wrote (`server/subprocess`
+  re-exports it for existing callers — see its SPEC.md for the lifetime mechanics this module owns);
+  `@thinkrail/shared/textFile` → `contentHash()`, `readFileAt()`, `writeFileAt()`, the UTF-8
+  content-hash/read/compare-and-swap-write primitives over an absolute path (no worktree containment —
+  `server/fs` owns that and re-exports these for its callers; see its SPEC.md for the CAS contract);
   `@thinkrail/shared/jbcentral` → the native Central CLI adapter: absolute executable/version/status
   probing; the minimum supported version and the global opaque PI-extension path; a one-directional auth
   verdict; an artifact-location watcher; `add pi` / `remove pi` / `login` / `update --install` actions; and
@@ -86,6 +92,12 @@ bundled into `apps/web`. Exposed through explicit subpath exports, not a barrel.
   to pattern-match. It lives here because both ends of the seam need it and neither may import the other:
   the module that knows the failure throws it (today `server/src/git`, for a vanished commit scope) and the
   host's request handler reads it onto `WsResponse.errorCode`.
+- **/claudePlugin** — `stagedClaudePlugin(runtimeDir)`: where the staged Claude Code marketplace and its
+  plugin sit inside a packaged app (`runtime/claude/.claude-plugin/marketplace.json` over
+  `runtime/claude/packages/claude-plugin`). One definition for the three server-side places that need the
+  same shape — the desktop `preBuild.ts` that stages it, the desktop app that hands the host
+  `THINKRAIL_CLAUDE_PLUGIN_DIR`, and the artifact smoke that proves it shipped — because the host finds the
+  marketplace from the plugin's own parent. Its test pins that parent relationship.
 - **/removeTree** — `removeTree(path, options?)`: delete a tree that a child process ran from, and keep
   trying while the failure is one a short wait can resolve (`EBUSY`, `EMFILE`, `ENFILE`, `ENOTEMPTY`,
   `EPERM`, `EACCES`) — ten attempts with a linear 100 ms backoff by default. It exists because Windows

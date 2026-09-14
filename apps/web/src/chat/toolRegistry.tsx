@@ -11,6 +11,10 @@ export interface ToolRenderProps {
 	workspaceRoot?: string | undefined;
 	onOpenFile?: ((path: string) => void) | undefined;
 	streaming: boolean;
+	/** Rendered as a pane that owns its space (navigable, full height) rather than a transcript card. */
+	interactive?: boolean;
+	/** Report what the renderer made of this call — the agent's answer waits on it. */
+	onRender?: ((error: string | null) => void) | undefined;
 }
 
 export type ToolChrome = "card" | "bare";
@@ -40,6 +44,10 @@ export function registerToolRenderer(
 	options: ToolRegistrationOptions = {},
 ): void {
 	registry.set(toolName, { renderer, ...options });
+}
+
+export function unregisterToolRenderer(toolName: string): void {
+	registry.delete(toolName);
 }
 
 export function getToolRenderer(toolName: string): ToolRenderer {

@@ -1,8 +1,8 @@
 import { RiCheckLine as Check, RiCloseLine as X } from "@remixicon/react";
-import type { ToolRenderProps } from "../../toolRegistry";
-import { strArg } from "../toolHelpers";
-import { parseComparisonOptions } from "./args";
-import { MermaidView } from "./MermaidView";
+import type { ToolRenderProps } from "@/chat/toolRegistry";
+import { strArg } from "@/chat/tools/toolHelpers";
+import { parseComparisonOptions } from "@/chat/tools/visualize/args";
+import { MermaidView } from "@/chat/tools/visualize/MermaidView";
 
 export function ComparisonCard({ args }: ToolRenderProps) {
 	const title = strArg(args, "title");

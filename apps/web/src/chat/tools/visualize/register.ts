@@ -1,6 +1,6 @@
+import { VisualizationCard } from "@/chat/tools/visualize/VisualizationCard";
 import { registerToolRenderer } from "../../toolRegistry";
 import { strArg } from "../toolHelpers";
-import { VisualizationCard } from "./VisualizationCard";
 
 registerToolRenderer("visualize", VisualizationCard, {
 	prominence: "primary",

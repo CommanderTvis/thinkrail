@@ -18,6 +18,7 @@ export default defineConfig({
 				target: `ws://localhost:${process.env.THINKRAIL_PORT ?? 24242}`,
 				ws: true,
 			},
+			"/files": `http://localhost:${process.env.THINKRAIL_PORT ?? 24242}`,
 		},
 	},
 	build: {

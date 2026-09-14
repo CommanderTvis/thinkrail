@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { parseAlertMarker } from "./markdownAlerts";
+import { parseAlertMarker } from "@/panels/markdownAlerts";
 
 test("parseAlertMarker reads each variant, case-insensitively", () => {
 	expect(parseAlertMarker("[!NOTE]\nbody")?.variant).toBe("note");

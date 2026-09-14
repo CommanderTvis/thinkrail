@@ -1,5 +1,10 @@
-import { cn, isAbsolutePath, projectRelativePath } from "@/lib";
-import { hasUriScheme, workspaceFileTarget } from "../fileTargets";
+import { cn } from "@/lib/cn";
+import {
+	hasUriScheme,
+	isAbsolutePath,
+	projectRelativePath,
+	workspaceFileTarget,
+} from "@/lib/pathUtils";
 
 export function ToolFileLink({
 	path,

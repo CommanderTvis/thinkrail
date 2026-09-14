@@ -2,8 +2,8 @@ import { describe, expect, test } from "bun:test";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { renderToStaticMarkup } from "react-dom/server";
-import { Popover, PopoverTrigger } from "./popover";
-import { IconTooltip, TooltipProvider } from "./tooltip";
+import { Popover, PopoverTrigger } from "@/components/ui/popover";
+import { IconTooltip, TooltipProvider } from "@/components/ui/tooltip";
 
 function renderTriggerPair(wrapTrigger: boolean): string {
 	return renderToStaticMarkup(

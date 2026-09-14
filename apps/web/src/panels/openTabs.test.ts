@@ -21,7 +21,8 @@ const { useAppStore } = await import("../store");
 type WorkspaceLayoutDocument = ReturnType<
 	typeof useAppStore.getState
 >["layoutDocumentsByWorkspace"][string];
-const { openDiffInTab } = await import("./openTabs");
+const { onEditorEvent } = await import("./editorEvents");
+const { openDiffInTab, openFileInTab } = await import("./openTabs");
 
 const workspace = (overrides: Partial<Workspace> = {}): Workspace => ({
 	id: "w1",
@@ -320,4 +321,21 @@ test("an undisturbed open stamps the state it actually read against", async () =
 	const tab = openedDiffTab();
 	expect(tab.loadedTarget).toBe("main");
 	expect(tab.loadedTick).toBe(1);
+});
+
+test('a file with no matching viewer reads its content as text and fires an "opened" editor event once it lands', async () => {
+	const events: string[] = [];
+	const off = onEditorEvent((event) => events.push(event.kind));
+
+	const open = openFileInTab("w1", "README.md", "keep");
+	expect(requests).toEqual([
+		{ method: "fs.readFile", params: { workspaceId: "w1", path: "README.md" } },
+	]);
+	pending?.resolve({ content: "# hi", hash: "h1" });
+	await open;
+	off();
+
+	const tab = (useAppStore.getState().tabsByWorkspace.w1 ?? [])[0];
+	expect(tab).toMatchObject({ kind: "file", path: "README.md", content: "# hi" });
+	expect(events).toEqual(["opened"]);
 });

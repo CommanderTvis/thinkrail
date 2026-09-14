@@ -13,7 +13,7 @@ import {
 const typography = loadTypography();
 const SRC = new URL("..", import.meta.url).pathname;
 
-function sourceFiles(dir = SRC): string[] {
+function sourceFiles(dir: string): string[] {
 	const out: string[] = [];
 	for (const entry of readdirSync(dir)) {
 		const path = join(dir, entry);
@@ -26,7 +26,7 @@ function sourceFiles(dir = SRC): string[] {
 	}
 	return out;
 }
-const FILES = sourceFiles();
+const FILES = [...sourceFiles(SRC)];
 const read = (p: string) => normalizeEol(readFileSync(p, "utf8"));
 const code = (p: string) =>
 	read(p)
@@ -38,9 +38,9 @@ const PRIMITIVE_ALLOWLIST = new Set([
 	"index.css",
 	"styles/tokens.css",
 	"styles/global.css",
-	"panels/monacoSetup.ts",
+	"editor/monacoSetup.ts",
 	"panels/TerminalInstance.tsx",
-	"chat/tools/visualize/mermaid.ts",
+	"visualization/mermaid.ts",
 ]);
 
 const componentFiles = () => FILES.filter((p) => !PRIMITIVE_ALLOWLIST.has(rel(p)));

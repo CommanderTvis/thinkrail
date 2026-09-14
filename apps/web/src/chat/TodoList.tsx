@@ -16,7 +16,7 @@ import {
 } from "@remixicon/react";
 import type { TodoGroupItem, TodoItem, TodoPlan, TodoStatus } from "@thinkrail/contracts";
 import { useState } from "react";
-import { IconTooltip } from "../components/ui/tooltip";
+import { IconTooltip } from "@/components/ui/tooltip";
 import { cn } from "../lib";
 import { PlanStatusIcon, SectionLabel } from "./planKit";
 import {
