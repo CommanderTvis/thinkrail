@@ -1,8 +1,9 @@
+import { execFileSync } from "node:child_process";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, type Locator, test } from "@playwright/test";
-import { createWorkspaceViaDialog, openFixtureProject, revealWorkbenchTool } from "./fixtures/app";
-import { commitFile } from "./fixtures/git";
+import { createWorkspaceViaDialog, openFixtureProject, worktreeRows } from "../../fixtures/app";
+import { commitFile } from "../../fixtures/git";
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -34,10 +35,10 @@ test("a live rendered-diff refresh preserves the reader's scroll position", asyn
 	);
 	writeFileSync(path, longMarkdown("first refresh"));
 
-	await revealWorkbenchTool(page, "changes");
+	await page.getByTestId("tab-changes").click();
 	const change = page.getByTestId("change-item").filter({ hasText: "scroll-refresh.md" });
 	await fsExpect(change).toBeVisible();
-	await change.dblclick();
+	await change.click();
 	const diff = page.getByTestId("rendered-diff");
 	await fsExpect(diff).toContainText("first refresh paragraph 299");
 	await expect
@@ -68,7 +69,7 @@ test("worktree changes on disk appear live in Specs, Files, Changes, and an open
 		page.locator('[data-testid="spec-node"][data-spec-id="sample-live"]'),
 	).toBeVisible();
 
-	await revealWorkbenchTool(page, "files");
+	await page.getByTestId("tab-files").click();
 	const freshFile = page.getByTestId("file-node").filter({ hasText: "fresh-file.txt" });
 	await expect(page.getByTestId("file-node").filter({ hasText: "README.md" })).toBeVisible();
 	writeFileSync(join(worktree, "fresh-file.txt"), "hello\n");
@@ -76,7 +77,7 @@ test("worktree changes on disk appear live in Specs, Files, Changes, and an open
 	rmSync(join(worktree, "fresh-file.txt"));
 	await fsExpect(freshFile).toHaveCount(0);
 
-	await revealWorkbenchTool(page, "changes");
+	await page.getByTestId("tab-changes").click();
 	const readmeRow = page.getByTestId("change-item").filter({ hasText: "README.md" });
 	await expect(
 		page.getByTestId("change-item").filter({ hasText: "SPEC.md" }).first(),
@@ -84,7 +85,7 @@ test("worktree changes on disk appear live in Specs, Files, Changes, and an open
 	await expect(readmeRow).toHaveCount(0);
 	writeFileSync(join(worktree, "README.md"), "# sample-project\n\nedited live by e2e\n");
 	await fsExpect(readmeRow).toHaveAttribute("data-status", "modified");
-	await readmeRow.dblclick();
+	await readmeRow.click();
 	await page.getByTestId("view-toggle-code").click();
 	await expect(
 		page.getByTestId("diff-view").getByText("edited live by e2e", { exact: false }).last(),
@@ -94,12 +95,22 @@ test("worktree changes on disk appear live in Specs, Files, Changes, and an open
 		page.getByTestId("diff-view").getByText("edited twice by e2e", { exact: false }).last(),
 	).toBeVisible();
 
-	await revealWorkbenchTool(page, "files");
+	await page.getByTestId("tab-files").click();
 	await page.getByTestId("file-node").filter({ hasText: "README.md" }).dblclick();
 	await expect(page.getByTestId("editor-pane")).toContainText("edited twice by e2e");
 	writeFileSync(join(worktree, "README.md"), "# sample-project\n\nlive tab reload\n");
 	await fsExpect(page.getByTestId("editor-pane")).toContainText("live tab reload");
 	await fsExpect(page.getByTestId("editor-pane")).not.toContainText("edited twice by e2e");
+});
+
+test("a branch switch inside a managed worktree converges its rail label", async ({ page }) => {
+	await openFixtureProject(page);
+	const workspace = await createWorkspaceViaDialog(page);
+	const row = worktreeRows(page).filter({ hasText: workspace.name });
+	await expect(row.getByTestId("workspace-branch")).toHaveText(workspace.branch);
+
+	execFileSync("git", ["-C", workspace.worktreePath, "switch", "-c", "checked-out-live"]);
+	await fsExpect(row.getByTestId("workspace-branch")).toHaveText("checked-out-live");
 });
 
 test("churn canary: a write storm coalesces to a few frames and the host stays responsive", async ({
@@ -118,7 +129,7 @@ test("churn canary: a write storm coalesces to a few frames and the host stays r
 	const workspace = await createWorkspaceViaDialog(page);
 	const worktree = workspace.worktreePath;
 
-	await revealWorkbenchTool(page, "files");
+	await page.getByTestId("tab-files").click();
 	await expect(page.getByTestId("file-node").filter({ hasText: "README.md" })).toBeVisible();
 	await sleep(1200);
 	const framesBefore = fsFrameTimes.length;

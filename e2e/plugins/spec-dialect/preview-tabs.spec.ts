@@ -3,8 +3,7 @@ import {
 	createWorkspaceViaDialog,
 	enterDefaultWorkspace,
 	openFixtureProject,
-	revealWorkbenchTool,
-} from "./fixtures/app";
+} from "../../fixtures/app";
 
 async function openWorkspaceFiles(page: import("@playwright/test").Page): Promise<void> {
 	await openFixtureProject(page);
@@ -13,7 +12,7 @@ async function openWorkspaceFiles(page: import("@playwright/test").Page): Promis
 	await chatTab.hover();
 	await chatTab.getByTestId("editor-tab-close").click();
 	await expect(chatTab).toHaveCount(0);
-	await revealWorkbenchTool(page, "files");
+	await page.getByTestId("tab-files").click();
 	await expect(page.getByTestId("file-node").first()).toBeVisible();
 }
 
@@ -189,7 +188,7 @@ test("a keep that lands first does not invalidate a browse requested after it", 
 test("a newer tab click cancels an older preview-tab settle timer", async ({ page }) => {
 	await openFixtureProject(page);
 	await enterDefaultWorkspace(page);
-	await revealWorkbenchTool(page, "files");
+	await page.getByTestId("tab-files").click();
 	await page.getByTestId("file-node").filter({ hasText: "notes.txt" }).dblclick();
 	await page.getByTestId("file-node").filter({ hasText: "README.md" }).click();
 
@@ -215,7 +214,7 @@ test("the Specs panel shares the one slot, and closing the preview tab releases 
 	await expect(tabs).toHaveCount(2);
 	await expect(tabs.nth(1)).toContainText("notes.txt");
 
-	await revealWorkbenchTool(page, "specs");
+	await page.getByTestId("tab-plugin:spec-dialect:specs").click();
 	await page.locator('[data-testid="spec-node"][data-spec-id="sample-root"]').click();
 	await expect(tabs).toHaveCount(2);
 	await expect(tabs.first()).toContainText("README.md");
@@ -225,7 +224,7 @@ test("the Specs panel shares the one slot, and closing the preview tab releases 
 	await tabs.nth(1).hover();
 	await tabs.nth(1).getByTestId("editor-tab-close").click();
 	await expect(tabs).toHaveCount(1);
-	await revealWorkbenchTool(page, "files");
+	await page.getByTestId("tab-files").click();
 	await page.getByTestId("file-node").filter({ hasText: "notes.txt" }).click();
 	await expect(tabs).toHaveCount(2);
 	await expect(tabs.nth(1)).toContainText("notes.txt");

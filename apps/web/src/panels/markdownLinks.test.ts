@@ -3,7 +3,6 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { Markdown } from "../chat/Markdown";
 import { usePluginRegistry } from "../plugins/registry";
-import { useAppStore } from "../store";
 import { classifyHref, documentComponents, resolveRelativePath, slugify } from "./markdownLinks";
 import { specUrlTransform } from "./specDocument";
 
@@ -60,14 +59,7 @@ test("relative document targets have no browser-navigable href", () => {
 	expect(html).not.toContain('href="../themes/SPEC.md"');
 });
 
-test("a spec: link resolves through the documentLink slot before the legacy graph lookup", () => {
-	useAppStore.setState({
-		specsByWorkspace: {
-			"workspace-1": [
-				{ id: "todo-groups", type: "task-spec", title: "t", path: "legacy/path.md" } as never,
-			],
-		},
-	});
+test("a spec: link resolves through the documentLink slot", () => {
 	usePluginRegistry
 		.getState()
 		.addSlot("spec-dialect", "documentLink", (_workspaceId, href) =>
@@ -83,7 +75,19 @@ test("a spec: link resolves through the documentLink slot before the legacy grap
 	);
 
 	expect(html).toContain('data-path="plugin/resolved.md"');
-	expect(html).not.toContain('data-path="legacy/path.md"');
+});
+
+test("a spec: link with no registered resolver renders disabled", () => {
+	const html = renderToStaticMarkup(
+		createElement(Markdown, {
+			text: "[the spec](spec:no-such-node)",
+			urlTransform: specUrlTransform,
+			components: documentComponents({ workspaceId: "workspace-1", path: "chat.md" }),
+		}),
+	);
+
+	expect(html).toContain('disabled=""');
+	expect(html).not.toContain("data-path=");
 });
 
 test("slugify matches GitHub-style heading anchors", () => {

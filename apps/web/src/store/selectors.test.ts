@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
 	MODEL_PICKER_PROTOCOL_VERSION,
 	type Project,
+	REVIEW_TERMINAL_PROTOCOL_VERSION,
 	type SessionStateRecord,
 	type WireModel,
 	type Workspace,
@@ -41,7 +42,6 @@ import {
 	selectSupportsModelPicker,
 	selectWorkspaceIsRunning,
 	selectWorkspaceNeedsAttention,
-	specPathMatcher,
 	workspaceBranchLabel,
 } from "./selectors";
 
@@ -713,6 +713,7 @@ test("the file the user is in is whatever the focused group shows, and nothing f
 			"ws",
 		),
 	).toBeNull();
+});
 
 describe("selectSupportsModelPicker", () => {
 	test("requires a connected host at or above the picker protocol", () => {
@@ -750,8 +751,12 @@ test("review targets list open chats, then agent terminals only once the host ca
 		title: "Claude Code",
 	});
 	expect(selectCanSendReviewToTerminal({ protocolVersion: 67 })).toBe(false);
-	expect(selectCanSendReviewToTerminal({ protocolVersion: 75 })).toBe(false);
-	expect(selectCanSendReviewToTerminal({ protocolVersion: 76 })).toBe(true);
+	expect(
+		selectCanSendReviewToTerminal({ protocolVersion: REVIEW_TERMINAL_PROTOCOL_VERSION - 1 }),
+	).toBe(false);
+	expect(selectCanSendReviewToTerminal({ protocolVersion: REVIEW_TERMINAL_PROTOCOL_VERSION })).toBe(
+		true,
+	);
 	expect(selectCanSendReviewToTerminal({ protocolVersion: null })).toBe(false);
 });
 
