@@ -288,6 +288,10 @@ immediately usable" fails for a reason that has nothing to do with the code unde
 
 ## Verification policy
 
+Claude model/effort picker and file-attachment scenarios dismiss the installation offer before driving
+terminal input. In the default bottom dock that unrelated banner can leave only one visible terminal row,
+pushing readiness, selection output, and the beginning of long input off-screen.
+
 During iteration, run the affected specs and use Playwright's last-failed mode. Flake repairs replace
 irrelevant expensive setup with equivalent fixture state and wait for observable readiness; blanket retries,
 arbitrary sleeps, and assertion weakening are not synchronization policy. Live-provider completion waits on

@@ -1,0 +1,41 @@
+{
+	"name": "@thinkrail/plugin-claude-code",
+	"version": "0.2.0",
+	"private": true,
+	"type": "module",
+	"sideEffects": false,
+	"exports": {
+		".": "./manifest.ts",
+		"./manifest": "./manifest.ts",
+		"./contracts": "./contracts.ts",
+		"./host": "./host/index.ts",
+		"./web": "./web/index.ts",
+		"./build-support": "./build-support.ts",
+		"./package.json": "./package.json"
+	},
+	"scripts": {
+		"test": "bun test && bash assets/marketplace/claude-plugin/tests/test-hooks.sh",
+		"typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.web.json"
+	},
+	"dependencies": {
+		"@remixicon/react": "4.9.0",
+		"@thinkrail/contracts": "workspace:*",
+		"@thinkrail/plugin-api": "workspace:*",
+		"@thinkrail/plugin-ui": "workspace:*",
+		"@thinkrail/shared": "workspace:*",
+		"typebox": "catalog:",
+		"zustand": "5.0.14"
+	},
+	"peerDependencies": {
+		"react": "*",
+		"react-dom": "*"
+	},
+	"devDependencies": {
+		"@types/bun": "catalog:",
+		"@types/react": "catalog:",
+		"@types/react-dom": "catalog:",
+		"react": "catalog:",
+		"react-dom": "catalog:",
+		"typescript": "catalog:"
+	}
+}

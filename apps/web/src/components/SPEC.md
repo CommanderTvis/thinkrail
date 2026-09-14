@@ -23,9 +23,8 @@ material-icon-theme glyph set, the filename/extension lookup, and the generator 
 all moved to the builtin `packages/plugin-file-icons` plugin — see its own `SPEC.md`. Disabling that
 plugin degrades every file row to the Remix fallback rather than losing the icon entirely.
 
-- **`ClaudeMark` is gone.** The `claude` glyph a `CLAUDE.md` wears is now resolved by
-  `plugins/registry/icons.ts`'s `pluginIcon("claude")` through the same `fileIcon` slot (path
-  `"CLAUDE.md"`), falling back to `RiRobot2Line` when the file-icons plugin is off.
+- **`ClaudeMark` is gone.** The `claude` glyph a `CLAUDE.md` wears comes from the file-icons plugin
+  like any other file's; the Claude Code plugin's own rail icon is its `asset:claude.svg`.
 - **`data-testid="file-type-icon"` and `data-icon` are preserved** on both the plugin-drawn glyph and
   the Remix fallback, so `e2e/file-icons.spec.ts` and `e2e/plugins/file-icons/` assert against the same
   hooks regardless of which one rendered.

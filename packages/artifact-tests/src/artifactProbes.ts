@@ -155,6 +155,73 @@ async function assertOAuthLoginReachesAuthUrl(socket: WebSocket): Promise<void> 
 	}
 }
 
+/** The three builtin plugins reach the artifact: their roster entries, their staged skills/assets, and
+ * (enabling it, since it defaults off) claude-code's own route answering under `/plugin/claude-code/`. */
+async function assertBuiltinPlugins(socket: WebSocket, host: RunningArtifactHost): Promise<void> {
+	const specDialectSkills = host.resources.pluginSkillsDir("spec-dialect");
+	assert(specDialectSkills, "spec-dialect plugin skills were not staged");
+	assert(
+		existsSync(join(specDialectSkills, "spec-graph", "SKILL.md")),
+		"skill file missing: spec-graph",
+	);
+
+	const claudeCodeAssets = host.resources.pluginAssetsDir("claude-code");
+	assert(claudeCodeAssets, "claude-code plugin assets were not staged");
+	assert(
+		existsSync(
+			join(claudeCodeAssets, "marketplace", "claude-plugin", ".claude-plugin", "plugin.json"),
+		),
+		"staged Claude plugin manifest is missing",
+	);
+
+	const roster = (await within(rpc(socket, "plugins.list", {}), 10_000, "plugins.list")) as {
+		id?: string;
+		status?: string;
+	}[];
+	for (const id of ["spec-dialect", "blueprint", "claude-code"]) {
+		assert(
+			roster.some((entry) => entry.id === id),
+			`plugin roster is missing ${id}`,
+		);
+	}
+	for (const id of ["spec-dialect", "blueprint"]) {
+		const entry = roster.find((candidate) => candidate.id === id);
+		assert(entry?.status === "active", `${id} plugin is not active by default: ${entry?.status}`);
+	}
+
+	await within(
+		rpc(socket, "settings.update", { config: { plugins: { "claude-code": { enabled: true } } } }),
+		10_000,
+		"enable claude-code plugin",
+	);
+	let claudeCodeActive = false;
+	for (let attempt = 0; attempt < 40 && !claudeCodeActive; attempt += 1) {
+		const retried = (await within(
+			rpc(socket, "plugins.list", {}),
+			10_000,
+			"plugins.list after enabling claude-code",
+		)) as { id?: string; status?: string }[];
+		claudeCodeActive = retried.some(
+			(entry) => entry.id === "claude-code" && entry.status === "active",
+		);
+		if (!claudeCodeActive) await Bun.sleep(100);
+	}
+	assert(claudeCodeActive, "claude-code plugin did not become active after being enabled");
+
+	const response = await within(
+		fetch(`${host.origin}/plugin/claude-code/status/smoke-probe-token`, {
+			method: "POST",
+			body: "{}",
+		}),
+		10_000,
+		"POST /plugin/claude-code/status/<token>",
+	);
+	assert(
+		response.status === 404 && (await response.text()) === "unknown terminal",
+		`claude-code plugin route did not answer: ${response.status}`,
+	);
+}
+
 export function hostEnvironment(
 	overrides: Record<string, string>,
 	unset: string[] = [],
@@ -413,6 +480,7 @@ export default function syntheticExternalExtension(pi) {
 		}
 		assert(existsSync(join(customHost.resources.skillsDir, "SPEC.md")), "workflow SPEC is missing");
 
+		await assertBuiltinPlugins(socket, customHost);
 		socket.close();
 		socket = undefined;
 		await customHost.stop();

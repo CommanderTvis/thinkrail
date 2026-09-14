@@ -1,0 +1,8 @@
+{
+	"mcpServers": {
+		"thinkrail": {
+			"type": "http",
+			"url": "${THINKRAIL_MCP_URL}"
+		}
+	}
+}

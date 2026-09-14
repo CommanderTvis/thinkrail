@@ -4,7 +4,6 @@ import {
 	RiLoader4Line as Loader2,
 	RiTerminalBoxLine as SquareTerminal,
 } from "@remixicon/react";
-import { pluginMethodName } from "@thinkrail/plugin-api";
 import type { TabDecoration } from "@thinkrail/plugin-api/web";
 import { DropdownMenuItem, IconTooltip } from "@thinkrail/plugin-ui";
 import {
@@ -94,8 +93,6 @@ import { decorateTab } from "./tabDecoration";
 import { useTerminalPlacementReconciliation } from "./terminalReconciliation";
 import { useReportedActiveFile } from "./useReportedActiveFile";
 import { WorkspaceChatHistory } from "./WorkspaceChatHistory";
-
-const CLAUDE_CODE_ID = "claude-code";
 
 const PlanPane = lazy(() => import("../panels/PlanPane"));
 
@@ -461,7 +458,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 			if (tab.kind === "file" || tab.kind === "external-file") {
 				const external = tab.kind === "external-file";
 				const viewer = selectFileViewer(usePluginRegistry.getState(), tab.path);
-				const install = (content: string) => {
+				const install = (content: string, hash: string) => {
 					const latest = useAppStore.getState();
 					if (!current || !isConnectedGeneration(latest, connectionGeneration)) return;
 					const placed = currentPlacement();
@@ -474,6 +471,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 							path: placed.path,
 							name: placed.name,
 							content,
+							hash,
 							loadedTick,
 						},
 						"keep",
@@ -482,14 +480,14 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 					);
 				};
 				if (!external && viewer?.read === "none") {
-					install("");
+					install("", "");
 				} else {
 					void getTransport()
-						.request(external ? pluginMethodName(CLAUDE_CODE_ID, "readFile") : "fs.readFile", {
+						.request("fs.readFile", {
 							workspaceId,
 							path: tab.path,
 						})
-						.then((result) => install((result as { content: string }).content))
+						.then(({ content, hash }) => install(content, hash))
 						.catch(() => {});
 				}
 			} else {
