@@ -433,7 +433,9 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   `template.get` reads, allowing Create Workspace to preview global plus current-checkout project templates
   without sending host paths; older hosts retain a global-only fallback. `themeMode` defaults to `"fixed"`
   and no pair, preserving both legacy configs
-  and the explicit Dark default; `subagentsEnabled` is the host-wide subagent default (`true` for current
+  and the explicit Dark default; the Claude Code launcher's own command line now lives in its plugin
+  namespace (`plugins["claude-code"].command`, default `"claude"`), normalised plugin-side so a blank value
+  can never reach a shell — see `module-plugin-claude-code`; `subagentsEnabled` is the host-wide subagent default (`true` for current
   behavior), overridden only by `Workspace.subagentsOverride`; `subagentMaxConcurrent` (whole number in
   **`SUBAGENT_MAX_CONCURRENT`** = 1–16, default 4, validated by `isSubagentMaxConcurrent`; on the wire from
   **`SUBAGENT_CONCURRENCY_PROTOCOL_VERSION`** = v79) is how many subagents one chat runs at once — more

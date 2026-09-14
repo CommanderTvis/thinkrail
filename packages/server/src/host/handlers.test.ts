@@ -11,13 +11,18 @@ import type {
 	AppConfig,
 	PluginRosterEntry,
 	Project,
+	ResourceMeta,
 	Template,
 	TemplateInfo,
 	WireModel,
 	Workspace,
 	WorkspaceWatchReadyResult,
 } from "@thinkrail/contracts";
-import { BRANCH_STATUS_PROTOCOL_VERSION, WORKSPACE_SETTLE_PROTOCOL_VERSION, WS_METHODS } from "@thinkrail/contracts";
+import {
+	BRANCH_STATUS_PROTOCOL_VERSION,
+	WORKSPACE_SETTLE_PROTOCOL_VERSION,
+	WS_METHODS,
+} from "@thinkrail/contracts";
 import { TodoStore } from "pi-todos/core";
 import {
 	type CreateSessionResult,
@@ -34,6 +39,7 @@ import { todoReviewRecord } from "../todos";
 import { stopAllWatches } from "../watch";
 import {
 	handleRequest,
+	openReviewForClient,
 	requestMethodDiagnostic,
 	setPluginRuntime,
 	shouldRefreshOpenReview,
@@ -949,6 +955,7 @@ test("resource handlers scope every read/control to a registered workspace and a
 		expect(await handleRequest("session.resources", scope, CTX)).toEqual({
 			...scope,
 			commands: [],
+			mcpServers: [],
 			subagents: [],
 		});
 		expect(
@@ -1029,10 +1036,11 @@ test("external text files require plugin ownership and retain compare-and-swap s
 			allowsExternalFile: (id, candidate) => id === workspace.id && candidate === path,
 		}),
 	);
-	const read = (await handleRequest("fs.readFile", params, CTX)) as {
+	const { content: readContent, meta } = (await handleRequest("fs.readFile", params, CTX)) as {
 		content: string;
-		hash: string;
+		meta: ResourceMeta;
 	};
+	const read = { content: readContent, hash: meta.hash ?? "" };
 	expect(read.content).toBe('model = "fixture"\n');
 	const content = 'model = "updated"\n';
 	expect(

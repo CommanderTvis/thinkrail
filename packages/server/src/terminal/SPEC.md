@@ -234,6 +234,26 @@ identities. A tab's shell outlives every client that looks at it; each frontend 
   available for retry.
 - **Not tmux.** Would buy restart survival at the cost of a dep we can't assume on Windows, a competing tab
   model, env-propagation breakage, and `capture-pane` polling. We already accept no crash isolation.
+- **Agent detection is polled, host-owned by whichever plugin wants it — not by this module.** This
+  module used to run its own `ps`-poll (`agentWatch.ts` + `processTree.ts`) unconditionally; the
+  Claude Code plugin now runs its own instance of the same engine (`packages/plugin-claude-code/host/
+  agentWatch.ts`, moved verbatim except narrowing `DETECTED_AGENTS` to `["claude"]` — nothing else in the
+  codebase consumed the old `"pi"` detection, confirmed by grep before the move), sourced from
+  `ctx.terminals()` and poked on `ctx.onTerminal`'s `"spawned"` event, writing through `ctx.setAgentRecord`.
+  The poll runs only while that plugin is active — "off means no `ps` sweep at all"
+  (`plugin-adoption.md`, S1) is now literally true, not merely a UI toggle over an always-running poll.
+  What stays here, generic and used by any such plugin: `TerminalTabInfo.agent` as where a detected kind is
+  folded in (clients already subscribe to `terminal.tabs`, so detection needs no wire surface of its own)
+  broadcast via the existing `agentChanged` → `setAgentRecord` path, and `processTree.ts`'s `ps
+  -Ao pid=,ppid=,comm=` snapshot + descendant search — kept here too (duplicated, not shared) because
+  `workspaceForProcess` needs the identical primitive for an unrelated purpose (mapping a live pid from the
+  IDE bridge back to a workspace) and has since before the plugin existed.
+- **A plugin's own poll decides its own poke/debounce discipline; this module no longer arms one.** The
+  `if (loadConfig().claudeCodeEnabled) agentWatch.poke()` call `attachTerminal` used to make is gone with
+  the poll itself — a synchronous `ps` on that path blocking long enough for a login shell to fork its
+  profile (which `closeTerminalTab` would then read as a busy shell) is a lesson the Claude Code plugin's
+  own `createAgentWatch` still carries (`poke()` arms a timer and never sweeps inline), just no longer this
+  module's problem to enforce.
 
 ## Tab titles
 
@@ -404,7 +424,12 @@ decision stays the user's; the tab is otherwise an ordinary shell.
 
 - `outputRecorder.test.ts` — bounds, line/escape-safe trimming, alt-screen exclusion (incl. a switch split
   across reads and enter+exit in one read), mode restoration, mouse tracking never restored, and `restore()`
-  keeping mode sequences out of the body (incl. a recording persisted by a host that still replayed them).
+  keeping mode sequences out of the body (incl. a recording persisted by a host that still replayed them),
+  and OSC 777 exclusion (incl. a split at any offset in the escape prefix, the ST terminator form, an
+  unrelated OSC left untouched, and scrubbing a notify sequence out of a pre-fix persisted recording).
+- `mouseModeGuard.test.ts` — passthrough of clean output, well-behaved apps left untouched, forced reset on
+  a dirty alt-screen exit, `resetIfEnabled()` for the inline-TUI fallback, no reset when mouse tracking was
+  never on, fires only once per left-on episode, a mode sequence split across chunks.
 - `outputBatcher.test.ts` — batching, backpressure, truncation, `reset`.
 - `shellBusy.test.ts` — child detection, including that an unanswerable platform reports *not* busy.
 - `shellArgs.test.ts` — shell executable precedence across Unix and Windows plus platform-specific
@@ -433,3 +458,13 @@ decision stays the user's; the tab is otherwise an ordinary shell.
 - `e2e/terminals.spec.ts` — the rapid re-entry regression, reload survival, second-client takeover,
   cross-client tab convergence, addressed-output isolation. Its output markers likewise never appear
   contiguously in the typed command: keystroke echo reaches the screen first, split across output batches.
+- `terminalManager.test.ts` — an unclaimed offer is typed and never run, a claimed one carries
+  `prefillSubmit`, and the claim is per tab and per workspace.
+- `processTree.test.ts` — `ps` row parsing (spaces in names, `.exe` stripping, header junk), descendant
+  search across generations, depth cap, and cycle termination. Moving agent detection out to the Claude
+  Code plugin left this module's own copy behind (`workspaceForProcess` needs it too) — the Claude Code plugin's identical file carries its
+  own copy of this same test.
+- `terminalTokens.test.ts` — the generic token primitives alone: a tab's address is stable
+  across reattach, the MCP and status addresses share one token, a forgotten token is refused, and a
+  workspace close forgets only its own tabs. `agentResume.test.ts`/`agentWatch.test.ts`/
+  `agentStatusReport.test.ts` moved with their modules to `packages/plugin-claude-code/host/`.

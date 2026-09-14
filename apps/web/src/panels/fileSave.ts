@@ -1,11 +1,9 @@
 import type { FileWriteResult } from "@thinkrail/contracts";
-import { pluginMethodName } from "@thinkrail/plugin-api";
-import { isAbsolutePath, mergeText } from "../lib";
+import { t } from "@thinkrail/locales/react";
+import { mergeText } from "../lib";
 import { type EditorTab, toast, useAppStore } from "../store";
 import { errorText, getTransport } from "../transport";
 import { emitEditorEvent, findEditorRef } from "./editorEvents";
-
-const CLAUDE_CODE_ID = "claude-code";
 
 interface Buffer {
 	workspaceId: string;
@@ -46,7 +44,7 @@ export function mergeDiskIntoDraft(workspaceId: string, tabId: string): void {
 	useAppStore.getState().applyFileTabMerge(workspaceId, tabId, merged.text, disk);
 	if (merged.conflicts > 0) {
 		toast.error(
-			`${merged.conflicts} conflicting ${merged.conflicts === 1 ? "region" : "regions"} left marked in the buffer.`,
+			t("panels.fileSave.mergeConflicts", { count: merged.conflicts }),
 			"Merged with conflicts",
 		);
 	}
@@ -69,12 +67,7 @@ export async function saveFileTab(workspaceId: string, tabId: string): Promise<v
 	};
 	let result: FileWriteResult;
 	try {
-		result = isAbsolutePath(buffer.path)
-			? ((await getTransport().request(
-					pluginMethodName(CLAUDE_CODE_ID, "writeFile"),
-					params,
-				)) as FileWriteResult)
-			: await getTransport().request("fs.writeFile", params);
+		result = await getTransport().request("fs.writeFile", params);
 	} catch (cause) {
 		toast.error(errorText(cause), "Couldn't save the file");
 		return;
@@ -91,8 +84,8 @@ export async function saveFileTab(workspaceId: string, tabId: string): Promise<v
 	useAppStore.getState().applyFileTabMerge(workspaceId, tabId, merged.text, result.disk);
 	toast.error(
 		merged.conflicts > 0
-			? `Changed on disk since you opened it. ${merged.conflicts} conflicting ${merged.conflicts === 1 ? "region is" : "regions are"} marked in the buffer — resolve them and save again.`
-			: "Changed on disk since you opened it. Both sets of edits are in the buffer now — save again to write them.",
+			? t("panels.fileSave.changedOnDiskConflicts", { count: merged.conflicts })
+			: t("panels.fileSave.changedOnDisk"),
 		"Not saved",
 	);
 }

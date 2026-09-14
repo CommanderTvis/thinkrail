@@ -1,9 +1,6 @@
-import { beforeEach, expect, mock, test } from "bun:test";
+import { afterAll, beforeEach, expect, mock, test } from "bun:test";
 import type { Workspace } from "@thinkrail/contracts";
-import { pluginMethodName } from "@thinkrail/plugin-api";
-import { diffTabId } from "./changesModel";
-
-const CLAUDE_CODE_ID = "claude-code";
+import { changesTabId, diffTabId } from "./changesModel";
 
 let pending: { resolve: (value: unknown) => void } | null = null;
 const requests: { method: string; params: unknown }[] = [];
@@ -35,7 +32,7 @@ type WorkspaceLayoutDocument = ReturnType<
 >["layoutDocumentsByWorkspace"][string];
 const { onEditorEvent } = await import("./editorEvents");
 const { usePluginRegistry } = await import("../plugins/registry");
-const { openDiffInTab, openFileInTab } = await import("./openTabs");
+const { openChangesTab, openDiffInTab, openFileInTab } = await import("./openTabs");
 
 const workspace = (overrides: Partial<Workspace> = {}): Workspace => ({
 	id: "w1",
@@ -47,7 +44,7 @@ const workspace = (overrides: Partial<Workspace> = {}): Workspace => ({
 	...overrides,
 });
 
-beforeEach(() => {
+function resetStore(): void {
 	pending = null;
 	requests.length = 0;
 	useAppStore.setState({
@@ -60,9 +57,15 @@ beforeEach(() => {
 		layoutIntents: [],
 		navTickByWorkspace: {},
 		fsChangesByWorkspace: {},
+		previewTabByWorkspace: {},
 	});
+}
+
+beforeEach(() => {
+	resetStore();
 	usePluginRegistry.setState({ fileViewers: [] });
 });
+afterAll(resetStore);
 
 const openedDiffTab = () => {
 	const tab = (useAppStore.getState().tabsByWorkspace.w1 ?? [])[0];
@@ -383,26 +386,16 @@ test("an undisturbed open stamps the state it actually read against", async () =
 	expect(tab.loadedTick).toBe(1);
 });
 
-test("a viewer registered before another for the same path wins, and its own `open` short-circuits the dispatch", async () => {
-	let opened: string | null = null;
-	usePluginRegistry.getState().addFileViewer("plugin1", {
-		matches: (path) => path.endsWith(".widget"),
-		component: () => null,
-		open: (workspaceId, path) => {
-			opened = `${workspaceId}:${path}`;
-			return true;
-		},
-		read: "none",
-	});
-	usePluginRegistry.getState().addFileViewer("core", {
-		matches: (path) => path.endsWith(".widget"),
-		component: () => null,
-		read: "text",
-	});
+const openedChangesTab = () => {
+	const tab = (useAppStore.getState().tabsByWorkspace.w1 ?? []).find(
+		(candidate) => candidate.kind === "changes",
+	);
+	if (tab?.kind !== "changes") throw new Error("no changes tab opened");
+	return tab;
+};
 
-	await openFileInTab("w1", "notes.widget", "keep");
-
-	expect(opened).toBe("w1:notes.widget");
+test("a review tab opens without a host read and carries the clicked file as a one-shot reveal", async () => {
+	await openChangesTab("w1", { kind: "branch" }, { revealPath: "/wt/w1/src/a.ts" }, "keep");
 	expect(requests).toHaveLength(0);
 	const tab = openedChangesTab();
 	expect(tab).toMatchObject({
@@ -497,6 +490,30 @@ test("a removed workspace rejects a late review-tab request", async () => {
 	expect(useAppStore.getState().tabsByWorkspace.w1 ?? []).toHaveLength(0);
 });
 
+test("a viewer registered before another for the same path wins, and its own `open` short-circuits the dispatch", async () => {
+	let opened: string | null = null;
+	usePluginRegistry.getState().addFileViewer("plugin1", {
+		matches: (path) => path.endsWith(".widget"),
+		component: () => null,
+		open: (workspaceId, path) => {
+			opened = `${workspaceId}:${path}`;
+			return true;
+		},
+		read: "none",
+	});
+	usePluginRegistry.getState().addFileViewer("core", {
+		matches: (path) => path.endsWith(".widget"),
+		component: () => null,
+		read: "text",
+	});
+
+	await openFileInTab("w1", "notes.widget", "keep");
+
+	expect(opened).toBe("w1:notes.widget");
+	expect(requests).toHaveLength(0);
+	expect(useAppStore.getState().tabsByWorkspace.w1 ?? []).toHaveLength(0);
+});
+
 test("an external-scope path a plugin viewer claims is read like any other file", async () => {
 	usePluginRegistry.getState().addFileViewer("core", {
 		matches: (path) => path.endsWith(".png"),
@@ -507,7 +524,7 @@ test("an external-scope path a plugin viewer claims is read like any other file"
 	const open = openFileInTab("w1", "/outside/logo.png", "keep");
 	expect(requests).toEqual([
 		{
-			method: pluginMethodName(CLAUDE_CODE_ID, "readFile"),
+			method: "fs.readFile",
 			params: { workspaceId: "w1", path: "/outside/logo.png" },
 		},
 	]);
