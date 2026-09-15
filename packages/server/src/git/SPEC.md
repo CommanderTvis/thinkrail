@@ -30,17 +30,13 @@ ref off the workspace-create critical path.
 - **A worktree this host did not make does not get to veto a deletion.** Git refuses `branch -D` for any
   branch a worktree holds, and people arrive at ThinkRail with worktrees made by other agents and tools —
   leaving them a branch list they could look at and not act on. So a checkout that is *not* a ThinkRail
-  workspace is removed first, with a plain `worktree remove`: one holding uncommitted work refuses, and
-  that refusal is passed on in git's own words rather than forced past. A registration whose directory is
-  already gone is pruned instead. A ThinkRail workspace is still refused outright, because the app has its
-  own way to remove one and its own state to keep in step.
-- **A worktree this host did not make does not get to veto a deletion.** Git refuses `branch -D` for any
-  branch a worktree holds, and people arrive at ThinkRail with worktrees made by other agents and tools —
-  which left them with a branch list they could look at and not act on. So a checkout that is *not* a
-  ThinkRail workspace is removed first, with a plain `worktree remove`: one holding uncommitted work
-  refuses, and that refusal is passed on with git's own words rather than forced. A registration whose
-  directory is already gone is pruned instead. A ThinkRail workspace is still refused outright, because
-  the app has its own way to remove one and its own state to keep in step.
+  workspace is removed first, with a plain `worktree remove`. A refusal specifically reporting modified
+  or untracked files is returned as the typed `dirty-worktree` recovery with its path and Git's own words;
+  only a follow-up explicit `force` request retries that already-validated external worktree with
+  `worktree remove --force`, then deletes the branch. Any other refusal remains an ordinary error. A
+  registration whose directory is already gone is pruned instead. A ThinkRail workspace and the current
+  checkout are refused before either removal path, including a force request, because the app has its own
+  state to keep in step.
 ## Boundary
 
 - **Owns:** `git(cwd, args)` (spawn git *sync*, capture trimmed stdout/stderr + ok; `opts.raw` keeps
