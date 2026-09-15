@@ -22,6 +22,7 @@ import type { EditorInfo, Project, Workspace } from "@thinkrail/contracts";
 import {
 	type KeyboardEvent,
 	type MouseEvent,
+	type ReactNode,
 	useCallback,
 	useEffect,
 	useRef,
@@ -75,7 +76,12 @@ import { canRenameWorkspace, workspaceRenameValue } from "./workspaceActions";
 const PREWARM_WORKSPACE_LIMIT = 8;
 const CREATE_WORKSPACE_LABEL = `Create workspace (${platformShortcutLabel("N")} or ${platformShortcutLabel("N", { alt: true })})`;
 
-export function ProjectTree() {
+export function ProjectTree({
+	renderWorkspaceTabs,
+}: {
+	/** Rendered under each workspace row: the shell's home for that workspace's open tabs, when it has one. */
+	renderWorkspaceTabs?: (workspace: Workspace) => ReactNode;
+}) {
 	const projects = useAppStore((s) => s.projects);
 	const recentProjects = useAppStore((s) => s.recentProjects);
 	const selectedProjectId = useAppStore((s) => s.selectedProjectId);
@@ -294,7 +300,9 @@ export function ProjectTree() {
 								<LoadingRegion rows={2} className="py-4 pr-8 pl-16" />
 							)}
 							{isExpanded && list !== undefined && (
-								<ul className="mt-4 flex flex-col gap-4 motion-safe:animate-reveal">
+								<ul
+									className={`mt-4 flex flex-col motion-safe:animate-reveal ${renderWorkspaceTabs ? "" : "gap-4"}`}
+								>
 									{list.map((ws) => (
 										<WorkspaceRow
 											key={ws.id}
@@ -310,7 +318,10 @@ export function ProjectTree() {
 											onReveal={() => revealWorkspace(ws)}
 											onRename={(name) => renameWorkspace(ws, name)}
 											onRemove={() => removeWorkspace(ws.id)}
-										/>
+											rack={renderWorkspaceTabs !== undefined}
+										>
+											{renderWorkspaceTabs?.(ws)}
+										</WorkspaceRow>
 									))}
 								</ul>
 							)}
@@ -587,6 +598,8 @@ function WorkspaceRow({
 	onReveal,
 	onRename,
 	onRemove,
+	rack = false,
+	children,
 }: {
 	workspace: Workspace;
 	isActive: boolean;
@@ -600,6 +613,9 @@ function WorkspaceRow({
 	onReveal: () => void;
 	onRename: (name: string) => void;
 	onRemove: () => void;
+	/** Rows divided by hairlines instead of spaced, the shelf a card of tabs can hang under. */
+	rack?: boolean;
+	children?: ReactNode;
 }) {
 	const isDefault = isDefaultWorkspace(workspace);
 	const isExternal = isExternalWorkspace(workspace);
@@ -696,7 +712,7 @@ function WorkspaceRow({
 	);
 
 	return (
-		<li>
+		<li className={rack ? "border-border-default border-b py-4 last:border-b-0" : undefined}>
 			<fieldset
 				aria-label={workspace.name}
 				data-testid="workspace-item"
@@ -821,6 +837,11 @@ function WorkspaceRow({
 					</DropdownMenuContent>
 				</DropdownMenu>
 			</fieldset>
+			{children ? (
+				<div data-testid="workspace-tabs" className="mt-4 ml-24">
+					{children}
+				</div>
+			) : null}
 
 			{!isDefault && (
 				<ConfirmDialog

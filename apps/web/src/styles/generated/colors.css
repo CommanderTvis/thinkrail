@@ -20,7 +20,7 @@
 	--container-content-bg: var(--content); /* the recessed read-a-diff/read-code canvas, NOT the document canvas (that is workspace): the Changes diff (Monaco THEME), rendered diffs, Shiki code blocks, and the center-column backdrop behind them */
 	--container-elevated-bg: var(--elevated); /* every raised surface: dialogs, popovers, menus, toasts, cards, code blocks */
 	--control-bg: var(--input);
-	--control-bg-hovered: var(--hover);
+	--control-bg-hovered: color-mix(in srgb, var(--hover) 60%, transparent);
 	--control-bg-selected: var(--hover);
 	--control-primary-bg: var(--accent-solid); /* the SOLID primary button fill — its own palette source (`accentSolid`), decoupled from `accent` so a theme can brighten the opaque fill without moving the alpha-derived primary tints (primary-subtle/soft/muted) or the accent used for text/ring/border; every theme maps accentSolid to its accent except regular Light, which uses the brighter dark-theme green */
 	--control-primary-bg-hovered: var(--accent-hover); /* the primary button's hover fill — its own manifest key so a theme owns the hover step instead of the button fading with an opacity utility */
