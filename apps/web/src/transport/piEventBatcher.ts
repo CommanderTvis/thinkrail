@@ -1,5 +1,4 @@
-import type { SessionEventPayload, WsServerMessage } from "@thinkrail/contracts";
-import { WS_CHANNELS } from "@thinkrail/contracts";
+import { type SessionEventPayload, WS_CHANNELS, type WsServerMessage } from "@thinkrail/contracts";
 
 const DEFAULT_DELAY_MS = 32;
 const DEFAULT_MAX_BATCH_SIZE = 128;

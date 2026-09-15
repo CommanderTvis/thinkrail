@@ -36,6 +36,7 @@ import {
 } from "@thinkrail/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@thinkrail/ui/popover";
 import { Textarea } from "@thinkrail/ui/textarea";
+import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { cn } from "@thinkrail/ui/utils";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { type DefaultPairOption, ModelEffortPicker } from "@/chat/ModelEffortPicker";
@@ -49,6 +50,7 @@ import { SkillsButton } from "@/chat/SkillsButton";
 import { SkillsDialog } from "@/chat/SkillsDialog";
 import { useModelCatalog } from "@/chat/useModelCatalog";
 import { useModelPreferences } from "@/chat/useModelPreferences";
+import { CHIP, CHIP_OFF, CHIP_ON } from "@/panels/chips";
 import {
 	applyTemplateSlotEdit,
 	beginTemplateSlotSession,
@@ -85,8 +87,12 @@ export function reconcileModel(
 	return catalogFresh && models.length > 0 ? "unavailable" : null;
 }
 
-const PILL =
-	"flex h-32 min-w-0 items-center gap-8 rounded-[var(--radius-sm)] border border-control-border-default bg-clip-padding bg-control-bg px-8 tr-text-ui text-text-default outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary data-[open=true]:border-control-border-active data-[open=true]:bg-control-bg-selected";
+const AGENTS = [{ id: "pi" as const, label: "Bundled agent" }];
+
+const PILL_SHAPE =
+	"flex h-32 min-w-0 items-center gap-8 rounded-[var(--radius-sm)] border border-control-border-default bg-clip-padding bg-control-bg px-8 tr-text-ui text-text-default outline-none transition-colors";
+
+const PILL = `${PILL_SHAPE} hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary data-[open=true]:border-control-border-active data-[open=true]:bg-control-bg-selected`;
 
 async function refreshProjectWorkspaces(projectId: string): Promise<void> {
 	useAppStore.getState().expandProject(projectId);
@@ -99,12 +105,14 @@ export function NewWorkspaceDialog({
 	projectId,
 	initialPrompt,
 	promptNote,
+	onCreated,
 	onOpenChange,
 }: {
 	open: boolean;
 	projectId: string;
 	initialPrompt?: string;
 	promptNote?: string;
+	onCreated?: (workspace: Workspace) => void;
 	onOpenChange: (open: boolean) => void;
 }) {
 	const projects = useAppStore((s) => s.projects);
@@ -114,6 +122,8 @@ export function NewWorkspaceDialog({
 	const [target, setTarget] = useState<WorkspaceTarget>("worktree");
 	const [baseRef, setBaseRef] = useState<string>("");
 	const [prompt, setPrompt] = useState("");
+	const [name, setName] = useState("");
+	const [nameTouched, setNameTouched] = useState(false);
 	const [skillCommands, setSkillCommands] = useState<SlashCommandInfo[]>([]);
 	const [templates, setTemplates] = useState<TemplateInfo[]>([]);
 	const [slotSession, setSlotSession] = useState<TemplateSlotSessionState | null>(null);
@@ -129,6 +139,7 @@ export function NewWorkspaceDialog({
 		setExplicitPair(true);
 	}, []);
 	const attachedImages = usePromptImages();
+	const [agent, setAgent] = useState<string>("pi");
 	const [creating, setCreating] = useState(false);
 	const [trusting, setTrusting] = useState(false);
 	const [manageSkills, setManageSkills] = useState(false);
@@ -197,7 +208,9 @@ export function NewWorkspaceDialog({
 		if (!open) return;
 		setSelectedProjectId(projectId);
 		updatePromptDraft(initialPrompt ?? "", null);
+		setNameTouched(false);
 		setTarget("worktree");
+		setAgent("pi");
 		setCreating(false);
 		attachedImages.reset();
 		hostDefaultAsked.current = false;
@@ -244,6 +257,21 @@ export function NewWorkspaceDialog({
 			cancelled = true;
 		};
 	}, [open, selectedProjectId, slashActive, supportsProjectTemplatePreview]);
+
+	useEffect(() => {
+		if (!open || nameTouched) return;
+		let cancelled = false;
+		setName("");
+		getTransport()
+			.request("workspace.suggestName", { projectId: selectedProjectId })
+			.then((suggested) => {
+				if (!cancelled) setName(suggested.name);
+			})
+			.catch(() => {});
+		return () => {
+			cancelled = true;
+		};
+	}, [open, selectedProjectId, nameTouched]);
 
 	useEffect(() => {
 		if (!open) return;
@@ -356,13 +384,16 @@ export function NewWorkspaceDialog({
 	});
 	const submitEnabled = !creating && !templatePending && attachedImages.pending === 0;
 
+	const gitless = projects.find((p) => p.id === selectedProjectId)?.hasGit === false;
+	const isolated = target === "worktree" && !gitless;
+
 	const create = async () => {
 		if (!submitEnabled) return;
 		setCreating(true);
 		const text = finalizeTemplateSlotSession(prompt, slotSession).trim();
 		const attachments = attachedImages.images.map(({ name, content }) => ({ name, content }));
 		let workspace: Workspace;
-		if (target === "default") {
+		if (!isolated) {
 			const def = await enterDefaultWorkspace(selectedProjectId);
 			if (!def) {
 				setCreating(false);
@@ -372,8 +403,10 @@ export function NewWorkspaceDialog({
 		} else {
 			useAppStore.getState().beginWorktreeCreation(selectedProjectId);
 			try {
+				const chosenName = nameTouched ? name.trim() : "";
 				workspace = await getTransport().request("workspace.create", {
 					projectId: selectedProjectId,
+					...(chosenName ? { name: chosenName } : {}),
 					...(baseRef ? { baseRef } : {}),
 				});
 			} catch (err) {
@@ -386,8 +419,9 @@ export function NewWorkspaceDialog({
 		}
 
 		const store = useAppStore.getState();
-		if (target === "worktree") {
+		if (isolated) {
 			void refreshProjectWorkspaces(workspace.projectId).catch(() => {});
+			onCreated?.(workspace);
 			store.activateWorkspace(workspace);
 		}
 		onOpenChange(false);
@@ -446,7 +480,6 @@ export function NewWorkspaceDialog({
 	};
 
 	const selectedProject = projects.find((p) => p.id === selectedProjectId);
-	const isolated = target === "worktree";
 
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
@@ -470,37 +503,45 @@ export function NewWorkspaceDialog({
 					promptRef.current?.focus();
 				}}
 			>
-				<DialogHeader>
-					<DialogTitle>{isolated ? "Create workspace" : "Work in project folder"}</DialogTitle>
+				<DialogTitle>Start work</DialogTitle>
+
+				<div className="flex flex-col gap-8">
+					<fieldset
+						data-testid="ws-target"
+						className="flex w-fit items-center gap-2 rounded-[var(--radius-md)] border border-control-border-default bg-control-bg p-2"
+					>
+						<legend className="sr-only">Where the work runs</legend>
+						<TargetOption
+							icon={GitBranch}
+							label="Isolated workspace"
+							name={targetGroupName}
+							active={isolated}
+							disabled={gitless}
+							title={
+								gitless
+									? "This folder is not a git repository, so there is nothing for a worktree to branch from."
+									: undefined
+							}
+							testid="ws-target-worktree"
+							onSelect={() => setTarget("worktree")}
+						/>
+						<TargetOption
+							icon={House}
+							label="Project folder"
+							name={targetGroupName}
+							active={!isolated}
+							testid="ws-target-default"
+							onSelect={() => setTarget("default")}
+						/>
+					</fieldset>
 					<DialogDescription>
 						{isolated
-							? "A separate checkout on its own new branch. Files, chats, changes, and terminals stay scoped to it."
-							: "Runs directly in your project folder — no isolation. Changes land on the current branch."}
+							? "A separate git worktree on its own new branch."
+							: gitless
+								? "Your project folder itself. It is not a git repository, so there is nothing to isolate."
+								: "Your project folder itself. No isolation, work lands on the current branch."}
 					</DialogDescription>
-				</DialogHeader>
-
-				<fieldset
-					data-testid="ws-target"
-					className="flex w-fit items-center gap-2 rounded-[var(--radius-md)] border border-control-border-default bg-control-bg p-2"
-				>
-					<legend className="sr-only">Where the work runs</legend>
-					<TargetOption
-						icon={GitBranch}
-						label="Isolated workspace"
-						name={targetGroupName}
-						active={isolated}
-						testid="ws-target-worktree"
-						onSelect={() => setTarget("worktree")}
-					/>
-					<TargetOption
-						icon={House}
-						label="Project folder"
-						name={targetGroupName}
-						active={!isolated}
-						testid="ws-target-default"
-						onSelect={() => setTarget("default")}
-					/>
-				</fieldset>
+				</div>
 
 				<div className="flex flex-wrap items-center gap-8">
 					<ProjectPicker
@@ -521,6 +562,32 @@ export function NewWorkspaceDialog({
 							onSelect={selectBaseRef}
 							onRefresh={refreshBranches}
 						/>
+					) : (
+						<span
+							data-testid="ws-current-branch"
+							className="flex h-32 min-w-0 max-w-[220px] items-center gap-8 text-text-muted tr-text-metadata"
+						>
+							<GitBranch className="size-14 shrink-0" />
+							<span className="truncate">On {branches?.current || "branch"}</span>
+						</span>
+					)}
+					{isolated ? (
+						<label
+							className={`${PILL_SHAPE} max-w-[160px] focus-within:border-control-border-active`}
+						>
+							<span className="shrink-0 tr-text-eyebrow text-text-muted">Name</span>
+							<input
+								type="text"
+								data-testid="ws-name"
+								value={name}
+								spellCheck={false}
+								onChange={(e) => {
+									setNameTouched(true);
+									setName(e.target.value);
+								}}
+								className="min-w-0 flex-1 bg-transparent text-text-muted tr-text-metadata outline-none"
+							/>
+						</label>
 					) : null}
 					<SkillsButton
 						onOpen={() => setManageSkills(true)}
@@ -620,7 +687,7 @@ export function NewWorkspaceDialog({
 							onNext={() => stepPromptSlot(1)}
 							className="absolute top-full left-8 z-50 mt-4"
 						/>
-					) : prompt.trim() && isolated ? (
+					) : prompt.trim() && isolated && !nameTouched && agent === "pi" ? (
 						<p
 							data-testid="workspace-naming-hint"
 							className="px-4 text-text-muted tr-text-metadata"
@@ -637,26 +704,41 @@ export function NewWorkspaceDialog({
 
 				<div className="flex flex-wrap items-center gap-8">
 					<div className="flex min-w-0 flex-1 flex-wrap items-center gap-8">
-						<ModelEffortPicker
-							models={models}
-							current={model}
-							level={thinkingLevel}
-							refreshing={modelsRefreshing}
-							onRefresh={onRefreshModels}
-							onSelect={({ model: next, level }) => {
-								pickExplicitly();
-								setModel(next);
-								if (level) setThinkingLevel(level);
-							}}
-							onSelectLevel={(level) => {
-								pickExplicitly();
-								setThinkingLevel(level);
-							}}
-							preferences={modelPreferences}
-							defaultOption={defaultOption}
-							container={dialogEl}
-							className="max-w-full"
-						/>
+						{AGENTS.map((option) => (
+							<button
+								key={option.id}
+								type="button"
+								data-testid="ws-agent"
+								data-agent={option.id}
+								data-selected={option.id === agent || undefined}
+								onClick={() => setAgent(option.id)}
+								className={cn(CHIP, option.id === agent ? CHIP_ON : CHIP_OFF)}
+							>
+								{option.label}
+							</button>
+						))}
+						{agent !== "pi" ? null : (
+							<ModelEffortPicker
+								models={models}
+								current={model}
+								level={thinkingLevel}
+								refreshing={modelsRefreshing}
+								onRefresh={onRefreshModels}
+								onSelect={({ model: next, level }) => {
+									pickExplicitly();
+									setModel(next);
+									if (level) setThinkingLevel(level);
+								}}
+								onSelectLevel={(level) => {
+									pickExplicitly();
+									setThinkingLevel(level);
+								}}
+								preferences={modelPreferences}
+								defaultOption={defaultOption}
+								container={dialogEl}
+								className="max-w-full"
+							/>
+						)}
 					</div>
 					<button
 						type="button"
@@ -695,6 +777,8 @@ function TargetOption({
 	label,
 	name,
 	active,
+	disabled = false,
+	title,
 	testid,
 	onSelect,
 }: {
@@ -702,23 +786,40 @@ function TargetOption({
 	label: string;
 	name: string;
 	active: boolean;
+	disabled?: boolean;
+	title?: string | undefined;
 	testid: string;
 	onSelect: () => void;
 }) {
-	return (
+	const control = (
 		<label
 			data-testid={testid}
 			data-active={active}
+			data-disabled={disabled || undefined}
 			className={cn(
-				"flex h-28 cursor-pointer items-center gap-8 rounded-[var(--radius-sm)] px-12 tr-text-ui transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-primary",
-				active ? "bg-primary-subtle text-primary" : "text-text-muted hover:text-text-default",
+				"flex h-28 items-center gap-8 rounded-[var(--radius-sm)] px-12 tr-text-ui transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-primary",
+				disabled
+					? "cursor-not-allowed text-control-disabled-text"
+					: active
+						? "cursor-pointer bg-primary-subtle text-primary"
+						: "cursor-pointer text-text-muted hover:text-text-default",
 			)}
 		>
-			<input type="radio" name={name} className="sr-only" checked={active} onChange={onSelect} />
+			<input
+				type="radio"
+				name={name}
+				className="sr-only"
+				checked={active}
+				disabled={disabled}
+				onChange={onSelect}
+			/>
 			<Icon className="size-14 shrink-0" />
 			{label}
 		</label>
 	);
+	// The reason an option is refused is ours to phrase and ours to style — the native `title` arrived
+	// late, unthemed, and in the OS's own voice. See panels/SPEC.md.
+	return title ? <IconTooltip label={title}>{control}</IconTooltip> : control;
 }
 
 function ProjectPicker({

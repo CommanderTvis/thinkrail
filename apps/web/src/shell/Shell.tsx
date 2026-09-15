@@ -1,19 +1,21 @@
 import {
 	RiArrowRightSLine as ChevronRight,
 	RiCircleLine as Circle,
-	RiGitBranchLine as GitBranch,
 	RiCircleFill,
 	RiSettings3Line as Settings,
 } from "@remixicon/react";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@thinkrail/ui/resizable";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { useEffect, useRef, useState } from "react";
+import { applyCodeFont } from "@/panels/editorFont";
 import { QuietScrollArea } from "../components/QuietScrollArea";
 import { NotificationPermissionPrompt, useAttentionNotifications } from "../notifications";
 import { AnalyticsConsentDialog } from "../panels/AnalyticsConsentDialog";
+import { BranchList } from "../panels/BranchList";
 import { InterviewPromptDialog } from "../panels/InterviewPromptDialog";
 import { NewWorkspaceDialog } from "../panels/NewWorkspaceDialog";
 import { ProjectTree } from "../panels/ProjectTree";
+import { SearchOverlay } from "../panels/SearchOverlay";
 import { SettingsDialog } from "../panels/SettingsDialog";
 import { Toaster } from "../panels/Toaster";
 import { openReviewLabel, useOpenBranchReview } from "../panels/useOpenBranchReview";
@@ -25,6 +27,7 @@ import {
 	selectAnalyticsConsentPromptOpen,
 	selectContextProject,
 	useAppStore,
+	workspaceBranchLabel,
 } from "../store";
 import {
 	applyThemePreference,
@@ -37,6 +40,8 @@ import { UpdateReadyButton, UpdateSettings, useUpdates } from "../updates";
 import { AppShortcuts } from "./AppShortcuts";
 import { BrandLogo } from "./BrandLogo";
 import { CollapsedPanelRail } from "./CollapsedPanelRail";
+import { isDesktopShell } from "./electrobunShell";
+import { FindBar } from "./FindBar";
 import { JbcentralQuotaTopbar } from "./JbcentralQuotaTopbar";
 import { LayoutSettings } from "./LayoutSettings";
 import { useLocalLayoutState } from "./layoutState";
@@ -75,6 +80,7 @@ export function Shell() {
 	const windowControls = useNativeWindowControls();
 	const [newWorkspaceProjectId, setNewWorkspaceProjectId] = useState<string | null>(null);
 	const sessionSwitcherOpen = useAppStore((s) => s.sessionSwitcherOpen);
+	const nativeShell = isDesktopShell();
 
 	const welcomeCenterRef = useRef<HTMLDivElement>(null);
 	const {
@@ -90,6 +96,8 @@ export function Shell() {
 	} = useCollapsibleRegion(welcomeCenterRef, "welcome-left");
 
 	const [themeHint] = useState(readThemeHint);
+	const [findRequest, setFindRequest] = useState(0);
+	const [searchOpen, setSearchOpen] = useState(false);
 	const welcomeGeneration = useAppStore((s) => s.welcomeGeneration);
 	const theme = useAppStore((s) => s.theme);
 	const themeMode = useAppStore((s) => s.themeMode);
@@ -104,7 +112,11 @@ export function Shell() {
 		if (welcomeGeneration > 0) writeThemeHint(preference);
 		return preference.themeMode === "system" ? onSystemAppearanceChange(apply) : undefined;
 	}, [themeHint, welcomeGeneration, theme, themeMode, systemThemePair]);
+	const codeFont = useAppStore((s) => s.codeFontFamily);
+	useEffect(() => applyCodeFont(codeFont), [codeFont]);
 	useGlobalHotkeys({
+		onFind: () => setFindRequest((current) => current + 1),
+		...(activeWorkspaceId ? { onSearch: () => setSearchOpen(true) } : {}),
 		onProjects: hasActiveWorkspace
 			? () => {
 					if (!activeWorkspaceId) return;
@@ -141,6 +153,9 @@ export function Shell() {
 	});
 	return (
 		<div data-testid="shell" className="grid h-full grid-cols-[minmax(0,1fr)] grid-rows-[auto_1fr]">
+			{searchOpen && activeWorkspaceId ? (
+				<SearchOverlay workspaceId={activeWorkspaceId} onClose={() => setSearchOpen(false)} />
+			) : null}
 			<header
 				data-testid="topbar"
 				className="relative window-drag flex h-topbar-row min-w-0 select-none items-center border-b border-border-default bg-container-header-bg px-16"
@@ -172,17 +187,23 @@ export function Shell() {
 							</span>
 							{activeWorkspace ? (
 								<>
-									<GitBranch className="size-14 shrink-0 text-text-muted" />
-									<span data-testid="scope-branch" className="truncate text-text-muted">
-										{activeWorkspace.branch}
+									<span className="window-no-drag inline-flex min-w-0">
+										<BranchList
+											projectId={activeWorkspace.projectId}
+											label={workspaceBranchLabel(activeWorkspace)}
+										/>
 									</span>
 									{isUserOwnedWorkspace(activeWorkspace) ? null : (
-										<span
-											data-testid="scope-base"
-											className="hidden shrink-0 text-text-muted md:inline"
+										<IconTooltip
+											label={`This workspace was cut from ${activeWorkspace.baseBranch}, and its changes are measured against it.`}
 										>
-											· from {activeWorkspace.baseBranch}
-										</span>
+											<span
+												data-testid="scope-base"
+												className="hidden shrink-0 select-none text-text-muted md:inline"
+											>
+												· from {activeWorkspace.baseBranch}
+											</span>
+										</IconTooltip>
 									)}
 									{openReview ? (
 										<span
@@ -209,21 +230,23 @@ export function Shell() {
 						/>
 					) : null}
 					<JbcentralQuotaTopbar />
-					<span
-						data-testid="connection-status"
-						data-status={status}
-						role="status"
-						aria-label={STATUS_LABEL[status]}
-						className="inline-flex items-center gap-8 tr-text-ui text-text-muted"
-					>
-						<StatusDot
-							aria-hidden="true"
-							className={`size-8 shrink-0 fill-current ${STATUS_DOT[status]}`}
-						/>
-						<span aria-hidden="true" className="hidden sm:inline">
-							{STATUS_LABEL[status]}
+					{nativeShell && status === "connected" ? null : (
+						<span
+							data-testid="connection-status"
+							data-status={status}
+							role="status"
+							aria-label={STATUS_LABEL[status]}
+							className="inline-flex items-center gap-8 tr-text-ui text-text-muted"
+						>
+							<StatusDot
+								aria-hidden="true"
+								className={`size-8 shrink-0 fill-current ${STATUS_DOT[status]}`}
+							/>
+							<span aria-hidden="true" className="hidden sm:inline">
+								{STATUS_LABEL[status]}
+							</span>
 						</span>
-					</span>
+					)}
 					<IconTooltip label="Settings">
 						<button
 							type="button"
@@ -341,6 +364,7 @@ export function Shell() {
 				}}
 			/>
 			<NotificationPermissionPrompt />
+			{findRequest > 0 ? <FindBar request={findRequest} onClose={() => setFindRequest(0)} /> : null}
 			<Toaster />
 			<AppShortcuts />
 		</div>

@@ -1,6 +1,10 @@
 import { expect, test } from "bun:test";
-import type { PiEvent, TodoItem, TodoPlan } from "@thinkrail/contracts";
-import { PLAN_SUMMARY_GENERATION_PROTOCOL_VERSION } from "@thinkrail/contracts";
+import {
+	type PiEvent,
+	PLAN_SUMMARY_GENERATION_PROTOCOL_VERSION,
+	type TodoItem,
+	type TodoPlan,
+} from "@thinkrail/contracts";
 import { supportsPlanSummaryGeneration } from "../transport";
 import { planIsCompleteWithoutSummary, shouldRefreshTodos } from "./useChatTodos";
 

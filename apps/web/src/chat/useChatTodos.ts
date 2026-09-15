@@ -1,11 +1,12 @@
-import type {
-	PiEvent,
-	ReviewChangedPayload,
-	ReviewFailedPayload,
-	SessionEventPayload,
-	TodoPlan,
+import {
+	type PiEvent,
+	type ReviewChangedPayload,
+	type ReviewFailedPayload,
+	type SessionEventPayload,
+	TODO_NUDGE_PREFIX,
+	type TodoPlan,
+	WS_CHANNELS,
 } from "@thinkrail/contracts";
-import { TODO_NUDGE_PREFIX, WS_CHANNELS } from "@thinkrail/contracts";
 import { useCallback, useEffect, useInsertionEffect, useRef, useState } from "react";
 import { tupleKey } from "../lib";
 import {

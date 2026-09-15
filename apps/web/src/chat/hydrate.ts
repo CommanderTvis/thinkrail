@@ -1,9 +1,6 @@
-import type {
-	AgentSettlement,
-	AskUserAnswersDetails,
-	TranscriptMessage,
-} from "@thinkrail/contracts";
 import {
+	type AgentSettlement,
+	type AskUserAnswersDetails,
 	customMessageText,
 	isAskUserAnswersMessage,
 	isBackgroundCommandCompletionMessage,
@@ -11,6 +8,7 @@ import {
 	isRetriedAttempt,
 	isSubagentCompletionMessage,
 	isTodoReviewFixMessage,
+	type TranscriptMessage,
 } from "@thinkrail/contracts";
 import { userText } from "../lib";
 import { assistantFailureText } from "./assistantFailure";

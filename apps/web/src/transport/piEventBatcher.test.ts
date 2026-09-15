@@ -1,6 +1,10 @@
 import { expect, test } from "bun:test";
-import type { PiEvent, SessionEventPayload, WsServerMessage } from "@thinkrail/contracts";
-import { WS_CHANNELS } from "@thinkrail/contracts";
+import {
+	type PiEvent,
+	type SessionEventPayload,
+	WS_CHANNELS,
+	type WsServerMessage,
+} from "@thinkrail/contracts";
 import { createPiEventBatcher, shouldFlushPiEventsBefore } from "./piEventBatcher";
 
 const payload = (sessionId: string, type: PiEvent["type"]): SessionEventPayload => ({

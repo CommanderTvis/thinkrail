@@ -22,7 +22,7 @@ if (root) {
 	createRoot(root).render(
 		<StrictMode>
 			<ErrorBoundary label="app">
-				<TooltipProvider delayDuration={250} skipDelayDuration={400}>
+				<TooltipProvider delayDuration={250} skipDelayDuration={400} disableHoverableContent>
 					<Shell />
 				</TooltipProvider>
 			</ErrorBoundary>

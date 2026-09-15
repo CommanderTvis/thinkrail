@@ -2,6 +2,7 @@ import {
 	RiArrowDownSLine as ChevronDown,
 	RiFileCopyLine as Copy,
 	RiFileScanLine as FileDiff,
+	RiPencilLine as Pencil,
 } from "@remixicon/react";
 import {
 	DropdownMenu,
@@ -9,8 +10,7 @@ import {
 	DropdownMenuItem,
 	DropdownMenuTrigger,
 } from "@thinkrail/ui/dropdown-menu";
-import type { MouseEvent, ReactNode } from "react";
-import { useState } from "react";
+import { type MouseEvent, type ReactNode, useState } from "react";
 import { copyText } from "@/lib";
 
 export const ROW_MENU_SLOT = "mr-4 size-20 shrink-0";
@@ -19,11 +19,14 @@ export function ChangeRowActions({
 	path,
 	active = false,
 	onView,
+	onJumpToSource,
 	children,
 }: {
 	path: string;
 	active?: boolean;
 	onView: () => void;
+	/** Opens the file itself, not the diff of it. */
+	onJumpToSource: () => void;
 	children: (rowProps: { onContextMenu: (event: MouseEvent) => void }) => ReactNode;
 }) {
 	const [open, setOpen] = useState(false);
@@ -52,7 +55,11 @@ export function ChangeRowActions({
 			<DropdownMenuContent align="end" data-testid="change-row-actions">
 				<DropdownMenuItem data-testid="change-action-view" onSelect={onView}>
 					<FileDiff />
-					View
+					Show diff
+				</DropdownMenuItem>
+				<DropdownMenuItem data-testid="change-action-jump" onSelect={onJumpToSource}>
+					<Pencil />
+					Jump to source
 				</DropdownMenuItem>
 				<DropdownMenuItem
 					data-testid="change-action-copy-path"

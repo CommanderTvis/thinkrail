@@ -1,5 +1,11 @@
-import type { WsMethodName, WsParams, WsResult, WsServerMessage } from "@thinkrail/contracts";
-import { PROTOCOL_VERSION, WS_CHANNELS } from "@thinkrail/contracts";
+import {
+	PROTOCOL_VERSION,
+	WS_CHANNELS,
+	type WsMethodName,
+	type WsParams,
+	type WsResult,
+	type WsServerMessage,
+} from "@thinkrail/contracts";
 import { randomId } from "../lib";
 import { RequestError } from "./requestError";
 
@@ -177,7 +183,9 @@ export class WsTransport {
 		}
 		this.beforeDispatch?.(msg);
 		if ("channel" in msg) {
-			if (!NON_REPLAYABLE_CHANNELS.has(msg.channel)) this.latest.set(msg.channel, msg.data);
+			if (!NON_REPLAYABLE_CHANNELS.has(msg.channel) && !msg.channel.startsWith("plugin.")) {
+				this.latest.set(msg.channel, msg.data);
+			}
 			const set = this.subscribers.get(msg.channel);
 			if (set) for (const handler of set) handler(msg.data);
 			return;

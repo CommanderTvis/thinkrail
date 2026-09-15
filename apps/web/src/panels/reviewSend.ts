@@ -16,7 +16,7 @@ async function showReviewChat(
 	background = false,
 ): Promise<void> {
 	if (sent.reused) {
-		await openChatInTab(workspaceId, sent.sessionId, navigation, background);
+		await openChatInTab(workspaceId, sent.sessionId, navigation, { background });
 		return;
 	}
 	const store = useAppStore.getState();

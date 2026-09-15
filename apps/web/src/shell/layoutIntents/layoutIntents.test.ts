@@ -1,7 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { LayoutAttention } from "../../lib";
-import type { LayoutTerminalTab, WorkspaceLayoutDocument } from "../layout";
-import { findTabLocation } from "../layout";
+import { findTabLocation, type LayoutTerminalTab, type WorkspaceLayoutDocument } from "../layout";
 import { placeTerminalForIntent } from "./layoutIntents";
 
 function document(): WorkspaceLayoutDocument {

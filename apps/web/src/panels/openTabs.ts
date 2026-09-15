@@ -1,6 +1,8 @@
 import type { GitDiffScope } from "@thinkrail/contracts";
+import type { LayoutOpenOptions } from "@/store";
 import {
 	DOUBLE_CLICK_SETTLE_MS,
+	isAbsolutePath,
 	layoutResourceIdentity,
 	projectRelativePath,
 	tupleKey,
@@ -19,6 +21,7 @@ import {
 } from "../store";
 import { getTransport } from "../transport";
 import { diffTabId, diffTabName } from "./changesModel";
+import { emitEditorEvent, findEditorRef } from "./editorEvents";
 
 function baseName(path: string): string {
 	return path.split("/").pop() || path;
@@ -43,11 +46,17 @@ async function openReadTab<T>(
 	workspaceId: string,
 	id: string,
 	resourceIdentity: string,
-	intent: TabIntent,
+	requestedIntent: TabIntent,
 	read: () => Promise<T>,
 	build: (payload: T, loadedTick: number) => EditorTab,
 	requestedNavigation?: CenterNavigationStamp | null,
+	extraOptions?: Partial<LayoutOpenOptions>,
 ): Promise<void> {
+	// With the preview slot turned off every open keeps: nothing claims the slot, and no open waits out
+	// the double-click window to find out whether it was one. See panels/SPEC.md.
+	const intent: TabIntent = useAppStore.getState().localLayoutPreferences.previewTabs
+		? requestedIntent
+		: "keep";
 	const navigation =
 		requestedNavigation === undefined
 			? useAppStore.getState().beginCenterNavigation(workspaceId)
@@ -100,8 +109,8 @@ async function openReadTab<T>(
 					flight.intent,
 					true,
 					flight.intent === "keep" && flight.claimPreview && !overtaken
-						? { ...options, claimPreview: true }
-						: options,
+						? { ...options, ...extraOptions, claimPreview: true }
+						: { ...options, ...extraOptions },
 				);
 		} finally {
 			inFlight.delete(id);
@@ -134,8 +143,8 @@ async function openReadTab<T>(
 				flight.intent,
 				true,
 				flight.intent === "keep" && flight.claimPreview && !overtaken
-					? { ...options, claimPreview: true }
-					: options,
+					? { ...options, ...extraOptions, claimPreview: true }
+					: { ...options, ...extraOptions },
 			);
 	} catch {
 	} finally {
@@ -148,20 +157,26 @@ export function openFileInTab(
 	reported: string,
 	intent: TabIntent,
 	requestedNavigation?: CenterNavigationStamp | null,
+	extraOptions?: Partial<LayoutOpenOptions>,
+	_viewerOptions?: { raw?: boolean },
 ): Promise<void> {
 	const path = projectRelativePath(
 		reported,
 		selectWorkspaceById(useAppStore.getState(), workspaceId)?.worktreePath,
 	);
-	const id = tupleKey("file", workspaceId, path);
+	// An absolute path here is one that fell outside the worktree: the worktree-relative form cannot name
+	// it, so it becomes its own tab kind rather than an invalid file tab — see contracts' LayoutExternalFileTab.
+	const external = isAbsolutePath(path);
+	const kind = external ? ("external-file" as const) : ("file" as const);
+	const id = tupleKey(kind, workspaceId, path);
 	return openReadTab(
 		workspaceId,
 		id,
-		layoutResourceIdentity({ kind: "file", id, name: baseName(path), path }),
+		layoutResourceIdentity({ kind, id, name: baseName(path), path }),
 		intent,
 		() => getTransport().request("fs.readFile", { workspaceId, path }),
 		({ content, meta }, loadedTick) => ({
-			kind: "file",
+			kind,
 			id,
 			workspaceId,
 			path,
@@ -171,7 +186,11 @@ export function openFileInTab(
 			loadedTick,
 		}),
 		requestedNavigation,
-	);
+		extraOptions,
+	).then(() => {
+		const ref = findEditorRef(workspaceId, path);
+		if (ref) emitEditorEvent({ kind: "opened", editor: ref });
+	});
 }
 
 export function openDiffInTab(

@@ -1,0 +1,61 @@
+import { stripFrontmatter } from "@/lib/utils";
+import type { HeadingEntry } from "@/panels/outlineHeadings";
+import { slugify } from "./markdownLinks";
+import { frontmatterOffset } from "./sourceLines";
+import { readSpecDocument } from "./specDocument";
+
+export { buildOutlineTree, type HeadingEntry, type OutlineNode } from "./outlineHeadings";
+
+const FENCE = /^ {0,3}(`{3,}|~{3,})/;
+const ATX = /^(#{1,6})\s+(.*)$/;
+
+/**
+ * Headings read from the markdown source — level, display text, the slug id the rendered document gives
+ * the same heading (same `slugify` + dedupe walk as `remarkHeadingIds`), and the raw source line. The
+ * source is what both sides of a split can agree on; the id can drift from the DOM only in the review
+ * path's segmented render, where the jump falls back to line stamps. See SPEC.md.
+ */
+export function sourceHeadings(raw: string): HeadingEntry[] {
+	const stripped = stripFrontmatter(raw);
+	const offset = frontmatterOffset(raw, stripped);
+	const seen = new Map<string, number>();
+	const found: HeadingEntry[] = [];
+	// A spec's title lives in its frontmatter, so the outline names the document the preview names.
+	const spec = readSpecDocument(raw);
+	if (spec?.title) {
+		const base = slugify(spec.title);
+		if (base) {
+			seen.set(base, 1);
+			const at = raw.split("\n").findIndex((line) => /^title:\s*\S/.test(line));
+			found.push({ level: 1, text: spec.title, id: base, line: at < 0 ? 1 : at + 1 });
+		}
+	}
+	let fence: string | null = null;
+	stripped.split("\n").forEach((lineText, at) => {
+		const fenceMark = FENCE.exec(lineText);
+		if (fenceMark) {
+			const mark = (fenceMark[1] ?? "").charAt(0);
+			if (fence === null) fence = mark;
+			else if (fence === mark) fence = null;
+			return;
+		}
+		if (fence !== null) return;
+		const match = ATX.exec(lineText);
+		if (!match) return;
+		const text = (match[2] ?? "")
+			.replace(/\s+#+\s*$/, "")
+			.replaceAll("`", "")
+			.trim();
+		const base = slugify(text);
+		if (!base) return;
+		const n = seen.get(base) ?? 0;
+		seen.set(base, n + 1);
+		found.push({
+			level: (match[1] ?? "").length,
+			text,
+			id: n === 0 ? base : `${base}-${n}`,
+			line: at + 1 + offset,
+		});
+	});
+	return found;
+}

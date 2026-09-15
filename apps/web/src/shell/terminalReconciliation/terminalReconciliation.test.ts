@@ -1,7 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import type { LayoutAttention } from "../../lib";
-import type { LayoutTerminalTab, WorkspaceLayoutDocument } from "../layout";
-import { findTabLocation, toolTab } from "../layout";
+import {
+	findTabLocation,
+	type LayoutTerminalTab,
+	toolTab,
+	type WorkspaceLayoutDocument,
+} from "../layout";
 import { placeRecoveredTerminal } from "./terminalReconciliation";
 
 function document(): WorkspaceLayoutDocument {

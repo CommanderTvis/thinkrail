@@ -16,6 +16,7 @@ import {
 	useState,
 } from "react";
 import { copyText, isPhoneViewport, usePhoneViewport } from "@/lib";
+import { OutlineColumn, OutlineToggle, scrollToHeading } from "@/panels/Outline";
 import {
 	describeResource,
 	type HunkActions,
@@ -25,11 +26,17 @@ import {
 	resolveRenderers,
 } from "@/resources";
 import { LoadingRegion } from "../components/Skeleton";
-import type { DiffTab } from "../store";
-import { selectDiffTabTargetRef, selectWorkspaceIsRunning, toast, useAppStore } from "../store";
+import {
+	type DiffTab,
+	selectDiffTabTargetRef,
+	selectWorkspaceIsRunning,
+	toast,
+	useAppStore,
+} from "../store";
 import { errorText, getTransport, wsErrorCode } from "../transport";
 import { canOfferChangeMutations, scopeHasMutableModifiedSide } from "./changeMutationAvailability";
 import { splitPath } from "./changesModel";
+import { sourceHeadings } from "./outlineTree";
 import {
 	PENDING_TEXT_META,
 	rendererImplementationKey,
@@ -96,6 +103,7 @@ export function DiffPane({ tab }: { tab: DiffTab }) {
 	const setTabRenderer = useAppStore((state) => state.setTabRenderer);
 	const setDiffTabView = useAppStore((state) => state.setDiffTabView);
 	const setDiffTabIgnoreWhitespace = useAppStore((state) => state.setDiffTabIgnoreWhitespace);
+	const setDiffTabOutline = useAppStore((state) => state.setDiffTabOutline);
 	const [copied, setCopied] = useState(false);
 	const protocolVersion = useAppStore((state) => state.protocolVersion);
 	const mutationExpect = useMemo(
@@ -189,6 +197,8 @@ export function DiffPane({ tab }: { tab: DiffTab }) {
 	useResetViewStateOnImplementationChange(tab.workspaceId, tab.id, implementationKey);
 
 	const view = mobile ? "inline" : (tab.view ?? "split");
+	const rendered = renderer.id === "thinkrail/markdown";
+	const outlineOpen = rendered && (tab.outlineOpen ?? false);
 	const ignoreWhitespace = tab.ignoreWhitespace ?? false;
 	const original = sideContent(
 		tab.original,
@@ -359,6 +369,13 @@ export function DiffPane({ tab }: { tab: DiffTab }) {
 						{base}
 					</span>
 				</span>
+				{rendered ? (
+					<OutlineToggle
+						active={outlineOpen}
+						onClick={() => setDiffTabOutline(tab.id, !outlineOpen)}
+						testid="diff-toggle-outline"
+					/>
+				) : null}
 				<SendReviewButton workspaceId={tab.workspaceId} path={tab.path} />
 				{hunkActions ? (
 					<HeaderIconButton
@@ -428,24 +445,29 @@ export function DiffPane({ tab }: { tab: DiffTab }) {
 				{...(placedThreadIds ? { placedThreadIds } : {})}
 				onSelectRenderer={(rendererId) => setTabRenderer(tab.workspaceId, tab.id, rendererId)}
 			/>
-			<div className="min-h-0 flex-1">
-				<Suspense fallback={loading}>
-					<RendererDiff
-						key={implementationKey}
-						renderer={renderer}
-						implementationKey={implementationKey}
-						resource={resource}
-						original={original}
-						modified={modified}
-						layout={view === "split" ? "split" : "unified"}
-						ignoreWhitespace={ignoreWhitespace}
-						{...(reviewable ? { review } : {})}
-						{...(hunkActions ? { hunkActions } : {})}
-						onPlacedThreadIds={onPlacedThreadIds}
-						viewState={tab.viewState}
-						onViewState={saveViewState}
-					/>
-				</Suspense>
+			<div className="flex min-h-0 flex-1">
+				{outlineOpen ? (
+					<OutlineColumn headings={sourceHeadings(modifiedText)} onSelect={scrollToHeading} />
+				) : null}
+				<div className="min-h-0 min-w-0 flex-1">
+					<Suspense fallback={loading}>
+						<RendererDiff
+							key={implementationKey}
+							renderer={renderer}
+							implementationKey={implementationKey}
+							resource={resource}
+							original={original}
+							modified={modified}
+							layout={view === "split" ? "split" : "unified"}
+							ignoreWhitespace={ignoreWhitespace}
+							{...(reviewable ? { review } : {})}
+							{...(hunkActions ? { hunkActions } : {})}
+							onPlacedThreadIds={onPlacedThreadIds}
+							viewState={tab.viewState}
+							onViewState={saveViewState}
+						/>
+					</Suspense>
+				</div>
 			</div>
 		</div>
 	);

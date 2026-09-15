@@ -1,5 +1,4 @@
-import type { DelegationRunDetails, DelegationRunStatus } from "@thinkrail/contracts";
-import { isDelegationRunDetails } from "@thinkrail/contracts";
+import { type DelegationRunDetails, type DelegationRunStatus, isDelegationRunDetails } from "@thinkrail/contracts";
 import { strArg, type ToolRenderProps } from "@thinkrail/extension-api/web";
 import { formatCost, formatElapsed, formatTokens } from "../../SessionStatsBar";
 

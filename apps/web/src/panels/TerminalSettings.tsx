@@ -1,6 +1,10 @@
 import { RiCheckLine as Check } from "@remixicon/react";
-import type { HostPlatform, TerminalWindowsShell } from "@thinkrail/contracts";
-import { TERMINAL_REPLAY_KB, WINDOWS_SHELL_SETTINGS_PROTOCOL_VERSION } from "@thinkrail/contracts";
+import {
+	type HostPlatform,
+	TERMINAL_REPLAY_KB,
+	type TerminalWindowsShell,
+	WINDOWS_SHELL_SETTINGS_PROTOCOL_VERSION,
+} from "@thinkrail/contracts";
 import { cn } from "@thinkrail/ui/utils";
 import { toast, useAppStore } from "@/store";
 import { getTransport } from "@/transport";

@@ -61,6 +61,14 @@ export interface ResourceViewProps {
 	onPlacedThreadIds?(ids: ReadonlySet<string>): void;
 	viewState?: unknown;
 	onViewState?(state: unknown): void;
+	edit?: ResourceEdit;
+	focusLine?: number;
+	onFocusHandled?(): void;
+}
+
+export interface ResourceEdit {
+	onChange(text: string): void;
+	onSave(): void;
 }
 
 export interface HunkActions {

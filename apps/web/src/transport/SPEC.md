@@ -33,9 +33,9 @@ batches high-frequency Pi events without allowing later wire messages to overtak
   `resume` repairs them all at once by restating the truth rather than confirming the confirmations —, channel
   `subscribe` with last-value replay for snapshots; append-only terminal data and the one-shot terminal
   exit/detach + session-creation/deletion + `provider.changed` invalidation + addressed `feedback.interview`
-  channels, plus scoped `session.resourcesChanged` invalidations, are never cached or replayed to late
-  subscribers. Resource metadata hydration belongs to the mounted chat integration, not replayed
-  invalidation payloads. Reconnect/backoff;
+  channels, plus scoped `session.resourcesChanged` invalidations, and every `"plugin."`-prefixed channel, are never
+  cached or replayed to late subscribers. Resource metadata hydration belongs to the mounted chat integration, not
+  replayed invalidation payloads. Reconnect/backoff;
   `inferUrl` defaults to
   same-origin; **`httpBase()`** derives the host's HTTP origin
   from the WS `url` — for building host HTTP URLs like the `/files/<workspaceId>/<path>` worktree-file
@@ -44,7 +44,8 @@ batches high-frequency Pi events without allowing later wire messages to overtak
   one atomic delivery at roughly 30 Hz, a 128-event forced-flush ceiling, and `flush`/`dispose` lifecycle);
   `wireTransport.ts` (`initTransport`/
   `getTransport` singleton; routes `server.welcome`, **`host.updateAvailable`**, **`project.updated`**, `pi.event`, `pi.extensionUi`,
-  **`session.created`**, **`session.deleted`**, **`provider.changed`**, addressed **`feedback.interview`**, **the
+  **`session.created`**, **`session.deleted`**, **`provider.changed`**, addressed **`feedback.interview`**,
+  **the
   `workspace.created`/`updated`/`removed` lifecycle trio, and `workspace.fsChanged`** into the store — and
   folds every connection transition through
   `setStatus`, whose connected generation gives active-workspace hydration a distinct trigger on every
@@ -70,7 +71,16 @@ batches high-frequency Pi events without allowing later wire messages to overtak
   then `feedback.interview` via the idempotent `showInterviewPrompt()` (a surviving host claim re-delivers the
   addressed event immediately after welcome),
   `workspace.fsChanged` via `noteFsChanged(payload)`, and **`settings.changed`** via `applyConfig(config)` — the post-startup server-synced app config broadcast;
-  welcome config lands in the atomic install above.
+  welcome config lands in the atomic install above. **`welcome.plugins`** installs the initial plugin roster via
+  `applyPluginRoster`, and **`plugins.changed`** keeps it live the same way — the one piece of plugin state this
+  module or `store` owns; every contribution a plugin registers lives in `plugins/registry` instead, reached via
+  `plugins/loader`'s own subscription to `store`'s `pluginRoster`, not through this module. A plugin's own wire
+  methods/channels (`plugin.<id>.<name>`, `PluginWireName`) never route through `wireTransport` at all — a
+  plugin's web half calls `getTransport().request`/`.subscribe` with its own namespaced method/channel name
+  directly, so no per-plugin line is ever added here. `transport.ts`'s channel-replay cache (`latest`, below)
+  is skipped for every channel starting with `"plugin."` for the same reason `terminalData`/`sessionDeleted`/etc.
+  are: a plugin's `subscribe` already does its own snapshot-then-stream (`plugins/loader/context.ts`), so a
+  cached last value would just be a second, unscoped source of the same fact.
 
   **Session state hydrates on every supported welcome.** `session.stateList` is tokenized by connection
   generation and buffers `session.state` pushes until the complete snapshot returns, folds those full-record
@@ -111,7 +121,8 @@ batches high-frequency Pi events without allowing later wire messages to overtak
 - **Public surface (barrel):** `initTransport`, `getTransport`, `prewarmWorkspaceSkillLoad`, the three
   skill-load-safe session request wrappers, `errorText`, `RequestError`, `wsErrorCode`, `ConnectionStatus`,
   `TransportOptions`, `runHostUpdate`, `supportsHostUpdateRun`, `supportsPlanReview`,
-  `supportsPlanSummaryGeneration`, `supportsChangeMutations`, `supportsRichAnchors`. `runHostUpdate` is the typed empty host action
+  `supportsPlanSummaryGeneration`, `supportsChangeMutations`, `supportsRichAnchors`,
+  `reportIdeSelection`/`reportIdeActiveFile`/`reportIdeDocumentClosed`. `runHostUpdate` is the typed empty host action
   and `supportsHostUpdateRun` lets `Shell` inject it only for protocol v70+; `supportsPlanReview` is exported
   because a sibling panel (`PlanPane`) gates the plan-review UI on it — an older host serves no
   `todo.startReview`/`reviewAll`, so the client must not offer them; `supportsPlanSummaryGeneration` (v69) is
@@ -125,6 +136,18 @@ batches high-frequency Pi events without allowing later wire messages to overtak
   resource shape needs no gate: a host older than `RESOURCE_META_PROTOCOL_VERSION` answers `fs.readFile`
   and `git.diffFile` without `meta`, which the panes read as "text" — exactly the surface that host's own
   client showed — and `/blob` is only ever addressed for a side the host itself reported as byte-only.
+- **`reportIdeSelection`/`reportIdeActiveFile`/`reportIdeDocumentClosed` are a generic bridge now,
+  `editorReports.ts` — Claude Code's own IDE-bridge wire calls (`ideBridge.selectionChanged`/`.action`,
+  `setIdeActionHandler`) moved to `@thinkrail/plugin-claude-code` along with everything else that plugin
+  owns.** These three functions keep their exact names and signatures because
+  `apps/web/src/plugins/loader/context.ts` (owned by the plugin-loader work, not this module) imports
+  `reportIdeSelection` by that name to feed the generic `ctx.editors.onEvent` stream every plugin's editor
+  events ride — so the fix for "a Claude-specific function name baked into a generic loader" was to keep
+  the name and swap what is inside it, not to touch the loader. `editorReports.ts` routes through the
+  generic editor-event emitter (`panels/editorEvents.ts`'s `emitEditorEvent`/`findEditorRef`) instead of a
+  wire call, de-duplicated by `workspace+path+range` the same way the old `ideBridge.ts` was — any plugin
+  that calls `ctx.editors.onEvent` sees the same selection/active-file/closed events Claude Code's plugin
+  now turns into its own `selectionChanged`/`documentClosed` requests.
 - **Allowed deps:** `contracts` (method maps, `WS_CHANNELS`, `Project` for welcome + `project.updated`, `SessionEventPayload`
   for `pi.event`, `ExtUiRequest` for `pi.extensionUi`, `Workspace` for `workspace.created`/`updated`,
   `WorkspaceRemoved` for `workspace.removed`, `SessionCreatedPayload` for `session.created`,
@@ -135,9 +158,10 @@ batches high-frequency Pi events without allowing later wire messages to overtak
   for the rich-anchor authoring gate, `provider.changed`, the empty
   addressed `feedback.interview` invitation, `HostUpdateNotice` for `server.welcome` +
   `host.updateAvailable`,
-  `WorkspaceFsChangedPayload` for `workspace.fsChanged`, and `AppConfig` for `server.welcome`'s config +
-  `settings.changed`); `store`
-  (welcome + event routing — a runtime edge owned by the parent graph); `lib` (plain-HTTP-safe random page
+  `WorkspaceFsChangedPayload` for `workspace.fsChanged`, `AppConfig` for `server.welcome`'s config +
+  `settings.changed`, `PluginRosterEntry` for `server.welcome`'s plugins + `plugins.changed`); `store`
+  (welcome + event routing — a runtime edge owned by the parent graph); `panels/editorEvents` (the generic
+  editor-event emitter `editorReports.ts` feeds); `lib` (plain-HTTP-safe random page
   identity); the browser `WebSocket`.
 - **Forbidden:** `server`/`shared`/any `pi` package; importing `panels`/`shell`; or requesting, subscribing to, or folding current-layout state. Browser layout persistence uses only `httpBase()` as part of its frontend-local storage identity; native stable persistence has no transport edge.
 

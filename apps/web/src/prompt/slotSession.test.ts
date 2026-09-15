@@ -1,5 +1,4 @@
 import { expect, test } from "bun:test";
-import type { TemplateSlot } from "./slotSession";
 import {
 	applyTemplateSlotEdit,
 	beginTemplateSlotSession,
@@ -11,6 +10,7 @@ import {
 	shiftSlots,
 	stepTemplateSlotSession,
 	stripUntouchedSlots,
+	type TemplateSlot,
 } from "./slotSession";
 
 test("the shared slot session begins, tracks an edit, advances, and finalizes", () => {

@@ -22,8 +22,9 @@ import { onThemeSwap } from "@thinkrail/ui/theme";
 import type { Environment, editor } from "monaco-editor/esm/vs/editor/editor.api.js";
 import * as monaco from "monaco-editor/esm/vs/editor/editor.api.js";
 import editorWorker from "monaco-editor/esm/vs/editor/editor.worker?worker";
-import { cssColorToHex } from "@/lib";
+import { cssColorToHex, supportsDevicePixelBox } from "@/lib";
 import { SHIKI_FILE_LANGUAGES } from "@/lib/highlighter";
+import { cssVar, editorFontSize } from "@/panels/editorFont";
 import { resolveThinkrailShikiTheme } from "../themes";
 import { editorWrappingOptions } from "./editorWrapping";
 
@@ -82,12 +83,38 @@ export function languageForPath(path: string): string {
 	return id;
 }
 
-function cssVar(name: string): string | undefined {
-	return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || undefined;
+interface WebGpu {
+	requestAdapter(): Promise<unknown>;
 }
 
-export function fileEditorOptions(lineWidth: number, bounded: boolean, path: string) {
-	const fontSize = Number.parseFloat(cssVar("--tr-font-size-s11") ?? "") || 11;
+let webgpuUsable = false;
+void (async () => {
+	const gpu = (navigator as Navigator & { gpu?: WebGpu }).gpu;
+	if (!gpu) return;
+	try {
+		webgpuUsable = (await gpu.requestAdapter()) !== null;
+	} catch {
+		webgpuUsable = false;
+	}
+})();
+
+const devicePixelBoxUsable = supportsDevicePixelBox((options) =>
+	new ResizeObserver(() => {}).observe(document.createElement("div"), options),
+);
+
+/** Monaco's GPU renderer, only where everything it needs answers — see panels/SPEC.md. */
+export function gpuAcceleration(requested: boolean): "on" | "off" {
+	return requested && webgpuUsable && devicePixelBoxUsable ? "on" : "off";
+}
+
+export function fileEditorOptions(
+	lineWidth: number,
+	bounded: boolean,
+	path: string,
+	gpu = false,
+	ligatures = false,
+) {
+	const fontSize = editorFontSize();
 	const lineHeight = Number.parseFloat(cssVar("--tr-line-height-default") ?? "") || undefined;
 	const paddingTop = Number.parseFloat(cssVar("--space-8") ?? "");
 	const options: editor.IStandaloneEditorConstructionOptions = {
@@ -106,6 +133,10 @@ export function fileEditorOptions(lineWidth: number, bounded: boolean, path: str
 		automaticLayout: true,
 		fontSize,
 		fontFamily: cssVar("--tr-font-family-code") ?? "monospace",
+		// `#130` in a comment is an issue number, not a colour swatch. See panels/SPEC.md.
+		colorDecorators: false,
+		experimentalGpuAcceleration: gpuAcceleration(gpu),
+		fontLigatures: ligatures,
 		...(lineHeight && lineHeight > 0 ? { lineHeight } : {}),
 		scrollbar: {
 			vertical: "auto",
