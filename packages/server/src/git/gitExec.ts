@@ -21,7 +21,7 @@ export type GitResult = {
 };
 
 export function nonInteractiveGitEnv(): Record<string, string | undefined> {
-	return { ...process.env, GIT_TERMINAL_PROMPT: "0" };
+	return { ...process.env, GIT_TERMINAL_PROMPT: "0", GIT_OPTIONAL_LOCKS: "0" };
 }
 
 function boundedStderr(raw: string): string {

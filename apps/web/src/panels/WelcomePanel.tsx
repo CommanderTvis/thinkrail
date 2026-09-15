@@ -1,27 +1,24 @@
 import {
 	RiFolderOpenLine as FolderOpen,
+	RiFolderAddLine as FolderPlus,
 	RiHome2Line as House,
 	type RemixiconComponentType as LucideIcon,
 	RiRocketLine as Rocket,
-	RiSparkling2Line as Sparkles,
 } from "@remixicon/react";
 import type { Workspace } from "@thinkrail/contracts";
-import { type ComponentPropsWithoutRef, forwardRef, useEffect, useState } from "react";
+import { type ComponentPropsWithoutRef, forwardRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import { PRODUCT_NAME } from "../constants/branding";
 import { useAppStore } from "../store";
 import { getTransport } from "../transport";
 import { AddProjectMenu } from "./AddProjectMenu";
+import { CloneProjectDialog } from "./CloneProjectDialog";
 import { enterDefaultWorkspace } from "./defaultWorkspace";
+import { NewProjectDialog } from "./NewProjectDialog";
 import { NewWorkspaceDialog } from "./NewWorkspaceDialog";
 import { ProjectSkillsNotice } from "./ProjectSkillsNotice";
 import { ProviderWarningBanner } from "./ProviderWarningBanner";
 import { useOpenProject } from "./useOpenProject";
-
-const SETUP_PROMPT = "/skill:setting-up-a-project ";
-
-const SETUP_NOTE =
-	"Runs the setting-up-a-project skill — the agent drafts your project's specs, starting from its goal, before building.";
 
 export function WelcomePanel() {
 	const projects = useAppStore((s) => s.projects);
@@ -32,30 +29,10 @@ export function WelcomePanel() {
 		prompt: string;
 		note?: string;
 	} | null>(null);
-	const [hasSpecs, setHasSpecs] = useState<boolean | null>(null);
+	const [newProject, setNewProject] = useState(false);
+	const [cloneProject, setCloneProject] = useState(false);
 
 	const project = projects.find((p) => p.id === selectedProjectId) ?? projects[0] ?? null;
-
-	useEffect(() => {
-		const projectId = project?.id;
-		if (!projectId) {
-			setHasSpecs(null);
-			return;
-		}
-		let cancelled = false;
-		setHasSpecs(null);
-		getTransport()
-			.request("project.hasSpecs", { projectId })
-			.then((r) => {
-				if (!cancelled) setHasSpecs(r.hasSpecs);
-			})
-			.catch(() => {
-				if (!cancelled) setHasSpecs(true);
-			});
-		return () => {
-			cancelled = true;
-		};
-	}, [project?.id]);
 
 	const { openProject, pickAndOpen, enterHostPath, dialogs } = useOpenProject((opened) =>
 		useAppStore.getState().selectProject(opened.id, { reveal: true }),
@@ -72,6 +49,15 @@ export function WelcomePanel() {
 
 	const noProjects = project == null;
 
+	const newProjectCard = () => (
+		<Card
+			icon={FolderPlus}
+			title="New project"
+			subtitle="Create a folder, start a git repo in it, and open it here."
+			onClick={() => setNewProject(true)}
+		/>
+	);
+
 	const projectFolderCard = (projectId: string) => (
 		<Card
 			icon={House}
@@ -87,6 +73,8 @@ export function WelcomePanel() {
 			recentProjects={recentProjects}
 			onOpen={() => void pickAndOpen()}
 			onEnterHostPath={enterHostPath}
+			onNew={() => setNewProject(true)}
+			onClone={() => setCloneProject(true)}
 			onOpenRecent={(path) => void openProject(path)}
 			align="start"
 		>
@@ -117,47 +105,22 @@ export function WelcomePanel() {
 
 			<div className="mt-24 flex flex-wrap justify-center gap-12">
 				{noProjects ? (
-					openProjectCard()
-				) : hasSpecs === null ? (
 					<>
-						<CardSkeleton />
-						<CardSkeleton />
-					</>
-				) : hasSpecs ? (
-					<>
-						<Card
-							cta
-							primary
-							icon={Rocket}
-							title="Start building"
-							subtitle="Cut an isolated worktree + branch, then pair with the agent to build it."
-							onClick={() => setDialog({ projectId: project.id, prompt: "" })}
-							className="motion-safe:animate-reveal"
-						/>
-						{projectFolderCard(project.id)}
+						{openProjectCard()}
+						{newProjectCard()}
 					</>
 				) : (
 					<>
 						<Card
 							cta
 							primary
-							icon={Sparkles}
-							title="Set up project"
-							tag="spec-first"
-							subtitle="Draft the project's specs with the agent before building, starting from its goal."
-							onClick={() =>
-								setDialog({
-									projectId: project.id,
-									prompt: SETUP_PROMPT,
-									note: SETUP_NOTE,
-								})
-							}
-							className="motion-safe:animate-reveal"
-						/>
-						<Card
 							icon={Rocket}
 							title="Start building"
-							subtitle="Cut an isolated worktree + branch and pair with the agent."
+							subtitle={
+								project.hasGit === false
+									? "Pair with the agent in the project folder — no git, so no worktree to cut."
+									: "Cut an isolated worktree + branch, then pair with the agent to build it."
+							}
 							onClick={() => setDialog({ projectId: project.id, prompt: "" })}
 							className="motion-safe:animate-reveal"
 						/>
@@ -166,6 +129,20 @@ export function WelcomePanel() {
 				)}
 			</div>
 
+			{newProject ? (
+				<NewProjectDialog
+					onOpenChange={setNewProject}
+					onCreated={(created) =>
+						useAppStore.getState().selectProject(created.id, { reveal: true })
+					}
+				/>
+			) : null}
+			{cloneProject ? (
+				<CloneProjectDialog
+					onOpenChange={setCloneProject}
+					onCloned={(cloned) => useAppStore.getState().selectProject(cloned.id, { reveal: true })}
+				/>
+			) : null}
 			{dialog ? (
 				<NewWorkspaceDialog
 					open
@@ -179,23 +156,6 @@ export function WelcomePanel() {
 				/>
 			) : null}
 			{dialogs}
-		</div>
-	);
-}
-
-function CardSkeleton() {
-	return (
-		<div
-			role="status"
-			aria-label="Loading"
-			aria-busy="true"
-			className="flex h-[150px] w-[220px] flex-col items-start justify-between rounded-[var(--radius-sm)] border border-border-default bg-container-workspace-bg p-16"
-		>
-			<span className="size-24 shrink-0 animate-pulse rounded-full bg-control-bg-hovered" />
-			<span className="flex w-full flex-col gap-8">
-				<span className="h-3 w-3/4 animate-pulse rounded-[var(--radius-sm)] bg-control-bg-hovered" />
-				<span className="h-3 w-full animate-pulse rounded-[var(--radius-sm)] bg-control-bg-hovered" />
-			</span>
 		</div>
 	);
 }

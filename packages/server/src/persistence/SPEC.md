@@ -14,10 +14,10 @@ Durable host state—projects, workspaces, cross-frontend app config, terminal c
 
 ## Boundary
 
-- **Owns:** `dataDir()` (`THINKRAIL_DATA_DIR` for dev/e2e isolation, else `~/.thinkrail`); project/workspace/config load-save operations; fieldwise config validation over `DEFAULT_CONFIG` while preserving unknown top-level extension fields; and `ensureInstallation` / `saveInstallation` over `installation.json` (`{ id, announced }`, the non-rotating per-install uuid4 plus `app_installed`-sent bit, server-only and never wire-broadcast). JSON remains tab-indented.
-- **Public surface (barrel):** `dataDir`, project/workspace/config and terminal-catalog load-save operations, and installation identity operations.
+- **Owns:** `dataDir()` (`THINKRAIL_DATA_DIR` for dev/e2e isolation, else `~/.thinkrail`); project/workspace/config load-save operations; fieldwise config validation over `DEFAULT_CONFIG` while preserving unknown top-level extension fields; `ensureInstallation` / `saveInstallation` over `installation.json` (`{ id, announced }`, the non-rotating per-install uuid4 plus `app_installed`-sent bit, server-only and never wire-broadcast); and `readPluginState`/`writePluginState`, namespaced JSON reads/writes under `plugin-state/<id>/<name>.json` (H14) for the plugin loader and each plugin's host context. JSON remains tab-indented.
+- **Public surface (barrel):** `dataDir`, project/workspace/config and terminal-catalog load-save operations, installation identity operations, and `readPluginState`/`writePluginState`.
 - **Allowed deps:** `contracts` (`Project`, `Workspace`, `AppConfig`, `LayoutPreset`, `DEFAULT_CONFIG`,
-  `isTerminalWindowsShell`); Node `fs`/`os`/`path`.
+  `isTerminalWindowsShell`, `TerminalAgentRecord`); `@thinkrail/plugin-api` (`pluginStateFile`); Node `fs`/`os`/`path`.
 - **Forbidden:** importing feature siblings or `host`; persisting a current frame/view, selection/focus, or frontend-surface identity; reading alternate config keys or old schemas; or reading, rewriting, or deleting old host layout snapshots.
 
 Config validation normalizes the closed theme mode plus complete opaque system pair, the closed

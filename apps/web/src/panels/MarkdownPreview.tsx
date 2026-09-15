@@ -1,16 +1,23 @@
-import { useMemo } from "react";
+import { type ComponentProps, memo, useEffect, useMemo, useRef, useState } from "react";
+import type { Components } from "react-markdown";
 import { stripFrontmatter } from "@/lib/utils";
+import { alertComponents, remarkGithubAlerts } from "@/panels/markdownAlerts";
 import { Markdown, type MarkdownRehypePlugins } from "../chat/Markdown";
-import { alertComponents, remarkGithubAlerts } from "./markdownAlerts";
+import { useAppStore } from "../store";
+import { emitEditorEvent, findEditorRef } from "./editorEvents";
+import { FrontmatterProperties } from "./FrontmatterProperties";
 import { documentComponents, remarkHeadingIds } from "./markdownLinks";
 import { type ComposerInsert, PreviewCommenting } from "./PreviewCommenting";
 import { ReviewThreadCard } from "./ReviewThreadCard";
 import {
+	blockAtLine,
 	frontmatterOffset,
 	indivisibleSpans,
 	snapSplitLine,
 	sourceLineRehype,
+	stampedSelectionLines,
 } from "./sourceLines";
+import { linkifyWikiLinks, readSpecDocument, specUrlTransform } from "./specDocument";
 import type { EditorReview } from "./useReviewCommenting";
 
 const DOCUMENT_PROSE = [
@@ -35,7 +42,26 @@ const DOCUMENT_PROSE = [
 	"[&_tbody_tr:nth-child(2n)]:bg-sunken",
 	"[&_pre]:my-12",
 	"[&_img]:my-12 [&_img]:max-w-full [&_img]:rounded-[var(--radius-sm)]",
+	"[&>*]:[content-visibility:auto] [&>*]:[contain-intrinsic-size:auto_2rem]",
 ].join(" ");
+
+/** A spec's prose with its `[[links]]` rewritten; ordinary markdown is returned untouched. */
+export function specProse(content: string): string {
+	const stripped = stripFrontmatter(content);
+	return readSpecDocument(content) ? linkifyWikiLinks(stripped) : stripped;
+}
+
+const DOCUMENT_REMARK = [remarkGithubAlerts, remarkHeadingIds];
+
+/**
+ * The document's own memo. Re-rendering a preview is a full re-parse, and the pane around it re-renders
+ * for reasons that have nothing to do with the text — but the chat renders the same primitive against a
+ * transcript whose scroll anchoring measures what each render produces, so the memo lives on this side
+ * of it. Its props must hold still to be worth anything: see panels/SPEC.md.
+ */
+const DocumentMarkdown = memo(function DocumentMarkdown(props: ComponentProps<typeof Markdown>) {
+	return <Markdown {...props} />;
+});
 
 export function MarkdownDocument({
 	content,
@@ -46,13 +72,19 @@ export function MarkdownDocument({
 	workspaceId: string;
 	path: string;
 }) {
-	const components = useMemo(() => documentComponents({ workspaceId, path }), [path, workspaceId]);
+	const components = useMemo(
+		() => ({ ...alertComponents, ...documentComponents({ workspaceId, path }) }),
+		[path, workspaceId],
+	);
+	// `[[id]]` is spec-graph vocabulary, so it only means anything in a spec — see panels/SPEC.md.
+	const body = useMemo(() => specProse(content), [content]);
 	return (
-		<Markdown
-			text={stripFrontmatter(content)}
+		<DocumentMarkdown
+			text={body}
 			className={DOCUMENT_PROSE}
-			remarkPlugins={[remarkGithubAlerts, remarkHeadingIds]}
-			components={{ ...alertComponents, ...components }}
+			urlTransform={specUrlTransform}
+			remarkPlugins={DOCUMENT_REMARK}
+			components={components}
 		/>
 	);
 }
@@ -105,39 +137,176 @@ function splicedSegments(
 	return segments;
 }
 
+/**
+ * Reports a selection made in the *rendered* document to the Claude Code bridge, so selecting a passage
+ * here reaches a running agent exactly as selecting code in the editor does. The line span comes from the
+ * same `data-md-line-*` stamps the review comments use, which are **block-level**: the reported range is
+ * the enclosing block's, while the text is the exact selection. That mismatch is why the transport's
+ * de-dupe keys on the text as well as the range. No-ops unless Claude Code is enabled. See panels/SPEC.md.
+ */
+function useReportedPreviewSelection(
+	container: React.RefObject<HTMLElement | null>,
+	workspaceId: string,
+	path: string,
+): void {
+	useEffect(() => {
+		const onSelectionChange = () => {
+			const root = container.current;
+			const selection = document.getSelection();
+			if (!root || !selection || selection.isCollapsed || selection.rangeCount === 0) return;
+			if (!root.contains(selection.getRangeAt(0).commonAncestorContainer)) return;
+			const text = selection.toString();
+			if (text.trim() === "") return;
+			const lines = stampedSelectionLines(root);
+			if (!lines) return;
+			const lastLine = text.slice(text.lastIndexOf("\n") + 1);
+			const range = {
+				startLine: lines.startLine,
+				startColumn: 1,
+				endLine: lines.endLine,
+				endColumn: lastLine.length + 1,
+			};
+			useAppStore
+				.getState()
+				.setEditorSelection(workspaceId, { ...lines, text, language: "markdown", path });
+			const ref = findEditorRef(workspaceId, path);
+			if (ref) emitEditorEvent({ kind: "selection", editor: ref, selection: { ...range, text } });
+		};
+		document.addEventListener("selectionchange", onSelectionChange);
+		return () => {
+			document.removeEventListener("selectionchange", onSelectionChange);
+			const store = useAppStore.getState();
+			if (store.editorSelectionByWorkspace[workspaceId]?.selection.path === path) {
+				store.setEditorSelection(workspaceId, null);
+			}
+		};
+	}, [container, workspaceId, path]);
+}
+
+/**
+ * Landing on a source line with nothing but a rendered document to land in: the block that line fell in
+ * is scrolled to and flashed, so a search hit says *where* it was and not only *which file*. The stamps
+ * are the review path's own `data-md-line-*`. See panels/SPEC.md.
+ */
+function useSourceLineLanding(
+	container: React.RefObject<HTMLElement | null>,
+	focusLine: number | undefined,
+	content: string,
+	onFocusHandled: (() => void) | undefined,
+): void {
+	const [landing, setLanding] = useState<number | null>(null);
+	useEffect(() => {
+		if (focusLine === undefined) return;
+		setLanding(focusLine);
+		onFocusHandled?.();
+	}, [focusLine, onFocusHandled]);
+
+	useEffect(() => {
+		const root = container.current;
+		if (!root || landing === null) return;
+		const target = blockAtLine(root, landing);
+		if (!target) return;
+		target.classList.add("source-landing");
+		target.scrollIntoView({ behavior: "smooth", block: "center" });
+		return () => target.classList.remove("source-landing");
+	}, [container, landing, content]);
+}
+
 export default function MarkdownPreview({
 	content,
 	workspaceId,
 	path,
 	review,
+	focusLine,
+	onFocusHandled,
+	onContentEdit,
 }: {
 	content: string;
 	workspaceId: string;
 	path: string;
 	review?: EditorReview;
+	focusLine?: number | undefined;
+	onFocusHandled?: (() => void) | undefined;
+	onContentEdit?: ((next: string) => void) | undefined;
 }) {
 	const components = useMemo(() => documentComponents({ workspaceId, path }), [path, workspaceId]);
-	if (!review) {
-		return (
-			<div
-				data-testid="markdown-preview"
-				className="h-full overflow-auto bg-container-workspace-bg"
-			>
-				<article className="mx-auto max-w-[78ch] px-24 py-16">
-					<MarkdownDocument content={content} workspaceId={workspaceId} path={path} />
-				</article>
-			</div>
-		);
-	}
+	const documentRef = useRef<HTMLDivElement>(null);
+	useReportedPreviewSelection(documentRef, workspaceId, path);
+	useSourceLineLanding(documentRef, focusLine, content, onFocusHandled);
 
-	const stripped = stripFrontmatter(content);
-	const rawOffset = frontmatterOffset(content, stripped);
-	const mdProps = (stampOffset: number) => ({
-		className: DOCUMENT_PROSE,
-		remarkPlugins: [remarkGithubAlerts, remarkHeadingIds],
-		rehypePlugins: [[sourceLineRehype, { offset: stampOffset }]] as MarkdownRehypePlugins,
-		components: { ...alertComponents, ...components },
-	});
+	const spec = readSpecDocument(content);
+	const properties = (
+		<>
+			{spec?.title ? (
+				<h1
+					data-testid="spec-title"
+					className="mx-auto max-w-[78ch] px-24 pt-16 tr-title-entity text-text-default"
+				>
+					{spec.title}
+				</h1>
+			) : null}
+			{onContentEdit ? <FrontmatterProperties content={content} onEdit={onContentEdit} /> : null}
+		</>
+	);
+
+	const body = review ? (
+		<ReviewedDocument
+			content={content}
+			review={review}
+			components={components}
+			documentRef={documentRef}
+			properties={properties}
+		/>
+	) : (
+		<div ref={documentRef} className="h-full overflow-auto bg-container-workspace-bg">
+			{properties}
+			<article className="mx-auto max-w-[78ch] px-24 py-16">
+				<MarkdownDocument content={content} workspaceId={workspaceId} path={path} />
+			</article>
+		</div>
+	);
+
+	return (
+		<div
+			{...(review ? {} : { "data-testid": "markdown-preview" })}
+			className="flex h-full min-h-0 flex-col bg-container-workspace-bg"
+		>
+			<div className="min-h-0 flex-1">{body}</div>
+		</div>
+	);
+}
+
+function ReviewedDocument({
+	content,
+	review,
+	components,
+	documentRef,
+	properties,
+}: {
+	content: string;
+	review: EditorReview;
+	components: Components;
+	documentRef: React.RefObject<HTMLDivElement | null>;
+	properties: React.ReactNode;
+}) {
+	const stripped = useMemo(() => specProse(content), [content]);
+	const rawOffset = useMemo(() => frontmatterOffset(content, stripFrontmatter(content)), [content]);
+	const merged = useMemo(() => ({ ...alertComponents, ...components }), [components]);
+	// The stamp offset is part of the plugin's identity, so each offset keeps one array to be memo-stable.
+	const rehypeByOffset = useRef(new Map<number, MarkdownRehypePlugins>());
+	const mdProps = (stampOffset: number) => {
+		const known = rehypeByOffset.current.get(stampOffset);
+		const rehypePlugins =
+			known ?? ([[sourceLineRehype, { offset: stampOffset }]] as MarkdownRehypePlugins);
+		if (!known) rehypeByOffset.current.set(stampOffset, rehypePlugins);
+		return {
+			className: DOCUMENT_PROSE,
+			urlTransform: specUrlTransform,
+			remarkPlugins: DOCUMENT_REMARK,
+			rehypePlugins,
+			components: merged,
+		};
+	};
 	const threadInserts: FlowInsert[] = review.threads.map((thread) => ({
 		key: thread.id,
 		line: thread.endLine,
@@ -151,14 +320,19 @@ export default function MarkdownPreview({
 					: threadInserts;
 				const segments = splicedSegments(stripped, rawOffset, inserts);
 				return (
-					<article className="mx-auto max-w-[78ch] px-24 py-16">
-						{segments.map((segment) => (
-							<div key={segment.key}>
-								{segment.text && <Markdown text={segment.text} {...mdProps(segment.stampOffset)} />}
-								{segment.nodes}
-							</div>
-						))}
-					</article>
+					<>
+						{properties}
+						<article ref={documentRef} className="mx-auto max-w-[78ch] px-24 py-16">
+							{segments.map((segment) => (
+								<div key={segment.key}>
+									{segment.text && (
+										<DocumentMarkdown text={segment.text} {...mdProps(segment.stampOffset)} />
+									)}
+									{segment.nodes}
+								</div>
+							))}
+						</article>
+					</>
 				);
 			}}
 		</PreviewCommenting>

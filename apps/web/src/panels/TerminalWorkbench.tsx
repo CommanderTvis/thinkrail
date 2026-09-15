@@ -2,7 +2,7 @@ import { RiAddLine as Plus } from "@remixicon/react";
 import type { TerminalTabsPush } from "@thinkrail/contracts";
 import { WS_CHANNELS } from "@thinkrail/contracts";
 import { lazy, type ReactNode, Suspense, useCallback, useEffect, useRef, useState } from "react";
-import { IconTooltip } from "../components/ui/tooltip";
+import { IconTooltip } from "@/components/ui/tooltip";
 import type { TerminalTab } from "../store";
 import { isConnectedGeneration, toast, useAppStore } from "../store";
 import { errorText, getTransport } from "../transport";
@@ -59,9 +59,27 @@ export function useTerminalCatalog(workspaceId: string | null): boolean {
 	return ready;
 }
 
+/**
+ * Building xterm costs ~90ms before it can even ask for its shell, and doing it in the commit that switches
+ * tabs makes the switch wait on it. A passive effect runs after that commit has been painted, so flipping
+ * this there lets the new tab appear first and the terminal fill in the panel already on screen.
+ *
+ * Deliberately not `requestAnimationFrame`: it does not fire while the window is occluded or minimised, so
+ * a terminal opened in a hidden window would never start at all. See SPEC.md.
+ */
+function useDeferredUntilPainted(): boolean {
+	const [painted, setPainted] = useState(false);
+	useEffect(() => setPainted(true), []);
+	return painted;
+}
+
 export function TerminalWorkbenchBody({ tab, onAdd }: { tab: TerminalTab; onAdd: () => void }) {
+	const painted = useDeferredUntilPainted();
 	return (
-		<div data-testid="terminal-panel" className="relative h-full min-h-0 bg-container-terminal-bg">
+		<div
+			data-testid="terminal-panel"
+			className="relative flex h-full min-h-0 flex-col bg-container-terminal-bg"
+		>
 			<IconTooltip label="New terminal">
 				<button
 					type="button"
@@ -73,13 +91,17 @@ export function TerminalWorkbenchBody({ tab, onAdd }: { tab: TerminalTab; onAdd:
 					<Plus className="size-14" />
 				</button>
 			</IconTooltip>
-			<Suspense fallback={null}>
-				<TerminalInstance
-					tabKey={tab.tabKey}
-					workspaceId={tab.workspaceId}
-					{...(tab.initialCommand ? { initialCommand: tab.initialCommand } : {})}
-				/>
-			</Suspense>
+			<div className="relative min-h-0 flex-1">
+				<Suspense fallback={null}>
+					{painted ? (
+						<TerminalInstance
+							tabKey={tab.tabKey}
+							workspaceId={tab.workspaceId}
+							{...(tab.initialCommand ? { initialCommand: tab.initialCommand } : {})}
+						/>
+					) : null}
+				</Suspense>
+			</div>
 		</div>
 	);
 }

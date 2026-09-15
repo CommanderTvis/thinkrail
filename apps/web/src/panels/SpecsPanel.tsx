@@ -15,8 +15,8 @@ import {
 	RiStackFill,
 } from "@remixicon/react";
 import { useEffect, useMemo, useState } from "react";
+import { Button } from "@/components/ui/button";
 import { LoadingRegion } from "../components/Skeleton";
-import { Button } from "../components/ui/button";
 import { cn } from "../lib";
 import { selectActiveEditorTab, useAppStore } from "../store";
 import { openFileInTab } from "./openTabs";

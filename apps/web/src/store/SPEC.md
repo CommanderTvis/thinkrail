@@ -415,6 +415,22 @@ per-workspace views/attention, terminal catalogs, and one **per-session chat run
   scroll, so the newest must stay visible).
   It's the home for a **rejected wire call with no better place to land** (no chat tab to host an error turn),
   complementing `appendErrorTurn` (which handles the in-chat case).
+  **`pluginRoster: PluginRosterEntry[]`** (initial `[]`) + **`applyPluginRoster(roster)`** (replace) is the
+  raw host roster from `server.welcome`/`plugins.changed` — see `transport/SPEC.md`. It is deliberately the
+  only plugin-shaped state this module owns: every contribution a plugin's web half registers lives in
+  `plugins/registry` instead, which copies this field in via `plugins/loader`'s roster subscription rather
+  than reading it directly, so `plugins/registry` stays a store-free leaf.
+  `configPatch` also carries **`plugins: Record<id, PluginSettingsNamespace>`** and
+  **`pluginPaths: string[]`** straight from `AppConfig` (defaulting to `DEFAULT_CONFIG`'s empty values) —
+  the loader's `createWebContext` projects these into `HostProjection.config` verbatim, so
+  `useSettings()`/`patchSettings()` and the plugin-paths editor read real state rather than the placeholder
+  they started from. Tab lifecycle actions **`closeTab`** and **`setActiveTab`** emit into
+  `panels/editorEvents` (`emitEditorEvent({ kind: "closed" | "activated", editor })`, built from the closed
+  or newly-active tab via a local `toEditorRef`) — the store computes the `EditorRef` and fires the event
+  from the action itself, never a component, and `setActiveTab` only fires when the active tab id actually
+  changes. `EmbeddedPaneKind` and `SettingsSection` are both `string`, not a closed union — a plugin's
+  companion kind or settings-section id shares the same field as the core sections; `"blueprint"` and
+  `"visualization"` are plugin-registered kinds now, not builtin ones.
   The host-wide **`templatesVersion: number`** counter + **`bumpTemplatesVersion()`** (increment) is a bare
   invalidation signal, the same shape as `fsChangesByWorkspace`'s `tick` below — **`panels/TemplatesSettings.tsx`**
   and **`chat/TemplateEditorDialog.tsx`** call it after a `template.save`/`delete`, and the Templates
@@ -431,7 +447,9 @@ ReviewSnapshot>`** with **`setWorkspaceReview`** (a `review.get` read landing) a
 **`applyReviewChanged`** (folds a `review.changed` push — full snapshot, idempotent; every client,
 including a mutation's initiator, converges here — no optimism); `applyWorkspaceRemoved` drops the
 entry; the pending-draft count is a selector (`selectReviewDraftCount`), never duplicated in
-components. The **Skills-reload badge** rides the same tick without a separate signal:
+components. **The blueprint slice moved to `@thinkrail/plugin-blueprint`'s own zustand store** — the
+plugin owns `blueprintByWorkspace` now, fed by its own state channel rather than a store action landing a
+wire reply. See [[module-plugin-blueprint]]. The **Skills-reload badge** rides the same tick without a separate signal:
   `noteFsChanged` also folds **`skillChangeTickByWorkspace: Record<workspaceId, tick>`** — the tick of the
   most recent *skill-relevant* batch, from the host-authored `payload.skillChange` semantic (`detected` for
   a concrete project-skill path, `unknown` for a genuinely pathless uncertainty, `none` for concrete
@@ -459,7 +477,7 @@ components. The **Skills-reload badge** rides the same tick without a separate s
   The selector
   **`selectSkillsStale(state, workspaceId, sessionId)`** = `skillChangeTick > syncedTick` — store-derived
   (survives `ChatView`'s tab-switch remount) and per-session (a sibling/newer chat that loaded the current
-  skills is not flagged; a reload clears only its own). Also **`updateFileTabContent(workspaceId, id, content,
+  skills is not flagged; a reload clears only its own). Also **`updateFileTabContent(workspaceId, id, content, hash,
   tick)`** — a `FileTab` carries the `tick` its content was loaded at, so `FilePane` detects staleness
   (`workspaceTick > tab.loadedTick`) across tab switches, and its diff twin
   **`updateDiffTabContent(workspaceId, id, original, modified, tick, loadedTarget)`** — a `DiffTab` follows the same
@@ -543,8 +561,16 @@ branch's review — a commit sha means nothing in another worktree — and dropp
   identities from its supplied document + local attention, while host attachment remains exclusive per terminal),
   `selectActiveWorkspaceProjectId`, `selectHistoryTarget` + `HistoryTarget` (the shell's `Ctrl+R` routing
   target: the locally selected chat resource, or the workspace's newest chat otherwise),
-  `selectContextProject`, the layout placement selectors (recursive center plus left/right/bottom auxiliary
+  `selectContextProject`, `workspaceBranchLabel` (one branch caption for the rail row and the top bar:
+  a non-Default workspace carrying the literal `HEAD` is a detached checkout and reads "detached HEAD",
+  while a Default row prints the literal as-is because a git-less folder project reports it too),
+  the layout placement selectors (recursive center plus left/right/bottom auxiliary
   groups), `selectAttentionCenterTab` (the selected resource in local last center focus),
+  `selectTerminalRunsClaude` (Claude Code is what runs in a terminal, read off the host's generic
+  `TerminalAgentRecord`'s `kind` — this used to also fall back to a status push the
+  Claude-specific store had already recorded, since the process-table poll runs a tick behind; the plugin
+  now writes the agent record from its own status report the instant one arrives (`ctx.setAgentRecord`),
+  so the single generic witness is never behind the poll the way core's own witness alone used to be),
   `selectCurrentRouteChatTarget` (exact-chat intent only while its workspace and stamped navigation remain
   current), `selectSkillsStale`, **`selectDiffScope` + `BRANCH_SCOPE`** (what a workspace's
   Changes panel is diffing, defaulting to the shared branch-scope constant), **`selectDiffBaseRef`** (the ref

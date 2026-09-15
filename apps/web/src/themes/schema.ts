@@ -6,6 +6,7 @@ export const THEME_COLOR_KEYS = [
 	"accentSolid",
 	"onAccent",
 	"bubbleAccent",
+	"agentClaude",
 	"background",
 	"header",
 	"content",

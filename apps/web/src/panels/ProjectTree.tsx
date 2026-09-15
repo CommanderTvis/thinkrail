@@ -45,6 +45,7 @@ import {
 	DropdownMenuSubTrigger,
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { IconTooltip } from "@/components/ui/tooltip";
 import { copyText } from "@/lib";
 import { LoadingRegion } from "../components/Skeleton";
 import {
@@ -56,12 +57,15 @@ import {
 	toast,
 	useAppStore,
 	workspaceActivityRollup,
+	workspaceBranchLabel,
 } from "../store";
 import { errorText, getTransport, prewarmWorkspaceSkillLoad } from "../transport";
 import { ActivityGlyph } from "./ActivityGlyph";
 import { AddProjectMenu } from "./AddProjectMenu";
+import { CloneProjectDialog } from "./CloneProjectDialog";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { ExistingWorktreeDialog } from "./ExistingWorktreeDialog";
+import { NewProjectDialog } from "./NewProjectDialog";
 import { NewWorkspaceDialog } from "./NewWorkspaceDialog";
 import { useOpenProject } from "./useOpenProject";
 import { canRenameWorkspace, workspaceRenameValue } from "./workspaceActions";
@@ -89,6 +93,8 @@ export function ProjectTree() {
 	const expandedProjectIds = useAppStore((s) => s.expandedProjectIds);
 	const [dialogProjectId, setDialogProjectId] = useState<string | null>(null);
 	const [existingDialogProjectId, setExistingDialogProjectId] = useState<string | null>(null);
+	const [newProject, setNewProject] = useState(false);
+	const [cloneProject, setCloneProject] = useState(false);
 	const addProjectButtonRef = useRef<HTMLButtonElement>(null);
 	const projectNameButtonsRef = useRef(new Map<string, HTMLButtonElement>());
 	const pendingCloseFocusProjectIdRef = useRef<string | null>(null);
@@ -241,9 +247,12 @@ export function ProjectTree() {
 			<header className="flex h-28 items-center justify-between pr-4 pl-8">
 				<span className="tr-text-eyebrow text-text-muted">Projects</span>
 				<AddProjectMenu
+					tooltip="Add project"
 					recentProjects={recentProjects}
 					onOpen={() => void pickAndOpen()}
 					onEnterHostPath={enterHostPath}
+					onNew={() => setNewProject(true)}
+					onClone={() => setCloneProject(true)}
 					onOpenRecent={(p) => void openProject(p)}
 				>
 					<Button
@@ -348,6 +357,22 @@ export function ProjectTree() {
 				/>
 			) : null}
 
+			{newProject ? (
+				<NewProjectDialog
+					onOpenChange={setNewProject}
+					onCreated={(project) =>
+						useAppStore.getState().selectProject(project.id, { reveal: true })
+					}
+				/>
+			) : null}
+
+			{cloneProject ? (
+				<CloneProjectDialog
+					onOpenChange={setCloneProject}
+					onCloned={(project) => useAppStore.getState().selectProject(project.id, { reveal: true })}
+				/>
+			) : null}
+
 			{dialogs}
 		</nav>
 	);
@@ -428,23 +453,29 @@ function ProjectRow({
 			</button>
 			{activity && <ActivityGlyph status={activity.status} counts={activity.counts} />}
 			{!isExpanded && workspaceCount > 0 && (
-				<span
-					data-testid="project-workspace-count"
-					className="shrink-0 tr-text-metadata text-text-muted"
+				<IconTooltip
+					label={`${workspaceCount} ${workspaceCount === 1 ? "workspace" : "workspaces"}`}
 				>
-					{workspaceCount}
-				</span>
+					<span
+						data-testid="project-workspace-count"
+						className="shrink-0 tr-text-metadata text-text-muted"
+					>
+						{workspaceCount}
+					</span>
+				</IconTooltip>
 			)}
-			<Button
-				variant="ghost"
-				size="icon"
-				className="shrink-0"
-				data-testid="add-workspace"
-				aria-label="Create workspace"
-				onClick={onAddWorkspace}
-			>
-				<Plus className="size-14" />
-			</Button>
+			<IconTooltip label="Start work">
+				<Button
+					variant="ghost"
+					size="icon"
+					className="shrink-0"
+					data-testid="add-workspace"
+					aria-label="Start work"
+					onClick={onAddWorkspace}
+				>
+					<Plus className="size-14" />
+				</Button>
+			</IconTooltip>
 		</div>
 	);
 	return (
@@ -475,27 +506,31 @@ function ProjectRow({
 						openingDialogRef.current = false;
 					}}
 				>
-					<ContextMenuItem
-						data-testid="project-menu-create-workspace"
-						onSelect={(event) => {
-							event.preventDefault();
-							openDialogAfterMenu(onAddWorkspaceFromMenu);
-						}}
-					>
-						<Plus />
-						Create workspace
-					</ContextMenuItem>
-					<ContextMenuItem
-						data-testid="project-menu-open-existing-worktree"
-						onSelect={(event) => {
-							event.preventDefault();
-							openDialogAfterMenu(onOpenExistingWorktree);
-						}}
-					>
-						<FolderOpen />
-						Open existing worktree…
-					</ContextMenuItem>
-					<ContextMenuSeparator />
+					{project.hasGit === false ? null : (
+						<>
+							<ContextMenuItem
+								data-testid="project-menu-create-workspace"
+								onSelect={(event) => {
+									event.preventDefault();
+									openDialogAfterMenu(onAddWorkspaceFromMenu);
+								}}
+							>
+								<Plus />
+								Create workspace
+							</ContextMenuItem>
+							<ContextMenuItem
+								data-testid="project-menu-open-existing-worktree"
+								onSelect={(event) => {
+									event.preventDefault();
+									openDialogAfterMenu(onOpenExistingWorktree);
+								}}
+							>
+								<FolderOpen />
+								Open existing worktree…
+							</ContextMenuItem>
+							<ContextMenuSeparator />
+						</>
+					)}
 					<ContextMenuItem
 						data-testid="project-menu-close"
 						onSelect={(event) => {
@@ -566,7 +601,6 @@ function WorkspaceRow({
 			: isExternal
 				? FolderOpen
 				: GitBranch;
-	const isTwoLine = workspace.branch !== workspace.name;
 	const [menuOpen, setMenuOpen] = useState(false);
 	const openMenuFromContext = (event: MouseEvent) => {
 		event.preventDefault();
@@ -631,20 +665,18 @@ function WorkspaceRow({
 		}
 	};
 
-	const identityClass = `flex min-w-0 flex-1 gap-4 text-left ${isTwoLine ? "items-start" : "items-center"}`;
+	const identityClass = "flex min-w-0 flex-1 items-start gap-4 text-left";
 	const identityIcon = (
-		<Icon
-			className={`${isTwoLine ? "mt-2 " : ""}size-14 shrink-0 ${isActive ? "text-primary" : "text-text-muted"}`}
-		/>
+		<Icon className={`mt-2 size-14 shrink-0 ${isActive ? "text-primary" : "text-text-muted"}`} />
 	);
-	const branchLabel = isTwoLine ? (
+	const branchLabel = (
 		<span
 			data-testid="workspace-branch"
 			className="truncate text-text-subtle tr-text-metadata leading-tight"
 		>
-			{workspace.branch}
+			{workspaceBranchLabel(workspace)}
 		</span>
-	) : null;
+	);
 
 	return (
 		<li>

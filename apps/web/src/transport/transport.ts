@@ -176,7 +176,9 @@ export class WsTransport {
 		}
 		this.beforeDispatch?.(msg);
 		if ("channel" in msg) {
-			if (!NON_REPLAYABLE_CHANNELS.has(msg.channel)) this.latest.set(msg.channel, msg.data);
+			if (!NON_REPLAYABLE_CHANNELS.has(msg.channel) && !msg.channel.startsWith("plugin.")) {
+				this.latest.set(msg.channel, msg.data);
+			}
 			const set = this.subscribers.get(msg.channel);
 			if (set) for (const handler of set) handler(msg.data);
 			return;

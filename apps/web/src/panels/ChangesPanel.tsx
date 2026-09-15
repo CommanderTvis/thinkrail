@@ -1,6 +1,8 @@
 import type { GitStatus } from "@thinkrail/contracts";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { QuietScrollArea } from "@/components/QuietScrollArea";
+import { ToggleSegment } from "@/panels/ToggleSegment";
+import { FileTypeIcon } from "../components/FileTypeIcon";
 import { LoadingRegion } from "../components/Skeleton";
 import {
 	type CenterNavigationStamp,
@@ -23,8 +25,7 @@ import { ChangesScopeMenu } from "./ChangesScopeMenu";
 import { ChangesTree } from "./ChangesTree";
 import { scopeKey, splitPath, statusNameClass } from "./changesModel";
 import { DiffStatBadge } from "./DiffStatBadge";
-import { openDiffInTab } from "./openTabs";
-import { ToggleSegment } from "./ToggleSegment";
+import { openDiffInTab, openFileInTab } from "./openTabs";
 import { useWorkspaceRead } from "./useWorkspaceRead";
 
 export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
@@ -97,6 +98,16 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 		[workspaceId, scope],
 	);
 
+	// The file itself, not the diff of it — IntelliJ's Jump to Source, kept rather than previewed because
+	// leaving the changes list to edit is not browsing. See SPEC.md.
+	const jumpToSource = useCallback(
+		(path: string) => {
+			setHighlighted(path);
+			void openFileInTab(workspaceId, path, "keep");
+		},
+		[workspaceId],
+	);
+
 	useEffect(() => {
 		if (!status || changesRequest?.workspaceId !== workspaceId) return;
 		if (useAppStore.getState().changesRequest !== changesRequest) return;
@@ -126,9 +137,9 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 				data-testid="changes-view-toggle"
 				role="toolbar"
 				aria-label="Changes scope and view"
-				className="flex h-panel-header-row shrink-0 items-center gap-4 overflow-clip border-border-default border-b px-12"
+				className="@container flex h-panel-header-row shrink-0 items-center gap-4 overflow-clip border-border-default border-b px-12"
 			>
-				<div className="mr-auto flex min-w-0 items-center gap-4">
+				<div className="mr-auto flex min-w-0 items-center gap-4 overflow-hidden">
 					<ChangesScopeMenu
 						key={`${workspaceId}:${baseRef}`}
 						workspaceId={workspaceId}
@@ -142,7 +153,7 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 							refreshing={branchesRefreshing}
 							label="vs"
 							testid="changes-target-picker"
-							triggerClassName="flex h-24 min-w-0 max-w-[200px] items-center gap-4 rounded-[var(--radius-sm)] px-4 outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary data-[open=true]:bg-control-bg-selected"
+							triggerClassName="hidden h-24 min-w-0 max-w-[200px] items-center @min-[16rem]:flex gap-4 rounded-[var(--radius-sm)] px-4 outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary data-[open=true]:bg-control-bg-selected"
 							onSelect={(ref) => void pointAt(ref)}
 							onRefresh={refreshBranches}
 						/>
@@ -183,7 +194,12 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 						No changes in this scope.
 					</p>
 				) : changesView === "tree" ? (
-					<ChangesTree changes={status.changes} onOpen={openDiff} isActive={isActive} />
+					<ChangesTree
+						changes={status.changes}
+						onOpen={openDiff}
+						onJumpToSource={jumpToSource}
+						isActive={isActive}
+					/>
 				) : (
 					<ul className="motion-safe:animate-reveal">
 						{status.changes.map((change) => {
@@ -194,6 +210,7 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 										path={change.path}
 										active={isActive(change.path)}
 										onView={() => openDiff(change.path, "preview")}
+										onJumpToSource={() => jumpToSource(change.path)}
 									>
 										{({ onContextMenu }) => (
 											<button
@@ -205,8 +222,9 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 												onClick={() => openDiff(change.path, "preview")}
 												onDoubleClick={() => openDiff(change.path, "keep")}
 												title={change.path}
-												className="flex min-w-0 flex-1 items-center gap-8 px-4 py-4 text-left tr-text-ui"
+												className="flex min-w-0 flex-1 items-center gap-4 px-4 py-4 text-left tr-text-ui"
 											>
+												<FileTypeIcon path={base} className="size-14 text-text-muted" />
 												<span className="flex min-w-0 flex-1 items-baseline">
 													{dir ? (
 														<span

@@ -6,11 +6,12 @@ import type {
 	LayoutToolId,
 } from "@thinkrail/contracts";
 import {
+	BUILTIN_LAYOUT_TOOL_CATALOG,
 	collectAllGroups,
 	collectCenterGroups,
 	createLayoutId,
-	LAYOUT_TOOL_DEFAULT_SIDES,
-	LAYOUT_TOOLS,
+	type LayoutToolCatalog,
+	resolveLayoutTool,
 	toolTab,
 } from "./model";
 import {
@@ -124,27 +125,29 @@ export function resolveLayoutPreset(
 	return resolved;
 }
 
-function defaultRestoreTarget(tool: LayoutToolId) {
-	const side = LAYOUT_TOOL_DEFAULT_SIDES[tool];
+function defaultRestoreTarget(tool: LayoutToolId, catalog: LayoutToolCatalog) {
+	const side = resolveLayoutTool(catalog, tool).defaultSide;
 	return {
 		region: side,
-		index: LAYOUT_TOOLS.filter(
-			(candidate) => LAYOUT_TOOL_DEFAULT_SIDES[candidate] === side,
-		).indexOf(tool),
+		index: [...catalog.keys()]
+			.filter((candidate) => resolveLayoutTool(catalog, candidate).defaultSide === side)
+			.indexOf(tool),
 	};
 }
 
-function restoreTargetsForPreset(preset: LayoutPreset): WorkbenchFrame["toolRestoreTargets"] {
+function restoreTargetsForPreset(
+	preset: LayoutPreset,
+	catalog: LayoutToolCatalog,
+): WorkbenchFrame["toolRestoreTargets"] {
 	const placed = new Set(
 		[...preset.left.groups, ...preset.right.groups, ...preset.bottom.groups].flatMap(
 			(group) => group.tools,
 		),
 	);
 	return Object.fromEntries(
-		LAYOUT_TOOLS.filter((tool) => !placed.has(tool)).map((tool) => [
-			tool,
-			defaultRestoreTarget(tool),
-		]),
+		[...catalog.keys()]
+			.filter((tool) => !placed.has(tool))
+			.map((tool) => [tool, defaultRestoreTarget(tool, catalog)]),
 	);
 }
 
@@ -188,6 +191,7 @@ export function instantiateWorkbenchFrame(
 	preset: LayoutPreset,
 	existing?: WorkbenchFrame,
 	claimedResourceIds: readonly string[] = [],
+	catalog: LayoutToolCatalog = BUILTIN_LAYOUT_TOOL_CATALOG,
 ): WorkbenchFrame {
 	const existingTools = new Map<LayoutToolId, LayoutToolTab>();
 	if (existing) {
@@ -199,11 +203,11 @@ export function instantiateWorkbenchFrame(
 	}
 	const claimedIds = new Set(claimedResourceIds);
 	const resolveTool = (tool: LayoutToolId): LayoutToolTab =>
-		claimToolPlacementId(existingTools.get(tool) ?? toolTab(tool), claimedIds);
+		claimToolPlacementId(existingTools.get(tool) ?? toolTab(tool, catalog), claimedIds);
 	const leftGroups = instantiateFrameGroups(preset.left.groups, "left-group", resolveTool);
 	const rightGroups = instantiateFrameGroups(preset.right.groups, "right-group", resolveTool);
 	const bottomGroups = instantiateFrameGroups(preset.bottom.groups, "bottom-group", resolveTool);
-	const restoreTargets = restoreTargetsForPreset(preset);
+	const restoreTargets = restoreTargetsForPreset(preset, catalog);
 	return {
 		version: 1,
 		center: instantiateFrameCenter(preset.center),
@@ -317,11 +321,13 @@ export function ensureWorkbenchToolPlacementIds(
 export function applyWorkbenchPreset(
 	state: NormalizedLayoutState,
 	preset: LayoutPreset,
+	catalog: LayoutToolCatalog = BUILTIN_LAYOUT_TOOL_CATALOG,
 ): NormalizedLayoutState {
 	const frame = instantiateWorkbenchFrame(
 		preset,
 		state.frame,
 		workspaceResourcePlacementIds(state.viewsByWorkspace),
+		catalog,
 	);
 	return {
 		frame,

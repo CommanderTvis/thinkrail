@@ -1,6 +1,7 @@
-import { readFileSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { isAbsolute, relative, resolve } from "node:path";
 import type {
+	BranchDetail,
 	BranchList,
 	GitCommit,
 	GitDiffScope,
@@ -20,7 +21,7 @@ import {
 	resolveDiffRange,
 } from "./diffScope";
 import { git, gitAsync, nonInteractiveGitEnv } from "./gitExec";
-import { isSafeRef, remoteNameOf } from "./refs";
+import { assertSafeRef, isSafeRef, remoteNameOf } from "./refs";
 
 const log = logger("git");
 
@@ -154,6 +155,7 @@ export async function listBranches(projectId: string): Promise<BranchList> {
 		remote,
 		remoteGroups: groupRemoteRefs(remote, lines(remoteNames.out)),
 		defaultBranch: resolveDefaultBranch(repo),
+		current: currentBranch(repo),
 	};
 }
 
@@ -243,7 +245,7 @@ async function numstat(
 	const out = await gitAsync(worktreePath, changedFileArgs(range, "--numstat", true), {
 		raw: true,
 	});
-	if (!out.ok) throw diffFailure(out.err);
+	if (!out.ok) throw diffFailure(worktreePath, out.err);
 	const fields = nulFields(out.out);
 	for (let index = 0; index < fields.length; ) {
 		const header = fields[index++] ?? "";
@@ -283,7 +285,13 @@ function untrackedAdded(worktreePath: string, path: string): number | undefined 
 	}
 }
 
-function diffFailure(stderr: string): Error {
+/**
+ * An unborn HEAD makes every diff base unresolvable, and git says so as `bad revision '<branch>'` — the
+ * name of a branch that does exist, which reads like corruption. Only checked once a diff has failed.
+ */
+function diffFailure(worktreePath: string, stderr: string): Error {
+	if (!git(worktreePath, ["rev-parse", "--verify", "HEAD"]).ok)
+		return new Error("This repository has no commits yet, so there is nothing to compare against.");
 	return new Error(`Could not read the changed files: ${stderr || "git failed"}`);
 }
 
@@ -312,11 +320,11 @@ export function gitUncommittedPaths(workspaceId: string): string[] {
 		["diff", "--name-only", "-z", "--no-ext-diff", "--end-of-options", "HEAD", "--"],
 		{ raw: true },
 	);
-	if (!tracked.ok) throw diffFailure(tracked.err);
+	if (!tracked.ok) throw diffFailure(cwd, tracked.err);
 	const untracked = git(cwd, ["ls-files", "-z", "--others", "--exclude-standard"], {
 		raw: true,
 	});
-	if (!untracked.ok) throw diffFailure(untracked.err);
+	if (!untracked.ok) throw diffFailure(cwd, untracked.err);
 	return [...new Set([...nulFields(tracked.out), ...nulFields(untracked.out)])].sort();
 }
 
@@ -328,7 +336,7 @@ export async function gitStatus(workspaceId: string, scope?: GitDiffScope): Prom
 		numstat(ws.worktreePath, range),
 		gitAsync(ws.worktreePath, changedFileArgs(range, "--name-status", true), { raw: true }),
 	]);
-	if (!tracked.ok) throw diffFailure(tracked.err);
+	if (!tracked.ok) throw diffFailure(ws.worktreePath, tracked.err);
 	for (const { code, path } of parseNameStatus(tracked.out)) {
 		changes.push({ path, status: mapStatus(code), ...counts.get(path) });
 	}
@@ -339,7 +347,7 @@ export async function gitStatus(workspaceId: string, scope?: GitDiffScope): Prom
 			["ls-files", "-z", "--others", "--exclude-standard"],
 			{ raw: true },
 		);
-		if (!untracked.ok) throw diffFailure(untracked.err);
+		if (!untracked.ok) throw diffFailure(ws.worktreePath, untracked.err);
 		for (const path of nulFields(untracked.out)) {
 			if (!path) continue;
 			const added = untrackedAdded(ws.worktreePath, path);
@@ -477,4 +485,104 @@ export async function countUnpushedCommits(
 	}
 	const count = Number(counted.out);
 	return Number.isSafeInteger(count) && count >= 0 ? count : null;
+}
+
+function project(projectId: string): { path: string } {
+	const found = loadProjects().find((entry) => entry.id === projectId);
+	if (!found) throw new Error(`Unknown project: ${projectId}`);
+	return { path: found.path };
+}
+
+/** macOS hands out `/var/...` for a `/private/var/...` worktree, so paths are matched after resolution. */
+function samePathKey(path: string): string {
+	try {
+		return realpathSync(resolve(path));
+	} catch {
+		return resolve(path);
+	}
+}
+
+/** Every local branch with the checkout occupying it, if any — see SPEC.md. */
+export async function branchDetails(projectId: string): Promise<{ branches: BranchDetail[] }> {
+	const root = project(projectId).path;
+	const list = await listBranches(projectId);
+	const occupied = new Map<
+		string,
+		{ path: string; workspaceId?: string; workspaceName?: string }
+	>();
+	const known = new Map(
+		loadWorkspaces()
+			.filter((ws) => ws.projectId === projectId)
+			.map((ws) => [samePathKey(ws.worktreePath), ws]),
+	);
+	const listed = await gitAsync(root, ["worktree", "list", "--porcelain"]);
+	if (listed.ok) {
+		let path = "";
+		const flush = (branch: string) => {
+			if (path === "" || branch === "") return;
+			const ws = known.get(samePathKey(path));
+			occupied.set(branch, {
+				path,
+				...(ws ? { workspaceId: ws.id, workspaceName: ws.name } : {}),
+			});
+		};
+		for (const line of listed.out.split("\n")) {
+			if (line.startsWith("worktree ")) path = line.slice("worktree ".length).trim();
+			else if (line.startsWith("branch ")) {
+				flush(refWithin(line.slice("branch ".length).trim(), LOCAL_REF_PREFIX) ?? "");
+				path = "";
+			}
+		}
+	}
+	return {
+		branches: list.local.map((branch) => {
+			const at = occupied.get(branch);
+			return {
+				branch,
+				isCurrent: branch === list.current,
+				isDefault: branch === list.defaultBranch,
+				...(at ? { worktreePath: at.path } : {}),
+				...(at?.workspaceId ? { workspaceId: at.workspaceId } : {}),
+				...(at?.workspaceName ? { workspaceName: at.workspaceName } : {}),
+			};
+		}),
+	};
+}
+
+/** Delete a local branch, refusing one a workspace or a checkout is living on — see SPEC.md. */
+/** Every remote, brought up to date. What the branch list's Fetch does — see SPEC.md. */
+export async function fetchRemotes(projectId: string): Promise<void> {
+	const root = project(projectId).path;
+	if (listRemotes(root).length === 0) return;
+	const run = await gitAsync(root, ["fetch", "--all", "--quiet"], { network: true });
+	if (!run.ok) throw new Error(`Could not fetch: ${run.err || "git failed"}`);
+}
+
+/** Frees a branch a checkout this host does not own is holding — see SPEC.md. */
+async function releaseWorktree(root: string, path: string, branch: string): Promise<void> {
+	const removed = await gitAsync(root, ["worktree", "remove", "--end-of-options", path]);
+	if (removed.ok) return;
+	if (existsSync(path)) {
+		throw new Error(
+			`${branch} is checked out at ${path}, which git will not give up: ${removed.err || "git failed"}`,
+		);
+	}
+	await gitAsync(root, ["worktree", "prune"]);
+}
+
+export async function deleteBranch(projectId: string, branch: string): Promise<void> {
+	assertSafeRef(branch);
+	const { branches } = await branchDetails(projectId);
+	const detail = branches.find((entry) => entry.branch === branch);
+	if (!detail) throw new Error(`No local branch named ${branch}`);
+	if (detail.workspaceId) {
+		throw new Error(
+			`${branch} is the branch of the workspace ${detail.workspaceName ?? detail.workspaceId}. Remove the workspace first.`,
+		);
+	}
+	if (detail.isCurrent) throw new Error(`${branch} is checked out and cannot be deleted`);
+	const root = project(projectId).path;
+	if (detail.worktreePath) await releaseWorktree(root, detail.worktreePath, branch);
+	const run = await gitAsync(root, ["branch", "-D", "--end-of-options", branch]);
+	if (!run.ok) throw new Error(`Could not delete ${branch}: ${run.err || "git failed"}`);
 }

@@ -6,8 +6,7 @@ import {
 import * as monaco from "monaco-editor";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import type { LineSelection } from "./reviewGutter";
-import { threadLabel } from "./reviewModel";
+import type { LineSelection } from "@/panels/reviewGutter";
 
 export interface ReviewCommentingCallbacks {
 	onSave: (selection: LineSelection | null, text: string) => Promise<void>;
@@ -32,6 +31,15 @@ export interface ReviewThreadData {
 	anchorState: string;
 	stale?: boolean;
 	refuted?: boolean;
+}
+
+export function threadLabel(
+	t: Pick<ReviewThreadData, "status" | "anchorState" | "stale" | "refuted">,
+): string {
+	if (t.refuted) return `${t.status} · refuted`;
+	if (t.stale) return `${t.status} · stale`;
+	if (t.anchorState === "outdated") return `${t.status} · outdated`;
+	return t.status;
 }
 
 export interface ReviewThreadActions {

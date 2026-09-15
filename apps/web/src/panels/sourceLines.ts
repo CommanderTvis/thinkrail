@@ -1,4 +1,7 @@
-import type { LineSelection } from "./reviewGutter";
+import type { LineSelection } from "@/panels/reviewGutter";
+import { stampedSelectionLines } from "@/panels/selectionLines";
+
+export { stampedSelectionLines };
 
 interface HastNode {
 	type: string;
@@ -66,49 +69,35 @@ export function snapSplitLine(spans: readonly LineSpan[], line: number): number 
 	return line;
 }
 
-function stampedAncestor(node: Node | null, root: HTMLElement): HTMLElement | null {
-	let el = node instanceof HTMLElement ? node : (node?.parentElement ?? null);
-	while (el && el !== root.parentElement) {
-		if (el.hasAttribute?.("data-md-line-start")) return el;
-		el = el.parentElement;
-	}
-	return null;
-}
-
-export function stampedSelectionLines(container: HTMLElement): LineSelection | null {
-	const sel = window.getSelection();
-	if (!sel || sel.isCollapsed || sel.rangeCount === 0) return null;
-	const range = sel.getRangeAt(0);
-	const startBlock = stampedAncestor(range.startContainer, container);
-	const endBlock = stampedAncestor(range.endContainer, container);
-	if (!startBlock || !endBlock) return null;
-	const num = (el: HTMLElement, attr: string) => Number(el.getAttribute(attr)) || 0;
-	const startLine = num(startBlock, "data-md-line-start");
-	const boundaryOnly = endBlock !== startBlock && range.endOffset === 0;
-	let effectiveEnd: HTMLElement = endBlock;
-	if (boundaryOnly) {
-		let prev = endBlock.previousElementSibling;
-		while (prev && !(prev instanceof HTMLElement && prev.hasAttribute("data-md-line-start")))
-			prev = prev.previousElementSibling;
-		effectiveEnd = prev instanceof HTMLElement ? prev : startBlock;
-	}
-	const endLine = num(effectiveEnd, "data-md-line-end");
-	if (startLine < 1 || endLine < 1) return null;
-	return { startLine, endLine: Math.max(startLine, endLine) };
-}
-
 const REGION_BLOCKS = "p, li, h1, h2, h3, h4, h5, h6, pre, blockquote, td, th";
 
-export function markReviewRegions(container: HTMLElement, ranges: LineSelection[]): void {
-	for (const el of container.querySelectorAll(".review-region"))
-		el.classList.remove("review-region");
-	if (ranges.length === 0) return;
+function leafBlocks(container: HTMLElement): { el: HTMLElement; span: LineSpan }[] {
+	const blocks: { el: HTMLElement; span: LineSpan }[] = [];
 	for (const el of container.querySelectorAll<HTMLElement>(REGION_BLOCKS)) {
 		const start = Number(el.getAttribute("data-md-line-start")) || 0;
 		const end = Number(el.getAttribute("data-md-line-end")) || 0;
 		if (start < 1 || end < 1) continue;
 		if (el.querySelector(REGION_BLOCKS)) continue;
-		if (ranges.some((r) => start <= r.endLine && end >= r.startLine))
-			el.classList.add("review-region");
+		blocks.push({ el, span: { start, end } });
 	}
+	return blocks;
+}
+
+export function markReviewRegions(container: HTMLElement, ranges: LineSelection[]): void {
+	for (const el of container.querySelectorAll(".review-region"))
+		el.classList.remove("review-region");
+	if (ranges.length === 0) return;
+	for (const { el, span } of leafBlocks(container))
+		if (ranges.some((r) => span.start <= r.endLine && span.end >= r.startLine))
+			el.classList.add("review-region");
+}
+
+/** The rendered block a source line fell in, the narrowest one when blocks share the line. */
+export function blockAtLine(container: HTMLElement, line: number): HTMLElement | null {
+	let best: { el: HTMLElement; span: LineSpan } | null = null;
+	for (const block of leafBlocks(container)) {
+		if (line < block.span.start || line > block.span.end) continue;
+		if (!best || block.span.end - block.span.start < best.span.end - best.span.start) best = block;
+	}
+	return best?.el ?? null;
 }
