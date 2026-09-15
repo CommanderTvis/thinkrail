@@ -189,7 +189,10 @@ of the host.
   canonical full-ref string list, while optional host-authored `remoteGroups` carries each configured
   remote and its `{ ref, branch }` rows for two-layer presentation. The field is additive so a newer UI
   falls back to full refs against an older host; a `null` remote group preserves tracking refs whose
-  configuration was removed without inventing ownership in the browser. The two meanings of a workspace's base are
+  configuration was removed without inventing ownership in the browser. **`BranchDeleteResult`** keeps a
+  successful `git.deleteBranch` response empty, but makes only the dirty external-worktree refusal
+  actionable (`dirty-worktree`, path, and Git message); every other deletion failure remains a normal wire
+  error. Its optional request `force` is meaningful solely as the explicitly confirmed retry. The two meanings of a workspace's base are
   **two fields**: `Workspace.baseBranch` is *creation provenance* (the ref the worktree was cut from — what
   the receipt's `branch · from baseBranch` shows; for a **user-owned** workspace, whose provenance isn't
   ThinkRail's to claim, it is the repo default as the *initial* review target and the UI shows no `from`)

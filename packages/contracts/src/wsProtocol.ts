@@ -2,6 +2,7 @@ import type {
 	ActivityStatus,
 	AppConfig,
 	AppConfigUpdate,
+	BranchDeleteResult,
 	BranchDetail,
 	BranchList,
 	DelegationRunDetails,
@@ -501,8 +502,8 @@ export interface WsMethodMap {
 	};
 	"git.branchDetails": { params: { projectId: string }; result: { branches: BranchDetail[] } };
 	"git.deleteBranch": {
-		params: { projectId: string; branch: string };
-		result: Record<string, never>;
+		params: { projectId: string; branch: string; force?: boolean };
+		result: BranchDeleteResult;
 	};
 	"git.fetchRemotes": { params: { projectId: string }; result: Record<string, never> };
 	"git.listCommits": { params: { workspaceId: string }; result: { commits: GitCommit[] } };

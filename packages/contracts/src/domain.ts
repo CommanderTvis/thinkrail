@@ -313,6 +313,16 @@ export interface BranchDetail {
 	isDefault: boolean;
 }
 
+export type BranchDeleteResult =
+	| Record<string, never>
+	| {
+			recovery: {
+				kind: "dirty-worktree";
+				worktreePath: string;
+				message: string;
+			};
+	  };
+
 export type ProviderAuthKind = "oauth" | "api-key" | "env" | "other";
 
 export interface ProviderStatus {

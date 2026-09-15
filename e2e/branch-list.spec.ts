@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, test } from "@playwright/test";
 import { createWorkspaceViaDialog, openFixtureProject } from "./fixtures/app";
@@ -56,6 +56,39 @@ test("a branch held by a worktree ThinkRail did not make is still the user's to 
 	await expect(
 		page.getByTestId("branch-list").getByTestId("branch-row").filter({ hasText: "foreign-branch" }),
 	).toHaveCount(0);
+	expect(existsSync(foreign)).toBe(false);
+});
+
+test("a dirty external worktree requires a second force-delete confirmation", async ({ page }) => {
+	await openFixtureProject(page);
+	await createWorkspaceViaDialog(page);
+	const foreign = join(E2E_DATA_DIR, "foreign-worktrees", "dirty-agent");
+	rmSync(join(E2E_DATA_DIR, "foreign-worktrees"), { recursive: true, force: true });
+	git(E2E_FIXTURE_REPO, "worktree", "add", "-b", "dirty-foreign-branch", foreign);
+	const untracked = join(foreign, "untracked.txt");
+	writeFileSync(untracked, "this work must not disappear without force\n");
+
+	await page.getByTestId("scope-branch").click();
+	const row = page
+		.getByTestId("branch-list")
+		.getByTestId("branch-row")
+		.filter({ hasText: "dirty-foreign-branch" });
+	await row.getByTestId("branch-delete").click();
+	await page.getByTestId("branch-delete-confirm").click();
+	const recovery = page.getByTestId("confirm-dialog");
+	await expect(recovery).toContainText("contains modified or untracked files");
+	await recovery.getByTestId("branch-force-recovery").click();
+	const force = page.getByTestId("confirm-dialog");
+	await expect(force).toContainText(foreign);
+	await expect(force).toContainText("uncommitted and untracked files will be discarded");
+	await force.getByRole("button", { name: "Cancel" }).click();
+	await expect.poll(() => existsSync(untracked)).toBe(true);
+
+	await row.getByTestId("branch-delete").click();
+	await page.getByTestId("branch-delete-confirm").click();
+	await page.getByTestId("branch-force-recovery").click();
+	await page.getByTestId("branch-force-confirm").click();
+	await expect(row).toHaveCount(0);
 	expect(existsSync(foreign)).toBe(false);
 });
 

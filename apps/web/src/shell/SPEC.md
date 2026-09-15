@@ -306,7 +306,11 @@ the worktree path occupying it when one does, so "which of these is a live works
 looking rather than by remembering. A branch can be deleted from there, and two of them cannot: the
 branch a ThinkRail workspace is living on, and the one currently checked out — both refused with the
 reason on the control, and refused again by the host, which is where the knowledge actually is. Every
-deletion asks first, because a branch is the only copy of whatever only it points at. The list is
+deletion asks first, because a branch is the only copy of whatever only it points at. If the first
+confirmation meets the host's typed dirty-external-worktree refusal, its failure dialog offers **Force
+remove worktree…**; choosing that opens a second destructive confirmation naming the path and warning
+that uncommitted and untracked files will be discarded before the force request is sent. Ordinary deletion
+errors offer no recovery. The list is
 re-read on every open and whenever the project's workspaces change, since a branch gains and loses its
 worktree behind the popover's back. The header carries a **Fetch**, the way an IDE's branch popup
 does — every remote brought up to date, nothing local moved, no pruning — because the question "is this

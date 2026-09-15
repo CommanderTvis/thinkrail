@@ -6,6 +6,7 @@ import type { Workspace } from "@thinkrail/contracts";
 import { changedFileArgs, diffBaseRef, resolveDiffRange } from "./diffScope";
 import {
 	countUnpushedCommits,
+	deleteBranch,
 	gitCommitPaths,
 	gitDiffFile,
 	gitHeadSha,
@@ -187,6 +188,51 @@ test("listBranches with no remote returns local branches and falls back to the r
 	expect(local.sort()).toEqual(["feature/x", "main"]);
 	expect(remote).toEqual([]);
 	expect(defaultBranch).toBe("main");
+});
+
+test("deleteBranch exposes dirty external worktree recovery and only forces it on request", async () => {
+	const foreign = join(dataDir, "foreign-worktree");
+	git(repo, "worktree", "add", "-b", "foreign", foreign);
+	writeFileSync(join(foreign, "untracked.txt"), "keep me unless force is confirmed\n");
+
+	const result = await deleteBranch("p1", "foreign");
+	expect("recovery" in result).toBe(true);
+	if ("recovery" in result) {
+		expect(result.recovery.kind).toBe("dirty-worktree");
+		expect(result.recovery.worktreePath).toEndWith("foreign-worktree");
+		expect(result.recovery.message).toContain("contains modified or untracked files");
+	}
+	expect(existsSync(foreign)).toBe(true);
+	expect(existsSync(join(foreign, "untracked.txt"))).toBe(true);
+
+	await expect(deleteBranch("p1", "foreign", true)).resolves.toEqual({});
+	expect(existsSync(foreign)).toBe(false);
+	const branches = await listBranches("p1");
+	expect(branches.local).not.toContain("foreign");
+});
+
+test("deleteBranch never turns a generic worktree removal error into force", async () => {
+	const foreign = join(dataDir, "generic-failure-worktree");
+	git(repo, "worktree", "add", "-b", "generic-failure", foreign);
+	failGitSubcommand("worktree remove");
+
+	await expect(deleteBranch("p1", "generic-failure", true)).rejects.toThrow(
+		/forced worktree remove failure/,
+	);
+	expect(existsSync(foreign)).toBe(true);
+});
+
+test("deleteBranch force retains current and ThinkRail workspace protections", async () => {
+	await expect(deleteBranch("p1", "main", true)).rejects.toThrow(/checked out/);
+
+	const foreign = join(dataDir, "thinkrail-worktree");
+	git(repo, "worktree", "add", "-b", "protected", foreign);
+	seedWorkspace({ branch: "protected", worktreePath: foreign, name: "Protected" });
+	writeFileSync(join(foreign, "untracked.txt"), "must survive\n");
+
+	await expect(deleteBranch("p1", "protected", true)).rejects.toThrow(/workspace Protected/);
+	expect(existsSync(foreign)).toBe(true);
+	expect(existsSync(join(foreign, "untracked.txt"))).toBe(true);
 });
 
 test("tryCurrentBranch distinguishes a detached checkout from an invalid workspace root", async () => {
