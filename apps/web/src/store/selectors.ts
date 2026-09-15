@@ -4,13 +4,14 @@ import {
 	CHAT_RESOURCES_PROTOCOL_VERSION,
 	type GitDiffScope,
 	MODEL_PICKER_PROTOCOL_VERSION,
+	type PluginRosterEntry,
 	type Project,
+	REVIEW_TERMINAL_PROTOCOL_VERSION,
 	SESSION_RENAME_PROTOCOL_VERSION,
 	SESSION_STATE_PROTOCOL_VERSION,
 	type SessionResources,
 	type SessionState,
 	type SessionStateRecord,
-	type SpecGraphNode,
 	type SubagentResourceSummary,
 	sameModel,
 	type WireModel,
@@ -397,7 +398,43 @@ export function selectAttentionCenterTab(
 	return find(document.center);
 }
 
-/** The file selected in the focused center group, if that resource is file-backed. */
+export function selectShownTerminalKeys(
+	state: CenterResourceCacheState,
+	workspaceId: string,
+): string[] {
+	const document = state.layoutDocumentsByWorkspace[workspaceId];
+	if (!document) return [];
+	const attention = state.layoutAttentionByWorkspace[workspaceId];
+	const known = new Set((state.terminalsByWorkspace[workspaceId] ?? []).map((tab) => tab.tabKey));
+	const shown = (group: { id: string; tabs: readonly LayoutTab[] }): string | null => {
+		const selectedId = attention ? readLayoutSelection(attention, group.id) : undefined;
+		const tab = group.tabs.find((candidate) => candidate.id === selectedId) ?? group.tabs[0];
+		return tab?.kind === "terminal" && known.has(tab.tabKey) ? tab.tabKey : null;
+	};
+	const center: { id: string; key: string | null }[] = [];
+	const collect = (node: WorkspaceLayoutDocument["center"]): void => {
+		if (node.kind === "split") {
+			collect(node.children[0]);
+			collect(node.children[1]);
+		} else center.push({ id: node.id, key: shown(node) });
+	};
+	collect(document.center);
+	const auxiliary = (["bottom", "right", "left"] as const).flatMap((region) =>
+		document[region].groups.map((group) => ({ id: group.id, region, key: shown(group) })),
+	);
+	const lastCenter = center.find((group) => group.id === attention?.lastFocusedCenterGroupId);
+	const lastBottom = auxiliary.find(
+		(group) => group.region === "bottom" && group.id === attention?.lastFocusedSideGroupId.bottom,
+	);
+	const ordered = [lastCenter, lastBottom, ...center, ...auxiliary];
+	return [...new Set(ordered.flatMap((group) => (group?.key ? [group.key] : [])))];
+}
+
+/**
+ * The file the user is *in*: the selected tab of the focused center group, whatever renders it. A path is
+ * a path — an editor, a markdown preview and a PDF all say the same thing about where the user is, and a
+ * diff tab is still a file. Null for a tab that is not a file at all (chat, terminal, a tool pane).
+ */
 export function selectAttentionCenterFilePath(
 	state: LayoutAttentionState,
 	workspaceId: string,
@@ -619,11 +656,6 @@ export function matchesWorktreePath(reported: string, rel: string): boolean {
 	return isAbsolutePath(path) && path.endsWith(`/${rel}`);
 }
 
-export function specPathMatcher(nodes: SpecGraphNode[]): (path: string) => boolean {
-	const paths = nodes.map((node) => node.path);
-	return (reported) => paths.some((rel) => matchesWorktreePath(reported, rel));
-}
-
 export function selectChatTitle(
 	state: { tabsByWorkspace: Record<string, EditorTab[]> },
 	workspaceId: string,
@@ -631,7 +663,53 @@ export function selectChatTitle(
 ): string {
 	const tabs = state.tabsByWorkspace[workspaceId] ?? [];
 	const chatTab = tabs.find((t) => t.kind === "chat" && t.sessionId === sessionId);
-	return (chatTab?.name ?? "Chat").trim() || "Chat";
+	return chatTabTitle(chatTab?.name);
+}
+
+function chatTabTitle(name: string | undefined): string {
+	return name?.trim() || "Chat";
+}
+
+export type ReviewTarget =
+	| { kind: "chat"; sessionId: string; title: string }
+	| { kind: "terminal"; tabKey: string; title: string };
+
+export function selectCanSendReviewToTerminal(state: ProtocolState): boolean {
+	return (
+		state.protocolVersion !== null && state.protocolVersion >= REVIEW_TERMINAL_PROTOCOL_VERSION
+	);
+}
+
+export function reviewTargets(
+	tabs: readonly EditorTab[],
+	terminals: readonly TerminalTab[],
+	terminalsAllowed: boolean,
+): ReviewTarget[] {
+	const targets: ReviewTarget[] = [];
+	for (const tab of tabs) {
+		if (tab.kind === "chat") {
+			targets.push({ kind: "chat", sessionId: tab.sessionId, title: chatTabTitle(tab.name) });
+		}
+	}
+	if (!terminalsAllowed) return targets;
+	for (const terminal of terminals) {
+		if (terminal.agent)
+			targets.push({ kind: "terminal", tabKey: terminal.tabKey, title: terminal.title });
+	}
+	return targets;
+}
+
+export function selectReviewDiscussionOpen(
+	state: { terminalsByWorkspace: Record<string, TerminalTab[]> },
+	workspaceId: string,
+	comment: { sessionId?: string; terminal?: string },
+): boolean {
+	if (comment.sessionId !== undefined) return true;
+	return (
+		comment.terminal !== undefined &&
+		(state.terminalsByWorkspace[workspaceId]?.some((tab) => tab.tabKey === comment.terminal) ??
+			false)
+	);
 }
 
 export function selectCompactionTurnIds(
@@ -643,6 +721,20 @@ export function selectCompactionTurnIds(
 			.filter((turn) => turn.kind === "compaction")
 			.map((turn) => turn.id),
 	);
+}
+
+/**
+ * Whether Claude Code is what runs in this terminal, by the host's process-table watch (`agent`, a tick
+ * behind) — the plugin's own live-reported status is no longer store state a core selector can reach; see
+ * plugin-claude-code/SPEC.md.
+ */
+export function selectTerminalRunsClaude(
+	state: { terminalsByWorkspace: Record<string, TerminalTab[]> },
+	workspaceId: string,
+	tabKey: string,
+): boolean {
+	const terminal = state.terminalsByWorkspace[workspaceId]?.find((tab) => tab.tabKey === tabKey);
+	return terminal?.agent?.kind === "claude";
 }
 
 export function selectWorkspaceTick(
@@ -753,4 +845,22 @@ export function selectAgentReviewCommentCount(
 	return snapshot.comments.filter(
 		(c) => c.author === "agent" && c.status !== "resolved" && c.status !== "dismissed",
 	).length;
+}
+
+export function selectPluginRoster(state: {
+	pluginRoster: PluginRosterEntry[];
+}): PluginRosterEntry[] {
+	return state.pluginRoster;
+}
+
+/** The workspace's open file tabs whose file was deleted on disk, NUL-joined so a selector compares by value. */
+export function selectDeletedFileTabPaths(
+	state: { tabsByWorkspace: Record<string, EditorTab[]> },
+	workspaceId: string,
+): string {
+	return (state.tabsByWorkspace[workspaceId] ?? [])
+		.flatMap((tab) =>
+			(tab.kind === "file" || tab.kind === "external-file") && tab.deletedOnDisk ? [tab.path] : [],
+		)
+		.join("\u0000");
 }

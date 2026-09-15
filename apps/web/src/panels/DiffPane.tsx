@@ -5,6 +5,9 @@ import {
 	RiArrowGoBackLine as Revert,
 } from "@remixicon/react";
 import type { ChangeReceipt, ResourceMeta } from "@thinkrail/contracts";
+import { editorFontSize } from "@thinkrail/ui/editor";
+import { OutlineColumn, OutlineToggle, scrollToHeading } from "@thinkrail/ui/Outline";
+import { ToggleSegment } from "@thinkrail/ui/ToggleSegment";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
 import {
 	type ComponentType,
@@ -15,27 +18,21 @@ import {
 	useMemo,
 	useState,
 } from "react";
-import { copyText, isPhoneViewport, usePhoneViewport } from "@/lib";
-import { OutlineColumn, OutlineToggle, scrollToHeading } from "@/panels/Outline";
+import { copyText, isPhoneViewport, useElementSize, usePhoneViewport } from "@/lib";
 import {
 	describeResource,
 	type HunkActions,
 	type ResourceContent,
 	type ResourceDiffProps,
 	type ResourceRenderer,
-	resolveRenderers,
 } from "@/resources";
 import { LoadingRegion } from "../components/Skeleton";
-import {
-	type DiffTab,
-	selectDiffTabTargetRef,
-	selectWorkspaceIsRunning,
-	toast,
-	useAppStore,
-} from "../store";
+import type { DiffTab } from "../store";
+import { selectDiffTabTargetRef, selectWorkspaceIsRunning, toast, useAppStore } from "../store";
 import { errorText, getTransport, wsErrorCode } from "../transport";
 import { canOfferChangeMutations, scopeHasMutableModifiedSide } from "./changeMutationAvailability";
 import { splitPath } from "./changesModel";
+import { narrowForSplit } from "./diffLayout";
 import { sourceHeadings } from "./outlineTree";
 import {
 	PENDING_TEXT_META,
@@ -44,10 +41,10 @@ import {
 	resourceBytesUrl,
 	selectResourceRenderer,
 	useResetViewStateOnImplementationChange,
+	useResourceRenderers,
 } from "./resourcePane";
 import { createAskAgentRequest } from "./resources/code/changeBlocks";
 import { SendReviewButton } from "./SendReviewButton";
-import { ToggleSegment } from "./ToggleSegment";
 import { UnplacedReviewStrip } from "./UnplacedReviewStrip";
 import { useLiveTabContent } from "./useLiveTabContent";
 import { useFileReview } from "./useReviewCommenting";
@@ -171,10 +168,7 @@ export function DiffPane({ tab }: { tab: DiffTab }) {
 		() => describeResource(tab.workspaceId, tab.path, descriptorMeta, tab.scope),
 		[tab.workspaceId, tab.path, descriptorMeta, tab.scope],
 	);
-	const candidates = useMemo(
-		() => resolveRenderers(resource, "diff", { mobile }),
-		[resource, mobile],
-	);
+	const candidates = useResourceRenderers(resource, "diff", mobile);
 	const renderer = selectResourceRenderer(candidates, tab.rendererId, tab.path);
 	const implementationKey = rendererImplementationKey(renderer.id, mobile);
 	const [placement, setPlacement] = useState<{
@@ -196,7 +190,10 @@ export function DiffPane({ tab }: { tab: DiffTab }) {
 		placement?.implementationKey === implementationKey ? placement.ids : undefined;
 	useResetViewStateOnImplementationChange(tab.workspaceId, tab.id, implementationKey);
 
-	const view = mobile ? "inline" : (tab.view ?? "split");
+	const [paneRef, { width: paneWidth }] = useElementSize();
+	const view = mobile
+		? "inline"
+		: (tab.view ?? (narrowForSplit(paneWidth, editorFontSize()) ? "inline" : "split"));
 	const rendered = renderer.id === "thinkrail/markdown";
 	const outlineOpen = rendered && (tab.outlineOpen ?? false);
 	const ignoreWhitespace = tab.ignoreWhitespace ?? false;
@@ -345,7 +342,7 @@ export function DiffPane({ tab }: { tab: DiffTab }) {
 	};
 
 	return (
-		<div data-testid="diff-pane" className="flex h-full min-h-0 flex-col">
+		<div ref={paneRef} data-testid="diff-pane" className="flex h-full min-h-0 flex-col">
 			<div
 				data-testid="diff-view-toggle"
 				role="toolbar"

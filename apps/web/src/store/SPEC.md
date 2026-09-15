@@ -582,7 +582,30 @@ branch's review — a commit sha means nothing in another worktree — and dropp
   and the intent carries the chat resource so a cache/placement id alias (including an id collision resolved
   by placement-only minting) still selects semantically. That selection deliberately does not focus the tab,
   because the mounted history query owns focus. The shell updates the group's local attention so the target
-  body mounts and consumes the request without publishing a structural snapshot. The `EditorTab` (`FileTab`
+  body mounts and consumes the request without publishing a structural snapshot.
+  The same family carries **`composerFocusRequest { id, sessionId }`** — set by **`addToChatDraft`**,
+  cleared by **`clearComposerFocus()`** — which is how text written into a chat's draft from outside the
+  chat subtree (the editor's "Send selection to chat", a restored queue) also hands over the caret.
+  `addToChatDraft(sessionId, text)` is one action rather than a draft write plus a focus call at each site:
+  the added text leads and whatever was already typed follows it, and the request that lands with it is
+  what `ChatView` turns into a composer focus at the draft's end (see `chat/SPEC.md`). Blank text and an
+  unknown session write nothing and ask for nothing.
+  **`editorSelectionByWorkspace`** is a different kind of transient: not a request but a *standing* one —
+  what the editor has highlighted, and whether the chat is still carrying it. `setEditorSelection` writes it
+  (null when the selection empties or the tab unmounts) and re-arms `attached`, because a fresh highlight is
+  a fresh offer; `detachEditorSelection` is the user declining it, or a send consuming it.
+  A third transient in the same family is **`fileFocusRequest { workspaceId, path, keyPath }`** — set by
+  **`requestFileFocus`**, cleared by **`clearFileFocus(path?)`** once the editor has revealed it. Its one
+  caller, before the plugin-api migration, was the Claude configuration pane opening a file at one of its entries; that pane
+  is now `@thinkrail/plugin-claude-code`'s, and `PluginWebContext`'s `editors.open()` has no `keyPath`
+  option, so this mechanism currently has no caller (`FilePane` still reads `fileFocusRequest` and resolves
+  it, so it works the moment something calls `requestFileFocus` again — nothing here was removed, only its
+  one caller moved somewhere that cannot reach it yet; see `module-plugin-claude-code`'s SPEC.md). It
+  carries a *key path*, never a line: the
+  line is resolved in `FilePane` against the text the editor holds, so nothing here can go stale against
+  an edited file (`panels/SPEC.md`). Like its siblings it stays out of the tab and the layout document —
+  an already-open tab is reused rather than rebuilt, and a caret position is not something a restored
+  layout should re-assert — and it is dropped with its workspace in `applyWorkspaceRemoved`. The `EditorTab` (`FileTab`
   | `ChatTab` | `DocTab` | `DiffTab` | `PlanTab`) + `TerminalTab` + `ClosedChat` + `SessionRuntime` types.
   (Chat *render* types + renderers live in the `chat` module.) The pure context
   selectors in `selectors.ts` resolve the active `Workspace`, its owning project id, and the shell's context

@@ -86,6 +86,7 @@ function FilePaneBody({ tab }: { tab: FileTab | ExternalFileTab }) {
 	const setTabRenderer = useAppStore((state) => state.setTabRenderer);
 	const setFileTabSplit = useAppStore((state) => state.setFileTabSplit);
 	const setFileTabOutline = useAppStore((state) => state.setFileTabOutline);
+	const paneDirection = useAppStore((state) => state.localLayoutPreferences.defaultPaneDirection);
 	const review = useFileReview(tab.workspaceId, tab.path, "inline");
 	const reviewComments = useAppStore(
 		(state) => state.reviewsByWorkspace[tab.workspaceId]?.comments,
@@ -330,7 +331,7 @@ function FilePaneBody({ tab }: { tab: FileTab | ExternalFileTab }) {
 				<div className="min-h-0 min-w-0 flex-1">
 					{splittable ? (
 						<EmbeddedSplit
-							direction="horizontal"
+							direction={paneDirection}
 							companion={
 								split && preview
 									? {

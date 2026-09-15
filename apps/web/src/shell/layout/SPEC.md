@@ -48,6 +48,27 @@ Frame groups may remain empty in any workspace. Closing a final resource therefo
 ## Layout grammar
 
 - **Center:** a recursive horizontal/vertical binary tree, maximum four leaves. A split replaces one leaf with equal halves. User creation/resize requires each child to remain at least 320 px wide and 180 px high. Empty leaves are valid frame slots and render the shell-provided empty surface. Remove/Merge promotes a sibling and rehomes every affected workspace's tabs deterministically.
+- **The bottom group's row clears the window's own corner.** The desktop window is rounded, and the
+  bottom region's header is the last row in it, so its right-hand controls — add, fold — sat inside the
+  arc and were clipped by it. The row reserves the corner's width (`--window-corner`, a platform
+  measurement like the titlebar inset, not a step on the spacing scale). The gutter is harmless in a
+  browser tab, where a control jammed against the window edge was never right either.
+- **A terminal nobody is looking at keeps its box and stops rendering.** An inactive terminal stays
+  mounted — closing and rebuilding one would lose the live attachment — and it keeps occupying real
+  layout space rather than being `display: none`, so the grid it wraps against is the one it will be
+  shown at. What it does not need to keep doing is laying out and painting a screen nobody can see, so
+  its subtree is skipped with `content-visibility: hidden`. The measurements that grid depends on are
+  safe inside a skipped subtree because both of them refuse a zero: `TerminalInstance`'s fit returns
+  early on a zero-sized host, and xterm keeps its last good character measurement rather than taking a
+  zero. `terminals.spec.ts` pins the outcome — a terminal that printed while hidden still wraps at its
+  real width.
+- **A tool the workspace cannot serve is not offered.** `Workbench` takes `unofferedTools`, and every
+  reveal menu — the side group's and the tab context menu's — leaves those out, so nothing in the shell can
+  open one. The engine stays ignorant of *why*: the shell decides, this module only withholds. It reaches
+  the two menus through a context rather than a prop threaded across every group view; both read it where
+  the list is built, and nothing else needs it. Withholding never touches the document: a tool already
+  placed keeps its tab (its renderer explains itself, as the Claude pane does when the integration is off),
+  and the condition can clear without a saved layout having been rewritten behind the user.
 - **Auxiliary eligibility:** Projects, Specs, Files, Changes, and Review are singleton auxiliary-only tools owned by the frame; terminals are workspace resources and may occupy center or any auxiliary region. Hiding a singleton preserves its restore target. View/deep-link reveal restores or unfolds it in frame-local position and focuses the requested item in current workspace attention.
 - **Left/right:** ordered vertical frame stacks. Dragging an outer separator through its minimum hides that side, retains the last expanded width, and exposes its full-height restore rail. Broad upper/lower targets create groups before/after each row, including folded or currently empty rows. Expanded bodies have a 120 px normal minimum; folded groups occupy 27 px and retain normalized expanded weights. An empty frame group remains available across workspaces until explicit removal and renders a named
   Add/Reveal surface rather than disappearing; a region with groups may stay hidden.
@@ -68,7 +89,14 @@ Frame groups may remain empty in any workspace. Closing a final resource therefo
 - **Limits:** left/right share a local setting defaulting to six groups per side; bottom has an independent local setting defaulting to three. Both accept 1–32, with closed hard safety bounds enforced even for untrusted local state or shared presets. Existing overages survive; creation is unavailable until below the configured limit, while reorder/join/reducing moves remain legal. Stable-id uniqueness, one canonical resource placement per workspace view, normalized geometry, and the final-center-leaf invariant are enforced by every mutation.
 - **Small viewports:** restoring onto less space may compress below operation minimums locally. Content scrolls/clips; bottom alignment projects from actual compressed side spans, while frame topology, alignment choice, and ratios are never rewritten merely because this viewport is narrow.
 
-Ordinary opens target the active workspace's last-focused surviving center group. Reopening a canonical resource selects its existing local placement rather than duplicating it and refreshes non-identity metadata in place. Each center group has one workspace-local preview slot: preview replaces in place, keep promotes one-way, and navigation clocks are group-local. A passive restore may select its first result without incrementing the user-navigation clock. A user open advances its clock at request time and carries that stamp through acceptance rather than counting twice; reselecting the active center tab also advances once so it defeats older deferred work. Incidental DOM focus changes update last-focus routing but not navigation.
+Ordinary opens target the active workspace's last-focused surviving center group — with one exception,
+horizontal-tabs mode only: **a file opened while that group shows a Claude Code terminal lands beside it,
+not over it** (`openCenterTabBeside`). Covering the session the user is talking to with the file the
+agent just asked for is the wrong trade; the file goes to the next center group in reading order when
+one exists, otherwise the group is split to the right and the file becomes the new column, exactly as a
+drag to the right half would. Only fresh file-like opens (file, external file, diff) reroute — a
+resource already placed reselects where it is, and chats, documents and terminals keep their target.
+Vertical-tabs mode cannot split the centre, so it keeps the plain rule (its panes are that mode's answer). Reopening a canonical resource selects its existing local placement rather than duplicating it and refreshes non-identity metadata in place. Each center group has one workspace-local preview slot: preview replaces in place, keep promotes one-way, and navigation clocks are group-local. A passive restore may select its first result without incrementing the user-navigation clock. A user open advances its clock at request time and carries that stamp through acceptance rather than counting twice; reselecting the active center tab also advances once so it defeats older deferred work. Incidental DOM focus changes update last-focus routing but not navigation.
 
 Async completion reroutes from a removed group to current last focus and advances the surviving destination once, unless newer local placement already contains the resource. File/chat/document closes update local attention immediately. Terminal close waits for host-domain acceptance, then removes that terminal from every local workspace view for the workspace; a rejection leaves placement and attention untouched. Any newer tab gesture or navigation suppresses delayed close-focus recovery.
 
@@ -156,4 +184,67 @@ without changing the live frame is still a change worth saving. Persistence cont
 
 The complete current-layout grammar, including the derived `WorkspaceLayoutDocument` projection consumed by existing shell renderers, is web-local. A pristine surface instantiates Balanced; no host snapshot or prior layout schema is imported.
 
-The terminal visibility gate mounts a body only for a terminal locally selected in an unfolded visible group. Distinct terminal identities may mount concurrently; one identity has one body per browser surface. Inactive/folded/hidden tabs never attach. Global New Terminal targets last local bottom focus, creating a frame slot only through an explicit frame command; center Group Header creation captures that group. Host catalog reconciliation may place an unrepresented terminal locally without selecting it, but cannot change frame geometry.
+The terminal visibility gate mounts a body only for a terminal locally selected in an unfolded visible group. Distinct terminal identities may mount concurrently; one identity has one body per browser surface. Inactive/folded/hidden tabs never attach. Global New Terminal targets last local bottom focus, creating a frame slot only through an explicit frame command; center Group Header creation captures that group. Host catalog reconciliation may place an unrepresented terminal locally without selecting it, but cannot change frame geometry.## Resizing does not rebuild the workbench
+
+Panel groups are keyed by the **projection epoch**, so a new projection re-keys them and React rebuilds
+them from the document's sizes. That is right when the frame's *shape* changed — a group appeared, a
+split collapsed, a side folded — and wrong for a resize: a drag writes new weights into the frame, and
+rebuilding on that flashed every column at the moment the drag ended, at the size it already had.
+
+So the epoch is bumped only when **`frameTopology`** changes: which groups exist, how they nest, which
+tools they hold, which regions are visible, and the bottom alignment — every size left out by
+construction. **Folding is not one of them**, though it once was: a side stack and the bottom stack
+already carry their own groups' folded flags in their keys, so they rebuild on a fold without being told
+to, while the shared epoch dragged the *centre* along with them — folding a rail unmounted the open
+editor and every live terminal and cost about a second on a real project. A fold changes one region's
+sizes; the rest of the workbench has no business hearing about it. A resize therefore commits its weights, persists, and re-renders in place. This is
+pinned by unit tests over `frameTopology` rather than by watching for flicker.
+
+## Embedded panes
+
+A companion view living **inside** the tab that owns it — a column beside, or a row under, the host's own
+body — and **never a tab of its own**. `components/EmbeddedSplit` is the one primitive: a host half, a
+handle, and a titled companion half with a close button. Three hosts use it today: a terminal (its
+blueprint, or the visualization the agent in it drew), a chat (its blueprint only), and a markdown editor
+(its Preview, the third view mode beside Preview and Source).
+
+- **Not a tab, deliberately.** A tab is a thing you navigate to and can move anywhere; these are things a
+  resource *carries*. The blueprint belongs to its author, a visualization belongs to the terminal that
+  drew it, a preview belongs to its buffer — none of them survives its host, and none of them should be
+  draggable into a group that has no idea what it is. That is why `visualization` and `blueprint` are no
+  longer `LayoutTab` kinds: the layout model never learns they exist.
+- **Auto-open, then a chip.** Content arriving (a `visualize` call, a blueprint the host authors) opens
+  the pane and makes that kind lead; the header's close button folds it into a chip on the host, and the
+  chip opens it again. Which kinds are hidden, and which leads, is per host resource in
+  `store.embeddedPanes[workspaceId][hostKey]` (`embeddedHostKey("terminal" | "chat", id)`) — device-local
+  view state, like the rest of the workbench frame.
+- **A companion opens at 45% of the host.** `defaultSize` counts only at mount and the group mounts
+  with the companion at 0, so a companion that arrives later would otherwise open at the 15% minimum, a
+  sliver beside an xterm. `EmbeddedSplit` therefore resizes the companion panel imperatively when it goes
+  from absent to present (and back to 0 when it goes away); a user's own drag afterwards is kept.
+  `e2e/mcp-tools.spec.ts` pins the opening share.
+- **No companion, no handle.** The group and both panels stay mounted with stable ids (a companion
+  appearing must not re-key an xterm host), and the empty companion collapses to nothing — but the
+  handle between them is *unmounted*, never merely hidden. `react-resizable-panels` registers every
+  mounted handle for its own body-level, capture-phase pointer hit test with a hit-area margin; a
+  `display:none` handle measures 0×0 at the window origin, so the margin turns (0,0) into "on a
+  handle", and any pointer event there is swallowed (`preventDefault` + `stopImmediatePropagation`)
+  before it reaches the host's content. That is exactly where a synthesized `pointerdown` with no
+  coordinates lands, which is how the chat's pointer-intent tests (`e2e/chat-scroll.spec.ts`) caught it.
+- **One companion at a time**, newest leading: a terminal that both authors a blueprint and draws a
+  diagram shows the diagram and offers the blueprint as a chip.
+- **A host only carries what it cannot already show.** A chat renders a `visualize` call in its own
+  transcript, so it is offered no visualization pane — the same picture beside its own card is a bug, not
+  a feature. A terminal has no transcript to render into, which is the whole reason it gets one.
+- **Direction is the Layout setting** (`defaultPaneDirection`) — the same answer that arranges tab panes,
+  because "beside or under" is one preference, not one per surface.
+- **The split wraps the host's whole chrome, not just its body.** A terminal's New-terminal button is
+  positioned over its panel's top-right corner, which is exactly where a companion's header sits; a pane
+  mounted *inside* the terminal would put its close button under that button. So `TerminalWorkbenchBody`
+  owns the split and the terminal (buttons included) is the host half.
+- **Both panels always render, with stable `id`s**, and an absent companion collapses to zero width
+  rather than unmounting. A structural change to the group re-keys its panels, which would remount the
+  host — and remounting an imperatively-attached body (xterm) kills the PTY it is attached to. This is
+  pinned by the e2e that asserts the terminal count is unchanged across open/close.
+
+

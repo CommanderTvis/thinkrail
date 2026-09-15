@@ -4,6 +4,7 @@ export * from "./fileDrag";
 export * from "./layoutAttention";
 export * from "./mergeText";
 export * from "./skillInvocation";
+export * from "./useElementSize";
 export * from "./utils";
 export * from "./viewport";
 export * from "./zoomGesture";
