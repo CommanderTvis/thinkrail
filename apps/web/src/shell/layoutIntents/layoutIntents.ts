@@ -5,6 +5,7 @@ import {
 	type EditorTab,
 	isFileComparison,
 	layoutOpenOptionsForNavigation,
+	selectTerminalRunsClaude,
 	shouldAdvanceAcceptedNavigation,
 	toast,
 	useAppStore,
@@ -21,6 +22,7 @@ import {
 	findLayoutTab,
 	findPlacedResource,
 	findTabLocation,
+	groupTabs,
 	hideBottom,
 	hideSide,
 	isLayoutUnavailable,
@@ -32,6 +34,7 @@ import {
 	type LayoutTerminalTab,
 	moveTabToGroup,
 	openCenterTab,
+	openCenterTabBeside,
 	primaryCenterGroupId,
 	reconcileAttention,
 	removeSessionLayoutTabs,
@@ -155,6 +158,8 @@ export function toLayoutTab(tab: EditorTab): LayoutCenterTab | null {
 	switch (tab.kind) {
 		case "file":
 			return { kind: "file", id: tab.id, name: tab.name, path: tab.path };
+		case "external-file":
+			return { kind: "external-file", id: tab.id, name: tab.name, path: tab.path };
 		case "diff":
 			return isFileComparison(tab)
 				? { kind: "diff", id: tab.id, name: tab.name, path: tab.path, before: tab.before }
@@ -265,13 +270,20 @@ export function useLayoutIntentProcessing(
 						: findCenterGroup(document.center, attention.lastFocusedCenterGroupId)
 							? attention.lastFocusedCenterGroupId
 							: primaryCenterGroupId(document);
-				const opened = openCenterTab(
-					document,
-					tab,
-					groupId,
-					layoutIntent.intent,
-					layoutIntent.claimPreview,
-				);
+				const state = useAppStore.getState();
+				const opened = state.localLayoutPreferences.verticalCenterTabs
+					? openCenterTab(document, tab, groupId, layoutIntent.intent, layoutIntent.claimPreview)
+					: openCenterTabBeside(
+							document,
+							attention,
+							tab,
+							groupId,
+							layoutIntent.intent,
+							layoutIntent.claimPreview ?? false,
+							(selected) =>
+								selected.kind === "terminal" &&
+								selectTerminalRunsClaude(state, workspaceId, selected.tabKey),
+						);
 				if (!isLayoutUnavailable(opened)) result = opened;
 				break;
 			}
@@ -468,6 +480,20 @@ export function useLayoutIntentProcessing(
 					if (!isLayoutUnavailable(shown)) result = shown;
 				}
 				break;
+			case "pane-with": {
+				const location = findTabLocation(document, layoutIntent.targetId);
+				if (location?.area === "center") {
+					const paned = groupTabs(
+						document,
+						location.groupId,
+						layoutIntent.tabId,
+						layoutIntent.targetId,
+						layoutIntent.direction,
+					);
+					if (!isLayoutUnavailable(paned)) result = paned;
+				}
+				break;
+			}
 			case "toggle-bottom":
 				if (document.bottom.visible && document.bottom.groups.some((group) => !group.folded)) {
 					result = hideBottom(document, attention);

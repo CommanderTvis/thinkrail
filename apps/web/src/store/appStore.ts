@@ -67,7 +67,8 @@ import type { HydratedRuntime } from "../chat/hydrate";
 import { insertRoundCloser } from "../chat/roundCloser";
 import type { ChatAttachment, ChatTurn, CompactionState, ExtUiDialogRequest, ToolResultState } from "../chat/types";
 import { ancestorPaths, defaultTerminalIndex, defaultTerminalTitle, isPreviewCompatibleTabKind, type LayoutAttention, layoutResourceIdentity, matchesSkillInvocationCommand, parseSkillInvocation, randomId, readLayoutNavigationClock, shallowEqualArrays, tupleKey, userText, type EditorSelection } from "../lib";
-import type { LayoutAuxiliaryRegion, LayoutToolId, WorkbenchFrame, WorkspaceLayoutDocument, WorkspaceViewState } from "../shell/layout";
+import { type LayoutAuxiliaryRegion, type LayoutToolId, type WorkbenchFrame, type WorkspaceLayoutDocument, type WorkspaceViewState, type LayoutTabPane, VERTICAL_TABS_WIDTH } from "../shell/layout";
+import { type EditorRef, emitEditorEvent } from "../panels/editorEvents";
 import type { ConnectionStatus } from "../transport";
 import { type ChatResourceRead, type ChatResourceScope, type ChatResourceSnapshots, staleChatResources } from "./chatResources";
 import { EMPTY_MCP_PROJECTION, foldMcpList, foldMcpSnapshot, type McpRead, type McpWorkspaceProjection, withoutMcpSession } from "./mcp";
@@ -255,16 +256,28 @@ export type TabIntent = "preview" | "keep";
 
 export interface LocalLayoutPreferences {
 	defaultPresetId: string;
-	/** Whether a single click opens a file in the reusable preview slot rather than a tab of its own. */
-	previewTabs: boolean;
 	maxSideGroups: number;
 	maxBottomGroups: number;
+	/** Center tabs as a column beside the editor instead of a strip above it. */
+	verticalCenterTabs: boolean;
+	/** Width of that column, in px. Ignored while `verticalCenterTabs` is off. */
+	verticalCenterTabsWidth: number;
+	/** That column lives under its workspace in Projects instead of beside the editor. Ignored while `verticalCenterTabs` is off. */
+	verticalTabsInProjects: boolean;
+	/** How a pane is arranged when one is first made; joining an existing pane follows that pane. */
+	defaultPaneDirection: LayoutTabPane["direction"];
+	/** Whether a single click opens a file in the reusable preview slot rather than a tab of its own. */
+	previewTabs: boolean;
 }
 
 export const DEFAULT_LOCAL_LAYOUT_PREFERENCES: LocalLayoutPreferences = {
 	defaultPresetId: "balanced",
 	maxSideGroups: 6,
 	maxBottomGroups: 3,
+	verticalCenterTabs: false,
+	verticalCenterTabsWidth: VERTICAL_TABS_WIDTH.default,
+	verticalTabsInProjects: false,
+	defaultPaneDirection: "horizontal",
 	previewTabs: true,
 };
 
@@ -346,6 +359,14 @@ export type LayoutIntent =
 	| { id: string; kind: "close-terminal"; workspaceId: string; tabKey: string }
 	| { id: string; kind: "select-terminal"; workspaceId: string; tabKey: string }
 	| { id: string; kind: "toggle-side"; workspaceId: string; side: "left" | "right" }
+	| {
+			id: string;
+			kind: "pane-with";
+			workspaceId: string;
+			tabId: string;
+			targetId: string;
+			direction: "horizontal" | "vertical";
+	  }
 	| { id: string; kind: "toggle-bottom"; workspaceId: string };
 export type LayoutIntentInput = LayoutIntent extends infer Intent
 	? Intent extends { id: string }

@@ -29,7 +29,7 @@ import {
 	projectWorkspaceLayout,
 	reconcileAttention,
 	reflowWorkspaceViewForFrame,
-	sameWorkbenchFrameShape,
+	VERTICAL_TABS_WIDTH,
 	validateLayoutDocument,
 	type WorkbenchFrame,
 	type WorkspaceLayoutDocument,
@@ -365,6 +365,8 @@ function isWorkspaceView(value: unknown): value is WorkspaceViewState {
 						: hasOnlyKeys(tab, ["kind", "id", "name", "path", "before"]) &&
 							typeof tab.before === "string")
 				);
+			case "changes":
+				return hasOnlyKeys(tab, ["kind", "id", "name", "scope"]) && validDiffScope(tab.scope);
 			case "chat":
 				return (
 					hasOnlyKeys(tab, ["kind", "id", "name", "sessionId"]) && typeof tab.sessionId === "string"
@@ -429,7 +431,14 @@ function parsePreferences(value: unknown): LocalLayoutPreferences | undefined {
 		!Number.isInteger(value.maxBottomGroups) ||
 		Number(value.maxBottomGroups) < 1 ||
 		Number(value.maxBottomGroups) > 32 ||
-		typeof value.previewTabs !== "boolean"
+		typeof value.verticalCenterTabs !== "boolean" ||
+		!Number.isFinite(value.verticalCenterTabsWidth) ||
+		Number(value.verticalCenterTabsWidth) < VERTICAL_TABS_WIDTH.min ||
+		Number(value.verticalCenterTabsWidth) > VERTICAL_TABS_WIDTH.max ||
+		(value.defaultPaneDirection !== "horizontal" && value.defaultPaneDirection !== "vertical") ||
+		typeof value.previewTabs !== "boolean" ||
+		(value.verticalTabsInProjects !== undefined &&
+			typeof value.verticalTabsInProjects !== "boolean")
 	) {
 		return undefined;
 	}
@@ -437,6 +446,10 @@ function parsePreferences(value: unknown): LocalLayoutPreferences | undefined {
 		defaultPresetId: value.defaultPresetId,
 		maxSideGroups: Number(value.maxSideGroups),
 		maxBottomGroups: Number(value.maxBottomGroups),
+		verticalCenterTabs: value.verticalCenterTabs,
+		verticalCenterTabsWidth: Number(value.verticalCenterTabsWidth),
+		verticalTabsInProjects: value.verticalTabsInProjects === true,
+		defaultPaneDirection: value.defaultPaneDirection,
 		previewTabs: value.previewTabs,
 	};
 }
@@ -957,7 +970,7 @@ export async function commitWorkspaceLayout(
 		? Object.keys(projected.viewsByWorkspace)
 		: [workspaceId];
 	const attentionByWorkspace = { ...state.layoutAttentionByWorkspace };
-	for (const id of changedWorkspaceIds) {
+	for (const id of [...changedWorkspaceIds]) {
 		const nextDocument = documentsByWorkspace[id];
 		if (!nextDocument) continue;
 		attentionByWorkspace[id] = reconcileAttention(
@@ -975,18 +988,22 @@ export async function commitWorkspaceLayout(
 			sourceDocument,
 			state.layoutDocumentsByWorkspace[workspaceId],
 		);
-		for (const id of changedWorkspaceIds) {
+		for (const id of Object.keys(documentsByWorkspace)) {
 			if (id === workspaceId) continue;
 			const otherDocument = documentsByWorkspace[id];
 			const otherAttention = attentionByWorkspace[id];
 			if (otherDocument && otherAttention) {
-				attentionByWorkspace[id] = adoptToolSelections(
+				const adopted = adoptToolSelections(
 					otherAttention,
 					otherDocument,
 					sourceAttention,
 					sourceDocument,
 					groups,
 				);
+				attentionByWorkspace[id] = adopted;
+				if (adopted !== otherAttention && !changedWorkspaceIds.includes(id)) {
+					changedWorkspaceIds.push(id);
+				}
 			}
 		}
 	}

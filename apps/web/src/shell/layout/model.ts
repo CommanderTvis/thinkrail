@@ -1047,9 +1047,10 @@ export function describeLayoutGroup(
 	tabs: readonly LayoutTab[],
 	chatFirstPrompts: ChatFirstPrompts = NO_FIRST_PROMPTS,
 	limit = 3,
+	catalog: LayoutToolCatalog = BUILTIN_LAYOUT_TOOL_CATALOG,
 ): string {
 	if (tabs.length === 0) return t("workbench.layout.emptyGroupSummary");
-	const names = tabs.slice(0, limit).map((tab) => layoutTabName(t, tab, chatFirstPrompts));
+	const names = tabs.slice(0, limit).map((tab) => layoutTabName(t, tab, chatFirstPrompts, catalog));
 	const rest = tabs.length - names.length;
 	const list = names.join(", ");
 	return rest > 0

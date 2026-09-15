@@ -29,6 +29,7 @@ import {
 	type LayoutGroupLocation,
 	type LayoutMutationResult,
 	type LayoutSide,
+	type LayoutToolCatalog,
 	layoutTabName,
 } from "./model";
 import type {
@@ -55,6 +56,17 @@ export interface PreparedLayoutClose {
 
 export interface WorkbenchProps {
 	workspaceId: string;
+	worktreePath?: string;
+	catalog?: LayoutToolCatalog;
+	unofferedTools?: readonly LayoutToolId[];
+	verticalCenterTabs?: boolean;
+	verticalCenterTabsWidth?: number;
+	verticalTabsInProjects?: boolean;
+	defaultPaneDirection?: "horizontal" | "vertical";
+	onVerticalCenterTabsWidthChange?: (width: number) => void;
+	renderTabIcon?: (tab: LayoutTab, active: boolean) => ReactNode | null;
+	renderSideMenuActions?: (side: LayoutSide, groupId: string) => ReactNode;
+	onDirectTabActivation?: (tab: LayoutTab) => void;
 	document: WorkspaceLayoutDocument;
 	attention: LayoutAttention;
 	maxSideGroups: number;
@@ -89,6 +101,12 @@ export interface WorkbenchProps {
 export type DropTarget =
 	| { kind: "group"; location: LayoutGroupLocation }
 	| { kind: "insert"; location: LayoutGroupLocation; index: number }
+	| {
+			kind: "pane";
+			location: LayoutGroupLocation;
+			tabId: string;
+			direction: "horizontal" | "vertical";
+	  }
 	| { kind: "split"; groupId: string; direction: CenterSplitDirection }
 	| { kind: "auxiliary-edge"; region: LayoutAuxiliaryRegion; index: number };
 
@@ -369,6 +387,7 @@ export function tabSearchKeywords(
 	const name = layoutTabName(t, tab, chatFirstPrompts);
 	switch (tab.kind) {
 		case "file":
+		case "external-file":
 		case "diff":
 			return [name, tab.kind, tab.path];
 		case "changes":
@@ -584,14 +603,23 @@ export function findLayoutGroupTabs(
 
 export interface SharedGroupProps {
 	workspaceId: string;
+	worktreePath: string;
+	catalog: LayoutToolCatalog;
+	unofferedTools?: readonly LayoutToolId[] | undefined;
 	document: WorkspaceLayoutDocument;
 	readAttention: () => LayoutAttention;
 	selectionEpochRef: React.MutableRefObject<number>;
 	maxSideGroups: number;
 	maxBottomGroups: number;
+	verticalCenterTabs: boolean;
+	defaultPaneDirection: "horizontal" | "vertical";
+	verticalCenterTabsWidth: number;
+	verticalTabsInProjects: boolean;
+	onVerticalCenterTabsWidthChange: WorkbenchProps["onVerticalCenterTabsWidthChange"];
 	draggingTab: LayoutTab | null;
 	renderTabBody: WorkbenchProps["renderTabBody"];
 	renderTabAdornment: WorkbenchProps["renderTabAdornment"];
+	renderTabIcon: WorkbenchProps["renderTabIcon"];
 	renderToolBody: WorkbenchProps["renderToolBody"];
 	onNewTerminal: WorkbenchProps["onNewTerminal"];
 	onUserNavigation: WorkbenchProps["onUserNavigation"];
@@ -606,7 +634,7 @@ export interface SharedGroupProps {
 	onFocusGroup: (location: LayoutGroupLocation, selectedTabId?: string) => void;
 	onFocusAdjacentGroup: (delta: -1 | 1, fromGroupId?: string) => void;
 	onHideSide: (region: LayoutAuxiliaryRegion) => void;
-	onRevealTool: (tool: LayoutToolId) => void;
+	onRevealTool: (tool: LayoutToolId, target?: LayoutGroupLocation) => void;
 	onRenameChat: WorkbenchProps["onRenameChat"];
 	chatFirstPrompts: WorkbenchProps["chatFirstPrompts"];
 	canFocusAdjacentGroup: boolean;

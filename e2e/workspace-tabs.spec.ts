@@ -46,10 +46,12 @@ test("the selected side tool follows workspace switches", async ({ page }) => {
 	await worktreeRow(page, "workspace-1").getByRole("button").first().click();
 	await expect(page.getByTestId("scope-name")).toHaveText("workspace-1");
 
-	const groupInfo = await page.locator('[data-side][data-tools~="specs"]').evaluate((group) => ({
-		side: group.getAttribute("data-side"),
-		groupId: group.getAttribute("data-group-id"),
-	}));
+	const groupInfo = await page
+		.locator('[data-side][data-tools~="plugin:spec-dialect:specs"]')
+		.evaluate((group) => ({
+			side: group.getAttribute("data-side"),
+			groupId: group.getAttribute("data-group-id"),
+		}));
 	if (!groupInfo.side || !groupInfo.groupId) throw new Error("missing Specs side group");
 	const projects = page.getByTestId("tool-rail-projects");
 

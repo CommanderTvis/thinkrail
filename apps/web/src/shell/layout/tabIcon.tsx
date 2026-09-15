@@ -1,6 +1,4 @@
 import {
-	RiBookOpenFill,
-	RiBookOpenLine,
 	RiChat2Fill,
 	RiChat2Line,
 	RiDiscussFill,
@@ -14,18 +12,19 @@ import {
 	RiLayout2Fill,
 	RiLayout2Line,
 	RiListCheck3,
-	RiTaskFill,
-	RiTaskLine,
 	RiTerminalBoxFill,
 	RiTerminalBoxLine,
 } from "@remixicon/react";
 import type { ReactNode } from "react";
 import { CustomIcon } from "../../components/CustomIcon";
+import { FileTypeIcon } from "../../components/FileTypeIcon";
 import type { LayoutTab } from "./types";
 
 export function tabIcon(tab: LayoutTab, active = false, cls = "size-14 shrink-0"): ReactNode {
 	switch (tab.kind) {
 		case "file":
+			return <FileTypeIcon path={tab.path} className={cls} />;
+		case "external-file":
 			return active ? <RiFileFill className={cls} /> : <RiFileLine className={cls} />;
 		case "diff":
 			return active ? (
@@ -45,14 +44,12 @@ export function tabIcon(tab: LayoutTab, active = false, cls = "size-14 shrink-0"
 			switch (tab.tool) {
 				case "projects":
 					return active ? <RiFolder2Fill className={cls} /> : <RiFolder2Line className={cls} />;
-				case "specs":
-					return active ? <RiBookOpenFill className={cls} /> : <RiBookOpenLine className={cls} />;
 				case "files":
 					return active ? <RiFileFill className={cls} /> : <RiFileLine className={cls} />;
 				case "review":
 					return active ? <RiDiscussFill className={cls} /> : <RiDiscussLine className={cls} />;
 				case "plan":
-					return active ? <RiTaskFill className={cls} /> : <RiTaskLine className={cls} />;
+					return <RiListCheck3 className={cls} />;
 				default:
 					return active ? <RiLayout2Fill className={cls} /> : <RiLayout2Line className={cls} />;
 			}

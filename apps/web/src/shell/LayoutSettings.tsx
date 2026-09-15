@@ -148,8 +148,8 @@ function GroupLimitInput({
 	);
 }
 const PANE_DIRECTIONS = [
-	{ direction: "horizontal", label: "Columns" },
-	{ direction: "vertical", label: "Rows" },
+	{ direction: "horizontal", labelKey: "workbench.layoutSettings.columns" },
+	{ direction: "vertical", labelKey: "workbench.layoutSettings.rows" },
 ] as const;
 
 export function LayoutSettings() {
@@ -529,6 +529,114 @@ export function LayoutSettings() {
 					</div>
 				)}
 			</div>
+
+			<section className="space-y-8 border-border-default border-t pt-16">
+				<div>
+					<h3 className="tr-title-section text-text-default">
+						{t("workbench.layoutSettings.editorTabs")}
+					</h3>
+					<p className="tr-text-metadata text-text-muted">
+						{t("workbench.layoutSettings.editorTabsHint")}
+					</p>
+				</div>
+				<label className="flex w-full items-center gap-8 tr-text-ui text-text-default">
+					<input
+						type="checkbox"
+						data-testid="vertical-center-tabs"
+						checked={preferences.verticalCenterTabs}
+						onChange={(event) =>
+							useAppStore.getState().setLocalLayoutPreferences({
+								...preferences,
+								verticalCenterTabs: event.target.checked,
+							})
+						}
+						className="size-16 shrink-0 accent-primary"
+					/>
+					<span className="min-w-0 flex-1">{t("workbench.layoutSettings.verticalTabs")}</span>
+				</label>
+
+				<label
+					className={`flex w-full items-start gap-8 tr-text-ui ${preferences.verticalCenterTabs ? "text-text-default" : "text-text-disabled"}`}
+				>
+					<input
+						type="checkbox"
+						data-testid="vertical-tabs-in-projects"
+						checked={preferences.verticalTabsInProjects}
+						disabled={!preferences.verticalCenterTabs}
+						onChange={(event) =>
+							useAppStore.getState().setLocalLayoutPreferences({
+								...preferences,
+								verticalTabsInProjects: event.target.checked,
+							})
+						}
+						className="mt-2 size-16 shrink-0 accent-primary"
+					/>
+					<span className="min-w-0 flex-1">
+						{t("workbench.layoutSettings.tabsInProjects")}
+						<span className="block tr-text-metadata text-text-muted">
+							{t("workbench.layoutSettings.tabsInProjectsHint")}
+						</span>
+					</span>
+				</label>
+
+				<label className="flex w-full items-start gap-8 tr-text-ui text-text-default">
+					<input
+						type="checkbox"
+						data-testid="preview-tabs"
+						checked={preferences.previewTabs}
+						onChange={(event) =>
+							useAppStore.getState().setLocalLayoutPreferences({
+								...preferences,
+								previewTabs: event.target.checked,
+							})
+						}
+						className="mt-2 size-16 shrink-0 accent-primary"
+					/>
+					<span className="min-w-0 flex-1">
+						{t("workbench.layoutSettings.previewTabs")}
+						<span className="block tr-text-metadata text-text-muted">
+							{t("workbench.layoutSettings.previewTabsHint")}
+						</span>
+					</span>
+				</label>
+
+				<div className="flex flex-col gap-4">
+					<span
+						className={
+							preferences.verticalCenterTabs
+								? "tr-text-ui text-text-default"
+								: "tr-text-ui text-text-disabled"
+						}
+					>
+						{t("workbench.layoutSettings.paneDirection")}
+					</span>
+					<div className="flex items-center gap-4">
+						{PANE_DIRECTIONS.map((option) => (
+							<button
+								key={option.direction}
+								type="button"
+								data-testid={`default-pane-${option.direction}`}
+								data-active={preferences.defaultPaneDirection === option.direction}
+								disabled={!preferences.verticalCenterTabs}
+								onClick={() =>
+									useAppStore.getState().setLocalLayoutPreferences({
+										...preferences,
+										defaultPaneDirection: option.direction,
+									})
+								}
+								className="rounded-sm border border-border-default px-12 py-4 tr-text-ui text-text-muted data-[active=true]:border-primary-muted data-[active=true]:bg-primary-subtle data-[active=true]:text-text-default hover:bg-control-bg-hovered disabled:border-control-disabled-border disabled:bg-control-disabled-bg disabled:text-control-disabled-text"
+							>
+								{t(option.labelKey)}
+							</button>
+						))}
+					</div>
+					<span className="tr-text-metadata text-text-muted">
+						{preferences.verticalCenterTabs
+							? t("workbench.layoutSettings.paneDirectionHint")
+							: t("workbench.layoutSettings.paneDirectionDisabled")}
+					</span>
+				</div>
+			</section>
 
 			<ConfirmDialog
 				open={applying !== null}

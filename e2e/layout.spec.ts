@@ -1,16 +1,19 @@
 import { realpathSync, rmSync } from "node:fs";
+import { basename, join } from "node:path";
 import { expect, type Locator, type Page, test, type WebSocketRoute } from "@playwright/test";
 import {
 	createWorkspaceViaDialog,
 	defaultWorkspaceRow,
 	enterDefaultWorkspace,
 	expandDisclosure,
+	openAppFresh,
 	openFixtureProject,
 	openPersistedChat,
 	pressPlatformShortcut,
 	pseudoBackgroundColor,
 	revealFirstProjectWorkspaces,
 	revealWorkbenchTool,
+	stagePlainFolder,
 	waitTerminalReady,
 } from "./fixtures/app";
 import { E2E_FIXTURE_REPO } from "./fixtures/paths";
@@ -232,7 +235,9 @@ test("auxiliary panel scrollbars stay quiet at rest and expose only clipped edge
 	await page.setViewportSize({ width: 900, height: 420 });
 	await openDefaultWorkbench(page);
 	for (const tool of ["projects", "specs", "files", "review"] as const) {
-		const tab = page.getByTestId(`tool-rail-${tool}`);
+		const tab = page.getByTestId(
+			`tool-rail-${tool === "specs" ? "plugin:spec-dialect:specs" : tool}`,
+		);
 		await revealWorkbenchTool(page, tool);
 		const panelId = await tab.getAttribute("aria-controls");
 		expect(panelId).toBeTruthy();
@@ -472,7 +477,7 @@ test("dragging outer separators hides both sides and preserves their restore sta
 
 	await page.getByTestId("tool-rail-projects").click();
 	await waitForLayoutSettled(page);
-	await page.getByTestId("tool-rail-specs").click();
+	await page.getByTestId("tool-rail-plugin:spec-dialect:specs").click();
 	await waitForLayoutSettled(page);
 
 	await expect(page.getByTestId("left-stack")).toBeVisible();
@@ -613,7 +618,7 @@ test("side groups expose broad per-panel above and below split targets", async (
 
 	const groups = sideGroups(page, "right");
 	await expect(groups).toHaveCount(3);
-	await expect(groups.nth(0)).toHaveAttribute("data-tools", "specs");
+	await expect(groups.nth(0)).toHaveAttribute("data-tools", "plugin:spec-dialect:specs");
 	await expect(groups.nth(1)).toHaveAttribute("data-tools", "files");
 	await expect(groups.nth(2)).toHaveAttribute("data-tools", /review/);
 
@@ -622,7 +627,7 @@ test("side groups expose broad per-panel above and below split targets", async (
 	expect(belowHeight).toBeGreaterThan(40);
 
 	await expect(groups).toHaveCount(4);
-	await expect(groups.nth(0)).toHaveAttribute("data-tools", "specs");
+	await expect(groups.nth(0)).toHaveAttribute("data-tools", "plugin:spec-dialect:specs");
 	await expect(groups.nth(1)).toContainText("Empty group");
 	await expect(groups.nth(2)).toHaveAttribute("data-tools", /review/);
 	await expect(groups.nth(3)).toHaveAttribute("data-tools", "files");
@@ -639,7 +644,7 @@ test("side groups expose broad per-panel above and below split targets", async (
 	await expect(page.getByTestId("tool-rail-review")).toHaveAttribute("aria-pressed", "false");
 	await page.getByTestId("tool-rail-review").click({ delay: 100 });
 	await expect(groups).toHaveCount(5);
-	await expect(groups.nth(0)).toHaveAttribute("data-tools", "specs");
+	await expect(groups.nth(0)).toHaveAttribute("data-tools", "plugin:spec-dialect:specs");
 	await expect(groups.nth(2)).toHaveAttribute("data-tools", "files");
 	await expect(groups.nth(3)).toHaveAttribute("data-tools", /review/);
 });
@@ -730,12 +735,12 @@ test("keyboard and menu commands reorder, search, recursively split, and explici
 	await page.getByTestId("tab-review").click({ button: "right" });
 	await page.getByRole("menuitem", { name: "Show Files" }).click();
 	await expect(page.getByTestId("tab-files")).toBeVisible();
-	await page.getByTestId("tool-rail-specs").focus();
+	await page.getByTestId("tool-rail-plugin:spec-dialect:specs").focus();
 	await page.keyboard.press("Delete");
-	await expect(page.getByTestId("tab-specs")).toHaveCount(0);
+	await expect(page.getByTestId("tab-plugin:spec-dialect:specs")).toHaveCount(0);
 	await page.getByTestId("tab-review").click({ button: "right" });
 	await page.getByRole("menuitem", { name: "Show Specs" }).click();
-	await expect(page.getByTestId("tab-specs")).toBeVisible();
+	await expect(page.getByTestId("tab-plugin:spec-dialect:specs")).toBeVisible();
 
 	await openKeptFiles(page, ["README.md", "notes.txt", "LINKS.md"]);
 	const tabs = page.getByTestId("editor-tab");
@@ -1162,10 +1167,7 @@ test("a narrow viewport compresses locally without rewriting recursive topology"
 	if (!bounds) throw new Error("workbench has no box");
 	expect(bounds.x).toBeGreaterThanOrEqual(0);
 	expect(bounds.x + bounds.width).toBeLessThanOrEqual(390);
-	await page
-		.getByTestId("editor-tab")
-		.filter({ hasText: "README.md" })
-		.click({ button: "right", position: { x: 24, y: 12 } });
+	await page.getByTestId("editor-tab").filter({ hasText: "README.md" }).click({ button: "right" });
 	await expect(page.getByRole("menuitem", { name: /Split right/ })).toBeDisabled();
 	await page.keyboard.press("Escape");
 
@@ -1423,4 +1425,541 @@ test("the hidden bottom drop zone wins overlapping terminal targets and reveals 
 	await expect(page.getByTestId("bottom-panel")).toBeVisible();
 	await expect(page.getByTestId("bottom-group").getByTestId("terminal-tab")).toHaveCount(1);
 	await expect(page.getByTestId("center-group").getByTestId("terminal-tab")).toHaveCount(0);
+});
+
+test("a middle click closes the tab under the pointer, tool tabs included", async ({ page }) => {
+	await openDefaultWorkbench(page);
+	await openKeptFiles(page, ["README.md", "notes.txt", "LINKS.md"]);
+	const center = page.getByTestId("center-tab-strip");
+
+	await center.getByRole("tab", { name: /notes\.txt/ }).click({ button: "middle" });
+	await expect(page.getByTestId("editor-tab")).toHaveCount(2);
+	await expect(center.getByRole("tab", { name: /notes\.txt/ })).toHaveCount(0);
+	await expect(center.getByRole("tab", { name: /README\.md/ })).toBeVisible();
+	await expect(center.getByRole("tab", { name: /LINKS\.md/ })).toBeVisible();
+
+	const files = page.getByTestId("tab-files");
+	await files.click({ button: "middle" });
+	await expect(files).toHaveCount(0);
+});
+
+test("the side group menu shows tools for its own side and opens terminals in that group", async ({
+	page,
+}) => {
+	await openDefaultWorkbench(page);
+	const specsGroup = sideGroups(page, "right").first();
+	await expect(specsGroup.getByTestId("terminal-tab")).toHaveCount(0);
+
+	await specsGroup.getByRole("button", { name: "Add to this group" }).click();
+	await page.getByTestId("side-new-terminal").click();
+	await expect(sideGroups(page, "right").getByTestId("terminal-tab")).toHaveCount(1);
+	await expect(page.getByTestId("center-tab-strip").getByTestId("terminal-tab")).toHaveCount(0);
+
+	await page.getByTestId("tab-projects").click({ button: "right" });
+	await page.getByRole("menuitem", { name: "Remove tool from group", exact: true }).click();
+	await page.getByTestId("tab-review").click({ button: "right" });
+	await page.getByRole("menuitem", { name: "Remove tool from group", exact: true }).click();
+
+	await specsGroup.getByRole("button", { name: "Add to this group" }).click();
+	await expect(page.getByTestId("show-tool-review")).toBeVisible();
+	await expect(page.getByTestId("show-tool-projects")).toHaveCount(0);
+
+	// "Show" from a group's own menu lands the tool in that group, not wherever it last lived.
+	const rightGroups = await sideGroups(page, "right").count();
+	await page.getByTestId("show-tool-review").click();
+	await expect(specsGroup).toHaveAttribute("data-tools", /review/);
+	await expect(sideGroups(page, "right")).toHaveCount(rightGroups);
+});
+
+test("Layout settings controls keep their container-preset max-widths", async ({ page }) => {
+	await openDefaultWorkbench(page);
+	await page.getByTestId("open-settings").click();
+	await page.getByTestId("settings-nav-layout").click();
+
+	await page.getByTestId("layout-add-new").click();
+	expect(await width(page.getByTestId("layout-preset-save-row"))).toBeLessThanOrEqual(280);
+	await page.keyboard.press("Escape");
+	await page.getByTestId("layout-advanced-toggle").click();
+	await expect(page.getByTestId("layout-group-limits")).toBeVisible();
+	expect(await width(page.locator("#layout-side-group-limit"))).toBeLessThanOrEqual(128);
+});
+
+test("a tab tooltip labels without blocking the tab it overlaps", async ({ page }) => {
+	await openDefaultWorkbench(page);
+	await openKeptFiles(page, ["README.md", "notes.txt", "LINKS.md"]);
+	const tabs = page.getByTestId("editor-tab");
+
+	// Hovering one tab shows our tooltip…
+	await tabs.filter({ hasText: "notes.txt" }).hover();
+	const tip = page.getByRole("tooltip").filter({ hasText: "notes.txt" });
+	await expect(tip.first()).toBeVisible();
+
+	// …and it must never swallow a click meant for a neighbour it happens to cover.
+	await expect
+		.poll(() => tip.first().evaluate((el) => getComputedStyle(el as HTMLElement).pointerEvents))
+		.toBe("none");
+
+	await tabs.filter({ hasText: "LINKS.md" }).click();
+	await expect(tabs.filter({ hasText: "LINKS.md" })).toHaveAttribute("data-active", "true");
+});
+
+test("a tab tooltip does not cover that tab's own close control", async ({ page }) => {
+	await openDefaultWorkbench(page);
+	await openKeptFiles(page, ["README.md", "notes.txt", "LINKS.md"]);
+
+	// Vertical tabs are where this bites: the tooltip opens to the *right*, which is exactly where the
+	// close cross sits. With a horizontal strip it opens below and clears it either way.
+	await page.getByTestId("open-settings").click();
+	await page.getByTestId("settings-nav-layout").click();
+	const verticalToggle = page.getByTestId("vertical-center-tabs");
+	await verticalToggle.click();
+	// Controlled by host-saved settings, so the box only ticks once the round trip lands.
+	await expect(verticalToggle).toBeChecked();
+	await page.keyboard.press("Escape");
+	await expect(page.getByTestId("settings-dialog")).toHaveCount(0);
+
+	const tab = page.getByTestId("editor-tab").filter({ hasText: "notes.txt" });
+	await tab.hover();
+	const tip = page.getByRole("tooltip").filter({ hasText: "notes.txt" }).first();
+	await expect(tip).toBeVisible();
+
+	const close = tab.getByTestId("editor-tab-close");
+	const [tipBox, closeBox] = [await tip.boundingBox(), await close.boundingBox()];
+	if (!tipBox || !closeBox) throw new Error("tooltip or close control has no box");
+	const overlaps =
+		tipBox.x < closeBox.x + closeBox.width &&
+		closeBox.x < tipBox.x + tipBox.width &&
+		tipBox.y < closeBox.y + closeBox.height &&
+		closeBox.y < tipBox.y + tipBox.height;
+	expect(overlaps).toBe(false);
+
+	await close.click();
+	await expect(page.getByTestId("editor-tab").filter({ hasText: "notes.txt" })).toHaveCount(0);
+});
+
+test("a third tab joins a pane's arrangement instead of restarting it", async ({ page }) => {
+	await openDefaultWorkbench(page);
+	await openKeptFiles(page, ["README.md", "notes.txt", "LINKS.md"]);
+
+	await page.getByTestId("open-settings").click();
+	await page.getByTestId("settings-nav-layout").click();
+	const verticalToggle = page.getByTestId("vertical-center-tabs");
+	if (!(await verticalToggle.isChecked())) await verticalToggle.click();
+	await expect(verticalToggle).toBeChecked();
+	await page.keyboard.press("Escape");
+	await expect(page.getByTestId("settings-dialog")).toHaveCount(0);
+
+	const tab = (name: string) => page.getByTestId("editor-tab").filter({ hasText: name });
+	await tab("notes.txt").click({ button: "right" });
+	await page.getByRole("menuitem", { name: "Show beside README.md" }).click();
+	await expect(page.getByTestId("pane-member")).toHaveCount(2);
+
+	// Two columns plus one is three columns: joining a pane is not a chance to redraw it.
+	await tab("LINKS.md").click({ button: "right" });
+	await page.getByRole("menuitem", { name: "Show beside notes.txt" }).click();
+	const members = page.getByTestId("pane-member");
+	await expect(members).toHaveCount(3);
+	const boxes = await members.evaluateAll((nodes) =>
+		nodes.map((node) => node.getBoundingClientRect()).map(({ x, y }) => ({ x, y })),
+	);
+	expect(boxes.map((box) => box.y)).toEqual([boxes[0]?.y, boxes[0]?.y, boxes[0]?.y]);
+	expect(boxes[0]?.x).toBeLessThan(boxes[1]?.x ?? 0);
+	expect(boxes[1]?.x).toBeLessThan(boxes[2]?.x ?? 0);
+});
+
+test("turning vertical tabs off keeps an existing pane split", async ({ page }) => {
+	await openDefaultWorkbench(page);
+	await openKeptFiles(page, ["README.md", "notes.txt"]);
+
+	await page.getByTestId("open-settings").click();
+	await page.getByTestId("settings-nav-layout").click();
+	const verticalToggle = page.getByTestId("vertical-center-tabs");
+	if (!(await verticalToggle.isChecked())) await verticalToggle.click();
+	await page.keyboard.press("Escape");
+	await expect(page.getByTestId("settings-dialog")).toHaveCount(0);
+
+	await page.getByTestId("editor-tab").filter({ hasText: "notes.txt" }).click({ button: "right" });
+	await page.getByRole("menuitem", { name: "Show beside README.md" }).click();
+	await expect(page.getByTestId("pane-member")).toHaveCount(2);
+
+	// The blueprint pair is made by intent whatever the strip orientation; the horizontal strip must not
+	// quietly unsplit a pane that already exists.
+	await page.getByTestId("open-settings").click();
+	await page.getByTestId("settings-nav-layout").click();
+	await verticalToggle.click();
+	await expect(verticalToggle).not.toBeChecked();
+	await page.keyboard.press("Escape");
+	await expect(page.getByTestId("settings-dialog")).toHaveCount(0);
+	await expect(page.getByTestId("pane-member")).toHaveCount(2);
+
+	// Managing the pane stays available from the tab menu in the horizontal strip.
+	await page.getByTestId("editor-tab").filter({ hasText: "notes.txt" }).click({ button: "right" });
+	await page.getByRole("menuitem", { name: "Show on its own" }).click();
+	await expect(page.getByTestId("pane-member")).toHaveCount(0);
+});
+
+test("a pane's columns can be reordered from the strip menu", async ({ page }) => {
+	await openDefaultWorkbench(page);
+	await openKeptFiles(page, ["README.md", "notes.txt"]);
+
+	await page.getByTestId("open-settings").click();
+	await page.getByTestId("settings-nav-layout").click();
+	const verticalToggle = page.getByTestId("vertical-center-tabs");
+	if (!(await verticalToggle.isChecked())) await verticalToggle.click();
+	await expect(verticalToggle).toBeChecked();
+	await page.keyboard.press("Escape");
+	await expect(page.getByTestId("settings-dialog")).toHaveCount(0);
+
+	const tab = (name: string) => page.getByTestId("editor-tab").filter({ hasText: name });
+	await tab("notes.txt").click({ button: "right" });
+	await page.getByRole("menuitem", { name: "Show beside README.md" }).click();
+	const members = page.getByTestId("pane-member");
+	await expect(members).toHaveCount(2);
+
+	const order = async () =>
+		members.evaluateAll((nodes) =>
+			nodes
+				.sort((a, b) => a.getBoundingClientRect().x - b.getBoundingClientRect().x)
+				.map((node) => node.getAttribute("data-tab-id") ?? ""),
+		);
+	const before = await order();
+
+	// The strip order and the split order are one order, so moving the row moves the column.
+	await tab("README.md").click({ button: "right" });
+	// A verb the mode removed is hidden, not disabled: vertical tabs group instead of splitting.
+	await expect(page.getByRole("menuitem", { name: /^Split/ })).toHaveCount(0);
+	await page.getByRole("menuitem", { name: "Move right in this group" }).click();
+	await expect(members).toHaveCount(2);
+	await expect.poll(order).toEqual([before[1], before[0]]);
+});
+
+test("previewing another file into a pane keeps the split it was opened in", async ({ page }) => {
+	await openDefaultWorkbench(page);
+	await openKeptFiles(page, ["README.md"]);
+	await page.getByTestId("file-node").filter({ hasText: "notes.txt" }).click();
+
+	await page.getByTestId("open-settings").click();
+	await page.getByTestId("settings-nav-layout").click();
+	const verticalToggle = page.getByTestId("vertical-center-tabs");
+	if (!(await verticalToggle.isChecked())) await verticalToggle.click();
+	await expect(verticalToggle).toBeChecked();
+	await page.keyboard.press("Escape");
+	await expect(page.getByTestId("settings-dialog")).toHaveCount(0);
+
+	// The previewed file is now a pane member, so the preview slot belongs to the split.
+	await page.getByTestId("editor-tab").filter({ hasText: "notes.txt" }).click({ button: "right" });
+	await page.getByRole("menuitem", { name: "Show beside README.md" }).click();
+	await expect(page.getByTestId("pane-member")).toHaveCount(2);
+
+	await page.getByTestId("file-node").filter({ hasText: "LINKS.md" }).click();
+	await expect(page.getByTestId("pane-member")).toHaveCount(2);
+	await expect(page.getByTestId("editor-tab").filter({ hasText: "LINKS.md" })).toHaveCount(1);
+	await expect(page.getByTestId("editor-tab").filter({ hasText: "notes.txt" })).toHaveCount(0);
+});
+
+test("the default arrangement for a new pane is a setting, and the menu says which it is", async ({
+	page,
+}) => {
+	await openDefaultWorkbench(page);
+	await openKeptFiles(page, ["README.md", "notes.txt"]);
+
+	await page.getByTestId("open-settings").click();
+	await page.getByTestId("settings-nav-layout").click();
+	const verticalToggle = page.getByTestId("vertical-center-tabs");
+	if (!(await verticalToggle.isChecked())) await verticalToggle.click();
+	await expect(verticalToggle).toBeChecked();
+	await page.getByTestId("default-pane-vertical").click();
+	await expect(page.getByTestId("default-pane-vertical")).toHaveAttribute("data-active", "true");
+	await page.keyboard.press("Escape");
+	await expect(page.getByTestId("settings-dialog")).toHaveCount(0);
+
+	await page.getByTestId("editor-tab").filter({ hasText: "notes.txt" }).click({ button: "right" });
+	await page.getByRole("menuitem", { name: "Show under README.md" }).click();
+
+	const members = page.getByTestId("pane-member");
+	await expect(members).toHaveCount(2);
+	const boxes = await members.evaluateAll((nodes) =>
+		nodes.map((node) => node.getBoundingClientRect()).map(({ x, y }) => ({ x, y })),
+	);
+	expect(boxes[0]?.x).toBe(boxes[1]?.x ?? -1);
+	expect(boxes[0]?.y).toBeLessThan(boxes[1]?.y ?? 0);
+
+	// Left as it was found, since this surface keeps the setting for every workspace.
+	await page.getByTestId("editor-tab").filter({ hasText: "notes.txt" }).click({ button: "right" });
+	await page.getByRole("menuitem", { name: "Show on its own" }).click();
+	await expect(page.getByTestId("pane-member")).toHaveCount(0);
+	await page.getByTestId("open-settings").click();
+	await page.getByTestId("settings-nav-layout").click();
+	await page.getByTestId("default-pane-horizontal").click();
+	await expect(page.getByTestId("default-pane-horizontal")).toHaveAttribute("data-active", "true");
+	await page.keyboard.press("Escape");
+	await expect(page.getByTestId("settings-dialog")).toHaveCount(0);
+
+	// The drop band is one target and its label is the setting's answer, not a half's.
+	const dragged = page.getByTestId("editor-tab").filter({ hasText: "notes.txt" });
+	const box = await dragged.boundingBox();
+	if (!box) throw new Error("drag tab has no box");
+	await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+	await page.mouse.down();
+	await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2 - 12, { steps: 4 });
+	await expect(page.locator('[data-drop-label="Show beside README.md"]')).toHaveCount(1);
+	await expect(page.locator('[data-drop-label="Show under README.md"]')).toHaveCount(0);
+	await page.keyboard.press("Escape");
+	await page.mouse.up();
+});
+
+test("the placement picker draws the workbench: a cell per group, a slot at every edge", async ({
+	page,
+}) => {
+	await openDefaultWorkbench(page);
+	await page.getByTestId("tab-files").click({ button: "right" });
+
+	// Every edge of every region offers a slot to start a group, whatever the groups already there.
+	for (const slot of [
+		"New left group at top",
+		"New left group at bottom",
+		"New right group at top",
+		"New right group at bottom",
+		"New bottom group at left",
+		"New bottom group at right",
+	]) {
+		await expect(page.getByRole("menuitem", { name: slot })).toBeVisible();
+	}
+
+	// The group this tab already lives in is where it stands, not somewhere to go: of the two right groups, one is offered.
+	await expect(page.getByRole("menuitem", { name: /^Move to right pane/ })).toHaveCount(1);
+	await expect(page.getByRole("menuitem", { name: /^Move to left pane/ })).toBeEnabled();
+
+	// And a destination moves it.
+	await page.getByRole("menuitem", { name: /^Move to left pane/ }).click();
+	await expect(sideGroups(page, "left").first()).toHaveAttribute("data-tools", /files/);
+	await expect(sideGroups(page, "right").first()).not.toHaveAttribute("data-tools", /files/);
+});
+
+test("a project with no specs opens its rail on Files, not on the empty Specs panel", async ({
+	page,
+}) => {
+	await openAppFresh(page);
+	const dir = await stagePlainFolder(page);
+	await page.getByTestId("add-project-menu").click();
+	await page.getByTestId("menu-open-project").click();
+	await expect(page.getByTestId("project-item").filter({ hasText: basename(dir) })).toBeVisible();
+	await page.getByTestId("welcome-action").filter({ hasText: "Work in project folder" }).click();
+	await expect(page.getByTestId("center-tabs")).toBeVisible();
+
+	// Specs is still docked and one click away; it just isn't what the rail opens on.
+	await expect(page.getByTestId("tool-rail-plugin:spec-dialect:specs")).toHaveAttribute(
+		"aria-pressed",
+		"false",
+	);
+	await expect(page.getByTestId("tool-rail-files")).toHaveAttribute("aria-pressed", "true");
+});
+
+test("vertical tabs at home in Projects hang under the workspace with its start buttons", async ({
+	page,
+}) => {
+	await openDefaultWorkbench(page);
+	await openKeptFiles(page, ["README.md", "notes.txt"]);
+
+	await page.getByTestId("open-settings").click();
+	await page.getByTestId("settings-nav-layout").click();
+	const verticalToggle = page.getByTestId("vertical-center-tabs");
+	if (!(await verticalToggle.isChecked())) await verticalToggle.click();
+	await expect(verticalToggle).toBeChecked();
+	const inProjects = page.getByTestId("vertical-tabs-in-projects");
+	await inProjects.click();
+	await expect(inProjects).toBeChecked();
+	await page.keyboard.press("Escape");
+	await expect(page.getByTestId("settings-dialog")).toHaveCount(0);
+
+	// One column, not two: the strip, its tabs and its start buttons sit under the workspace row.
+	const home = page.getByTestId("left-nav").getByTestId("workspace-tabs");
+	await expect(home.getByTestId("editor-tab")).toHaveCount(2);
+	await expect(home.getByTestId("new-chat")).toBeVisible();
+	await expect(home.getByTestId("new-terminal")).toBeVisible();
+	await expect(page.getByTestId("center-tabs").getByTestId("center-tab-strip")).toHaveCount(0);
+
+	// They are the live tabs: selecting one there switches the editor.
+	const notes = home.getByTestId("editor-tab").filter({ hasText: "notes.txt" });
+	await notes.click();
+	await expect(notes).toHaveAttribute("data-active", "true");
+
+	// Hiding Projects gives the column back to the centre rather than stranding the tabs.
+	await pressPlatformShortcut(page, "b");
+	await expect(page.getByTestId("center-tabs").getByTestId("center-tab-strip")).toHaveCount(1);
+	await expect(page.getByTestId("center-tabs").getByTestId("editor-tab")).toHaveCount(2);
+	await pressPlatformShortcut(page, "b");
+	await expect(home.getByTestId("editor-tab")).toHaveCount(2);
+});
+
+test("file tabs copy paths from the strip and its overflow list", async ({ page, context }) => {
+	await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+	await openDefaultWorkbench(page);
+	await openKeptFiles(page, ["README.md", "notes.txt", "LINKS.md"]);
+	const readme = page.getByTestId("editor-tab").filter({ hasText: "README.md" });
+	await readme.click({ button: "right" });
+	await page.getByTestId("tab-copy-path").click();
+	await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe("README.md");
+	await readme.click({ button: "right" });
+	await page.getByTestId("tab-copy-absolute-path").click();
+	await expect
+		.poll(() => page.evaluate(() => navigator.clipboard.readText()))
+		.toBe(join(realpathSync(E2E_FIXTURE_REPO), "README.md"));
+
+	await page.setViewportSize({ width: 620, height: 800 });
+	await page
+		.getByTestId("center-tab-strip")
+		.getByRole("button", { name: "Search open tabs" })
+		.click();
+	await page.getByRole("option", { name: /notes\.txt/ }).click({ button: "right" });
+	await page.getByTestId("tab-path-actions").getByTestId("tab-copy-absolute-path").click();
+	await expect
+		.poll(() => page.evaluate(() => navigator.clipboard.readText()))
+		.toBe(join(realpathSync(E2E_FIXTURE_REPO), "notes.txt"));
+	await expect(page.getByTestId("editor-tab").filter({ hasText: "notes.txt" })).not.toHaveAttribute(
+		"data-active",
+		"true",
+	);
+});
+
+test("inactive workspace file previews copy paths without switching workspaces", async ({
+	page,
+	context,
+}) => {
+	await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+	await openDefaultWorkbench(page);
+	await openKeptFiles(page, ["README.md"]);
+	await page.getByTestId("open-settings").click();
+	await page.getByTestId("settings-nav-layout").click();
+	const vertical = page.getByTestId("vertical-center-tabs");
+	if (!(await vertical.isChecked())) await vertical.click();
+	const inProjects = page.getByTestId("vertical-tabs-in-projects");
+	if (!(await inProjects.isChecked())) await inProjects.click();
+	await page.keyboard.press("Escape");
+	await createWorkspaceViaDialog(page);
+	await expect(defaultWorkspaceRow(page)).toHaveAttribute("data-active", "false");
+	const preview = page.getByTestId("workspace-tabs-preview").getByTestId("workspace-tab-preview");
+	await preview.click({ button: "right" });
+	await page.getByTestId("tab-copy-path").click();
+	await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe("README.md");
+	await preview.click({ button: "right" });
+	await page.getByTestId("tab-copy-absolute-path").click();
+	await expect
+		.poll(() => page.evaluate(() => navigator.clipboard.readText()))
+		.toBe(join(realpathSync(E2E_FIXTURE_REPO), "README.md"));
+	await expect(defaultWorkspaceRow(page)).toHaveAttribute("data-active", "false");
+});
+
+test("tab group in project-connected vertical tabs renders as one bubble", async ({ page }) => {
+	await openDefaultWorkbench(page);
+	await openKeptFiles(page, ["README.md", "notes.txt", "LINKS.md"]);
+
+	await page.getByTestId("open-settings").click();
+	await page.getByTestId("settings-nav-layout").click();
+	const verticalToggle = page.getByTestId("vertical-center-tabs");
+	if (!(await verticalToggle.isChecked())) await verticalToggle.click();
+	await expect(verticalToggle).toBeChecked();
+	const inProjects = page.getByTestId("vertical-tabs-in-projects");
+	if (!(await inProjects.isChecked())) await inProjects.click();
+	await expect(inProjects).toBeChecked();
+	await page.keyboard.press("Escape");
+	await expect(page.getByTestId("settings-dialog")).toHaveCount(0);
+
+	const home = page.getByTestId("left-nav").getByTestId("workspace-tabs");
+	await expect(home.getByTestId("editor-tab")).toHaveCount(3);
+
+	const notes = home.getByTestId("editor-tab").filter({ hasText: "notes.txt" });
+	await notes.click({ button: "right" });
+	await page.getByRole("menuitem", { name: /Show (beside|under) README\.md/ }).click();
+
+	const groupBubble = home.getByTestId("tab-pane-group");
+	await expect(groupBubble).toHaveCount(1);
+	await expect(groupBubble.getByTestId("editor-tab")).toHaveCount(2);
+	await expect(groupBubble.getByTestId("editor-tab").filter({ hasText: "README.md" })).toHaveCount(
+		1,
+	);
+	await expect(groupBubble.getByTestId("editor-tab").filter({ hasText: "notes.txt" })).toHaveCount(
+		1,
+	);
+	await expect(groupBubble).toHaveAttribute("data-active", "true");
+
+	const standalone = home.getByTestId("editor-tab").filter({ hasText: "LINKS.md" });
+	await expect(standalone).toHaveCount(1);
+	await expect(groupBubble.getByTestId("editor-tab").filter({ hasText: "LINKS.md" })).toHaveCount(
+		0,
+	);
+
+	// Select standalone tab so the group bubble becomes inactive at rest
+	await standalone.click();
+	await expect(standalone).toHaveAttribute("data-active", "true");
+	await expect(groupBubble).not.toHaveAttribute("data-active", "true");
+
+	// Hovering any member of the group highlights the group as a whole
+	await notes.hover();
+	await expect(groupBubble).toHaveCSS("background-color", /0\.6\)?$/);
+	const hoverColor = await groupBubble.evaluate(
+		(element) => getComputedStyle(element).backgroundColor,
+	);
+
+	await createWorkspaceViaDialog(page);
+	await expect(defaultWorkspaceRow(page)).toHaveAttribute("data-active", "false");
+	const preview = page.getByTestId("workspace-tabs-preview");
+	const previewGroup = preview.getByTestId("tab-pane-group");
+	const previewMembers = previewGroup.getByTestId("workspace-tab-preview");
+	await expect(previewMembers).toHaveCount(2);
+	const previewStandalone = preview
+		.getByTestId("workspace-tab-preview")
+		.filter({ hasText: "LINKS.md" });
+	await previewStandalone.hover();
+	await expect(previewStandalone).toHaveCSS("background-color", hoverColor);
+	await expect(previewGroup).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+	for (const member of await previewMembers.all()) {
+		await member.hover();
+		await expect(previewGroup).toHaveCSS("background-color", hoverColor);
+		await expect(member).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+		await expect(previewStandalone).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+	}
+	await previewMembers.filter({ hasText: "notes.txt" }).click();
+	await expect(defaultWorkspaceRow(page)).toHaveAttribute("data-active", "true");
+	await expect(groupBubble).toHaveAttribute("data-active", "true");
+	await expect(groupBubble.getByTestId("editor-tab")).toHaveCount(2);
+	await expect(notes).toHaveAttribute("data-active", "true");
+});
+
+test("the Projects pane keeps its scroll position across a workspace switch", async ({ page }) => {
+	await openDefaultWorkbench(page);
+	await openKeptFiles(page, ["README.md", "notes.txt", "LINKS.md"]);
+
+	await page.getByTestId("open-settings").click();
+	await page.getByTestId("settings-nav-layout").click();
+	const verticalToggle = page.getByTestId("vertical-center-tabs");
+	if (!(await verticalToggle.isChecked())) await verticalToggle.click();
+	await expect(verticalToggle).toBeChecked();
+	const inProjects = page.getByTestId("vertical-tabs-in-projects");
+	if (!(await inProjects.isChecked())) await inProjects.click();
+	await expect(inProjects).toBeChecked();
+	await page.keyboard.press("Escape");
+	await expect(page.getByTestId("settings-dialog")).toHaveCount(0);
+
+	await createWorkspaceViaDialog(page);
+	await expect(defaultWorkspaceRow(page)).toHaveAttribute("data-active", "false");
+
+	// Short enough that the tree overflows: two workspaces, three tabs under one, a strip under the other.
+	await page.setViewportSize({ width: 1280, height: 260 });
+	const viewport = page.getByTestId("left-nav").locator(".quiet-scroll-viewport");
+	await viewport.evaluate((element) => {
+		element.scrollTop = 40;
+	});
+	await expect.poll(() => viewport.evaluate((element) => element.scrollTop)).toBe(40);
+
+	// Switching rebuilds the workbench; the pane must come back where it was, not at the top. The strip
+	// then nudges only as far as it takes to keep the selected tab in view, never back to zero.
+	await defaultWorkspaceRow(page).getByTestId("workspace-name").click();
+	await expect(defaultWorkspaceRow(page)).toHaveAttribute("data-active", "true");
+	await expect
+		.poll(() => viewport.evaluate((element) => element.scrollTop))
+		.toBeGreaterThanOrEqual(40);
+	await expect(
+		page.getByTestId("left-nav").locator('[data-testid="editor-tab"][data-active="true"]'),
+	).toBeInViewport();
 });

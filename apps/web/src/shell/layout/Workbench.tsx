@@ -15,11 +15,22 @@ import {
 	ResizablePanel,
 	ResizablePanelGroup,
 } from "@thinkrail/ui/resizable";
-import { useCallback, useEffect, useInsertionEffect, useMemo, useRef, useState } from "react";
+import {
+	createContext,
+	type ReactNode,
+	useCallback,
+	useContext,
+	useEffect,
+	useInsertionEffect,
+	useMemo,
+	useRef,
+	useState,
+} from "react";
 import { readLayoutNavigationClock, readLayoutSelection, tupleKey } from "../../lib";
 import { projectWorkbenchRatio, restoreWorkbenchRatio } from "./auxiliaryPresentation";
 import { closeRequestTarget } from "./closeRequest";
 import {
+	BUILTIN_LAYOUT_TOOL_CATALOG,
 	canCreateAuxiliaryGroup,
 	canJoinAuxiliaryGroup,
 	canPlaceLayoutTab,
@@ -31,9 +42,11 @@ import {
 	findCenterGroup,
 	findPlacedResource,
 	findTabLocation,
+	groupTabs,
 	hideBottom,
 	hideSide,
 	isLayoutUnavailable,
+	isToolShowing,
 	keepPreview,
 	LAYOUT_LIMITS,
 	type LayoutGroupLocation,
@@ -52,14 +65,19 @@ import {
 	splitCenterGroup,
 } from "./model";
 import { tabIcon } from "./tabIcon";
-import type { LayoutAuxiliaryRegion, LayoutTab, LayoutToolId } from "./types";
+import {
+	type LayoutAuxiliaryRegion,
+	type LayoutTab,
+	type LayoutToolId,
+	VERTICAL_TABS_WIDTH,
+} from "./types";
 import {
 	BottomAlignedRow,
 	BottomAlignmentMenu,
 	BottomDropZone,
 	BottomStack,
 } from "./workbenchBottom";
-import { CenterNodeView } from "./workbenchCenter";
+import { CenterGroupStrips, CenterNodeView } from "./workbenchCenter";
 import { AuxiliaryRegionRail } from "./workbenchRails";
 import type {
 	DragData,
@@ -85,17 +103,33 @@ import { SideStack } from "./workbenchSide";
 
 export type { LayoutTabFocusRequest, WorkbenchProps } from "./workbenchShared";
 
+const CenterTabsInProjectsContext = createContext<ReactNode>(null);
+
+/** The active workspace's centre strips while they are at home in Projects; `null` everywhere else. */
+export function useCenterTabsInProjects(): ReactNode {
+	return useContext(CenterTabsInProjectsContext);
+}
+
 export function Workbench({
 	workspaceId,
+	worktreePath = "",
+	catalog,
+	unofferedTools,
 	document,
 	attention,
 	maxSideGroups,
 	maxBottomGroups,
+	verticalCenterTabs = false,
+	verticalCenterTabsWidth = VERTICAL_TABS_WIDTH.default,
+	verticalTabsInProjects = false,
+	defaultPaneDirection = "horizontal",
+	onVerticalCenterTabsWidthChange,
 	projectionEpoch,
 	focusRequest,
 	subscribeCloseRequest,
 	renderTabBody,
 	renderTabAdornment,
+	renderTabIcon,
 	renderToolBody,
 	renderEmptyCenter,
 	renderCenterActions,
@@ -414,6 +448,15 @@ export function Workbench({
 				result = moveTabToGroup(document, tab, target.location, insertionIndex);
 				break;
 			}
+			case "pane":
+				result = groupTabs(
+					document,
+					target.location.groupId,
+					tab.id,
+					target.tabId,
+					target.direction,
+				);
+				break;
 			case "split":
 				result =
 					tab.kind === "tool"
@@ -750,22 +793,39 @@ export function Workbench({
 		[apply],
 	);
 	const revealMissingTool = useCallback(
-		(tool: LayoutToolId) => {
-			const result = revealTool(documentRef.current, tool, maxSideGroups, maxBottomGroups);
+		(tool: LayoutToolId, target?: LayoutGroupLocation) => {
+			const result = revealTool(
+				documentRef.current,
+				tool,
+				maxSideGroups,
+				maxBottomGroups,
+				target,
+				catalog ?? BUILTIN_LAYOUT_TOOL_CATALOG,
+			);
 			if (!isLayoutUnavailable(result)) apply(result);
 		},
-		[apply, maxBottomGroups, maxSideGroups],
+		[apply, catalog, maxBottomGroups, maxSideGroups],
 	);
 	const shared: SharedGroupProps = {
 		workspaceId,
+		catalog: catalog ?? BUILTIN_LAYOUT_TOOL_CATALOG,
+		worktreePath,
+		unofferedTools,
 		document,
 		readAttention,
 		selectionEpochRef: tabSelectionEpoch,
 		maxSideGroups,
 		maxBottomGroups,
+		verticalCenterTabs,
+		defaultPaneDirection,
+		verticalCenterTabsWidth,
+		verticalTabsInProjects:
+			verticalTabsInProjects && isToolShowing(document, attention, "projects"),
+		onVerticalCenterTabsWidthChange,
 		draggingTab,
 		renderTabBody,
 		renderTabAdornment,
+		renderTabIcon,
 		renderToolBody,
 		onNewTerminal,
 		onUserNavigation,
@@ -1010,43 +1070,57 @@ export function Workbench({
 		</ResizablePanelGroup>
 	);
 
+	const centerTabsInProjects =
+		verticalCenterTabs &&
+		verticalTabsInProjects &&
+		isToolShowing(document, attention, "projects") ? (
+			<CenterGroupStrips
+				attention={attention}
+				shared={shared}
+				onNewChat={onNewChat}
+				renderCenterActions={renderCenterActions}
+			/>
+		) : null;
+
 	return (
-		<DndContext
-			sensors={sensors}
-			collisionDetection={workbenchCollisionDetection}
-			measuring={{ droppable: { strategy: MeasuringStrategy.Always } }}
-			onDragStart={handleDragStart}
-			onDragCancel={() => setDraggingTab(null)}
-			onDragEnd={handleDragEnd}
-		>
-			<div
-				ref={workbenchRef}
-				data-testid="workbench"
-				className="flex h-full min-h-0 min-w-0 overflow-hidden"
-				onPointerDownCapture={() => {
-					tabSelectionEpoch.current += 1;
-				}}
-				onKeyDownCapture={(event) => {
-					if (!event.ctrlKey || event.altKey || event.metaKey || event.key !== "F6") return;
-					event.preventDefault();
-					event.stopPropagation();
-					focusAdjacentGroup(event.shiftKey ? -1 : 1);
-				}}
+		<CenterTabsInProjectsContext.Provider value={centerTabsInProjects}>
+			<DndContext
+				sensors={sensors}
+				collisionDetection={workbenchCollisionDetection}
+				measuring={{ droppable: { strategy: MeasuringStrategy.Always } }}
+				onDragStart={handleDragStart}
+				onDragCancel={() => setDraggingTab(null)}
+				onDragEnd={handleDragEnd}
 			>
-				<AuxiliaryRegionRail region="left" shared={shared} attention={attention} />
-				<div ref={columnsRef} className="min-h-0 min-w-0 flex-1">
-					{workbenchColumns}
-				</div>
-				<AuxiliaryRegionRail region="right" shared={shared} attention={attention} />
-			</div>
-			<DragOverlay dropAnimation={null}>
-				{draggingTab ? (
-					<div className="flex max-w-224 items-center gap-4 rounded-sm border border-primary bg-container-elevated-bg px-8 py-4 tr-text-ui text-text-default shadow-lg">
-						{tabIcon(draggingTab)}
-						<span className="truncate">{layoutTabName(t, draggingTab, chatFirstPrompts)}</span>
+				<div
+					ref={workbenchRef}
+					data-testid="workbench"
+					className="flex h-full min-h-0 min-w-0 overflow-hidden"
+					onPointerDownCapture={() => {
+						tabSelectionEpoch.current += 1;
+					}}
+					onKeyDownCapture={(event) => {
+						if (!event.ctrlKey || event.altKey || event.metaKey || event.key !== "F6") return;
+						event.preventDefault();
+						event.stopPropagation();
+						focusAdjacentGroup(event.shiftKey ? -1 : 1);
+					}}
+				>
+					<AuxiliaryRegionRail region="left" shared={shared} attention={attention} />
+					<div ref={columnsRef} className="min-h-0 min-w-0 flex-1">
+						{workbenchColumns}
 					</div>
-				) : null}
-			</DragOverlay>
-		</DndContext>
+					<AuxiliaryRegionRail region="right" shared={shared} attention={attention} />
+				</div>
+				<DragOverlay dropAnimation={null}>
+					{draggingTab ? (
+						<div className="flex max-w-224 items-center gap-4 rounded-sm border border-primary bg-container-elevated-bg px-8 py-4 tr-text-ui text-text-default shadow-lg">
+							{tabIcon(draggingTab)}
+							<span className="truncate">{layoutTabName(t, draggingTab, chatFirstPrompts)}</span>
+						</div>
+					) : null}
+				</DragOverlay>
+			</DndContext>
+		</CenterTabsInProjectsContext.Provider>
 	);
 }

@@ -325,6 +325,8 @@ export function AuxiliaryRegionRail({
 									onFocusAdjacentGroup={shared.onFocusAdjacentGroup}
 									onHideSide={shared.onHideSide}
 									onRevealTool={shared.onRevealTool}
+									catalog={shared.catalog}
+									worktreePath={shared.worktreePath}
 									onRenameChat={shared.onRenameChat}
 									canFocusAdjacentGroup={shared.canFocusAdjacentGroup}
 									renderTabAdornment={shared.renderTabAdornment}

@@ -15,6 +15,7 @@ import { memo, type ReactNode, useMemo, useRef } from "react";
 import { type LayoutAttention, readLayoutSelection, tupleKey } from "../../lib";
 import { AuxiliaryPaneHeader, AuxiliaryPaneHideButton } from "./AuxiliaryPaneHeader";
 import { resizeVisibleAuxiliaryGroups, visibleAuxiliaryGroups } from "./auxiliaryPresentation";
+import type { LayoutToolCatalog } from "./model";
 import {
 	canCreateSideGroup,
 	canJoinAuxiliaryGroup,
@@ -144,10 +145,12 @@ export const SideGroupView = memo(function SideGroupView({
 			id={groupDomId(location)}
 			tabIndex={-1}
 			aria-label={t(PANE_LABELS[side], {
-				name: selected ? layoutTabName(t, selected) : t("workbench.pane.tools"),
+				name: selected
+					? layoutTabName(t, selected, undefined, shared.catalog)
+					: t("workbench.pane.tools"),
 			})}
 			data-testid={
-				group.tabs.some((tab) => tab.kind === "tool" && tab.tool === "specs")
+				group.tabs.some((tab) => tab.kind === "tool" && tab.tool === "plugin:spec-dialect:specs")
 					? "right-panel"
 					: "side-group"
 			}
@@ -199,16 +202,22 @@ export function SideGroupMenu({
 	limit,
 	onNewTerminal,
 	onRevealTool,
+	catalog,
+	unofferedTools,
 }: {
+	catalog: LayoutToolCatalog;
+	unofferedTools?: readonly LayoutToolId[] | undefined;
 	document: WorkspaceLayoutDocument;
 	side: LayoutAuxiliaryRegion;
 	group: LayoutSideGroup;
 	limit: number;
 	onNewTerminal: WorkbenchProps["onNewTerminal"];
-	onRevealTool: (tool: LayoutToolId) => void;
+	onRevealTool: (tool: LayoutToolId, target?: LayoutGroupLocation) => void;
 }) {
 	const t = useT();
-	const missing = unplacedToolsForRegion(document, side);
+	const missing = unplacedToolsForRegion(document, side, catalog).filter(
+		(tool) => !unofferedTools?.includes(tool),
+	);
 	const toolPane = group.tabs.some((tab) => tab.kind === "tool");
 	const paneBelowAvailable = !toolPane || document[side].groups.length < limit;
 	const newTerminalPaneLabel =
@@ -248,9 +257,11 @@ export function SideGroupMenu({
 					<DropdownMenuItem
 						key={tool}
 						data-testid={`show-tool-${tool}`}
-						onSelect={() => onRevealTool(tool)}
+						onSelect={() => onRevealTool(tool, { area: side, groupId: group.id })}
 					>
-						{t("workbench.tab.showTool", { name: layoutTabName(t, toolTab(tool)) })}
+						{t("workbench.tab.showTool", {
+							name: layoutTabName(t, toolTab(tool, catalog), undefined, catalog),
+						})}
 					</DropdownMenuItem>
 				))}
 			</DropdownMenuContent>
@@ -290,6 +301,8 @@ export function AuxiliaryGroupHeader({
 	const actions = (
 		<>
 			<SideGroupMenu
+				catalog={shared.catalog}
+				unofferedTools={shared.unofferedTools}
 				document={shared.document}
 				side={region}
 				group={group}
@@ -342,10 +355,13 @@ export function AuxiliaryGroupHeader({
 				onFocusAdjacentGroup={shared.onFocusAdjacentGroup}
 				onHideSide={shared.onHideSide}
 				onRevealTool={shared.onRevealTool}
+				catalog={shared.catalog}
+				worktreePath={shared.worktreePath}
 				onRenameChat={shared.onRenameChat}
 				{...(shared.chatFirstPrompts ? { chatFirstPrompts: shared.chatFirstPrompts } : {})}
 				canFocusAdjacentGroup={shared.canFocusAdjacentGroup}
 				renderTabAdornment={shared.renderTabAdornment}
+				renderTabIcon={shared.renderTabIcon}
 				trailing={actions}
 			/>
 		);
@@ -354,7 +370,7 @@ export function AuxiliaryGroupHeader({
 			ref={setNodeRef}
 			title={
 				selected
-					? layoutTabName(t, selected)
+					? layoutTabName(t, selected, undefined, shared.catalog)
 					: region === "bottom"
 						? t("workbench.rail.terminal")
 						: t("workbench.pane.tools")
