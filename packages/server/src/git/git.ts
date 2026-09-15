@@ -1,6 +1,7 @@
 import { existsSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { isAbsolute, relative, resolve } from "node:path";
 import type {
+	BranchDeleteResult,
 	BranchDetail,
 	BranchList,
 	GitCommit,
@@ -559,18 +560,41 @@ export async function fetchRemotes(projectId: string): Promise<void> {
 }
 
 /** Frees a branch a checkout this host does not own is holding — see SPEC.md. */
-async function releaseWorktree(root: string, path: string, branch: string): Promise<void> {
+async function releaseWorktree(
+	root: string,
+	path: string,
+	branch: string,
+	force: boolean,
+): Promise<BranchDeleteResult> {
 	const removed = await gitAsync(root, ["worktree", "remove", "--end-of-options", path]);
-	if (removed.ok) return;
+	if (removed.ok) return {};
 	if (existsSync(path)) {
-		throw new Error(
-			`${branch} is checked out at ${path}, which git will not give up: ${removed.err || "git failed"}`,
-		);
+		const message = `${branch} is checked out at ${path}, which git will not give up: ${removed.err || "git failed"}`;
+		if (/contains modified or untracked files/i.test(removed.err)) {
+			if (!force) return { recovery: { kind: "dirty-worktree", worktreePath: path, message } };
+			const forced = await gitAsync(root, [
+				"worktree",
+				"remove",
+				"--force",
+				"--end-of-options",
+				path,
+			]);
+			if (forced.ok) return {};
+			throw new Error(
+				`${branch} is checked out at ${path}, which git will not give up: ${forced.err || "git failed"}`,
+			);
+		}
+		throw new Error(message);
 	}
 	await gitAsync(root, ["worktree", "prune"]);
+	return {};
 }
 
-export async function deleteBranch(projectId: string, branch: string): Promise<void> {
+export async function deleteBranch(
+	projectId: string,
+	branch: string,
+	force = false,
+): Promise<BranchDeleteResult> {
 	assertSafeRef(branch);
 	const { branches } = await branchDetails(projectId);
 	const detail = branches.find((entry) => entry.branch === branch);
@@ -582,7 +606,11 @@ export async function deleteBranch(projectId: string, branch: string): Promise<v
 	}
 	if (detail.isCurrent) throw new Error(`${branch} is checked out and cannot be deleted`);
 	const root = project(projectId).path;
-	if (detail.worktreePath) await releaseWorktree(root, detail.worktreePath, branch);
+	if (detail.worktreePath) {
+		const result = await releaseWorktree(root, detail.worktreePath, branch, force);
+		if ("recovery" in result) return result;
+	}
 	const run = await gitAsync(root, ["branch", "-D", "--end-of-options", branch]);
 	if (!run.ok) throw new Error(`Could not delete ${branch}: ${run.err || "git failed"}`);
+	return {};
 }

@@ -631,10 +631,9 @@ const handlers: Record<string, Handler> = {
 		return gitDiffFile(p.workspaceId, p.path, p.scope);
 	},
 	"git.branchDetails": (params) => branchDetails((params as { projectId: string }).projectId),
-	"git.deleteBranch": async (params) => {
-		const p = params as { projectId: string; branch: string };
-		await deleteBranch(p.projectId, p.branch);
-		return {};
+	"git.deleteBranch": (params) => {
+		const p = params as { projectId: string; branch: string; force?: boolean };
+		return deleteBranch(p.projectId, p.branch, p.force === true);
 	},
 	"git.fetchRemotes": async (params) => {
 		await fetchRemotes((params as { projectId: string }).projectId);
