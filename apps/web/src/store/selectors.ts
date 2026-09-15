@@ -140,8 +140,15 @@ export function selectAttentionCenterTab(
 	return find(document.center);
 }
 
-/** The file selected in the focused center group, if that resource is file-backed. */
-export function selectAttentionCenterFilePath(state: LayoutAttentionState, workspaceId: string): string | null {
+/**
+ * The file the user is *in*: the selected tab of the focused center group, whatever renders it. A path is
+ * a path — an editor, a markdown preview and a PDF all say the same thing about where the user is, and a
+ * diff tab is still a file. Null for a tab that is not a file at all (chat, terminal, a tool pane).
+ */
+export function selectAttentionCenterFilePath(
+	state: LayoutAttentionState,
+	workspaceId: string,
+): string | null {
 	const tab = selectAttentionCenterTab(state, workspaceId);
 	if (!tab) return null;
 	switch (tab.kind) {

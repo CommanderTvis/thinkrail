@@ -392,6 +392,117 @@ export function LayoutSettings() {
 				</div>
 			</section>
 
+			<section className="space-y-8 border-border-default border-t pt-16">
+				<div>
+					<h3 className="tr-title-section text-text-default">Editor tabs</h3>
+					<p className="tr-text-metadata text-text-muted">
+						A column beside the editor instead of a strip above it. Drag its edge to resize. A split
+						centre keeps the strip, since two columns leave too little room for the editors.
+					</p>
+				</div>
+				<label className="flex w-full items-center gap-8 tr-text-ui text-text-default">
+					<input
+						type="checkbox"
+						data-testid="vertical-center-tabs"
+						checked={preferences.verticalCenterTabs}
+						onChange={(event) =>
+							useAppStore.getState().setLocalLayoutPreferences({
+								...preferences,
+								verticalCenterTabs: event.target.checked,
+							})
+						}
+						className="size-16 shrink-0 accent-primary"
+					/>
+					<span className="min-w-0 flex-1">Show editor tabs vertically</span>
+				</label>
+
+				<label
+					className={`flex w-full items-start gap-8 tr-text-ui ${preferences.verticalCenterTabs ? "text-text-default" : "text-text-disabled"}`}
+				>
+					<input
+						type="checkbox"
+						data-testid="vertical-tabs-in-projects"
+						checked={preferences.verticalTabsInProjects}
+						disabled={!preferences.verticalCenterTabs}
+						onChange={(event) =>
+							useAppStore.getState().setLocalLayoutPreferences({
+								...preferences,
+								verticalTabsInProjects: event.target.checked,
+							})
+						}
+						className="mt-2 size-16 shrink-0 accent-primary"
+					/>
+					<span className="min-w-0 flex-1">
+						Keep them in Projects, under their workspace
+						<span className="block tr-text-metadata text-text-muted">
+							One column instead of two: each workspace lists its open tabs and its start buttons in
+							the Projects view, and the editor takes the whole centre. Tabs of another workspace
+							switch to it when clicked.
+						</span>
+					</span>
+				</label>
+
+				<label className="flex w-full items-start gap-8 tr-text-ui text-text-default">
+					<input
+						type="checkbox"
+						data-testid="preview-tabs"
+						checked={preferences.previewTabs}
+						onChange={(event) =>
+							useAppStore.getState().setLocalLayoutPreferences({
+								...preferences,
+								previewTabs: event.target.checked,
+							})
+						}
+						className="mt-2 size-16 shrink-0 accent-primary"
+					/>
+					<span className="min-w-0 flex-1">
+						Open a file in a preview tab first
+						<span className="block tr-text-metadata text-text-muted">
+							One click previews in a reusable slot and a double click keeps the tab. With this off
+							every click opens a tab of its own, and none of them waits out the double-click
+							window.
+						</span>
+					</span>
+				</label>
+
+				<div className="flex flex-col gap-4">
+					<span
+						className={
+							preferences.verticalCenterTabs
+								? "tr-text-ui text-text-default"
+								: "tr-text-ui text-text-disabled"
+						}
+					>
+						Tabs shown together open as
+					</span>
+					<div className="flex items-center gap-4">
+						{PANE_DIRECTIONS.map((option) => (
+							<button
+								key={option.direction}
+								type="button"
+								data-testid={`default-pane-${option.direction}`}
+								data-active={preferences.defaultPaneDirection === option.direction}
+								disabled={!preferences.verticalCenterTabs}
+								onClick={() =>
+									useAppStore.getState().setLocalLayoutPreferences({
+										...preferences,
+										defaultPaneDirection: option.direction,
+									})
+								}
+								className="rounded-[var(--radius-sm)] border border-border-default px-12 py-4 tr-text-ui text-text-muted data-[active=true]:border-primary-muted data-[active=true]:bg-primary-subtle data-[active=true]:text-text-default hover:bg-control-bg-hovered disabled:border-control-disabled-border disabled:bg-control-disabled-bg disabled:text-control-disabled-text"
+							>
+								{option.label}
+							</button>
+						))}
+					</div>
+					<span className="tr-text-metadata text-text-muted">
+						{preferences.verticalCenterTabs
+							? "What a new pair looks like when two tabs are first shown together, from a tab's menu. A tab joining a pane that already exists follows that pane, and a drop says which arrangement it means by which half of the row it lands on."
+							: "Tabs are shown together only in the vertical strip, so this waits on the setting above."}
+					</span>
+				</div>
+			</section>
+
 			<ConfirmDialog
 				open={applying !== null}
 				onOpenChange={(open) => {

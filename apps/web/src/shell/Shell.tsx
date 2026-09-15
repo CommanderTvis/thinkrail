@@ -11,7 +11,7 @@ import { applyCodeFont } from "@/panels/editorFont";
 import { QuietScrollArea } from "../components/QuietScrollArea";
 import { BranchList } from "../panels/BranchList";
 import { InterviewPromptDialog } from "../panels/InterviewPromptDialog";
-import { ProjectTree } from "../panels/ProjectTree";
+
 import { SearchOverlay } from "../panels/SearchOverlay";
 import { SettingsDialog } from "../panels/SettingsDialog";
 import { Toaster } from "../panels/Toaster";
@@ -40,6 +40,7 @@ import { FindBar } from "./FindBar";
 import { JbcentralQuotaTopbar } from "./JbcentralQuotaTopbar";
 import { LayoutSettings } from "./LayoutSettings";
 import { useLocalLayoutState } from "./layoutState";
+import { ProjectsTool } from "./ProjectsTool";
 import { useCollapsibleRegion } from "./useCollapsibleRegion";
 import { useGlobalHotkeys } from "./useGlobalHotkeys";
 import { WorkspaceWorkbench } from "./WorkspaceWorkbench";
@@ -306,7 +307,7 @@ export function Shell() {
 								className="h-full bg-container-sidebar-bg outline-none"
 							>
 								<QuietScrollArea className="h-full" viewportClassName="p-12">
-									<ProjectTree />
+									<ProjectsTool activeWorkspaceId={null} />
 								</QuietScrollArea>
 							</aside>
 						</ResizablePanel>

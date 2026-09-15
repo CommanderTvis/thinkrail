@@ -103,6 +103,7 @@ describe("frontend-local layout state", () => {
 			defaultPresetId: "focused",
 			maxSideGroups: 8,
 			maxBottomGroups: 4,
+			verticalCenterTabs: true,
 		});
 
 		resetLayoutStateForTests();
@@ -114,6 +115,7 @@ describe("frontend-local layout state", () => {
 			defaultPresetId: "focused",
 			maxSideGroups: 8,
 			maxBottomGroups: 4,
+			verticalCenterTabs: true,
 		});
 	});
 
