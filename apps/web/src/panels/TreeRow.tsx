@@ -1,12 +1,11 @@
 import {
 	RiArrowDownSLine as ChevronDown,
 	RiArrowRightSLine as ChevronRight,
-	RiFileFill,
-	RiFileLine,
 	RiFolderFill,
 	RiFolderLine,
 } from "@remixicon/react";
-import type { MouseEvent, ReactNode } from "react";
+import type { DragEvent, MouseEvent, ReactNode } from "react";
+import { FileTypeIcon } from "@/components/FileTypeIcon";
 
 export function TreeRow({
 	testid,
@@ -15,12 +14,15 @@ export function TreeRow({
 	active,
 	dataStatus,
 	label,
+	iconPath,
 	labelClassName,
 	trailing,
 	highlight = "self",
+	muted,
 	onClick,
 	onDoubleClick,
 	onContextMenu,
+	onDragStart,
 }: {
 	testid: string;
 	kind: "dir" | "file";
@@ -28,16 +30,19 @@ export function TreeRow({
 	active?: boolean;
 	dataStatus?: string;
 	label: string;
+	/** What the icon is chosen from, when the row's label is not the file's own name. */
+	iconPath?: string;
 	labelClassName?: string;
 	trailing?: ReactNode;
 	highlight?: "self" | "wrapper";
+	muted?: string | undefined;
 	onClick?: (() => void) | undefined;
 	onDoubleClick?: (() => void) | undefined;
 	onContextMenu?: ((event: MouseEvent) => void) | undefined;
+	onDragStart?: ((event: DragEvent) => void) | undefined;
 }) {
 	const Chevron = expanded ? ChevronDown : ChevronRight;
 	const Folder = active ? RiFolderFill : RiFolderLine;
-	const FileIcon = active ? RiFileFill : RiFileLine;
 	return (
 		<button
 			type="button"
@@ -45,9 +50,13 @@ export function TreeRow({
 			data-kind={kind}
 			data-active={active ? true : undefined}
 			data-status={dataStatus}
+			data-muted={muted ? true : undefined}
+			title={muted}
 			onClick={onClick}
 			onDoubleClick={onDoubleClick}
 			onContextMenu={onContextMenu}
+			draggable={onDragStart ? true : undefined}
+			onDragStart={onDragStart}
 			className={`flex h-24 w-full min-w-0 items-center gap-4 rounded-[var(--radius-sm)] px-4 text-left tr-text-ui text-text-muted outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary ${
 				highlight === "self"
 					? `hover:bg-control-bg-hovered ${active ? "bg-control-bg-selected" : ""}`
@@ -63,9 +72,13 @@ export function TreeRow({
 				{kind === "dir" ? (
 					<Folder className="size-14 shrink-0 text-text-muted" />
 				) : (
-					<FileIcon className="size-14 shrink-0 text-text-muted" />
+					<FileTypeIcon path={iconPath ?? label} className="size-14 text-text-muted" />
 				)}
-				<span className={`min-w-0 flex-1 truncate ${labelClassName ?? ""}`}>{label}</span>
+				<span
+					className={`min-w-0 flex-1 truncate ${muted ? "text-text-subtle" : ""} ${labelClassName ?? ""}`}
+				>
+					{label}
+				</span>
 			</span>
 			{trailing}
 		</button>

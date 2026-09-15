@@ -15,49 +15,49 @@ import {
 import {
 	RiCheckFill as Check,
 	RiArrowLeftSLine as ChevronLeft,
-	RiFileLine as File,
 	RiGitPullRequestLine as GitCompareArrows,
 	RiListCheck3 as ListTodo,
 	RiChatNewLine as MessageSquarePlus,
 	RiMoreLine as MoreHorizontal,
 	RiLayoutLeftLine as PanelLeftOpen,
 	RiLayoutRightLine as PanelRightOpen,
-	RiLayout2Line as PanelsTopLeft,
 	RiAddLine as Plus,
-	RiBookOpenFill,
-	RiBookOpenLine,
 	RiChat2Fill,
 	RiChat2Line,
 	RiCollapseVerticalLine,
-	RiDiscussFill,
-	RiDiscussLine,
 	RiExpandVerticalLine,
-	RiFileFill,
-	RiFolder2Fill,
-	RiFolder2Line,
 	RiGitPullRequestFill,
-	RiLayout2Fill,
 	RiTerminalBoxFill,
 	RiSearchLine as Search,
 	RiTerminalBoxLine as SquareTerminal,
 	RiCloseLine as X,
 } from "@remixicon/react";
-import { Fragment, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { CustomIcon } from "../../components/CustomIcon";
+import {
+	createContext,
+	Fragment,
+	type ReactNode,
+	useCallback,
+	useContext,
+	useDeferredValue,
+	useEffect,
+	useMemo,
+	useRef,
+	useState,
+} from "react";
 import {
 	Command,
 	CommandEmpty,
 	CommandInput,
 	CommandItem,
 	CommandList,
-} from "../../components/ui/command";
+} from "@/components/ui/command";
 import {
 	ContextMenu,
 	ContextMenuContent,
 	ContextMenuItem,
 	ContextMenuSeparator,
 	ContextMenuTrigger,
-} from "../../components/ui/context-menu";
+} from "@/components/ui/context-menu";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -66,16 +66,18 @@ import {
 	DropdownMenuRadioItem,
 	DropdownMenuSeparator,
 	DropdownMenuTrigger,
-} from "../../components/ui/dropdown-menu";
-import { Popover, PopoverContent, PopoverTrigger } from "../../components/ui/popover";
+} from "@/components/ui/dropdown-menu";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
 	type ImperativePanelGroupHandle,
 	ResizableHandle,
 	ResizablePanel,
 	ResizablePanelGroup,
-} from "../../components/ui/resizable";
-import { IconTooltip } from "../../components/ui/tooltip";
+} from "@/components/ui/resizable";
+import { IconTooltip } from "@/components/ui/tooltip";
+import { FileTypeIcon } from "../../components/FileTypeIcon";
 import {
+	abbreviateHomePath,
 	DOUBLE_CLICK_SETTLE_MS,
 	type LayoutAttention,
 	readLayoutNavigationClock,
@@ -83,6 +85,7 @@ import {
 	tupleKey,
 } from "../../lib";
 import {
+	BUILTIN_LAYOUT_TOOL_CATALOG,
 	type CenterSplitDirection,
 	canCreateAuxiliaryGroup,
 	canCreateSideGroup,
@@ -106,6 +109,7 @@ import {
 	type LayoutMutationResult,
 	type LayoutOperationResult,
 	type LayoutSide,
+	type LayoutToolCatalog,
 	layoutTabName,
 	moveTabToGroup,
 	reconcileAttention,
@@ -115,6 +119,7 @@ import {
 	resizeCenterSplit,
 	resizeSideGroups,
 	resizeSideRegion,
+	resolveLayoutTool,
 	revealTool,
 	selectTab,
 	setAuxiliaryGroupFolded,
@@ -147,13 +152,32 @@ export interface LayoutTabFocusRequest {
 	tabId?: string;
 }
 
-interface PreparedLayoutClose {
+export interface PreparedLayoutClose {
 	document: WorkspaceLayoutDocument;
 	onAccepted: (currentDocument?: WorkspaceLayoutDocument) => void;
 }
 
+const NO_TOOLS: readonly LayoutToolId[] = [];
+
+/**
+ * Tools the shell says this workspace cannot offer. Read where a reveal menu is built rather than
+ * threaded through every group — see SPEC.md.
+ */
+const UnofferedToolsContext = createContext<readonly LayoutToolId[]>(NO_TOOLS);
+
+/** The active tool catalog (builtins + plugin side tools), read wherever a tool label/icon is resolved. */
+const LayoutToolCatalogContext = createContext<LayoutToolCatalog>(BUILTIN_LAYOUT_TOOL_CATALOG);
+
+function revealable(tools: readonly LayoutToolId[], unoffered: readonly LayoutToolId[]) {
+	return unoffered.length === 0 ? tools : tools.filter((tool) => !unoffered.includes(tool));
+}
+
 export interface WorkbenchProps {
 	document: WorkspaceLayoutDocument;
+	/** Builtins + plugin side tools; defaults to the builtin-only catalog. */
+	catalog?: LayoutToolCatalog;
+	/** Tools that stay out of the reveal menus while this workspace cannot serve them. */
+	unofferedTools?: readonly LayoutToolId[];
 	attention: LayoutAttention;
 	maxSideGroups: number;
 	maxBottomGroups: number;
@@ -161,6 +185,7 @@ export interface WorkbenchProps {
 	focusRequest?: LayoutTabFocusRequest;
 	renderTabBody: (tab: LayoutCenterTab | Extract<LayoutSideTab, { kind: "terminal" }>) => ReactNode;
 	renderTabAdornment: (tab: LayoutTab) => ReactNode;
+	renderTabIcon: (tab: LayoutTab, active: boolean) => ReactNode | null;
 	renderToolBody: (tool: LayoutToolId) => ReactNode;
 	renderEmptyCenter: (groupId: string) => ReactNode;
 	renderCenterActions: (groupId: string) => ReactNode;
@@ -210,6 +235,25 @@ function sameSizes(first: readonly number[], second: readonly number[], toleranc
 
 function isResizeArrowKey(key: string): boolean {
 	return ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(key);
+}
+
+function useElementSize(): {
+	ref: React.RefObject<HTMLDivElement | null>;
+	width: number;
+	height: number;
+} {
+	const ref = useRef<HTMLDivElement>(null);
+	const [size, setSize] = useState({ width: 0, height: 0 });
+	useEffect(() => {
+		const element = ref.current;
+		if (!element) return;
+		const update = () => setSize({ width: element.clientWidth, height: element.clientHeight });
+		update();
+		const observer = new ResizeObserver(update);
+		observer.observe(element);
+		return () => observer.disconnect();
+	}, []);
+	return { ref, ...size };
 }
 
 function useCommittedSizes(
@@ -318,25 +362,6 @@ function bindSideResize(
 	};
 }
 
-function useElementSize(): {
-	ref: React.RefObject<HTMLDivElement | null>;
-	width: number;
-	height: number;
-} {
-	const ref = useRef<HTMLDivElement>(null);
-	const [size, setSize] = useState({ width: 0, height: 0 });
-	useEffect(() => {
-		const element = ref.current;
-		if (!element) return;
-		const update = () => setSize({ width: element.clientWidth, height: element.clientHeight });
-		update();
-		const observer = new ResizeObserver(update);
-		observer.observe(element);
-		return () => observer.disconnect();
-	}, []);
-	return { ref, ...size };
-}
-
 interface HorizontalOverflow {
 	before: boolean;
 	after: boolean;
@@ -382,10 +407,17 @@ function useHorizontalOverflow(ref: React.RefObject<HTMLDivElement | null>): Hor
 	return overflow;
 }
 
-function tabSearchKeywords(tab: LayoutTab): string[] {
-	const name = layoutTabName(tab);
+/** A basename alone cannot say which `settings.json` this is, so an out-of-worktree tab names its path. */
+function tabTitle(tab: LayoutTab, catalog: LayoutToolCatalog): string {
+	const name = layoutTabName(tab, catalog);
+	return tab.kind === "external-file" ? `${name} — ${tab.path}` : name;
+}
+
+function tabSearchKeywords(tab: LayoutTab, catalog: LayoutToolCatalog): string[] {
+	const name = layoutTabName(tab, catalog);
 	switch (tab.kind) {
 		case "file":
+		case "external-file":
 		case "diff":
 			return [name, tab.kind, tab.path];
 		case "chat":
@@ -399,11 +431,19 @@ function tabSearchKeywords(tab: LayoutTab): string[] {
 	}
 }
 
-function tabIcon(tab: LayoutTab, active = false): ReactNode {
+function tabIcon(
+	tab: LayoutTab,
+	renderTabIcon: WorkbenchProps["renderTabIcon"],
+	active = false,
+	catalog: LayoutToolCatalog = BUILTIN_LAYOUT_TOOL_CATALOG,
+): ReactNode {
+	const custom = renderTabIcon(tab, active);
+	if (custom) return custom;
 	const cls = "size-14 shrink-0";
 	switch (tab.kind) {
 		case "file":
-			return active ? <RiFileFill className={cls} /> : <File className={cls} />;
+		case "external-file":
+			return <FileTypeIcon path={tab.path} className={cls} />;
 		case "diff":
 			return active ? (
 				<RiGitPullRequestFill className={cls} />
@@ -416,21 +456,11 @@ function tabIcon(tab: LayoutTab, active = false): ReactNode {
 			return <ListTodo className={cls} />;
 		case "terminal":
 			return active ? <RiTerminalBoxFill className={cls} /> : <SquareTerminal className={cls} />;
-		case "tool":
-			switch (tab.tool) {
-				case "projects":
-					return active ? <RiFolder2Fill className={cls} /> : <RiFolder2Line className={cls} />;
-				case "specs":
-					return active ? <RiBookOpenFill className={cls} /> : <RiBookOpenLine className={cls} />;
-				case "files":
-					return active ? <RiFileFill className={cls} /> : <File className={cls} />;
-				case "changes":
-					return <CustomIcon name={active ? "file-diff-fill" : "file-diff-line"} className={cls} />;
-				case "review":
-					return active ? <RiDiscussFill className={cls} /> : <RiDiscussLine className={cls} />;
-				default:
-					return active ? <RiLayout2Fill className={cls} /> : <PanelsTopLeft className={cls} />;
-			}
+		case "tool": {
+			const entry = resolveLayoutTool(catalog, tab.tool);
+			const Icon = (active && entry.activeIcon) || entry.icon;
+			return <Icon className={cls} />;
+		}
 	}
 }
 
@@ -509,7 +539,7 @@ function canInsertDraggedTab(
 	if (!canPlaceLayoutTab(tab, location.area)) return false;
 	const source = findTabLocation(document, tab.id);
 	if (!source || source.area !== location.area || source.groupId !== location.groupId) return true;
-	const sourceTabs = findLayoutGroupTabs(document, source);
+	const sourceTabs = findLayoutTabs(document, source);
 	const sourceIndex = sourceTabs?.findIndex((candidate) => candidate.id === tab.id) ?? -1;
 	if (sourceIndex < 0) return true;
 	const insertionIndex = sourceIndex < rawIndex ? rawIndex - 1 : rawIndex;
@@ -576,6 +606,35 @@ function CenterSplitTarget({
 	);
 }
 
+/** How many terminals a centre group keeps alive behind the active one. */
+const KEPT_TERMINALS = 8;
+
+type TabStripOrientation = "horizontal" | "vertical";
+
+/**
+ * Vertical rows have room for a folder, but showing one on every row is noise. A basename shared by two
+ * open tabs is exactly when the name alone stops identifying the file, so that is when the folder appears.
+ */
+function ambiguousTabSubtitles(tabs: readonly LayoutTab[]): Map<string, string> {
+	const byName = new Map<string, LayoutTab[]>();
+	for (const tab of tabs) {
+		const sharing = byName.get(tab.name);
+		if (sharing) sharing.push(tab);
+		else byName.set(tab.name, [tab]);
+	}
+	const subtitles = new Map<string, string>();
+	for (const sharing of byName.values()) {
+		if (sharing.length < 2) continue;
+		for (const tab of sharing) {
+			const path = "path" in tab ? tab.path : undefined;
+			if (!path) continue;
+			const folder = path.slice(0, path.lastIndexOf("/"));
+			if (folder) subtitles.set(tab.id, abbreviateHomePath(folder));
+		}
+	}
+	return subtitles;
+}
+
 interface TabStripProps {
 	document: WorkspaceLayoutDocument;
 	attention: LayoutAttention;
@@ -592,10 +651,11 @@ interface TabStripProps {
 	onApply: (result: LayoutMutationResult) => void;
 	onFocusAdjacentGroup: (delta: -1 | 1, fromGroupId?: string) => void;
 	onHideSide: (region: LayoutAuxiliaryRegion) => void;
-	onRevealTool: (tool: LayoutToolId) => void;
+	onRevealTool: (tool: LayoutToolId, target?: LayoutGroupLocation) => void;
 	onRenameChat: WorkbenchProps["onRenameChat"];
 	canFocusAdjacentGroup: boolean;
 	renderTabAdornment: WorkbenchProps["renderTabAdornment"];
+	renderTabIcon: WorkbenchProps["renderTabIcon"];
 	splitGeometry?: { horizontal: boolean; vertical: boolean };
 	trailing?: ReactNode;
 }
@@ -620,9 +680,13 @@ function TabStrip({
 	onRenameChat,
 	canFocusAdjacentGroup,
 	renderTabAdornment,
+	renderTabIcon,
 	splitGeometry,
 	trailing,
 }: TabStripProps) {
+	const catalog = useContext(LayoutToolCatalogContext);
+	const vertical = false;
+	const subtitles = null;
 	const scroller = useRef<HTMLDivElement>(null);
 	const scrollOverflow = useHorizontalOverflow(scroller);
 	const tabRefs = useRef(new Map<string, HTMLElement>());
@@ -650,9 +714,14 @@ function TabStrip({
 		disabled: !acceptsAppend,
 	});
 
+	// After the frame, not during it: scrolling reads geometry, and reading it here made every tab click
+	// lay out the whole document before the strip could paint. See layout/SPEC.md.
 	useEffect(() => {
-		if (selectedId)
-			tabRefs.current.get(selectedId)?.scrollIntoView({ block: "nearest", inline: "nearest" });
+		if (!selectedId) return;
+		const frame = requestAnimationFrame(() =>
+			tabRefs.current.get(selectedId)?.scrollIntoView({ block: "nearest", inline: "nearest" }),
+		);
+		return () => cancelAnimationFrame(frame);
 	}, [selectedId]);
 
 	useEffect(() => {
@@ -682,15 +751,31 @@ function TabStrip({
 			data-group-id={location.groupId}
 			data-drop-active={groupDrop.isOver || undefined}
 			data-drop-hint={(acceptsAppend && !groupDrop.isOver) || undefined}
-			className="relative flex h-panel-header-row shrink-0 items-stretch border-border-default border-b bg-container-workspace-bg data-[drop-hint]:ring-1 data-[drop-hint]:ring-inset data-[drop-hint]:ring-primary-soft data-[drop-active]:bg-primary-subtle data-[drop-active]:ring-2 data-[drop-active]:ring-inset data-[drop-active]:ring-primary"
+			className={
+				vertical
+					? "relative flex h-full min-h-0 w-full flex-col items-stretch border-border-default border-r bg-container-workspace-bg data-[drop-hint]:ring-1 data-[drop-hint]:ring-inset data-[drop-hint]:ring-primary-soft data-[drop-active]:bg-primary-subtle data-[drop-active]:ring-2 data-[drop-active]:ring-inset data-[drop-active]:ring-primary"
+					: "relative flex h-panel-header-row shrink-0 items-stretch border-border-default border-b bg-container-workspace-bg data-[drop-hint]:ring-1 data-[drop-hint]:ring-inset data-[drop-hint]:ring-primary-soft data-[drop-active]:bg-primary-subtle data-[drop-active]:ring-2 data-[drop-active]:ring-inset data-[drop-active]:ring-primary"
+			}
 		>
-			<div className="relative min-w-0 flex-1 overflow-hidden">
+			<div
+				className={
+					vertical
+						? "relative flex min-h-0 flex-1 flex-col overflow-hidden"
+						: "relative min-w-0 flex-1 overflow-hidden"
+				}
+			>
 				<div
 					ref={scroller}
 					role="tablist"
 					aria-label={`${location.area} group tabs`}
-					className="flex h-full w-full min-w-0 items-stretch overflow-x-auto overflow-y-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+					aria-orientation={vertical ? "vertical" : undefined}
+					className={
+						vertical
+							? "flex min-h-0 flex-1 flex-col items-stretch overflow-x-hidden overflow-y-auto [scrollbar-width:thin]"
+							: "flex h-full w-full min-w-0 items-stretch overflow-x-auto overflow-y-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+					}
 					onWheel={(event) => {
+						if (vertical) return;
 						if (!scroller.current || Math.abs(event.deltaY) <= Math.abs(event.deltaX)) return;
 						scroller.current.scrollLeft += event.deltaY;
 					}}
@@ -721,6 +806,7 @@ function TabStrip({
 							onRenameChat={onRenameChat}
 							canFocusAdjacentGroup={canFocusAdjacentGroup}
 							renderTabAdornment={renderTabAdornment}
+							renderTabIcon={renderTabIcon}
 							draggingTab={draggingTab}
 							panelId={panelId}
 							{...(splitGeometry ? { splitGeometry } : {})}
@@ -771,14 +857,14 @@ function TabStrip({
 						/>
 					) : null}
 				</div>
-				{scrollOverflow.before ? (
+				{!vertical && scrollOverflow.before ? (
 					<div
 						aria-hidden="true"
 						data-testid="tab-overflow-before"
 						className="pointer-events-none absolute inset-y-0 left-0 z-20 w-16 bg-[linear-gradient(to_right,var(--color-container-workspace-bg),transparent)]"
 					/>
 				) : null}
-				{scrollOverflow.after ? (
+				{!vertical && scrollOverflow.after ? (
 					<div
 						aria-hidden="true"
 						data-testid="tab-overflow-after"
@@ -786,52 +872,60 @@ function TabStrip({
 					/>
 				) : null}
 			</div>
-			{trailing}
-			{overflowing ? (
-				<Popover open={overflowOpen} onOpenChange={setOverflowOpen}>
-					<IconTooltip label="Search open tabs" wrapTrigger>
-						<PopoverTrigger
-							aria-label="Search open tabs"
-							className="flex w-32 shrink-0 items-center justify-center border-border-muted border-l text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
+			<div
+				className={
+					vertical
+						? "flex h-panel-header-row shrink-0 items-stretch border-border-default border-t"
+						: "contents"
+				}
+			>
+				{trailing}
+				{overflowing ? (
+					<Popover open={overflowOpen} onOpenChange={setOverflowOpen}>
+						<IconTooltip label="Search open tabs" wrapTrigger>
+							<PopoverTrigger
+								aria-label="Search open tabs"
+								className="flex w-32 shrink-0 items-center justify-center border-border-muted border-l text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
+							>
+								<Search className="size-14" />
+							</PopoverTrigger>
+						</IconTooltip>
+						<PopoverContent
+							align="end"
+							className="w-288 p-0"
+							onCloseAutoFocus={(event) => {
+								const targetId = overflowFocusTarget.current;
+								if (!targetId) return;
+								overflowFocusTarget.current = null;
+								event.preventDefault();
+								tabRefs.current.get(targetId)?.focus();
+							}}
 						>
-							<Search className="size-14" />
-						</PopoverTrigger>
-					</IconTooltip>
-					<PopoverContent
-						align="end"
-						className="w-288 p-0"
-						onCloseAutoFocus={(event) => {
-							const targetId = overflowFocusTarget.current;
-							if (!targetId) return;
-							overflowFocusTarget.current = null;
-							event.preventDefault();
-							tabRefs.current.get(targetId)?.focus();
-						}}
-					>
-						<Command>
-							<CommandInput placeholder="Find an open tab…" />
-							<CommandList>
-								<CommandEmpty>No matching tabs.</CommandEmpty>
-								{tabs.map((tab) => (
-									<CommandItem
-										key={tab.id}
-										value={tab.id}
-										keywords={tabSearchKeywords(tab)}
-										onSelect={() => {
-											overflowFocusTarget.current = tab.id;
-											selectTab(tab.id);
-											setOverflowOpen(false);
-										}}
-									>
-										{tabIcon(tab)}
-										<span className="truncate">{layoutTabName(tab)}</span>
-									</CommandItem>
-								))}
-							</CommandList>
-						</Command>
-					</PopoverContent>
-				</Popover>
-			) : null}
+							<Command>
+								<CommandInput placeholder="Find an open tab…" />
+								<CommandList>
+									<CommandEmpty>No matching tabs.</CommandEmpty>
+									{tabs.map((tab) => (
+										<CommandItem
+											key={tab.id}
+											value={tab.id}
+											keywords={tabSearchKeywords(tab, catalog)}
+											onSelect={() => {
+												overflowFocusTarget.current = tab.id;
+												selectTab(tab.id);
+												setOverflowOpen(false);
+											}}
+										>
+											{tabIcon(tab, renderTabIcon, false, catalog)}
+											<span className="truncate">{layoutTabName(tab, catalog)}</span>
+										</CommandItem>
+									))}
+								</CommandList>
+							</Command>
+						</PopoverContent>
+					</Popover>
+				) : null}
+			</div>
 		</div>
 	);
 }
@@ -853,12 +947,14 @@ interface WorkbenchTabProps {
 	onApply: (result: LayoutMutationResult) => void;
 	onFocusAdjacentGroup: (delta: -1 | 1, fromGroupId?: string) => void;
 	onHideSide: (region: LayoutAuxiliaryRegion) => void;
-	onRevealTool: (tool: LayoutToolId) => void;
+	onRevealTool: (tool: LayoutToolId, target?: LayoutGroupLocation) => void;
 	onRenameChat: WorkbenchProps["onRenameChat"];
 	canFocusAdjacentGroup: boolean;
 	renderTabAdornment: WorkbenchProps["renderTabAdornment"];
+	renderTabIcon: WorkbenchProps["renderTabIcon"];
 	draggingTab: LayoutTab | null;
 	panelId: string;
+	subtitle?: string;
 	splitGeometry?: { horizontal: boolean; vertical: boolean };
 	onKeyDown: (event: React.KeyboardEvent<HTMLButtonElement>) => void;
 }
@@ -884,11 +980,15 @@ function WorkbenchTab({
 	onRenameChat,
 	canFocusAdjacentGroup,
 	renderTabAdornment,
+	renderTabIcon,
 	draggingTab,
 	panelId,
 	splitGeometry,
 	onKeyDown,
+	subtitle,
 }: WorkbenchTabProps) {
+	const catalog = useContext(LayoutToolCatalogContext);
+	const vertical = false;
 	const drag = useDraggable({ id: tupleKey("dnd-tab", tab.id), data: { tab } satisfies DragData });
 	const attentionRef = useRef(attention);
 	attentionRef.current = attention;
@@ -985,8 +1085,23 @@ function WorkbenchTab({
 		data: { target: { kind: "insert", location, index: index + 1 } satisfies DropTarget },
 		disabled: !acceptsAfter,
 	});
+	const missingTools = revealable(
+		unplacedTools(document, catalog),
+		useContext(UnofferedToolsContext),
+	);
 	const groups = collectAllGroups(document);
-	const missingTools = unplacedTools(document);
+	const moveTargets = groups.filter(
+		(group) =>
+			group.location.groupId !== location.groupId &&
+			(tab.kind === "terminal" || group.location.area === "center"
+				? tab.kind !== "tool"
+				: tab.kind === "tool"),
+	);
+	const currentAuxiliary = location.area === "center" ? null : location.area;
+	const currentAuxiliaryGroupIndex = currentAuxiliary
+		? document[currentAuxiliary].groups.findIndex((group) => group.id === location.groupId)
+		: -1;
+	const currentAuxiliaryLimit = currentAuxiliary === "bottom" ? maxBottomGroups : maxSideGroups;
 	const splitReason = (direction: CenterSplitDirection): string | null => {
 		if (location.area !== "center") return "Only center tabs can split the center.";
 		if (tab.kind === "tool") return "Tools stay in a side region.";
@@ -1001,19 +1116,7 @@ function WorkbenchTab({
 		}
 		return null;
 	};
-	const moveTargets = groups.filter(
-		(group) =>
-			group.location.groupId !== location.groupId &&
-			(tab.kind === "terminal" || group.location.area === "center"
-				? tab.kind !== "tool"
-				: tab.kind === "tool"),
-	);
-	const currentAuxiliary = location.area === "center" ? null : location.area;
-	const currentAuxiliaryGroupIndex = currentAuxiliary
-		? document[currentAuxiliary].groups.findIndex((group) => group.id === location.groupId)
-		: -1;
-	const currentAuxiliaryLimit = currentAuxiliary === "bottom" ? maxBottomGroups : maxSideGroups;
-	const name = layoutTabName(tab);
+	const name = layoutTabName(tab, catalog);
 	const groupRemoval = removeLayoutGroup(document, location);
 
 	const move = (target: LayoutGroupLocation, targetIndex?: number) => {
@@ -1036,84 +1139,105 @@ function WorkbenchTab({
 				: "editor-tab";
 	return (
 		<ContextMenu>
-			<ContextMenuTrigger asChild>
-				<div
-					ref={drag.setNodeRef}
-					role="presentation"
-					data-testid={tabTestId}
-					data-active={active}
-					data-preview={preview}
-					data-kind={tab.kind === "document" ? "plan" : tab.kind}
-					data-session-id={tab.kind === "chat" ? tab.sessionId : undefined}
-					data-dragging={drag.isDragging || undefined}
-					className="group relative flex min-w-96 max-w-192 shrink-0 items-center border-border-default border-r text-text-muted after:pointer-events-none after:absolute after:inset-x-0 after:bottom-0 after:z-10 after:h-[2px] after:rounded-full after:content-[''] has-[[role=tab]:focus-visible]:ring-2 has-[[role=tab]:focus-visible]:ring-inset has-[[role=tab]:focus-visible]:ring-primary data-[active=true]:bg-control-bg-selected data-[active=true]:text-text-default data-[active=true]:after:bg-primary data-[dragging]:opacity-40"
-				>
+			{/* Anchored to the whole row, not the name button: the button's right edge is exactly where the
+			    close cross sits, so a tooltip opening there hides the control you are reaching for. */}
+			<IconTooltip
+				label={preview ? "Preview — double-click to keep" : tabTitle(tab, catalog)}
+				side="bottom"
+			>
+				<ContextMenuTrigger asChild>
 					<div
-						ref={before.setNodeRef}
-						aria-hidden="true"
-						data-drop-label={acceptsBefore ? `Insert before ${name}` : undefined}
-						data-drop-active={before.isOver || undefined}
-						className="pointer-events-none absolute inset-y-0 left-0 z-10 w-1/2 border-primary data-[drop-active]:border-l-2"
-					/>
-					<div
-						ref={after.setNodeRef}
-						aria-hidden="true"
-						data-drop-label={acceptsAfter ? `Insert after ${name}` : undefined}
-						data-drop-active={after.isOver || undefined}
-						className="pointer-events-none absolute inset-y-0 right-0 z-10 w-1/2 border-primary data-[drop-active]:border-r-2"
-					/>
-					{editingName && tab.kind === "chat" ? (
-						<div ref={register} className="flex min-w-0 flex-1 items-center gap-4 py-4 pl-8">
-							{tabIcon(tab, active)}
-							<input
-								ref={nameInputRef}
-								data-testid="chat-tab-name-input"
-								type="text"
-								spellCheck={false}
-								aria-label="Chat name"
-								defaultValue={name}
-								onKeyDown={onNameKeyDown}
-								onBlur={commitRename}
-								className="min-w-0 flex-1 border-0 bg-transparent p-0 tr-text-ui text-text-default outline-none"
-							/>
-						</div>
-					) : (
-						<button
-							ref={register}
-							type="button"
-							id={tabDomId(location, tab.id)}
-							role="tab"
-							aria-selected={active}
-							aria-keyshortcuts="Delete Home End ArrowLeft ArrowRight Alt+Shift+ArrowLeft Alt+Shift+ArrowRight Control+F6 Control+Shift+F6"
-							aria-controls={panelId}
-							data-layout-tab-id={tab.id}
-							tabIndex={active ? 0 : -1}
-							{...drag.listeners}
-							title={preview ? "Preview — double-click to keep" : name}
-							onClick={selectFromClick}
-							onDoubleClick={selectFromDoubleClick}
-							onKeyDown={onKeyDown}
-							className={`flex min-w-0 flex-1 items-center gap-4 py-4 pl-8 text-left outline-none ${tab.kind === "tool" ? "pr-8" : ""}`}
-						>
-							{tabIcon(tab, active)}
-							<span className={`truncate ${preview ? "italic" : ""}`}>{name}</span>
-							{renderTabAdornment(tab)}
-						</button>
-					)}
-					{tab.kind !== "tool" ? (
-						<button
-							type="button"
-							tabIndex={-1}
-							data-testid={tab.kind === "terminal" ? "terminal-tab-close" : "editor-tab-close"}
-							aria-label={`Close ${name}`}
-							onClick={onClose}
-							className="mr-4 rounded-[var(--radius-sm)] p-2 opacity-0 hover:bg-control-bg-hovered group-hover:opacity-100 focus:opacity-100"
-						>
-							<X className="size-14" />
-						</button>
-					) : null}
-				</div>
-			</ContextMenuTrigger>
+						ref={drag.setNodeRef}
+						role="presentation"
+						data-testid={tabTestId}
+						data-active={active}
+						data-preview={preview}
+						data-kind={tab.kind === "document" ? "plan" : tab.kind}
+						data-session-id={tab.kind === "chat" ? tab.sessionId : undefined}
+						data-dragging={drag.isDragging || undefined}
+						className="group relative flex min-w-96 max-w-192 shrink-0 items-center border-border-default border-r text-text-muted after:pointer-events-none after:absolute after:inset-x-0 after:bottom-0 after:z-10 after:h-[2px] after:rounded-full after:content-[''] has-[[role=tab]:focus-visible]:ring-2 has-[[role=tab]:focus-visible]:ring-inset has-[[role=tab]:focus-visible]:ring-primary data-[active=true]:bg-control-bg-selected data-[active=true]:text-text-default data-[active=true]:after:bg-primary data-[dragging]:opacity-40"
+					>
+						<div
+							ref={before.setNodeRef}
+							aria-hidden="true"
+							data-drop-label={acceptsBefore ? `Insert before ${name}` : undefined}
+							data-drop-active={before.isOver || undefined}
+							className="pointer-events-none absolute inset-y-0 left-0 z-10 w-1/2 border-primary data-[drop-active]:border-l-2"
+						/>
+						<div
+							ref={after.setNodeRef}
+							aria-hidden="true"
+							data-drop-label={acceptsAfter ? `Insert after ${name}` : undefined}
+							data-drop-active={after.isOver || undefined}
+							className="pointer-events-none absolute inset-y-0 right-0 z-10 w-1/2 border-primary data-[drop-active]:border-r-2"
+						/>
+						{editingName && tab.kind === "chat" ? (
+							<div ref={register} className="flex min-w-0 flex-1 items-center gap-4 py-4 pl-8">
+								{tabIcon(tab, renderTabIcon, active, catalog)}
+								<input
+									ref={nameInputRef}
+									data-testid="chat-tab-name-input"
+									type="text"
+									spellCheck={false}
+									aria-label="Chat name"
+									defaultValue={name}
+									onKeyDown={onNameKeyDown}
+									onBlur={commitRename}
+									className="min-w-0 flex-1 border-0 bg-transparent p-0 tr-text-ui text-text-default outline-none"
+								/>
+							</div>
+						) : (
+							<button
+								ref={register}
+								type="button"
+								id={tabDomId(location, tab.id)}
+								role="tab"
+								aria-selected={active}
+								aria-keyshortcuts="Delete Home End ArrowLeft ArrowRight Alt+Shift+ArrowLeft Alt+Shift+ArrowRight Control+F6 Control+Shift+F6"
+								aria-controls={panelId}
+								data-layout-tab-id={tab.id}
+								tabIndex={active ? 0 : -1}
+								{...drag.listeners}
+								onMouseDown={(event) => {
+									if (event.button === 1) event.preventDefault();
+								}}
+								onAuxClick={(event) => {
+									if (event.button !== 1) return;
+									event.preventDefault();
+									onClose();
+								}}
+								onClick={selectFromClick}
+								onDoubleClick={selectFromDoubleClick}
+								onKeyDown={onKeyDown}
+								className={`flex min-w-0 flex-1 items-center gap-4 py-4 pl-8 text-left outline-none ${tab.kind === "tool" ? "pr-8" : ""}`}
+							>
+								{tabIcon(tab, renderTabIcon, active, catalog)}
+								{subtitle ? (
+									<span className="flex min-w-0 flex-1 flex-col">
+										<span className={`truncate ${preview ? "italic" : ""}`}>{name}</span>
+										<span className="truncate tr-text-metadata text-text-subtle">{subtitle}</span>
+									</span>
+								) : (
+									<span className={`truncate ${preview ? "italic" : ""}`}>{name}</span>
+								)}
+								{renderTabAdornment(tab)}
+							</button>
+						)}
+						{tab.kind !== "tool" ? (
+							<button
+								type="button"
+								tabIndex={-1}
+								data-testid={tab.kind === "terminal" ? "terminal-tab-close" : "editor-tab-close"}
+								aria-label={`Close ${name}`}
+								onClick={onClose}
+								className="mr-4 rounded-[var(--radius-sm)] p-2 opacity-0 hover:bg-control-bg-hovered group-hover:opacity-100 focus:opacity-100"
+							>
+								<X className="size-14" />
+							</button>
+						) : null}
+					</div>
+				</ContextMenuTrigger>
+			</IconTooltip>
 			<ContextMenuContent
 				onCloseAutoFocus={(event) => {
 					if (!enterRenameRef.current) return;
@@ -1156,10 +1280,10 @@ function WorkbenchTab({
 					{index === 0 ? "Move left — already first" : "Move left"}
 				</ContextMenuItem>
 				<ContextMenuItem
-					disabled={index === (findLayoutGroupTabs(document, location)?.length ?? 0) - 1}
+					disabled={index === (findLayoutTabs(document, location)?.length ?? 0) - 1}
 					onSelect={() => reorder(index + 1)}
 				>
-					{index === (findLayoutGroupTabs(document, location)?.length ?? 0) - 1
+					{index === (findLayoutTabs(document, location)?.length ?? 0) - 1
 						? "Move right — already last"
 						: "Move right"}
 				</ContextMenuItem>
@@ -1290,8 +1414,8 @@ function WorkbenchTab({
 					<>
 						<ContextMenuSeparator />
 						{missingTools.map((tool) => (
-							<ContextMenuItem key={tool} onSelect={() => onRevealTool(tool)}>
-								Show {toolTab(tool).name}
+							<ContextMenuItem key={tool} onSelect={() => onRevealTool(tool, location)}>
+								Show {toolTab(tool, catalog).name}
 							</ContextMenuItem>
 						))}
 					</>
@@ -1324,7 +1448,14 @@ function WorkbenchTab({
 	);
 }
 
-function findLayoutGroupTabs(
+/** A group is named by where it is, not by what happens to be open in it — see shell/layout/SPEC.md. */
+const REGION_NAME: Record<LayoutAuxiliaryRegion, string> = {
+	left: "Left",
+	right: "Right",
+	bottom: "Bottom",
+};
+
+function findLayoutTabs(
 	document: WorkspaceLayoutDocument,
 	location: LayoutGroupLocation,
 ): LayoutTab[] | null {
@@ -1345,6 +1476,7 @@ interface SharedGroupProps {
 	renderTabBody: WorkbenchProps["renderTabBody"];
 	renderTabAdornment: WorkbenchProps["renderTabAdornment"];
 	renderToolBody: WorkbenchProps["renderToolBody"];
+	renderTabIcon: WorkbenchProps["renderTabIcon"];
 	renderSideMenuActions: WorkbenchProps["renderSideMenuActions"];
 	onAttentionChange: WorkbenchProps["onAttentionChange"];
 	onUserNavigation: WorkbenchProps["onUserNavigation"];
@@ -1353,19 +1485,21 @@ interface SharedGroupProps {
 	onClose: (tab: LayoutTab) => void;
 	onFocusAdjacentGroup: (delta: -1 | 1, fromGroupId?: string) => void;
 	onHideSide: (region: LayoutAuxiliaryRegion) => void;
-	onRevealTool: (tool: LayoutToolId) => void;
+	onRevealTool: (tool: LayoutToolId, target?: LayoutGroupLocation) => void;
 	onRenameChat: WorkbenchProps["onRenameChat"];
 	canFocusAdjacentGroup: boolean;
 }
 
 function CenterGroupView({
 	group,
+	projectionEpoch,
 	onNewChat,
 	renderEmptyCenter,
 	renderCenterActions,
 	...shared
 }: SharedGroupProps & {
 	group: LayoutCenterGroup;
+	projectionEpoch: number;
 	onNewChat: WorkbenchProps["onNewChat"];
 	renderEmptyCenter: WorkbenchProps["renderEmptyCenter"];
 	renderCenterActions: WorkbenchProps["renderCenterActions"];
@@ -1426,6 +1560,7 @@ function CenterGroupView({
 				onRenameChat={shared.onRenameChat}
 				canFocusAdjacentGroup={shared.canFocusAdjacentGroup}
 				renderTabAdornment={shared.renderTabAdornment}
+				renderTabIcon={shared.renderTabIcon}
 				trailing={
 					<>
 						{renderCenterActions(group.id)}
@@ -1540,6 +1675,7 @@ function CenterNodeView({
 		<CenterGroupView
 			key={tupleKey("center-node", node.id)}
 			group={node}
+			projectionEpoch={projectionEpoch}
 			onNewChat={onNewChat}
 			{...shared}
 		/>
@@ -1726,6 +1862,7 @@ function SideGroupView({
 						onRenameChat={shared.onRenameChat}
 						canFocusAdjacentGroup={shared.canFocusAdjacentGroup}
 						renderTabAdornment={shared.renderTabAdornment}
+						renderTabIcon={shared.renderTabIcon}
 						trailing={
 							<SideGroupMenu
 								document={shared.document}
@@ -1760,19 +1897,14 @@ function SideGroupView({
 						</button>
 					</IconTooltip>
 				) : null}
-				{group.tabs.length === 0 ? (
-					<IconTooltip
-						label={isLayoutUnavailable(groupRemoval) ? groupRemoval.reason : "Remove group"}
-					>
+				{group.tabs.length === 0 && !isLayoutUnavailable(groupRemoval) ? (
+					<IconTooltip label="Remove group">
 						<button
 							type="button"
 							data-testid="remove-layout-group"
 							aria-label="Remove group"
-							disabled={isLayoutUnavailable(groupRemoval)}
-							onClick={() => {
-								if (!isLayoutUnavailable(groupRemoval)) shared.onApply(groupRemoval);
-							}}
-							className="flex w-32 shrink-0 items-center justify-center border-border-muted border-b border-l text-text-muted hover:bg-control-bg-hovered hover:text-text-default disabled:text-control-disabled-text"
+							onClick={() => shared.onApply(groupRemoval)}
+							className="flex w-32 shrink-0 items-center justify-center border-border-muted border-b border-l text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
 						>
 							<X className="size-14" />
 						</button>
@@ -1817,9 +1949,13 @@ function SideGroupMenu({
 	side: LayoutSide;
 	groupId: string;
 	renderSideMenuActions: WorkbenchProps["renderSideMenuActions"];
-	onRevealTool: (tool: LayoutToolId) => void;
+	onRevealTool: (tool: LayoutToolId, target?: LayoutGroupLocation) => void;
 }) {
-	const missing = unplacedToolsForSide(document, side);
+	const catalog = useContext(LayoutToolCatalogContext);
+	const missing = revealable(
+		unplacedToolsForSide(document, side, catalog),
+		useContext(UnofferedToolsContext),
+	);
 	const actions = renderSideMenuActions(side, groupId);
 	if (missing.length === 0 && !actions) return null;
 	return (
@@ -1840,9 +1976,9 @@ function SideGroupMenu({
 					<DropdownMenuItem
 						key={tool}
 						data-testid={`show-tool-${tool}`}
-						onSelect={() => onRevealTool(tool)}
+						onSelect={() => onRevealTool(tool, { area: side, groupId })}
 					>
-						Show {toolTab(tool).name}
+						Show {toolTab(tool, catalog).name}
 					</DropdownMenuItem>
 				))}
 			</DropdownMenuContent>
@@ -2072,11 +2208,12 @@ function BottomGroupView({
 	onNewTerminal: () => void;
 	onAlignmentChange: (alignment: LayoutBottomAlignment) => void;
 }) {
+	const catalog = useContext(LayoutToolCatalogContext);
 	const location: LayoutGroupLocation = { area: "bottom", groupId: group.id };
 	const groupRemoval = removeLayoutGroup(shared.document, location);
 	const selectedId = readLayoutSelection(shared.attention, group.id);
 	const selected = group.tabs.find((tab) => tab.id === selectedId) ?? group.tabs[0];
-	const selectedName = selected ? layoutTabName(selected) : undefined;
+	const selectedName = selected ? layoutTabName(selected, catalog) : undefined;
 	return (
 		<section
 			id={groupDomId(location)}
@@ -2101,7 +2238,7 @@ function BottomGroupView({
 				});
 			}}
 		>
-			<div className="flex h-panel-header-row shrink-0 items-stretch">
+			<div className="flex h-panel-header-row shrink-0 items-stretch pr-[var(--spacing-window-corner)]">
 				<div className="min-w-0 flex-1">
 					<TabStrip
 						document={shared.document}
@@ -2124,6 +2261,7 @@ function BottomGroupView({
 						onRenameChat={shared.onRenameChat}
 						canFocusAdjacentGroup={shared.canFocusAdjacentGroup}
 						renderTabAdornment={shared.renderTabAdornment}
+						renderTabIcon={shared.renderTabIcon}
 						trailing={
 							showAlignmentMenu ? (
 								<BottomAlignmentMenu
@@ -2135,19 +2273,14 @@ function BottomGroupView({
 						}
 					/>
 				</div>
-				{group.tabs.length === 0 ? (
-					<IconTooltip
-						label={isLayoutUnavailable(groupRemoval) ? groupRemoval.reason : "Remove group"}
-					>
+				{group.tabs.length === 0 && !isLayoutUnavailable(groupRemoval) ? (
+					<IconTooltip label="Remove group">
 						<button
 							type="button"
 							data-testid="remove-layout-group"
 							aria-label="Remove group"
-							disabled={isLayoutUnavailable(groupRemoval)}
-							onClick={() => {
-								if (!isLayoutUnavailable(groupRemoval)) shared.onApply(groupRemoval);
-							}}
-							className="flex w-32 shrink-0 items-center justify-center border-border-muted border-b border-l text-text-muted hover:bg-control-bg-hovered hover:text-text-default disabled:text-control-disabled-text"
+							onClick={() => shared.onApply(groupRemoval)}
+							className="flex w-32 shrink-0 items-center justify-center border-border-muted border-b border-l text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
 						>
 							<X className="size-14" />
 						</button>
@@ -2211,9 +2344,10 @@ function BottomFoldedGroup({
 	onAlignmentChange: (alignment: LayoutBottomAlignment) => void;
 	shared: SharedGroupProps;
 }) {
+	const catalog = useContext(LayoutToolCatalogContext);
 	const selectedId = readLayoutSelection(shared.attention, group.id);
 	const selected = group.tabs.find((tab) => tab.id === selectedId) ?? group.tabs[0];
-	const selectedName = selected ? layoutTabName(selected) : undefined;
+	const selectedName = selected ? layoutTabName(selected, catalog) : undefined;
 	const location: LayoutGroupLocation = { area: "bottom", groupId: group.id };
 	const restoreId = groupDomId(location);
 	const panelId = groupPanelId(location);
@@ -2540,6 +2674,8 @@ function HiddenSideRail({
 
 export function Workbench({
 	document,
+	catalog = BUILTIN_LAYOUT_TOOL_CATALOG,
+	unofferedTools = NO_TOOLS,
 	attention,
 	maxSideGroups,
 	maxBottomGroups,
@@ -2547,6 +2683,7 @@ export function Workbench({
 	focusRequest,
 	renderTabBody,
 	renderTabAdornment,
+	renderTabIcon,
 	renderToolBody,
 	renderEmptyCenter,
 	renderCenterActions,
@@ -2784,7 +2921,7 @@ export function Workbench({
 				break;
 			case "insert": {
 				const source = findTabLocation(document, tab.id);
-				const sourceTabs = source ? findLayoutGroupTabs(document, source) : null;
+				const sourceTabs = source ? findLayoutTabs(document, source) : null;
 				const sourceIndex = sourceTabs?.findIndex((candidate) => candidate.id === tab.id) ?? -1;
 				const insertionIndex =
 					source?.area === target.location.area &&
@@ -3077,8 +3214,8 @@ export function Workbench({
 		[apply, document],
 	);
 	const revealMissingTool = useCallback(
-		(tool: LayoutToolId) => {
-			const result = revealTool(document, tool, maxSideGroups, maxBottomGroups);
+		(tool: LayoutToolId, target?: LayoutGroupLocation) => {
+			const result = revealTool(document, tool, maxSideGroups, maxBottomGroups, target, catalog);
 			if (!isLayoutUnavailable(result)) apply(result);
 		},
 		[apply, document, maxBottomGroups, maxSideGroups],
@@ -3092,6 +3229,7 @@ export function Workbench({
 		draggingTab,
 		renderTabBody,
 		renderTabAdornment,
+		renderTabIcon,
 		renderToolBody,
 		renderSideMenuActions,
 		onAttentionChange,
@@ -3318,82 +3456,86 @@ export function Workbench({
 	);
 
 	return (
-		<DndContext
-			sensors={sensors}
-			collisionDetection={workbenchCollisionDetection}
-			measuring={{ droppable: { strategy: MeasuringStrategy.Always } }}
-			onDragStart={handleDragStart}
-			onDragCancel={() => setDraggingTab(null)}
-			onDragEnd={handleDragEnd}
-		>
-			<div
-				ref={workbenchRef}
-				data-testid="workbench"
-				className="flex h-full min-h-0 min-w-0 overflow-hidden"
-				onPointerDownCapture={() => {
-					tabSelectionEpoch.current += 1;
-				}}
-				onKeyDownCapture={(event) => {
-					if (!event.ctrlKey || event.altKey || event.metaKey || event.key !== "F6") return;
-					event.preventDefault();
-					event.stopPropagation();
-					focusAdjacentGroup(event.shiftKey ? -1 : 1);
-				}}
-			>
-				{!leftVisible ? (
-					<HiddenSideRail
-						side="left"
-						onShow={() => {
-							const result = showSide(document, "left", maxSideGroups, attention);
-							if (!isLayoutUnavailable(result)) apply(result);
+		<LayoutToolCatalogContext.Provider value={catalog}>
+			<UnofferedToolsContext.Provider value={unofferedTools}>
+				<DndContext
+					sensors={sensors}
+					collisionDetection={workbenchCollisionDetection}
+					measuring={{ droppable: { strategy: MeasuringStrategy.Always } }}
+					onDragStart={handleDragStart}
+					onDragCancel={() => setDraggingTab(null)}
+					onDragEnd={handleDragEnd}
+				>
+					<div
+						ref={workbenchRef}
+						data-testid="workbench"
+						className="flex h-full min-h-0 min-w-0 overflow-hidden"
+						onPointerDownCapture={() => {
+							tabSelectionEpoch.current += 1;
 						}}
-						showEnabled={canShowSide(document, "left")}
-						dropEnabled={
-							!!draggingTab &&
-							canPlaceLayoutTab(draggingTab, "left") &&
-							canCreateSideGroup(
-								document,
-								"left",
-								draggingTab,
-								maxSideGroups,
-								document.left.groups.length,
-							)
-						}
-						targetIndex={document.left.groups.length}
-					/>
-				) : null}
-				{workbenchColumns}
-				{!rightVisible ? (
-					<HiddenSideRail
-						side="right"
-						onShow={() => {
-							const result = showSide(document, "right", maxSideGroups, attention);
-							if (!isLayoutUnavailable(result)) apply(result);
+						onKeyDownCapture={(event) => {
+							if (!event.ctrlKey || event.altKey || event.metaKey || event.key !== "F6") return;
+							event.preventDefault();
+							event.stopPropagation();
+							focusAdjacentGroup(event.shiftKey ? -1 : 1);
 						}}
-						showEnabled={canShowSide(document, "right")}
-						dropEnabled={
-							!!draggingTab &&
-							canPlaceLayoutTab(draggingTab, "right") &&
-							canCreateSideGroup(
-								document,
-								"right",
-								draggingTab,
-								maxSideGroups,
-								document.right.groups.length,
-							)
-						}
-						targetIndex={document.right.groups.length}
-					/>
-				) : null}
-			</div>
-			<DragOverlay dropAnimation={null}>
-				{draggingTab ? (
-					<div className="flex max-w-224 items-center gap-4 rounded-[var(--radius-sm)] border border-primary bg-container-elevated-bg px-8 py-4 tr-text-ui text-text-default shadow-lg">
-						{tabIcon(draggingTab)}
-						<span className="truncate">{layoutTabName(draggingTab)}</span>
+					>
+						{!leftVisible ? (
+							<HiddenSideRail
+								side="left"
+								onShow={() => {
+									const result = showSide(document, "left", maxSideGroups, attention, catalog);
+									if (!isLayoutUnavailable(result)) apply(result);
+								}}
+								showEnabled={canShowSide(document, "left", catalog)}
+								dropEnabled={
+									!!draggingTab &&
+									canPlaceLayoutTab(draggingTab, "left") &&
+									canCreateSideGroup(
+										document,
+										"left",
+										draggingTab,
+										maxSideGroups,
+										document.left.groups.length,
+									)
+								}
+								targetIndex={document.left.groups.length}
+							/>
+						) : null}
+						{workbenchColumns}
+						{!rightVisible ? (
+							<HiddenSideRail
+								side="right"
+								onShow={() => {
+									const result = showSide(document, "right", maxSideGroups, attention, catalog);
+									if (!isLayoutUnavailable(result)) apply(result);
+								}}
+								showEnabled={canShowSide(document, "right", catalog)}
+								dropEnabled={
+									!!draggingTab &&
+									canPlaceLayoutTab(draggingTab, "right") &&
+									canCreateSideGroup(
+										document,
+										"right",
+										draggingTab,
+										maxSideGroups,
+										document.right.groups.length,
+									)
+								}
+								targetIndex={document.right.groups.length}
+							/>
+						) : null}
 					</div>
-				) : null}
-			</DragOverlay>
-		</DndContext>
+					<DragOverlay dropAnimation={null}>
+						{draggingTab ? (
+							<div className="flex max-w-224 items-center gap-4 rounded-[var(--radius-sm)] border border-primary bg-container-elevated-bg px-8 py-4 tr-text-ui text-text-default shadow-lg">
+								{tabIcon(draggingTab, renderTabIcon, false, catalog)}
+								<span className="truncate">{layoutTabName(draggingTab, catalog)}</span>
+							</div>
+						) : null}
+					</DragOverlay>
+				</DndContext>
+			</UnofferedToolsContext.Provider>
+		</LayoutToolCatalogContext.Provider>
 	);
 }

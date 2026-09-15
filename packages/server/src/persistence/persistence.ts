@@ -51,6 +51,7 @@ export interface PersistedTerminalTab {
 	tabKey: string;
 	title: string;
 	recorded?: string;
+	/** The agent invocation live in this tab at shutdown, so reopening can offer to resume it. */
 }
 
 export type PersistedTerminalSessions = Record<string, PersistedTerminalTab[]>;
@@ -107,6 +108,18 @@ export function loadConfig(): AppConfig {
 			typeof value.subagentsEnabled === "boolean"
 				? value.subagentsEnabled
 				: DEFAULT_CONFIG.subagentsEnabled,
+		editorGpuRendering:
+			typeof value.editorGpuRendering === "boolean"
+				? value.editorGpuRendering
+				: DEFAULT_CONFIG.editorGpuRendering,
+		codeFontFamily:
+			typeof value.codeFontFamily === "string"
+				? value.codeFontFamily
+				: DEFAULT_CONFIG.codeFontFamily,
+		codeFontLigatures:
+			typeof value.codeFontLigatures === "boolean"
+				? value.codeFontLigatures
+				: DEFAULT_CONFIG.codeFontLigatures,
 		jbcentralQuotaEnabled:
 			typeof value.jbcentralQuotaEnabled === "boolean"
 				? value.jbcentralQuotaEnabled

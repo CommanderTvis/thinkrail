@@ -3,7 +3,7 @@ import {
 	RiLayoutRightLine as PanelRightOpen,
 } from "@remixicon/react";
 import { forwardRef } from "react";
-import { IconTooltip } from "../components/ui/tooltip";
+import { IconTooltip } from "@/components/ui/tooltip";
 import { cn, platformShortcutLabel } from "../lib";
 
 type CollapsedPanelRailProps = {

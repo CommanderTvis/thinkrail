@@ -1,12 +1,19 @@
-import { lazy, Suspense, useMemo } from "react";
-import { isMarkdownPath } from "@/lib/utils";
+import { RiFileTransferLine as FileSymlink } from "@remixicon/react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { abbreviateHomePath, isMarkdownPath } from "@/lib/utils";
+import { OutlineColumn, OutlineToggle, scrollToHeading } from "@/panels/Outline";
+import { ToggleSegment } from "@/panels/ToggleSegment";
+import { EmbeddedSplit } from "../components/EmbeddedSplit";
 import { LoadingRegion } from "../components/Skeleton";
-import type { FileTab } from "../store";
+import type { ExternalFileTab, FileTab } from "../store";
 import { useAppStore } from "../store";
 import { getTransport } from "../transport";
+import { coreViewerFor } from "./coreViewers";
+import { isFileTabDirty, mergeDiskIntoDraft, saveFileTab } from "./fileSave";
+import { jsonKeyLine } from "./jsonKeyLine";
+import { type HeadingEntry, sourceHeadings } from "./outlineTree";
 import { reviewFlagFor } from "./reviewModel";
 import { SendReviewButton } from "./SendReviewButton";
-import { ToggleSegment } from "./ToggleSegment";
 import { useLiveTabContent } from "./useLiveTabContent";
 import { useFileReview } from "./useReviewCommenting";
 
@@ -15,8 +22,9 @@ const MarkdownPreview = lazy(() => import("./MarkdownPreview"));
 
 const loading = <LoadingRegion rows={12} className="h-full p-12" />;
 
-export function FilePane({ tab }: { tab: FileTab }) {
+function FilePaneBody({ tab }: { tab: FileTab | ExternalFileTab }) {
 	const setFileTabView = useAppStore((s) => s.setFileTabView);
+	const setFileTabOutline = useAppStore((s) => s.setFileTabOutline);
 	const review = useFileReview(tab.workspaceId, tab.path, "inline");
 	const reviewComments = useAppStore((s) => s.reviewsByWorkspace[tab.workspaceId]?.comments);
 	const fileHasDraft = useMemo(
@@ -24,39 +32,198 @@ export function FilePane({ tab }: { tab: FileTab }) {
 		[reviewComments, tab.path],
 	);
 
+	const external = tab.kind === "external-file";
+	const viewer = coreViewerFor(tab.path);
+	const binary = !external && viewer?.read === "none";
+	const clearFocus = useCallback(() => useAppStore.getState().clearFileFocus(tab.path), [tab.path]);
+	const buffer = tab.draft ?? tab.content;
+
+	// Resolved against the text the editor holds, never sent as a line by the host — see panels/SPEC.md.
+	const focusRequest = useAppStore((s) =>
+		s.fileFocusRequest?.path === tab.path ? s.fileFocusRequest : undefined,
+	);
+	const focusKeyPath = focusRequest && "keyPath" in focusRequest ? focusRequest.keyPath : undefined;
+	const requestedLine = focusRequest && "line" in focusRequest ? focusRequest.line : undefined;
+	const focusLine = useMemo(
+		() =>
+			requestedLine ??
+			(focusKeyPath ? (jsonKeyLine(buffer, focusKeyPath) ?? undefined) : undefined),
+		[requestedLine, focusKeyPath, buffer],
+	);
+	const [outlineLine, setOutlineLine] = useState<number | undefined>(undefined);
+
+	// A binary viewer is re-fetched by this counter, and only a change that names *this file* advances it:
+	// the workspace tick moves for every write anywhere, and a compile writes a dozen of them. See SPEC.md.
+	const [byteRevision, setByteRevision] = useState(0);
+	const fsChange = useAppStore((s) => s.fsChangesByWorkspace[tab.workspaceId]);
+	useEffect(() => {
+		if (!binary || !fsChange) return;
+		if (!fsChange.truncated && !fsChange.paths.includes(tab.path)) return;
+		setByteRevision((current) => current + 1);
+	}, [binary, fsChange, tab.path]);
+
 	useLiveTabContent(tab, {
-		read: () =>
-			getTransport().request("fs.readFile", { workspaceId: tab.workspaceId, path: tab.path }),
-		applyFresh: ({ content }, tick) =>
-			useAppStore.getState().updateFileTabContent(tab.workspaceId, tab.id, content, tick),
+		// A binary viewer renders from its own bytes over its own route, never from tab.content. An
+		// external tab's path is outside the worktree, so the worktree-scoped read cannot refresh it.
+		read: (): Promise<{ content: string; hash: string }> =>
+			binary
+				? Promise.resolve({ content: "", hash: "" })
+				: (getTransport().request("fs.readFile", {
+						workspaceId: tab.workspaceId,
+						path: tab.path,
+					}) as Promise<{ content: string; hash: string }>),
+		applyFresh: ({ content, hash }, tick) =>
+			useAppStore.getState().updateFileTabContent(tab.workspaceId, tab.id, content, hash, tick),
 		keepCurrent: (tick) =>
-			useAppStore.getState().updateFileTabContent(tab.workspaceId, tab.id, tab.content, tick),
+			useAppStore
+				.getState()
+				.updateFileTabContent(tab.workspaceId, tab.id, tab.content, tab.hash ?? "", tick),
 	});
+
+	const dirty = isFileTabDirty(tab);
+	const save = useCallback(
+		() => void saveFileTab(tab.workspaceId, tab.id),
+		[tab.workspaceId, tab.id],
+	);
 
 	const editor = (
 		<Suspense fallback={loading}>
-			<MonacoEditor path={tab.path} content={tab.content} review={review} />
+			<MonacoEditor
+				path={tab.path}
+				content={buffer}
+				editable={!binary}
+				onChange={(next) => useAppStore.getState().setFileTabDraft(tab.workspaceId, tab.id, next)}
+				onSave={save}
+				review={review}
+				focusLine={focusLine ?? outlineLine}
+				onFocusHandled={() => {
+					clearFocus();
+					setOutlineLine(undefined);
+				}}
+				workspaceId={tab.workspaceId}
+			/>
 		</Suspense>
 	);
 
-	if (!isMarkdownPath(tab.path)) {
-		if (!fileHasDraft) return editor;
+	// The tab strip can only show a basename, which is ambiguous across scopes — three files here are all
+	// called settings.json. The full path is the only thing that says which one this is.
+	const externalBar = external ? (
+		<div
+			data-testid="external-file-path"
+			className="flex h-32 shrink-0 items-center gap-4 border-border-default border-b bg-container-header-bg px-8"
+		>
+			<FileSymlink className="size-14 shrink-0 text-agent-claude" />
+			<span className="shrink-0 tr-text-label-pill text-text-subtle uppercase">
+				outside worktree
+			</span>
+			<span title={tab.path} className="min-w-0 truncate tr-code-text text-text-muted">
+				{abbreviateHomePath(tab.path)}
+			</span>
+			<span className="ml-auto shrink-0 tr-text-metadata text-text-subtle">
+				{dirty ? "unsaved" : ""}
+			</span>
+		</div>
+	) : null;
+
+	const diskBar = tab.external ? (
+		<div
+			data-testid="file-disk-changed"
+			className="flex shrink-0 flex-wrap items-center gap-8 border-feedback-warning border-b bg-container-header-bg px-8 py-4 tr-text-metadata text-text-default"
+		>
+			<span>This file changed on disk while you were editing it.</span>
+			<button
+				type="button"
+				data-testid="file-disk-merge"
+				// Editor chrome never takes the caret: the buffer keeps focus so Ctrl+S still reaches it.
+				onMouseDown={(event) => event.preventDefault()}
+				onClick={() => mergeDiskIntoDraft(tab.workspaceId, tab.id)}
+				className="rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg px-8 py-2 hover:bg-control-bg-hovered"
+			>
+				Merge into my edits
+			</button>
+			<button
+				type="button"
+				data-testid="file-disk-discard"
+				onMouseDown={(event) => event.preventDefault()}
+				onClick={() => useAppStore.getState().discardFileTabDraft(tab.workspaceId, tab.id)}
+				className="rounded-[var(--radius-sm)] border border-border-default px-8 py-2 text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
+			>
+				Discard mine, take the file
+			</button>
+		</div>
+	) : null;
+
+	if (externalBar) {
 		return (
 			<div className="flex h-full min-h-0 flex-col">
-				<div
-					data-testid="file-review-toolbar"
-					role="toolbar"
-					aria-label="Review actions"
-					className="flex h-32 shrink-0 items-center justify-end gap-4 border-border-default border-b bg-container-header-bg px-12"
-				>
-					<SendReviewButton workspaceId={tab.workspaceId} path={tab.path} />
-				</div>
+				{externalBar}
+				{diskBar}
+				<div className="min-h-0 flex-1">{editor}</div>
+			</div>
+		);
+	}
+
+	if (viewer && binary) {
+		const Viewer = viewer.component;
+		return (
+			<Suspense fallback={loading}>
+				<Viewer workspaceId={tab.workspaceId} path={tab.path} revision={byteRevision} />
+			</Suspense>
+		);
+	}
+
+	if (!isMarkdownPath(tab.path)) {
+		// Unconditional: a changing tree around Monaco remounts it — see panels/SPEC.md.
+		return (
+			<div className="flex h-full min-h-0 flex-col">
+				{fileHasDraft ? (
+					<div
+						data-testid="file-review-toolbar"
+						role="toolbar"
+						aria-label="Review actions"
+						className="flex h-32 shrink-0 items-center justify-end gap-4 border-border-default border-b bg-container-header-bg px-8"
+					>
+						<SendReviewButton workspaceId={tab.workspaceId} path={tab.path} />
+					</div>
+				) : null}
+				{diskBar}
 				<div className="min-h-0 flex-1">{editor}</div>
 			</div>
 		);
 	}
 
 	const view = tab.view ?? "rendered";
+	const paneDirection = "horizontal";
+	// Scanning a large document for headings is not free, and this runs on every render of the pane.
+	const headings = useMemo(() => sourceHeadings(buffer), [buffer]);
+	// Overleaf-style: one click lands both sides. The preview scrolls to the heading's rendered element
+	// (by slug id, or by line stamp in the review path's segmented render); the editor reveals the line.
+	const jumpToHeading = (entry: HeadingEntry) => {
+		scrollToHeading(entry);
+		setOutlineLine(entry.line);
+	};
+	const outline =
+		(tab.outlineOpen ?? false) ? (
+			<OutlineColumn headings={headings} onSelect={jumpToHeading} />
+		) : null;
+	const preview = (
+		<Suspense fallback={loading}>
+			<div className="h-full motion-safe:animate-reveal">
+				<MarkdownPreview
+					content={buffer}
+					onContentEdit={(next) =>
+						useAppStore.getState().setFileTabDraft(tab.workspaceId, tab.id, next)
+					}
+					workspaceId={tab.workspaceId}
+					path={tab.path}
+					review={review}
+					{...(view === "rendered" && focusLine !== undefined
+						? { focusLine, onFocusHandled: clearFocus }
+						: {})}
+				/>
+			</div>
+		</Suspense>
+	);
 	return (
 		<div className="flex h-full min-h-0 flex-col">
 			<div
@@ -65,6 +232,10 @@ export function FilePane({ tab }: { tab: FileTab }) {
 				aria-label="Markdown view mode"
 				className="flex h-32 shrink-0 items-center justify-end gap-4 border-border-default border-b bg-container-header-bg px-12"
 			>
+				<OutlineToggle
+					active={tab.outlineOpen ?? false}
+					onClick={() => setFileTabOutline(tab.id, !(tab.outlineOpen ?? false))}
+				/>
 				<SendReviewButton workspaceId={tab.workspaceId} path={tab.path} />
 				<ToggleSegment
 					testid="md-toggle-preview"
@@ -78,23 +249,58 @@ export function FilePane({ tab }: { tab: FileTab }) {
 					active={view === "source"}
 					onClick={() => setFileTabView(tab.id, "source")}
 				/>
+				<ToggleSegment
+					testid="md-toggle-split"
+					label="Split"
+					active={view === "split"}
+					onClick={() => setFileTabView(tab.id, "split")}
+				/>
 			</div>
-			<div className="min-h-0 flex-1">
-				{view === "rendered" ? (
-					<Suspense fallback={loading}>
-						<div className="h-full motion-safe:animate-reveal">
-							<MarkdownPreview
-								content={tab.content}
-								workspaceId={tab.workspaceId}
-								path={tab.path}
-								review={review}
-							/>
-						</div>
-					</Suspense>
-				) : (
-					editor
-				)}
+			{diskBar}
+			<div className="flex min-h-0 flex-1">
+				{outline}
+				{/* `min-w-0` is load-bearing: a flex item defaults to `min-width:auto` and so refuses to shrink
+				    below its content, which makes the scroller grow instead of scrolling a wide table sideways. */}
+				<div className="min-h-0 min-w-0 flex-1">
+					{view === "split" ? (
+						<EmbeddedSplit
+							direction={paneDirection}
+							companion={{
+								title: "Preview",
+								content: preview,
+								onClose: () => setFileTabView(tab.id, "source"),
+							}}
+						>
+							{editor}
+						</EmbeddedSplit>
+					) : view === "rendered" ? (
+						preview
+					) : (
+						editor
+					)}
+				</div>
 			</div>
 		</div>
+	);
+}
+
+/**
+ * Ctrl/Cmd+S belongs to the pane, not the editor alone: the disk-changed bar's buttons take focus, and a
+ * save request from there is the same request. Scoped here rather than to the window, where a focused
+ * terminal would swallow it. See panels/SPEC.md.
+ */
+export function FilePane({ tab }: { tab: FileTab | ExternalFileTab }) {
+	return (
+		<section
+			aria-label={tab.name}
+			className="contents"
+			onKeyDown={(event) => {
+				if (event.key !== "s" || !(event.ctrlKey || event.metaKey)) return;
+				event.preventDefault();
+				void saveFileTab(tab.workspaceId, tab.id);
+			}}
+		>
+			<FilePaneBody tab={tab} />
+		</section>
 	);
 }

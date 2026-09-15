@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import type { LayoutAttention } from "../../lib";
 import {
+	BUILTIN_LAYOUT_TOOL_CATALOG,
+	buildLayoutToolCatalog,
 	canShowSide,
 	closeLayoutTab,
 	closePlacedResource,
@@ -23,6 +25,7 @@ import {
 	resizeBottomRegion,
 	resizeSideGroups,
 	resizeSideRegion,
+	resolveLayoutTool,
 	revealTool,
 	selectTab,
 	setAuxiliaryGroupFolded,
@@ -33,6 +36,7 @@ import {
 	showSide,
 	splitCenterGroup,
 	toolTab,
+	ungroupTab,
 	unplacedTools,
 	unplacedToolsForSide,
 	validateLayoutDocument,
@@ -67,6 +71,111 @@ function baseDocument(tabs: LayoutCenterTab[] = []): WorkspaceLayoutDocument {
 	};
 }
 
+describe("openCenterTabBeside", () => {
+	const terminal: LayoutTerminalTab = {
+		kind: "terminal",
+		id: "term",
+		name: "Claude Code",
+		tabKey: "claude-1",
+	};
+	const attentionOn = (groupId: string, tabId: string): LayoutAttention => ({
+		selectedByGroup: { [groupId]: tabId },
+		lastFocusedCenterGroupId: groupId,
+		lastFocusedSideGroupId: {},
+		navigationClockByGroup: {},
+	});
+	const runsAgent = (tab: { kind: string }) => tab.kind === "terminal";
+
+	test("a file opened over an agent terminal splits a new column to the right", () => {
+		const doc = baseDocument([terminal]);
+		const result = mutation(
+			openCenterTabBeside(
+				doc,
+				attentionOn("center-a", "term"),
+				file("a"),
+				"center-a",
+				"preview",
+				false,
+				runsAgent,
+			),
+		);
+		const groups = collectCenterGroups(result.document.center);
+		expect(groups.map((group) => group.tabs.map((tab) => tab.id))).toEqual([["term"], ["a"]]);
+		expect(result.focusGroupId).toBe(groups[1]?.id);
+		expect(result.focusTabId).toBe("a");
+	});
+
+	test("with a column already to the right, the file goes there instead of splitting again", () => {
+		const doc = mutation(
+			openCenterTabBeside(
+				baseDocument([terminal]),
+				attentionOn("center-a", "term"),
+				file("a"),
+				"center-a",
+				"keep",
+				false,
+				runsAgent,
+			),
+		).document;
+		const [left, right] = collectCenterGroups(doc.center);
+		if (!left || !right) throw new Error("expected two groups");
+		const result = mutation(
+			openCenterTabBeside(
+				doc,
+				attentionOn(left.id, "term"),
+				file("b"),
+				left.id,
+				"keep",
+				false,
+				runsAgent,
+			),
+		);
+		expect(collectCenterGroups(result.document.center)).toHaveLength(2);
+		expect(findTabLocation(result.document, "b")).toEqual({ area: "center", groupId: right.id });
+	});
+
+	test("a group not showing an agent, a placed resource, or a non-file resource keep the plain rule", () => {
+		const docWithFile = baseDocument([terminal, file("a")]);
+		const overFile = mutation(
+			openCenterTabBeside(
+				docWithFile,
+				attentionOn("center-a", "a"),
+				file("b"),
+				"center-a",
+				"keep",
+				false,
+				runsAgent,
+			),
+		);
+		expect(collectCenterGroups(overFile.document.center)).toHaveLength(1);
+		const reselect = mutation(
+			openCenterTabBeside(
+				docWithFile,
+				attentionOn("center-a", "term"),
+				file("a"),
+				"center-a",
+				"keep",
+				false,
+				runsAgent,
+			),
+		);
+		expect(collectCenterGroups(reselect.document.center)).toHaveLength(1);
+		const chat: LayoutCenterTab = { kind: "chat", id: "chat-1", name: "Chat", sessionId: "s1" };
+		const overAgentChat = mutation(
+			openCenterTabBeside(
+				baseDocument([terminal]),
+				attentionOn("center-a", "term"),
+				chat,
+				"center-a",
+				"keep",
+				false,
+				runsAgent,
+			),
+		);
+		expect(collectCenterGroups(overAgentChat.document.center)).toHaveLength(1);
+	});
+});
+
 function mutation<T extends { document: WorkspaceLayoutDocument } | { reason: string }>(result: T) {
 	if ("reason" in result) throw new Error(result.reason);
 	return result;
@@ -78,6 +187,64 @@ describe("workspace layout model", () => {
 		expect(toolTab("files").name).toBe("Files");
 		expect(layoutTabName(legacyFiles)).toBe("Files");
 		expect(layoutTabName(file("one"))).toBe("one.ts");
+	});
+
+	test("an unplaced plugin tool id resolves to a dormant entry named after the id, never undefined", () => {
+		const pluginTool = "plugin:spec-dialect:specs" as const;
+		expect(toolTab(pluginTool).name).toBe(pluginTool);
+		expect(resolveLayoutTool(BUILTIN_LAYOUT_TOOL_CATALOG, pluginTool)).toMatchObject({
+			id: pluginTool,
+			label: pluginTool,
+			dormant: true,
+		});
+	});
+
+	test("the retired claude/graph builtin ids are dormant, never offered, and named after the plugin id", () => {
+		for (const legacyId of ["claude", "graph"] as const) {
+			expect(BUILTIN_LAYOUT_TOOL_CATALOG.has(legacyId)).toBe(false);
+			expect(resolveLayoutTool(BUILTIN_LAYOUT_TOOL_CATALOG, legacyId)).toMatchObject({
+				id: legacyId,
+				label: legacyId,
+				dormant: true,
+			});
+			expect(unplacedTools(baseDocument())).not.toContain(legacyId);
+		}
+	});
+
+	test("buildLayoutToolCatalog composes builtins with plugin-declared side tools", () => {
+		const specsIcon = resolveLayoutTool(BUILTIN_LAYOUT_TOOL_CATALOG, "specs").icon;
+		const pluginEntry = {
+			id: "plugin:spec-dialect:specs" as const,
+			label: "Specs",
+			icon: specsIcon,
+			defaultSide: "right" as const,
+			dormant: false,
+		};
+		const catalog = buildLayoutToolCatalog([pluginEntry]);
+		expect(catalog.get("plugin:spec-dialect:specs")).toEqual(pluginEntry);
+		expect(catalog.get("files")).toEqual(BUILTIN_LAYOUT_TOOL_CATALOG.get("files"));
+		expect([...catalog.keys()].at(-1)).toBe("plugin:spec-dialect:specs");
+	});
+
+	test("a dormant plugin tool is never offered by the unplaced-tool menus", () => {
+		const icon = resolveLayoutTool(BUILTIN_LAYOUT_TOOL_CATALOG, "files").icon;
+		const entry = (dormant: boolean) => ({
+			id: "plugin:spec-dialect:specs" as const,
+			label: "Specs",
+			icon,
+			defaultSide: "right" as const,
+			dormant,
+		});
+		const document = baseDocument();
+		expect(unplacedTools(document, buildLayoutToolCatalog([entry(false)]))).toContain(
+			"plugin:spec-dialect:specs",
+		);
+		expect(unplacedTools(document, buildLayoutToolCatalog([entry(true)]))).not.toContain(
+			"plugin:spec-dialect:specs",
+		);
+		expect(
+			unplacedToolsForSide(document, "right", buildLayoutToolCatalog([entry(true)])),
+		).not.toContain("plugin:spec-dialect:specs");
 	});
 
 	test("opens one canonical tab and keeps preview promotion one-way", () => {
@@ -271,6 +438,20 @@ describe("workspace layout model", () => {
 		);
 		expect(revealed.document.bottom.visible).toBe(true);
 		expect(validateLayoutDocument(revealed.document, 6, 2)).toEqual([]);
+
+		// Asked from a specific group's menu, the tool lands in that group, not at its restore target.
+		const asked = document.bottom.groups[0];
+		if (!asked) throw new Error("no bottom group");
+		const targeted = mutation(
+			revealTool(document, "changes", 6, 2, { area: "bottom", groupId: asked.id }),
+		);
+		expect(findTabLocation(targeted.document, targeted.focusTabId ?? "missing")).toEqual({
+			area: "bottom",
+			groupId: asked.id,
+		});
+		expect(targeted.focusGroupId).toBe(asked.id);
+		expect(targeted.document.bottom.groups).toHaveLength(2);
+		expect(validateLayoutDocument(targeted.document, 6, 2)).toEqual([]);
 	});
 
 	test("bottom removal preserves every frame group after its final tab closes", () => {

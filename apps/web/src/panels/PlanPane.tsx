@@ -24,6 +24,7 @@ import {
 	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { IconTooltip } from "@/components/ui/tooltip";
 import { VerificationBadge, VerificationGlyph } from "../chat/planKit";
 import { planToMarkdown } from "../chat/planMarkdown";
 import {
@@ -45,7 +46,6 @@ import {
 import { StatusIcon } from "../chat/TodoList";
 import { useChatTodos } from "../chat/useChatTodos";
 import { LoadingRegion } from "../components/Skeleton";
-import { IconTooltip } from "../components/ui/tooltip";
 import {
 	selectAgentReviewCommentCount,
 	selectChatTitle,

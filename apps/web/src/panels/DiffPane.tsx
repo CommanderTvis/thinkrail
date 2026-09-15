@@ -6,13 +6,17 @@ import {
 import { lazy, Suspense, useState } from "react";
 import { IconTooltip } from "@/components/ui/tooltip";
 import { copyText, isMarkdownPath } from "@/lib/utils";
+import { editorFontSize } from "@/panels/editorFont";
+import { OutlineColumn, OutlineToggle, scrollToHeading } from "@/panels/Outline";
+import { ToggleSegment } from "@/panels/ToggleSegment";
 import { LoadingRegion } from "../components/Skeleton";
 import type { DiffTab } from "../store";
 import { selectDiffTabTargetRef, useAppStore } from "../store";
 import { getTransport } from "../transport";
 import { splitPath } from "./changesModel";
+import { narrowForSplit } from "./diffLayout";
+import { sourceHeadings } from "./outlineTree";
 import { SendReviewButton } from "./SendReviewButton";
-import { ToggleSegment } from "./ToggleSegment";
 import { useLiveTabContent } from "./useLiveTabContent";
 import { useFileReview } from "./useReviewCommenting";
 
@@ -25,6 +29,7 @@ export function DiffPane({ tab }: { tab: DiffTab }) {
 	const setDiffTabView = useAppStore((s) => s.setDiffTabView);
 	const setDiffTabRendered = useAppStore((s) => s.setDiffTabRendered);
 	const setDiffTabIgnoreWhitespace = useAppStore((s) => s.setDiffTabIgnoreWhitespace);
+	const setDiffTabOutline = useAppStore((s) => s.setDiffTabOutline);
 	const [copied, setCopied] = useState(false);
 	const reviewable = tab.scope.kind !== "commit";
 	const review = useFileReview(tab.workspaceId, tab.path, "diff", tab.scope);
@@ -62,6 +67,7 @@ export function DiffPane({ tab }: { tab: DiffTab }) {
 	const markdown = isMarkdownPath(tab.path);
 	const view = tab.view ?? "split";
 	const rendered = markdown && (tab.rendered ?? false);
+	const outlineOpen = rendered && (tab.outlineOpen ?? false);
 	const ignoreWhitespace = tab.ignoreWhitespace ?? false;
 	const { dir, base } = splitPath(tab.path);
 	const copy = async () => {
@@ -125,6 +131,13 @@ export function DiffPane({ tab }: { tab: DiffTab }) {
 						{base}
 					</span>
 				</span>
+				{rendered ? (
+					<OutlineToggle
+						active={outlineOpen}
+						onClick={() => setDiffTabOutline(tab.id, !outlineOpen)}
+						testid="diff-toggle-outline"
+					/>
+				) : null}
 				<SendReviewButton workspaceId={tab.workspaceId} path={tab.path} />
 				{rendered ? null : (
 					<HeaderIconButton
@@ -145,23 +158,28 @@ export function DiffPane({ tab }: { tab: DiffTab }) {
 				</HeaderIconButton>
 				{toggles}
 			</div>
-			<div className="min-h-0 flex-1">
-				<Suspense fallback={loading}>
-					{rendered ? (
-						<div className="h-full motion-safe:animate-reveal">
-							<RenderedDiff tab={tab} />
-						</div>
-					) : (
-						<MonacoDiff
-							path={tab.path}
-							original={tab.original}
-							modified={tab.modified}
-							view={markdown ? "split" : view}
-							ignoreWhitespace={ignoreWhitespace}
-							{...(reviewable ? { review } : {})}
-						/>
-					)}
-				</Suspense>
+			<div className="flex min-h-0 flex-1">
+				{outlineOpen ? (
+					<OutlineColumn headings={sourceHeadings(tab.modified)} onSelect={scrollToHeading} />
+				) : null}
+				<div className="min-h-0 min-w-0 flex-1">
+					<Suspense fallback={loading}>
+						{rendered ? (
+							<div className="h-full motion-safe:animate-reveal">
+								<RenderedDiff tab={tab} />
+							</div>
+						) : (
+							<MonacoDiff
+								path={tab.path}
+								original={tab.original}
+								modified={tab.modified}
+								view={view}
+								ignoreWhitespace={ignoreWhitespace}
+								{...(reviewable ? { review } : {})}
+							/>
+						)}
+					</Suspense>
+				</div>
 			</div>
 		</div>
 	);
