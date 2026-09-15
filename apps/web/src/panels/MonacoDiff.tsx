@@ -6,18 +6,18 @@ import {
 } from "@monaco-editor/react";
 import type { editor } from "monaco-editor";
 import { useCallback, useEffect, useRef } from "react";
-import { LoadingRegion } from "../components/Skeleton";
-import { useAppStore } from "../store";
-import { decorateEditorContextMenus } from "./monacoMenuIcons";
+import { decorateEditorContextMenus } from "@/panels/monacoMenuIcons";
 import {
 	defineThinkrailTheme,
 	languageForPath,
 	sharedEditorOptions,
 	THEME,
 	watchThemeSwap,
-} from "./monacoSetup";
-import { applyReviewDecorations } from "./reviewGutter";
-import { attachReviewCommenting, attachReviewThreads } from "./reviewWidgets";
+} from "@/panels/monacoSetup";
+import { applyReviewDecorations } from "@/panels/reviewGutter";
+import { attachReviewCommenting, attachReviewThreads } from "@/panels/reviewWidgets";
+import { LoadingRegion } from "../components/Skeleton";
+import { useAppStore } from "../store";
 import type { EditorReview, SideReview } from "./useReviewCommenting";
 
 const beforeMount: BeforeMount = (m) => defineThinkrailTheme(m);
@@ -47,6 +47,8 @@ export default function MonacoDiff({
 }) {
 	const fileLineWidth = useAppStore((state) => state.fileLineWidth);
 	const fileLineWidthBounded = useAppStore((state) => state.fileLineWidthBounded);
+	const editorGpu = useAppStore((state) => state.editorGpuRendering);
+	const ligatures = useAppStore((state) => state.codeFontLigatures);
 	const stopThemeWatchRef = useRef<(() => void) | null>(null);
 	const menuIconsRef = useRef<{ dispose(): void }[]>([]);
 	const editorRef = useRef<MonacoDiffEditor | null>(null);
@@ -153,7 +155,7 @@ export default function MonacoDiff({
 			onMount={onMount}
 			loading={<LoadingRegion rows={12} className="h-full w-full p-12" />}
 			options={{
-				...sharedEditorOptions(fileLineWidth, fileLineWidthBounded),
+				...sharedEditorOptions(fileLineWidth, fileLineWidthBounded, editorGpu, ligatures),
 				renderSideBySide: view === "split",
 				useInlineViewWhenSpaceIsLimited: false,
 				hideUnchangedRegions: { enabled: true },

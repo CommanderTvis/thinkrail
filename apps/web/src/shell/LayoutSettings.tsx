@@ -36,6 +36,11 @@ async function updateCustomPresets(customLayoutPresets: LayoutPreset[]): Promise
 	}
 }
 
+const PANE_DIRECTIONS = [
+	{ direction: "horizontal", label: "Columns" },
+	{ direction: "vertical", label: "Rows" },
+] as const;
+
 export function LayoutSettings() {
 	const customLayoutPresets = useAppStore((state) => state.customLayoutPresets);
 	const preferences = useAppStore((state) => state.localLayoutPreferences);

@@ -1,106 +1,89 @@
-import MonacoReact, { type BeforeMount, type OnMount } from "@monaco-editor/react";
-import type { editor } from "monaco-editor";
-import { useCallback, useEffect, useRef } from "react";
+import {
+	type EditorSelectionChange,
+	MonacoEditor as KitMonacoEditor,
+} from "@/panels/MonacoEditorBase";
+import type { EditorReview } from "@/panels/reviewTypes";
 import { LoadingRegion } from "../components/Skeleton";
 import { useAppStore } from "../store";
-import { decorateEditorContextMenus } from "./monacoMenuIcons";
-import {
-	defineThinkrailTheme,
-	EDITOR_THEME,
-	sharedEditorOptions,
-	watchThemeSwap,
-} from "./monacoSetup";
-import { applyReviewDecorations } from "./reviewGutter";
-import { attachReviewCommenting, attachReviewThreads } from "./reviewWidgets";
-import type { EditorReview } from "./useReviewCommenting";
-
-const beforeMount: BeforeMount = (m) => defineThinkrailTheme(m);
+import { reportIdeDocumentClosed } from "../transport";
+import { emitEditorEvent, findEditorRef } from "./editorEvents";
+import { sendSelectionToChat } from "./sendSelectionToChat";
 
 export default function MonacoEditor({
 	path,
 	content,
 	review,
+	focusLine,
+	onFocusHandled,
+	workspaceId,
+	editable,
+	onChange,
+	onSave,
 }: {
 	path: string;
 	content: string;
 	review?: EditorReview;
+	focusLine?: number | undefined;
+	onFocusHandled?: (() => void) | undefined;
+	workspaceId?: string | undefined;
+	editable?: boolean | undefined;
+	onChange?: ((value: string) => void) | undefined;
+	onSave?: (() => void) | undefined;
 }) {
 	const fileLineWidth = useAppStore((state) => state.fileLineWidth);
 	const fileLineWidthBounded = useAppStore((state) => state.fileLineWidthBounded);
-	const stopThemeWatchRef = useRef<(() => void) | null>(null);
-	const menuIconsRef = useRef<{ dispose(): void } | null>(null);
-	const detachRef = useRef<(() => void) | null>(null);
-	const threadsRef = useRef<ReturnType<typeof attachReviewThreads> | null>(null);
-	const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
-	const decorationsRef = useRef<string[]>([]);
-	const reviewRef = useRef(review);
-	reviewRef.current = review;
-
-	const syncThreads = useCallback((target: EditorReview) => {
-		if (!editorRef.current) return;
-		threadsRef.current?.setThreads(target.threads);
-		decorationsRef.current = applyReviewDecorations(
-			editorRef.current,
-			decorationsRef.current,
-			target.threads,
-		);
-	}, []);
-
-	const onMount: OnMount = (codeEditor, m) => {
-		stopThemeWatchRef.current = watchThemeSwap(m, EDITOR_THEME);
-		editorRef.current = codeEditor;
-		menuIconsRef.current = decorateEditorContextMenus(codeEditor);
-		if (review) {
-			detachRef.current = attachReviewCommenting(codeEditor, {
-				onSave: (s, t) => reviewRef.current?.commenting.onSave(s, t) ?? Promise.resolve(),
-				onSend: (s, t) => reviewRef.current?.commenting.onSend(s, t) ?? Promise.resolve(),
-			});
-			threadsRef.current = attachReviewThreads(codeEditor, {
-				onSendComment: (id) => reviewRef.current?.actions.onSendComment(id) ?? Promise.resolve(),
-				onDeleteComment: (id) =>
-					reviewRef.current?.actions.onDeleteComment(id) ?? Promise.resolve(),
-				onUpdateComment: (id, body) =>
-					reviewRef.current?.actions.onUpdateComment(id, body) ?? Promise.resolve(),
-			});
-			syncThreads(review);
-			const focus = reviewRef.current?.focus;
-			if (focus) {
-				codeEditor.revealLineInCenter(focus.line);
-				reviewRef.current?.onFocusHandled();
-			}
-		}
-	};
-
-	useEffect(() => {
-		if (review) syncThreads(review);
-	}, [review, syncThreads]);
-
-	useEffect(() => {
-		if (!review?.focus || !editorRef.current) return;
-		editorRef.current.revealLineInCenter(review.focus.line);
-		review.onFocusHandled();
-	}, [review]);
-
-	useEffect(
-		() => () => {
-			stopThemeWatchRef.current?.();
-			menuIconsRef.current?.dispose();
-			detachRef.current?.();
-			threadsRef.current?.dispose();
-		},
-		[],
-	);
+	const editorGpu = useAppStore((state) => state.editorGpuRendering);
+	const ligatures = useAppStore((state) => state.codeFontLigatures);
 
 	return (
-		<MonacoReact
-			height="100%"
+		<KitMonacoEditor
 			path={path}
-			value={content}
-			theme={EDITOR_THEME}
-			beforeMount={beforeMount}
-			onMount={onMount}
+			content={content}
+			{...(review ? { review } : {})}
+			{...(focusLine !== undefined ? { focusLine } : {})}
+			{...(onFocusHandled ? { onFocusHandled } : {})}
+			{...(workspaceId !== undefined ? { workspaceId } : {})}
+			{...(editable !== undefined ? { editable } : {})}
+			{...(onChange ? { onChange } : {})}
+			{...(onSave ? { onSave } : {})}
+			lineWidth={fileLineWidth}
+			lineWidthBounded={fileLineWidthBounded}
+			gpuRendering={editorGpu}
+			ligatures={ligatures}
 			loading={<LoadingRegion rows={12} className="h-full w-full p-12" />}
-			options={sharedEditorOptions(fileLineWidth, fileLineWidthBounded)}
+			onSelectionChange={(change: EditorSelectionChange) => {
+				const {
+					workspaceId: ws,
+					path: p,
+					startLine,
+					startColumn,
+					endLine,
+					endColumn,
+					text,
+				} = change;
+				useAppStore
+					.getState()
+					.setEditorSelection(
+						ws,
+						change.empty ? null : { text, startLine, endLine, language: change.language, path: p },
+					);
+				const ref = findEditorRef(ws, p);
+				if (ref) {
+					emitEditorEvent({
+						kind: "selection",
+						editor: ref,
+						selection: change.empty ? null : { startLine, startColumn, endLine, endColumn, text },
+					});
+				}
+			}}
+			onSendToChat={(change: EditorSelectionChange) => {
+				useAppStore.getState().detachEditorSelection(change.workspaceId);
+				void sendSelectionToChat(change);
+			}}
+			onClose={(ws, p) => {
+				useAppStore.getState().setEditorSelection(ws, null);
+				reportIdeDocumentClosed(ws, p);
+			}}
 		/>
 	);
 }

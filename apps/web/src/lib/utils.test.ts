@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import {
+	absoluteWorkspacePath,
 	cssColorToHex,
 	hasPlatformModifier,
 	isAbsolutePath,
@@ -12,6 +13,7 @@ import {
 	projectRelativePath,
 	shallowEqualArrays,
 	stripFrontmatter,
+	supportsDevicePixelBox,
 	tupleKey,
 } from "./utils";
 
@@ -152,6 +154,16 @@ test("projectRelativePath yields the worktree-relative tab identity from every r
 	expect(projectRelativePath("/wt/ws/src/foo.ts")).toBe("/wt/ws/src/foo.ts");
 });
 
+test("absoluteWorkspacePath preserves the host root and already absolute paths", () => {
+	expect(absoluteWorkspacePath("/worktree", "docs/file.md")).toBe("/worktree/docs/file.md");
+	expect(absoluteWorkspacePath("/", "docs/file.md")).toBe("/docs/file.md");
+	expect(absoluteWorkspacePath("C:\\worktree\\", "docs\\file.md")).toBe(
+		"C:\\worktree\\docs\\file.md",
+	);
+	expect(absoluteWorkspacePath("C:\\worktree", "docs/file.md")).toBe("C:\\worktree\\docs\\file.md");
+	expect(absoluteWorkspacePath("/worktree", "/elsewhere/file.md")).toBe("/elsewhere/file.md");
+});
+
 test("isAbsolutePath accepts posix and Windows roots, in either separator style", () => {
 	expect(isAbsolutePath("/wt/src/foo.ts")).toBe(true);
 	expect(isAbsolutePath("C:/wt/foo.ts")).toBe(true);
@@ -171,4 +183,14 @@ test("shallowEqualArrays compares element-wise and treats absent as unequal", ()
 	expect(shallowEqualArrays([Number.NaN], [Number.NaN])).toBe(true);
 	expect(shallowEqualArrays(undefined, [])).toBe(false);
 	expect(shallowEqualArrays(undefined, undefined)).toBe(true);
+});
+
+test("the device-pixel box is a feature to ask about, not to assume", () => {
+	expect(supportsDevicePixelBox(() => undefined)).toBe(true);
+	// WebKit throws on the box value rather than ignoring it, which is the whole point of asking.
+	expect(
+		supportsDevicePixelBox(() => {
+			throw new TypeError("device-pixel-content-box");
+		}),
+	).toBe(false);
 });

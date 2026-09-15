@@ -1,9 +1,9 @@
 import { RiChatNewLine as MessageSquarePlus } from "@remixicon/react";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import type { LineSelection } from "@/panels/reviewGutter";
+import type { ReviewCommentingCallbacks } from "@/panels/reviewWidgets";
 import { mapPreviewSelection } from "./previewAnchor";
-import type { LineSelection } from "./reviewGutter";
-import type { ReviewCommentingCallbacks } from "./reviewWidgets";
 import { markReviewRegions, stampedSelectionLines } from "./sourceLines";
 import type { EditorReview } from "./useReviewCommenting";
 

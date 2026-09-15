@@ -1,5 +1,5 @@
 import type { GitDiffScope, ReviewAnchor, ReviewComment } from "@thinkrail/contracts";
-import type { ReviewThreadData } from "./reviewWidgets";
+import type { ReviewThreadData } from "@/panels/reviewWidgets";
 
 export type ReviewSurface = { kind: "file" } | { kind: "diff"; scope?: GitDiffScope };
 
@@ -62,12 +62,6 @@ export function statusLabel(
 		if (comment.anchorState === "outdated") return `${comment.status} · outdated`;
 	}
 	return comment.status;
-}
-
-export function threadLabel(t: Pick<ReviewThreadData, "status" | "anchorState" | "stale">): string {
-	if (t.stale) return `${t.status} · stale`;
-	if (t.anchorState === "outdated") return `${t.status} · outdated`;
-	return t.status;
 }
 
 export type ReviewFlag = "draft" | "sent";

@@ -5,6 +5,7 @@
 @import "./styles/generated/spacing.css";
 @import "./styles/tokens.css";
 @import "./styles/global.css";
+@import "./styles/tooltip.css";
 
 /*
  * Map the ThinkRail design tokens (tokens.css) onto Tailwind's theme namespaces. `inline` makes the
@@ -46,6 +47,7 @@
 	--spacing-topbar-row: var(--topbar-row-height);
 	--spacing-window-chrome-inset-left: var(--window-chrome-inset-left, 0px);
 	--spacing-window-chrome-inset-right: var(--window-chrome-inset-right, 0px);
+	--spacing-window-corner: var(--window-corner);
 
 	/* A block appearing in place (e.g. the ask-question card's atomic reveal once its args are final). */
 	--animate-reveal: reveal 150ms ease-out;
@@ -102,6 +104,24 @@
 	app-region: no-drag;
 }
 
+/* Selection belongs to content, not to chrome. A drag that starts in a document used to sweep up tab
+   labels, chips, toolbars and rails on its way, so one copy carried the interface along with the text.
+   The workbench is therefore unselectable by default and content opts back in: the editor, the terminal,
+   both prose skins, form fields, and anything that marks itself `data-selectable`. See shell/SPEC.md. */
+body {
+	user-select: none;
+}
+input,
+textarea,
+[contenteditable="true"],
+[data-selectable],
+.xterm,
+.monaco-editor,
+.tr-prose-doc,
+.tr-prose-chat {
+	user-select: text;
+}
+
 /* Review Monaco surfaces (panels/reviewGutter.ts + reviewWidgets.ts): commented-line decorations, the
    floating comment icon, and the inline composer. Plain-DOM widgets inside Monaco's layers — styled
    here from the live theme tokens, so every theme wears them. */
@@ -143,12 +163,21 @@
 .review-add-icon:hover {
 	background: var(--control-bg-hovered);
 }
-/* The rendered preview's ::selection: translucent (the muted alpha step of the theme's selection),
-   because Chrome paints a multi-block selection wall-to-wall — with the theme's OPAQUE selection over
-   the near-black canvas, the unselected remainder of the focus line read as a black hole punched in
-   the wash. Monaco never shows this (it paints its own selection), so only the preview needs it. */
+/* The rendered preview's ::selection: the muted alpha step of the theme's selection, because Chrome
+   paints a multi-block selection wall-to-wall and the full-strength selection over the near-black canvas
+   left the unselected remainder of the focus line reading as a black hole punched in the wash. The step
+   is applied on top of whatever alpha the palette already carries, so a theme owes it enough opacity to
+   survive that (styles/selectionVisibility.test.ts). Monaco never shows this — it paints its own
+   selection — so only the preview needs it. */
 [data-testid="markdown-preview"] ::selection {
 	background: var(--selection-bg-muted);
+}
+
+::highlight(thinkrail-find) {
+	background: var(--selection-bg-muted);
+}
+::highlight(thinkrail-find-current) {
+	background: var(--selection-bg);
 }
 
 /* The rendered preview's floating icon (the React twin of Monaco's content widget): its position is a
@@ -375,6 +404,25 @@
 	box-shadow: inset 2px 0 0 var(--text-subtle);
 	padding-left: 10px;
 	margin-left: -10px;
+}
+
+/* Where a search hit landed in a rendered document. A flash, not a mark: it has to survive long enough
+   to be found on a screen that just scrolled, then get out of the way — a wash that stayed would read
+   as a selection, which is the mistake `.review-region` above exists to avoid. */
+.source-landing {
+	animation: source-landing 2.4s ease-out;
+	border-radius: var(--radius-sm);
+}
+@keyframes source-landing {
+	0%,
+	40% {
+		background-color: var(--color-primary-subtle);
+		box-shadow: 0 0 0 6px var(--color-primary-subtle);
+	}
+	100% {
+		background-color: transparent;
+		box-shadow: 0 0 0 6px transparent;
+	}
 }
 
 .custom-icon {

@@ -15,6 +15,7 @@ import {
 	type Workspace,
 } from "@thinkrail/contracts";
 import {
+	type EditorSelection,
 	isAbsolutePath,
 	type LayoutAttention,
 	layoutResourceIdentity,
@@ -389,6 +390,20 @@ export function selectAttentionCenterTab(
 	return find(document.center);
 }
 
+/** The file selected in the focused center group, if that resource is file-backed. */
+export function selectAttentionCenterFilePath(state: LayoutAttentionState, workspaceId: string): string | null {
+	const tab = selectAttentionCenterTab(state, workspaceId);
+	if (!tab) return null;
+	switch (tab.kind) {
+		case "file":
+		case "external-file":
+		case "diff":
+			return tab.path;
+		default:
+			return null;
+	}
+}
+
 export function selectAttentionCenterResourceCacheKey(
 	state: CenterResourceCacheState,
 	workspaceId: string,
@@ -430,6 +445,12 @@ export function isDefaultWorkspace(workspace: Pick<Workspace, "kind">): boolean 
 
 export function isExternalWorkspace(workspace: Pick<Workspace, "kind">): boolean {
 	return workspace.kind === "external";
+}
+
+export function workspaceBranchLabel(workspace: Pick<Workspace, "kind" | "branch">): string {
+	return workspace.branch === "HEAD" && !isDefaultWorkspace(workspace)
+		? "detached HEAD"
+		: workspace.branch;
 }
 
 export function isUserOwnedWorkspace(workspace: Pick<Workspace, "kind">): boolean {
@@ -688,6 +709,17 @@ export function selectLastOpenChatSession(
 		if (tab?.kind === "chat" && tab.sessionId) return tab.sessionId;
 	}
 	return null;
+}
+
+/** The highlight the chat would carry: present only while the user has not taken it back off. */
+export function selectAttachedEditorSelection(
+	state: {
+		editorSelectionByWorkspace: Record<string, { selection: EditorSelection; attached: boolean }>;
+	},
+	workspaceId: string,
+): EditorSelection | null {
+	const held = state.editorSelectionByWorkspace[workspaceId];
+	return held?.attached ? held.selection : null;
 }
 
 export function selectReviewDraftCount(

@@ -1,7 +1,12 @@
 import type { ReactNode } from "react";
 import type { Components } from "react-markdown";
-import { getTransport } from "../transport";
+import { remarkHeadingIds } from "@/panels/headingIds";
+import { useAppStore } from "../store";
+import { worktreeFileUrl } from "./filesUrl";
 import { openFileInTab } from "./openTabs";
+import { specLinkTarget } from "./specDocument";
+
+export { remarkHeadingIds };
 
 export type HrefKind = "empty" | "anchor" | "external" | "relative";
 
@@ -45,42 +50,6 @@ function relativePathname(href: string): string {
 	return i < 0 ? href : href.slice(0, i);
 }
 
-function encodePath(path: string): string {
-	return path.split("/").map(encodeURIComponent).join("/");
-}
-
-interface MdNode {
-	type: string;
-	value?: string;
-	children?: MdNode[];
-	data?: { hProperties?: Record<string, unknown> };
-}
-
-function headingText(node: MdNode): string {
-	if (typeof node.value === "string") return node.value;
-	return (node.children ?? []).map(headingText).join("");
-}
-
-export function remarkHeadingIds() {
-	return (tree: MdNode): void => {
-		const seen = new Map<string, number>();
-		walk(tree, (node) => {
-			if (node.type !== "heading") return;
-			const base = slugify(headingText(node));
-			if (!base) return;
-			const n = seen.get(base) ?? 0;
-			seen.set(base, n + 1);
-			const id = n === 0 ? base : `${base}-${n}`;
-			node.data = { ...node.data, hProperties: { ...node.data?.hProperties, id } };
-		});
-	};
-}
-
-function walk(node: MdNode, visit: (n: MdNode) => void): void {
-	visit(node);
-	for (const child of node.children ?? []) walk(child, visit);
-}
-
 function scrollToAnchor(id: string): void {
 	document
 		.getElementById(decodeURIComponent(id))
@@ -101,6 +70,28 @@ export function documentComponents(ctx: { workspaceId: string; path: string }): 
 				>
 					{children}
 				</a>
+			);
+		}
+		const spec = specLinkTarget(href ?? "");
+		if (spec !== null) {
+			const path = useAppStore
+				.getState()
+				.specsByWorkspace[ctx.workspaceId]?.find((entry) => entry.id === spec)?.path;
+			return (
+				<button
+					type="button"
+					data-testid="markdown-spec-link"
+					data-spec-id={spec}
+					data-path={path ?? undefined}
+					disabled={!path}
+					title={path ? undefined : `No spec in this workspace has the id ${spec}`}
+					onClick={() => {
+						if (path) void openFileInTab(ctx.workspaceId, path, "preview");
+					}}
+					className="cursor-pointer text-left text-primary underline decoration-primary-muted underline-offset-2 hover:decoration-primary disabled:cursor-default disabled:text-text-subtle disabled:no-underline"
+				>
+					{children}
+				</button>
 			);
 		}
 		if (kind === "relative" && href) {
@@ -130,9 +121,10 @@ export function documentComponents(ctx: { workspaceId: string; path: string }): 
 	function DocumentImage({ src, alt, title }: { src?: string; alt?: string; title?: string }) {
 		const isRelative = classifyHref(src) === "relative" && src !== undefined;
 		const target = isRelative ? resolveRelativePath(ctx.path, relativePathname(src)) : null;
+		// One place builds a worktree file URL; the PDF preview reads the same one. See panels/SPEC.md.
 		const resolved = isRelative
 			? target
-				? `${getTransport().httpBase()}/files/${encodeURIComponent(ctx.workspaceId)}/${encodePath(target)}`
+				? worktreeFileUrl(ctx.workspaceId, target)
 				: undefined
 			: src;
 		return <img src={resolved} alt={alt ?? ""} title={title} />;

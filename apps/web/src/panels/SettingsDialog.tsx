@@ -16,7 +16,7 @@ import {
 	RiTextWrap as TextWrap,
 } from "@remixicon/react";
 import { DEFAULT_MODEL_PROTOCOL_VERSION } from "@thinkrail/contracts";
-import type { ReactNode } from "react";
+import type { ComponentType, ReactNode } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib";
 import { SettingsSection, useAppStore } from "@/store";
@@ -32,10 +32,12 @@ import { ReviewSettings } from "./ReviewSettings";
 import { TemplatesSettings } from "./TemplatesSettings";
 import { TerminalSettings } from "./TerminalSettings";
 
-const SECTIONS: {
+type SectionIcon = ComponentType<{ className?: string | undefined }>;
+
+const CORE_SECTIONS: {
 	id: SettingsSection;
 	label: string;
-	icon: LucideIcon;
+	icon: SectionIcon;
 	requiresInjectedContent?: true;
 	requiresProtocolVersion?: number;
 }[] = [
@@ -65,6 +67,20 @@ const SECTIONS: {
 ];
 const SOON: { label: string; icon: LucideIcon }[] = [{ label: "General", icon: SlidersHorizontal }];
 
+const CORE_CONTENT: Partial<Record<SettingsSection, () => ReactNode>> = {
+	[SettingsSection.Providers]: () => <ProvidersSettings />,
+	[SettingsSection.Models]: () => <ModelsSettings />,
+	[SettingsSection.Github]: () => <GithubSettings />,
+	[SettingsSection.LineWidth]: () => <LineWidthSettings />,
+	[SettingsSection.Chat]: () => <ChatSettings />,
+	[SettingsSection.Terminal]: () => <TerminalSettings />,
+	[SettingsSection.Templates]: () => <TemplatesSettings />,
+	[SettingsSection.Review]: () => <ReviewSettings />,
+	[SettingsSection.Privacy]: () => <PrivacySettings />,
+	[SettingsSection.Feedback]: () => <FeedbackSettings />,
+	[SettingsSection.Appearance]: () => <AppearanceSettings />,
+};
+
 export function SettingsDialog({
 	layoutSettings,
 	updateSettings,
@@ -75,12 +91,14 @@ export function SettingsDialog({
 	const open = useAppStore((s) => s.settingsOpen);
 	const section = useAppStore((s) => s.settingsSection);
 	const protocolVersion = useAppStore((s) => s.protocolVersion);
-	const sections = SECTIONS.filter(
-		(candidate) =>
-			(!candidate.requiresInjectedContent || updateSettings !== undefined) &&
-			(candidate.requiresProtocolVersion === undefined ||
-				(protocolVersion !== null && protocolVersion >= candidate.requiresProtocolVersion)),
-	);
+	const sections = [
+		...CORE_SECTIONS.filter(
+			(candidate) =>
+				(!candidate.requiresInjectedContent || updateSettings !== undefined) &&
+				(candidate.requiresProtocolVersion === undefined ||
+					(protocolVersion !== null && protocolVersion >= candidate.requiresProtocolVersion)),
+		),
+	];
 	const selectedSection = sections.some((candidate) => candidate.id === section)
 		? section
 		: SettingsSection.Appearance;
@@ -149,33 +167,11 @@ export function SettingsDialog({
 					</nav>
 
 					<div className="min-h-0 flex-1 overflow-y-auto p-16">
-						{selectedSection === SettingsSection.Providers ? (
-							<ProvidersSettings />
-						) : selectedSection === SettingsSection.Models ? (
-							<ModelsSettings />
-						) : selectedSection === SettingsSection.Github ? (
-							<GithubSettings />
-						) : selectedSection === SettingsSection.LineWidth ? (
-							<LineWidthSettings />
-						) : selectedSection === SettingsSection.Chat ? (
-							<ChatSettings />
-						) : selectedSection === SettingsSection.Layout ? (
-							layoutSettings
-						) : selectedSection === SettingsSection.Updates && updateSettings !== undefined ? (
-							updateSettings
-						) : selectedSection === SettingsSection.Terminal ? (
-							<TerminalSettings />
-						) : selectedSection === SettingsSection.Templates ? (
-							<TemplatesSettings />
-						) : selectedSection === SettingsSection.Review ? (
-							<ReviewSettings />
-						) : selectedSection === SettingsSection.Privacy ? (
-							<PrivacySettings />
-						) : selectedSection === SettingsSection.Feedback ? (
-							<FeedbackSettings />
-						) : (
-							<AppearanceSettings />
-						)}
+						{selectedSection === SettingsSection.Layout
+							? layoutSettings
+							: selectedSection === SettingsSection.Updates && updateSettings !== undefined
+								? updateSettings
+								: (CORE_CONTENT[selectedSection]?.() ?? null)}
 					</div>
 				</div>
 			</DialogContent>

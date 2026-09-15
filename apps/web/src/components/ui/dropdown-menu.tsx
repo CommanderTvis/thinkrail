@@ -1,8 +1,8 @@
 import * as DropdownMenuPrimitive from "@radix-ui/react-dropdown-menu";
 import { RiArrowRightSLine as ChevronRight } from "@remixicon/react";
 import type * as React from "react";
-import { cn } from "@/lib";
-import { menuContentClass, menuItemClass, menuSeparatorClass } from "./menu-styles";
+import { menuContentClass, menuItemClass, menuSeparatorClass } from "@/components/ui/menu-styles";
+import { cn } from "@/lib/cn";
 
 const DropdownMenu = DropdownMenuPrimitive.Root;
 const DropdownMenuTrigger = DropdownMenuPrimitive.Trigger;

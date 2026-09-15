@@ -27,6 +27,7 @@ import {
 	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { IconTooltip } from "@/components/ui/tooltip";
 import { AskStatesContext, deriveAskStates } from "../chat/askState";
 import { type ChatActions, ChatActionsContext } from "../chat/ChatActions";
 import { Markdown } from "../chat/Markdown";
@@ -58,7 +59,6 @@ import { StatusIcon } from "../chat/TodoList";
 import { AskUserQuestionCard } from "../chat/tools/AskUserQuestionCard";
 import { hydrateSessionRuntime, useChatTodos } from "../chat/useChatTodos";
 import { LoadingRegion } from "../components/Skeleton";
-import { IconTooltip } from "../components/ui/tooltip";
 import { isShellInert } from "../lib";
 import {
 	selectAgentReviewCommentCount,

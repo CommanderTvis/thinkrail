@@ -28,3 +28,32 @@ test("shows files and compacts single-directory runs in the Files tree", async (
 	await expect(folderRows.filter({ hasText: /^here$/ })).toBeVisible();
 	await expect(leaf).toBeVisible();
 });
+
+test("file and compacted folder menus copy their host absolute paths", async ({
+	page,
+	context,
+}) => {
+	await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+	await openFixtureProject(page);
+	const workspace = await createWorkspaceViaDialog(page);
+	mkdirSync(join(workspace.worktreePath, "compact", "only", "here"), { recursive: true });
+	await page.getByTestId("tab-files").click();
+
+	const readme = page.getByTestId("file-node").filter({ hasText: /^README\.md$/ });
+	await readme.click({ button: "right" });
+	await page.getByTestId("file-node-copy-path").click();
+	await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe("README.md");
+	await readme.click({ button: "right" });
+	await page.getByTestId("file-node-copy-absolute-path").click();
+	await expect
+		.poll(() => page.evaluate(() => navigator.clipboard.readText()))
+		.toBe(join(workspace.worktreePath, "README.md"));
+
+	const folder = page.getByTestId("file-node").filter({ hasText: /^compact\/only\/here$/ });
+	await expect(folder).toBeVisible();
+	await folder.click({ button: "right" });
+	await page.getByTestId("file-node-copy-absolute-path").click();
+	await expect
+		.poll(() => page.evaluate(() => navigator.clipboard.readText()))
+		.toBe(join(workspace.worktreePath, "compact", "only", "here"));
+});

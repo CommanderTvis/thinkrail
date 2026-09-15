@@ -227,3 +227,7 @@ test("chat resources introduce scoped reads and cancellation, never browser comm
 	expect(WS_METHODS.subagentStopAll).toBe("subagent.stopAll");
 	expect(Object.values(WS_METHODS)).not.toContain("backgroundCommand.start");
 });
+
+test("this fork's own additive methods sit above every version upstream has taken", () => {
+	expect(PROTOCOL_VERSION).toBe(72);
+});

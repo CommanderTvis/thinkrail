@@ -932,6 +932,9 @@ own section. The kebab menu (`plan-menu`, a
   `@xterm/*`) loaded via `import()`.
 - **Forbidden:** `server`/`shared`/`pi`; importing `shell`; reaching across unrelated panels.
 
+File rows offer both worktree-relative **Copy path** and host **Copy absolute path** in their context
+menu. A compacted folder copies the deepest represented directory for the absolute action.
+
 ## Get right
 
 - **Workbench tab chrome is not a feature panel.** The shell layout module supplies one selected-tab

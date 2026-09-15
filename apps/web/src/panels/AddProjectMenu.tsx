@@ -1,7 +1,8 @@
 import {
 	RiEditLine as Edit,
 	RiFolderLine as Folder,
-	RiGlobalLine as Globe,
+	RiFolderAddLine as FolderPlus,
+	RiGitRepositoryLine as GitRepository,
 } from "@remixicon/react";
 import type { Project } from "@thinkrail/contracts";
 import type { ReactNode } from "react";
@@ -14,25 +15,35 @@ import {
 	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { IconTooltip } from "@/components/ui/tooltip";
+import { hostWording } from "@/lib/desktopShell";
 
 export function AddProjectMenu({
 	recentProjects,
 	onOpen,
 	onEnterHostPath,
+	onNew,
+	onClone,
 	onOpenRecent,
 	align = "end",
+	tooltip,
 	children,
 }: {
 	recentProjects: Project[];
 	onOpen: () => void;
 	onEnterHostPath: () => void;
+	onNew: () => void;
+	onClone: () => void;
 	onOpenRecent: (path: string) => void;
 	align?: "start" | "center" | "end";
+	/** Rendered around the trigger, never between it and the button — see panels/SPEC.md. */
+	tooltip?: string;
 	children: ReactNode;
 }) {
+	const trigger = <DropdownMenuTrigger asChild>{children}</DropdownMenuTrigger>;
 	return (
 		<DropdownMenu>
-			<DropdownMenuTrigger asChild>{children}</DropdownMenuTrigger>
+			{tooltip ? <IconTooltip label={tooltip}>{trigger}</IconTooltip> : trigger}
 			<DropdownMenuContent align={align}>
 				<DropdownMenuItem data-testid="menu-open-project" onSelect={() => onOpen()}>
 					<Folder />
@@ -40,11 +51,15 @@ export function AddProjectMenu({
 				</DropdownMenuItem>
 				<DropdownMenuItem data-testid="menu-enter-host-path" onSelect={() => onEnterHostPath()}>
 					<Edit />
-					<span>Enter host path…</span>
+					<span>{hostWording("Enter host path…", "Enter a path…")}</span>
 				</DropdownMenuItem>
-				<DropdownMenuItem disabled>
-					<Globe />
-					<span>Open GitHub project</span>
+				<DropdownMenuItem data-testid="menu-new-project" onSelect={() => onNew()}>
+					<FolderPlus />
+					<span>New project</span>
+				</DropdownMenuItem>
+				<DropdownMenuItem data-testid="menu-clone-project" onSelect={() => onClone()}>
+					<GitRepository />
+					<span>Clone repository…</span>
 				</DropdownMenuItem>
 				{recentProjects.length > 0 && (
 					<>
