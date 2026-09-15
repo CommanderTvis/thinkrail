@@ -9,6 +9,7 @@ export type {
 	ResourceContent,
 	ResourceDescriptor,
 	ResourceDiffProps,
+	ResourceEdit,
 	ResourceEnvironment,
 	ResourceIntent,
 	ResourceRenderer,

@@ -3,6 +3,7 @@ import { diffArrays } from "diff";
 import { createElement, type ReactNode, useEffect, useMemo, useState } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { ResourceDiffProps } from "@/resources";
+import { FrontmatterProperties } from "./FrontmatterProperties";
 import { MarkdownDocument } from "./MarkdownPreview";
 import { focusSegments } from "./renderedDiffFocus";
 import { useScrollViewState } from "./useScrollViewState";
@@ -54,6 +55,16 @@ function hasMark(element: Element): boolean {
 function parseRoot(html: string): Element {
 	const body = new DOMParser().parseFromString(html, "text/html").body;
 	return (body.children.length === 1 ? body.firstElementChild : null) ?? body;
+}
+
+const PROPERTIES_BLOCK = ':scope > [data-testid="frontmatter-properties"]';
+
+function splitDocument(root: Element): { properties: Element | null; body: Element } {
+	const properties = root.querySelector(PROPERTIES_BLOCK);
+	const body = properties
+		? Array.from(root.children).find((child) => child !== properties)
+		: undefined;
+	return { properties, body: body ?? root };
 }
 
 function* units(root: Element): Generator<Element> {
@@ -245,6 +256,15 @@ function Placeholder({ testid, children }: { testid: string; children: string })
 	);
 }
 
+function renderSide(content: string, workspaceId: string, path: string): string {
+	return renderToStaticMarkup(
+		<>
+			<FrontmatterProperties content={content} />
+			<MarkdownDocument content={content} workspaceId={workspaceId} path={path} />
+		</>,
+	);
+}
+
 export default function RenderedDiff({
 	resource,
 	original,
@@ -256,30 +276,26 @@ export default function RenderedDiff({
 	const modifiedText = modified.kind === "text" ? modified.text : "";
 	const [before, after] = useMemo(
 		() => [
-			renderToStaticMarkup(
-				<MarkdownDocument
-					content={originalText}
-					workspaceId={resource.workspaceId}
-					path={resource.path}
-				/>,
-			),
-			renderToStaticMarkup(
-				<MarkdownDocument
-					content={modifiedText}
-					workspaceId={resource.workspaceId}
-					path={resource.path}
-				/>,
-			),
+			renderSide(originalText, resource.workspaceId, resource.path),
+			renderSide(modifiedText, resource.workspaceId, resource.path),
 		],
 		[originalText, modifiedText, resource.workspaceId, resource.path],
 	);
 	const merge = useHtmldiffMerge(before, after);
 	const view = useMemo(() => {
 		if (merge.state !== "done") return null;
-		const root = parseRoot(merge.html);
-		const changedSet = changedUnits(root, parseRoot(merge.before));
+		const merged = splitDocument(parseRoot(merge.html));
+		const before = splitDocument(parseRoot(merge.before));
+		const root = merged.body;
+		const changedSet = changedUnits(root, before.body);
 		const changed: Changed = (element) => changedSet.has(element);
-		return { root, changed, empty: !Array.from(root.children).some(changed) };
+		const propertiesChanged = merged.properties?.outerHTML !== before.properties?.outerHTML;
+		return {
+			root,
+			properties: merged.properties,
+			changed,
+			empty: !propertiesChanged && !Array.from(root.children).some(changed),
+		};
 	}, [merge]);
 	const { attach: attachScroller } = useScrollViewState<HTMLDivElement>(viewState, onViewState);
 
@@ -307,6 +323,9 @@ export default function RenderedDiff({
 				</p>
 			) : null}
 			<article className={`mx-auto max-w-[78ch] px-24 py-16 ${DIFF_MARKS}`}>
+				{view.properties ? (
+					<Block element={view.properties} ordinal={undefined} changed={view.changed} />
+				) : null}
 				<div className={view.root.getAttribute("class") ?? undefined}>
 					<FocusedChildren parent={view.root} unit="blocks" changed={view.changed} />
 				</div>

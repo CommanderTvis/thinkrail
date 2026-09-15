@@ -1,6 +1,5 @@
 import { expect, test } from "bun:test";
-import type { TranscriptMessage } from "@thinkrail/contracts";
-import { ASK_USER_ANSWERS_CUSTOM_TYPE } from "@thinkrail/contracts";
+import { ASK_USER_ANSWERS_CUSTOM_TYPE, type TranscriptMessage } from "@thinkrail/contracts";
 import { messagesToRuntime } from "./hydrate";
 import { readRunDetails } from "./tools/subagent/runDetails";
 

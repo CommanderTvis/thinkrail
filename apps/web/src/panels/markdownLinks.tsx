@@ -1,8 +1,13 @@
 import type { ReactNode } from "react";
 import type { Components } from "react-markdown";
+import { remarkHeadingIds } from "@/panels/headingIds";
+import { useAppStore } from "../store";
 import { DOCUMENT_ID_PREFIX } from "./markdownHtml";
 import { openFileInTab } from "./openTabs";
 import { resourceBytesUrl } from "./resourcePane";
+import { specLinkTarget } from "./specDocument";
+
+export { remarkHeadingIds };
 
 export type HrefKind = "empty" | "anchor" | "external" | "relative";
 
@@ -44,38 +49,6 @@ export function slugify(text: string): string {
 function relativePathname(href: string): string {
 	const i = href.search(/[?#]/);
 	return i < 0 ? href : href.slice(0, i);
-}
-
-interface MdNode {
-	type: string;
-	value?: string;
-	children?: MdNode[];
-	data?: { hProperties?: Record<string, unknown> };
-}
-
-function headingText(node: MdNode): string {
-	if (typeof node.value === "string") return node.value;
-	return (node.children ?? []).map(headingText).join("");
-}
-
-export function remarkHeadingIds() {
-	return (tree: MdNode): void => {
-		const seen = new Map<string, number>();
-		walk(tree, (node) => {
-			if (node.type !== "heading") return;
-			const base = slugify(headingText(node));
-			if (!base) return;
-			const n = seen.get(base) ?? 0;
-			seen.set(base, n + 1);
-			const id = n === 0 ? base : `${base}-${n}`;
-			node.data = { ...node.data, hProperties: { ...node.data?.hProperties, id } };
-		});
-	};
-}
-
-function walk(node: MdNode, visit: (n: MdNode) => void): void {
-	visit(node);
-	for (const child of node.children ?? []) walk(child, visit);
 }
 
 function scrollToAnchor(id: string): void {
@@ -135,6 +108,28 @@ export function documentComponents(
 				>
 					{children}
 				</a>
+			);
+		}
+		const spec = specLinkTarget(href ?? "");
+		if (spec !== null) {
+			const path = useAppStore
+				.getState()
+				.specsByWorkspace[ctx.workspaceId]?.find((entry) => entry.id === spec)?.path;
+			return (
+				<button
+					type="button"
+					data-testid="markdown-spec-link"
+					data-spec-id={spec}
+					data-path={path ?? undefined}
+					disabled={!path}
+					title={path ? undefined : `No spec in this workspace has the id ${spec}`}
+					onClick={() => {
+						if (path) void openFileInTab(ctx.workspaceId, path, "preview");
+					}}
+					className="cursor-pointer text-left text-primary underline decoration-primary-muted underline-offset-2 hover:decoration-primary disabled:cursor-default disabled:text-text-subtle disabled:no-underline"
+				>
+					{children}
+				</button>
 			);
 		}
 		if (kind === "relative" && href) {

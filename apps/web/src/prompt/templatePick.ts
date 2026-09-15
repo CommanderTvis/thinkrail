@@ -1,7 +1,6 @@
 import type { Template } from "@thinkrail/contracts";
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { ParsedTemplate } from "./slotSession";
-import { parseTemplateSlots } from "./slotSession";
+import { type ParsedTemplate, parseTemplateSlots } from "./slotSession";
 import { stripFrontmatter } from "./templateText";
 
 export function shouldApplyTemplatePick(pick: {

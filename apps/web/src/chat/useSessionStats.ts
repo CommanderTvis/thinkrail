@@ -1,7 +1,6 @@
 import type { SessionStats } from "@thinkrail/contracts";
 import { useCallback, useEffect, useRef } from "react";
-import type { SessionRuntime } from "../store";
-import { isConnectedGeneration, useAppStore } from "../store";
+import { isConnectedGeneration, type SessionRuntime, useAppStore } from "../store";
 import { type ConnectionStatus, getTransport } from "../transport";
 
 interface SessionStatsRefreshState {

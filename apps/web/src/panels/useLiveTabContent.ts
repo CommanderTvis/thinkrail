@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef } from "react";
 import { selectWorkspaceTick, useAppStore } from "../store";
+import { watchWorkspaceForLiveContent } from "../transport";
 import { createLatestOperation, type LatestOperation } from "./latestOperation";
 
 export function useLiveTabContent<T>(
@@ -13,6 +14,12 @@ export function useLiveTabContent<T>(
 	loadedKey?: string,
 ) {
 	const change = useAppStore((s) => s.fsChangesByWorkspace[tab.workspaceId]);
+
+	// A tab on screen promising fresh content is a reason to watch its workspace for real — the rail's
+	// prewarm watch is evictable, and an evicted one is a tab that quietly stops tracking its file.
+	useEffect(() => {
+		void watchWorkspaceForLiveContent(tab.workspaceId).catch(() => {});
+	}, [tab.workspaceId]);
 	const opsRef = useRef(ops);
 	const tabRef = useRef(tab);
 	opsRef.current = ops;

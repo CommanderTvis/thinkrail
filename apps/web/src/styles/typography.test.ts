@@ -2,22 +2,7 @@ import { describe, expect, it } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { normalizeEol } from "../../scripts/generatedFiles";
-import type { Style, StyleRef, Typography } from "../../scripts/typography";
-import {
-	allStyles,
-	GENERATED_PATH,
-	isCodeStyleId,
-	isRef,
-	loadTypography,
-	PROSE_SELECTORS,
-	proseRootClassName,
-	rawStyle,
-	renderCss,
-	resolveFamily,
-	resolveStyle,
-	styleClassName,
-	validate,
-} from "../../scripts/typography";
+import { allStyles, GENERATED_PATH, isCodeStyleId, isRef, loadTypography, PROSE_SELECTORS, proseRootClassName, rawStyle, renderCss, resolveFamily, resolveStyle, type Style, styleClassName, type StyleRef, type Typography, validate } from "../../scripts/typography";
 
 const typography = loadTypography();
 const SRC = new URL("..", import.meta.url).pathname;

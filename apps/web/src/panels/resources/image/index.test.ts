@@ -1,6 +1,10 @@
 import { expect, test } from "bun:test";
-import type { ResourceRenderer, ReviewThread } from "@/resources";
-import { registerResourceRenderer, resolveRenderers } from "@/resources";
+import {
+	type ResourceRenderer,
+	type ReviewThread,
+	registerResourceRenderer,
+	resolveRenderers,
+} from "@/resources";
 import { placedRegionThreadIds } from "../regionReview";
 import { imageRenderer } from ".";
 import {

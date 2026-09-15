@@ -1,7 +1,9 @@
 import { useEffect, useInsertionEffect, useRef } from "react";
-import { hasPlatformModifier } from "../lib";
+import { hasPlatformModifier, isMacOS } from "../lib";
 import { selectHistoryTarget, useAppStore } from "../store";
 import { hasLayer, isInTerminal, MODAL_LAYER_SELECTOR } from "./shortcutLayers";
+
+const MONACO_ROOT_SELECTOR = ".monaco-editor";
 
 type GlobalHotkeyActions = {
 	onProjects: () => void;
@@ -9,7 +11,36 @@ type GlobalHotkeyActions = {
 	onBottom?: () => void;
 	onNewWorkspace?: () => void;
 	onSessionSwitcher?: () => void;
+	onFind: () => void;
+	onSearch?: () => void;
 };
+
+export function isFindChord(event: PanelHotkeyEvent, platform?: string): boolean {
+	return (
+		event.code === "KeyF" &&
+		!event.altKey &&
+		!event.shiftKey &&
+		hasPlatformModifier(event, platform)
+	);
+}
+
+export function isSearchChord(event: PanelHotkeyEvent, platform?: string): boolean {
+	return (
+		event.code === "KeyF" && !event.altKey && event.shiftKey && hasPlatformModifier(event, platform)
+	);
+}
+
+/** ⌘, is macOS's own Preferences chord, so it exists there and nowhere else — see shell/SPEC.md. */
+export function isSettingsChord(event: PanelHotkeyEvent, platform?: string): boolean {
+	return (
+		event.code === "Comma" &&
+		event.metaKey &&
+		!event.ctrlKey &&
+		!event.altKey &&
+		!event.shiftKey &&
+		isMacOS(platform)
+	);
+}
 
 type GlobalHotkeyCommand =
 	| "projects"
@@ -30,6 +61,7 @@ type GlobalHotkeyEvent = Pick<
 	KeyboardEvent,
 	"altKey" | "code" | "ctrlKey" | "metaKey" | "shiftKey"
 >;
+type PanelHotkeyEvent = GlobalHotkeyEvent;
 
 export function globalHotkeyCommand(
 	event: GlobalHotkeyEvent,
@@ -50,6 +82,10 @@ export function globalHotkeyCommand(
 
 function hasOpenModal(): boolean {
 	return hasLayer(globalThis.document, MODAL_LAYER_SELECTOR);
+}
+
+function isInMonaco(target: EventTarget | null): boolean {
+	return target instanceof Element && target.closest(MONACO_ROOT_SELECTOR) !== null;
 }
 
 export function useGlobalHotkeys(actions: GlobalHotkeyActions): void {
@@ -81,6 +117,31 @@ export function useGlobalHotkeys(actions: GlobalHotkeyActions): void {
 					else if (command === "session-switcher") actionsRef.current.onSessionSwitcher?.();
 					else actionsRef.current.onNewWorkspace?.();
 				}
+				return;
+			}
+
+			if (isSettingsChord(event) && !hasOpenModal()) {
+				event.preventDefault();
+				event.stopPropagation();
+				// The pane it last showed, the way a Preferences window comes back where it was left.
+				if (!event.repeat) {
+					const state = useAppStore.getState();
+					state.openSettings(state.settingsSection);
+				}
+				return;
+			}
+
+			if (isSearchChord(event) && actionsRef.current.onSearch && !hasOpenModal()) {
+				event.preventDefault();
+				event.stopPropagation();
+				if (!event.repeat) actionsRef.current.onSearch();
+				return;
+			}
+
+			if (isFindChord(event) && !hasOpenModal() && !isInMonaco(event.target)) {
+				event.preventDefault();
+				event.stopPropagation();
+				if (!event.repeat) actionsRef.current.onFind();
 				return;
 			}
 

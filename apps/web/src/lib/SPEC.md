@@ -43,6 +43,11 @@ not this module; the theme-aware highlighter remains app-local.
   (plain-http remote access) or a denied permission has no clipboard, and every caller's answer is the same
   — do nothing loud, the text stays visible/selectable), **`randomId()`** (16 random bytes through
   `getRandomValues`, which remains available to a plain-HTTP remote client),
+  **`zoomGesture.ts`** — what a zoom *gesture* is and where it leaves the scale
+  (`isZoomGesture`, `zoomScaleForWheel`, `clampZoomScale`, and the min/max/step constants): macOS
+  delivers a trackpad pinch as a ctrlKey wheel event, and the step has to follow the delta's *size* or a
+  pinch leaps. Shared by the PDF preview and the diagram pan/zoom, since two surfaces disagreeing about
+  what a pinch means is a bug the user feels in their fingers. Also
   **`DOUBLE_CLICK_SETTLE_MS`** (the one click→double-click arbitration window shared by cached and
   host-read tab opens), **`mcpState.ts`** (the MCP server-state vocabulary — `MCP_STATE_LABEL`,
   `mcpStateTone` (a connected server reporting zero tools warns), `mcpStatusLabel` / `mcpToolCountLabel`,
@@ -84,6 +89,8 @@ not this module; the theme-aware highlighter remains app-local.
   drive-rooted containment compares path/root case-insensitively while preserving the candidate's casing),
   `shallowEqualArrays`, `userText`, `isShellInert` (a value made only of characters that stay literal in POSIX, PowerShell,
   and cmd, so it may be interpolated into a command a human copies and runs), `parseSkillInvocation`, `matchesSkillInvocationCommand`,
+  `shellQuotePath`, `FILE_DRAG_TYPE`, `startFileDrag`,
+  `carriesFileDrag`, `draggedFile`, the `DraggedFile` type, `mergeText`, `hasConflictMarkers`,
   `relativeTime`, `platformShortcutLabel`, `hasPlatformModifier`, `platformFamily`, `copyText`, `randomId`,
   `MCP_STATE_LABEL`, `mcpStateTone`, `mcpStatusLabel`, `mcpToolCountLabel`, `isMcpAttentionState`,
   `isMcpActiveState`, the `McpStateTone` type,

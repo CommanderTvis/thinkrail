@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { globalHotkeyCommand } from "./useGlobalHotkeys";
+import { globalHotkeyCommand, isFindChord, isSettingsChord } from "./useGlobalHotkeys";
 
 const key = (
 	code: string,

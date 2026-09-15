@@ -1,5 +1,11 @@
-import type { HostPlatform, TerminalWindowsShell } from "@thinkrail/contracts";
-import { WINDOWS_SHELL_SETTINGS_PROTOCOL_VERSION } from "@thinkrail/contracts";
+import { RiCheckLine as Check } from "@remixicon/react";
+import {
+	type HostPlatform,
+	TERMINAL_REPLAY_KB,
+	type TerminalWindowsShell,
+	WINDOWS_SHELL_SETTINGS_PROTOCOL_VERSION,
+} from "@thinkrail/contracts";
+import { cn } from "@thinkrail/ui/utils";
 import { toast, useAppStore } from "@/store";
 import { getTransport } from "@/transport";
 import { SegmentedControl, type SegmentedControlOption } from "./SegmentedControl";

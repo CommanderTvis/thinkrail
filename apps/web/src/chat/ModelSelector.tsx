@@ -64,6 +64,7 @@ export function ModelSelector({
 	onSelectDefault,
 	disabled = false,
 	preferences,
+	showLabel = true,
 }: {
 	models: WireModel[];
 	current: WireModel | null;
@@ -77,6 +78,7 @@ export function ModelSelector({
 	onSelectDefault?: () => void;
 	disabled?: boolean;
 	preferences?: ModelPreferences;
+	showLabel?: boolean;
 }) {
 	const [open, setOpen] = useState(false);
 	const [query, setQuery] = useState("");
@@ -192,6 +194,7 @@ export function ModelSelector({
 					className,
 				)}
 			>
+				{showLabel ? <span className="tr-text-eyebrow text-text-muted">Model</span> : null}
 				<span className="truncate text-text-muted tr-text-metadata">
 					{current?.name ?? (placeholder || "Select model")}
 				</span>
