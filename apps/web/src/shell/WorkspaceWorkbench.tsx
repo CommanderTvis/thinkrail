@@ -31,7 +31,6 @@ import { FilePane } from "../panels/FilePane";
 import { FileTree } from "../panels/FileTree";
 import { isFileTabDirty } from "../panels/fileSave";
 import { openFileInTab } from "../panels/openTabs";
-import { ProjectTree } from "../panels/ProjectTree";
 import "../panels/resources/register";
 import { ReviewPanel, selectActiveReviewedPath } from "../panels/ReviewPanel";
 import { reviewFlags } from "../panels/reviewModel";
@@ -80,6 +79,7 @@ import {
 	type LayoutToolId,
 	type PreparedLayoutClose,
 	selectTab,
+	VERTICAL_TABS_WIDTH,
 	Workbench,
 	type WorkspaceLayoutDocument,
 } from "./layout";
@@ -92,6 +92,7 @@ import {
 	workspaceProjectionReference,
 } from "./layoutState";
 import { syncLegacySelectionFromAttention, useLegacySelectionAdapter } from "./legacySelection";
+import { ProjectsTool } from "./ProjectsTool";
 import { useTerminalPlacementReconciliation } from "./terminalReconciliation";
 import { useReportedActiveFile } from "./useReportedActiveFile";
 import { WorkspaceChatHistory } from "./WorkspaceChatHistory";
@@ -307,6 +308,30 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 		(state) => state.layoutProjectionEpochByWorkspace[workspaceId] ?? 0,
 	);
 	const layoutPreferences = useAppStore((state) => state.localLayoutPreferences);
+	useReportedActiveFile(workspaceId);
+	const verticalWidthTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+	useEffect(
+		() => () => {
+			if (verticalWidthTimer.current) clearTimeout(verticalWidthTimer.current);
+		},
+		[],
+	);
+	const persistVerticalTabsWidth = useCallback(
+		(width: number) => {
+			const clamped = Math.min(
+				VERTICAL_TABS_WIDTH.max,
+				Math.max(VERTICAL_TABS_WIDTH.min, Math.round(width)),
+			);
+			if (clamped === layoutPreferences.verticalCenterTabsWidth) return;
+			if (verticalWidthTimer.current) clearTimeout(verticalWidthTimer.current);
+			verticalWidthTimer.current = setTimeout(() => {
+				useAppStore
+					.getState()
+					.setLocalLayoutPreferences({ ...layoutPreferences, verticalCenterTabsWidth: clamped });
+			}, 400);
+		},
+		[layoutPreferences],
+	);
 	const workspace = useAppStore((state) => selectWorkspaceById(state, workspaceId));
 	const vcsGap = workspace?.vcs;
 	const unofferedTools = vcsGap ? GIT_TOOLS : NO_UNOFFERED_TOOLS;
@@ -624,7 +649,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 					className="h-full"
 					viewportClassName="p-panel-inset"
 				>
-					<ProjectTree />
+					<ProjectsTool activeWorkspaceId={workspaceId} />
 				</QuietScrollArea>
 			),
 			specs: (
@@ -784,6 +809,11 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 				attention={rendered.attention}
 				maxSideGroups={layoutPreferences.maxSideGroups}
 				maxBottomGroups={layoutPreferences.maxBottomGroups}
+				verticalCenterTabs={layoutPreferences.verticalCenterTabs}
+				verticalCenterTabsWidth={layoutPreferences.verticalCenterTabsWidth}
+				verticalTabsInProjects={layoutPreferences.verticalTabsInProjects}
+				onVerticalCenterTabsWidthChange={persistVerticalTabsWidth}
+				defaultPaneDirection={layoutPreferences.defaultPaneDirection}
 				projectionEpoch={projectionEpoch}
 				{...(focusRequest ? { focusRequest } : {})}
 				subscribeCloseRequest={subscribeCloseRequest}
