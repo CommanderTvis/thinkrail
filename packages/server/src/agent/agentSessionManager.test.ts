@@ -56,6 +56,7 @@ import {
 	removeSession,
 	removeWorkspaceSessions,
 	setActivityProjectResolver,
+	setDefaultModel,
 	setSessionActivityPublisher,
 	setSessionCreatedPublisher,
 	setSessionDeletedPublisher,
@@ -714,6 +715,72 @@ test("model.default names NO model when the pinned one is unavailable", async ()
 	);
 	try {
 		expect((await getDefaultModel()).model).toBeNull();
+	} finally {
+		rmSync(settingsPath, { force: true });
+	}
+});
+
+test("model.setDefault persists default provider, model, and thinking level, and clears when reset", async () => {
+	const agentDir = process.env.PI_CODING_AGENT_DIR;
+	if (!agentDir) throw new Error("agent dir not isolated");
+	const settingsPath = join(agentDir, "settings.json");
+	try {
+		const models = await listAvailableModels();
+		const target = models.find((m) => m.provider === "fauxa" && m.id === "fauxa");
+		if (!target) throw new Error("fauxa not available");
+
+		const updated = await setDefaultModel({ model: target, thinkingLevel: "high" });
+		expect(updated.model?.id).toBe("fauxa");
+		expect(updated.model?.provider).toBe("fauxa");
+		// fauxa only supports ["off"], so thinking level is clamped to "off"
+		expect(updated.thinkingLevel).toBe("off");
+
+		const read = await getDefaultModel();
+		expect(read.model?.id).toBe("fauxa");
+		expect(read.thinkingLevel).toBe("off");
+
+		// Resetting default unsets both
+		const reset = await setDefaultModel({ model: null, thinkingLevel: null });
+		expect(reset.model).toBeNull();
+
+		const readAfterReset = await getDefaultModel();
+		expect(readAfterReset.model).toBeNull();
+	} finally {
+		rmSync(settingsPath, { force: true });
+	}
+});
+
+test("model.setDefault rejects an unknown or unavailable model", async () => {
+	await expect(
+		setDefaultModel({
+			model: {
+				id: "nonexistent",
+				name: "Nonexistent",
+				provider: "fauxa",
+				contextWindow: 1000,
+				reasoning: false,
+				thinkingLevels: [],
+			},
+		}),
+	).rejects.toThrow("Unknown or unavailable model");
+});
+
+test("new sessions created without explicit model adopt the setDefaultModel configured defaults", async () => {
+	const agentDir = process.env.PI_CODING_AGENT_DIR;
+	if (!agentDir) throw new Error("agent dir not isolated");
+	const settingsPath = join(agentDir, "settings.json");
+	try {
+		const models = await listAvailableModels();
+		const target = models.find((m) => m.provider === "fauxa" && m.id === "fauxa");
+		if (!target) throw new Error("fauxa not available");
+
+		await setDefaultModel({ model: target, thinkingLevel: "off" });
+
+		const cwd = tmpCwd("trpi-defaultmodel-session-");
+		const session = await createSession({ cwd, workspaceId: "ws-defaultmodel" });
+		expect(session.model?.id).toBe("fauxa");
+		expect(session.model?.provider).toBe("fauxa");
+		expect(session.thinkingLevel).toBe("off");
 	} finally {
 		rmSync(settingsPath, { force: true });
 	}

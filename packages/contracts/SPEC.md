@@ -423,7 +423,7 @@ of the host.
   **`complete`**, whether that pass settled inside the host's capped wait, since only a settled list is
   authoritative; `force` bypasses pi's 4h freshness throttle, so a user-initiated refresh actually fetches) / **`model.clampThinking`** (pi's
   `clampThinkingLevel` for a `{model, level}` pair — the pre-session picker's effort adjustment, so no
-  client re-derives pi's policy) / **`provider.status`**
+  client re-derives pi's policy) / `model.default` + **`model.setDefault`** (read and update pi's configured default provider, model, and thinking level) / **`provider.status`**
 (the auth-provider status report; every read revalidates host-side) / the **`provider.*` in-app login**
   (**`loginStart`** — mints a `loginId` and runs pi's login flow **detached** (`type` `"oauth"` |
   `"api_key"`, issue #97 — both auth routes ride one channel; a flow can take minutes and must

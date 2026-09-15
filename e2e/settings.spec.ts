@@ -51,3 +51,28 @@ test("macOS opens settings with its own Preferences chord, and other platforms d
 	await page.keyboard.press("Meta+Comma");
 	await expect(page.getByTestId("settings-terminal")).toBeVisible();
 });
+
+test("Chat settings displays Default model section with model selector and effort selector", async ({
+	page,
+}) => {
+	await page.goto("/");
+	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
+
+	await page.getByTestId("open-settings").click();
+	const dialog = page.getByTestId("settings-dialog");
+	await expect(dialog).toBeVisible();
+
+	await page.getByTestId("settings-nav-chat").click();
+	await expect(page.getByTestId("settings-chat")).toBeVisible();
+	await expect(page.getByTestId("settings-default-model")).toBeVisible();
+	await expect(page.getByTestId("settings-default-model")).toContainText("Default model");
+	await expect(
+		page.getByTestId("settings-default-model").getByTestId("model-selector"),
+	).toBeVisible();
+	await expect(
+		page.getByTestId("settings-default-model").getByTestId("thinking-selector"),
+	).toBeVisible();
+
+	await page.keyboard.press("Escape");
+	await expect(dialog).toBeHidden();
+});

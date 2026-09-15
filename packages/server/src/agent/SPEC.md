@@ -284,7 +284,8 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     pair — `model.clampThinking`; the host owns it so the pre-session picker, `getDefaultModel`, and a live
     session all adjust effort identically) / `getDefaultModel` (the **pinned** default only — pi's settings
     `defaultProvider`/`defaultModel` when that model is available, else `model: null` — plus the effort that
-    pairs with it). **The host never guesses a pre-session model:** pi's own resolver (settings pin →
+    pairs with it) / **`setDefaultModel`** (persists default provider, model, and thinking level to pi's
+    `settings.json` via `SettingsManager`, unsetting on null). **The host never guesses a pre-session model:** pi's own resolver (settings pin →
     provider default → first available) runs inside `createAgentSession`, so a caller without a pinned
     default omits `model` and lets pi choose, and every creation path agrees by construction. The earlier
     `pinned ?? available[0]` was a *second* resolver: with nothing pinned it answered `available[0]` while a

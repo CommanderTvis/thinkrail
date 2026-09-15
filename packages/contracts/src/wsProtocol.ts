@@ -238,6 +238,7 @@ export const WS_METHODS = {
 	modelList: "model.list",
 	modelRefresh: "model.refresh",
 	modelDefault: "model.default",
+	modelSetDefault: "model.setDefault",
 	modelClampThinking: "model.clampThinking",
 	providerStatus: "provider.status",
 	providerLoginStart: "provider.loginStart",
@@ -583,6 +584,10 @@ export interface WsMethodMap {
 	"model.refresh": { params: { force?: boolean }; result: RefreshedModels };
 	"model.default": {
 		params: Record<string, never>;
+		result: { model: WireModel | null; thinkingLevel: ThinkingLevel };
+	};
+	"model.setDefault": {
+		params: { model?: WireModel | null; thinkingLevel?: ThinkingLevel | null };
 		result: { model: WireModel | null; thinkingLevel: ThinkingLevel };
 	};
 	"provider.status": { params: Record<string, never>; result: ProviderStatusReport };

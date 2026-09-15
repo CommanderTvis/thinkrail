@@ -54,6 +54,8 @@ import {
 	removeSession,
 	removeWorkspaceSessions,
 	resolveExtUi,
+	type SetDefaultModelInput,
+	setDefaultModel,
 	setSessionModel,
 	setSessionThinkingLevel,
 	steerSession,
@@ -809,6 +811,10 @@ const handlers: Record<string, Handler> = {
 		return refreshAvailableModels(p.force === true);
 	},
 	"model.default": () => getDefaultModel(),
+	"model.setDefault": (params) => {
+		const p = params as SetDefaultModelInput;
+		return setDefaultModel(p);
+	},
 	"provider.status": () => getProviderStatus(),
 	"provider.loginStart": (params) => {
 		const p = params as { providerId: string; type?: "oauth" | "api_key" };
