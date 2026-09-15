@@ -20,6 +20,8 @@ export interface Project {
 	acknowledgedSkills?: string[];
 	disabledSkills?: string[];
 	disabledGroups?: string[];
+	/** `false` for a plain folder ThinkRail opened without a git repo; absent/`true` otherwise. */
+	hasGit?: boolean;
 }
 
 export type ProjectPathStatus = { kind: "repo" | "initable" | "missing" | "notDirectory" };
@@ -43,6 +45,11 @@ export interface Workspace {
 	renamed?: boolean;
 	initialTerminalPending?: true;
 	diffStats?: DiffStats;
+	/**
+	 * Why git can answer nothing here, when it can't: no repository at all, or one with no commits yet.
+	 * Absent for the ordinary case. Live, not stamped — a first commit clears it.
+	 */
+	vcs?: "none" | "unborn";
 	skillOverrides?: Record<string, "on" | "off">;
 	subagentsOverride?: SubagentOverride;
 }
@@ -87,6 +94,14 @@ export interface EditorInfo {
 
 export type WorkspaceSkillChange = "none" | "detected" | "unknown";
 
+/**
+ * The answer to one file write. A write is a compare-and-swap against the content the editor last read,
+ * so "not written" is an ordinary outcome carrying what is on disk now — the client merges from there.
+ */
+export type FileWriteResult =
+	| { written: true; hash: string }
+	| { written: false; disk: { content: string; hash: string } };
+
 export interface WorkspaceFsChangedPayload {
 	workspaceId: string;
 	paths: string[];
@@ -104,21 +119,15 @@ export interface FileNode {
 	children?: FileNode[];
 }
 
-export interface SpecGraphNode {
-	id: string;
-	type: string;
-	title: string;
-	status?: string;
+export interface SearchHit {
 	path: string;
-	parent?: string;
-	dependsOn: string[];
-	references: string[];
-	implements: string[];
-	tags: string[];
+	line: number;
+	text: string;
 }
 
-export interface SpecGraphSnapshot {
-	nodes: SpecGraphNode[];
+export interface SearchHits {
+	hits: SearchHit[];
+	truncated: boolean;
 }
 
 export type TodoStatus = "pending" | "in_progress" | "done";
@@ -289,6 +298,19 @@ export interface BranchList {
 	remote: string[];
 	remoteGroups?: RemoteBranchGroup[];
 	defaultBranch: string;
+	current: string;
+}
+
+/** A local branch with whatever is checked out on it, for the branch list. */
+export interface BranchDetail {
+	branch: string;
+	/** The checkout occupying this branch, absent when nothing has it out. */
+	worktreePath?: string;
+	/** Set when that checkout is a ThinkRail workspace, which is what makes the branch undeletable. */
+	workspaceId?: string;
+	workspaceName?: string;
+	isCurrent: boolean;
+	isDefault: boolean;
 }
 
 export type ProviderAuthKind = "oauth" | "api-key" | "env" | "other";
@@ -438,7 +460,25 @@ export function isSystemThemePair(value: unknown): value is SystemThemePair {
 	);
 }
 
-export type LayoutToolId = "projects" | "specs" | "files" | "changes" | "review";
+export interface SpecGraphNode {
+	id: string;
+	type: string;
+	title: string;
+	status?: string;
+	path: string;
+	parent?: string;
+	dependsOn: string[];
+	references: string[];
+	implements: string[];
+	tags: string[];
+}
+
+export interface SpecGraphSnapshot {
+	nodes: SpecGraphNode[];
+}
+
+export type BuiltinLayoutToolId = "projects" | "specs" | "files" | "changes" | "review";
+export type LayoutToolId = BuiltinLayoutToolId;
 
 export type LayoutBottomAlignment = "center" | "center-left" | "center-right" | "full";
 
@@ -529,12 +569,19 @@ export interface AppConfig extends ThemePreference {
 	jbcentralQuotaRefreshSeconds: number;
 	/** Which shell new workspace terminals start on Windows; ignored on other platforms. */
 	terminalWindowsShell: TerminalWindowsShell;
+	/** Monaco's experimental GPU renderer. Off unless asked for — see panels/SPEC.md. */
+	editorGpuRendering: boolean;
+	/** Font family for every code surface. Empty keeps the bundled one — see panels/SPEC.md. */
+	codeFontFamily: string;
+	/** Render the code font's ligatures where the surface can. */
+	codeFontLigatures: boolean;
 }
 
 /** The `settings.update` payload: `null` clears an optional override back to unset (⇒ the default). */
 export type AppConfigUpdate = Partial<Omit<AppConfig, "reviewModel" | "reviewEffort">> & {
 	reviewModel?: WireModel | null;
 	reviewEffort?: ThinkingLevel | null;
+	/** `null` for a namespace resets it back to `{}`. */
 };
 
 export type InterviewResponse = "book" | "postpone" | "never";
@@ -549,6 +596,14 @@ export function isTerminalWindowsShell(value: unknown): value is TerminalWindows
 }
 
 export const JBCENTRAL_QUOTA_REFRESH_SECONDS = { min: 1, max: 3600, default: 30 } as const;
+
+/**
+ * A font family the browser will accept in a CSS custom property: names and the usual separators only.
+ * Quotes, semicolons and braces are refused so the value cannot close the declaration it lands in.
+ */
+export function isCodeFontFamily(value: unknown): value is string {
+	return typeof value === "string" && value.length <= 120 && /^[\w ,.-]*$/.test(value);
+}
 
 export function isJbcentralQuotaRefreshSeconds(value: unknown): value is number {
 	return (
@@ -566,6 +621,9 @@ export const DEFAULT_CONFIG: AppConfig = {
 	analyticsConsentConfirmed: false,
 	terminalReplayKb: TERMINAL_REPLAY_KB.default,
 	terminalWindowsShell: "auto",
+	editorGpuRendering: false,
+	codeFontFamily: "",
+	codeFontLigatures: false,
 	composerGrowthLimit: "half-chat",
 	chatLineWidth: LINE_WIDTH_COLUMNS.default,
 	fileLineWidth: LINE_WIDTH_COLUMNS.default,

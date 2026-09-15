@@ -29,6 +29,7 @@ import {
 	type LayoutTerminalTab,
 	moveTabToGroup,
 	openCenterTab,
+	openCenterTabBeside,
 	primaryCenterGroupId,
 	reconcileAttention,
 	removeSessionLayoutTabs,
@@ -139,6 +140,8 @@ export function toLayoutTab(tab: EditorTab): LayoutCenterTab | null {
 	switch (tab.kind) {
 		case "file":
 			return { kind: "file", id: tab.id, name: tab.name, path: tab.path };
+		case "external-file":
+			return { kind: "external-file", id: tab.id, name: tab.name, path: tab.path };
 		case "diff":
 			return { kind: "diff", id: tab.id, name: tab.name, path: tab.path, scope: tab.scope };
 		case "chat":
@@ -481,11 +484,13 @@ export function useLayoutIntentProcessing(
 							: shouldAdvanceAcceptedNavigation(attention, requestNavigation),
 					);
 				}
-				requestFocus({
-					key: layoutIntent.id,
-					location,
-					...(result.focusTabId ? { tabId: result.focusTabId } : {}),
-				});
+				if (layoutIntent.kind !== "open" || layoutIntent.focus !== false) {
+					requestFocus({
+						key: layoutIntent.id,
+						location,
+						...(result.focusTabId ? { tabId: result.focusTabId } : {}),
+					});
+				}
 			}
 		}
 		changeAttention(nextAttention);

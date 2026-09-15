@@ -6,9 +6,10 @@ import cssWorker from "monaco-editor/esm/vs/language/css/css.worker?worker";
 import htmlWorker from "monaco-editor/esm/vs/language/html/html.worker?worker";
 import jsonWorker from "monaco-editor/esm/vs/language/json/json.worker?worker";
 import tsWorker from "monaco-editor/esm/vs/language/typescript/ts.worker?worker";
-import { cssColorToHex } from "@/lib";
-import { onThemeSwap } from "../themes";
-import { editorWrappingOptions } from "./editorWrapping";
+import { cssColorToHex, supportsDevicePixelBox } from "@/panels/colorUtils";
+import { cssVar, editorFontSize } from "@/panels/editorFont";
+import { editorWrappingOptions } from "@/panels/editorWrapping";
+import { useThemeSwap as onThemeSwap } from "@/themes/useThemeSwap";
 
 declare global {
 	interface Window {
@@ -45,12 +46,37 @@ export function languageForPath(path: string): string {
 	return id;
 }
 
-function cssVar(name: string): string | undefined {
-	return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || undefined;
+interface WebGpu {
+	requestAdapter(): Promise<unknown>;
 }
 
-export function sharedEditorOptions(lineWidth: number, bounded: boolean) {
-	const fontSize = Number.parseFloat(cssVar("--tr-font-size-s11") ?? "") || 11;
+let webgpuUsable = false;
+void (async () => {
+	const gpu = (navigator as Navigator & { gpu?: WebGpu }).gpu;
+	if (!gpu) return;
+	try {
+		webgpuUsable = (await gpu.requestAdapter()) !== null;
+	} catch {
+		webgpuUsable = false;
+	}
+})();
+
+const devicePixelBoxUsable = supportsDevicePixelBox((options) =>
+	new ResizeObserver(() => {}).observe(document.createElement("div"), options),
+);
+
+/** Monaco's GPU renderer, only where everything it needs answers — see panels/SPEC.md. */
+export function gpuAcceleration(requested: boolean): "on" | "off" {
+	return requested && webgpuUsable && devicePixelBoxUsable ? "on" : "off";
+}
+
+export function sharedEditorOptions(
+	lineWidth: number,
+	bounded: boolean,
+	gpu = false,
+	ligatures = false,
+) {
+	const fontSize = editorFontSize();
 	const lineHeight = Number.parseFloat(cssVar("--tr-line-height-default") ?? "") || undefined;
 	return {
 		readOnly: true,
@@ -60,6 +86,13 @@ export function sharedEditorOptions(lineWidth: number, bounded: boolean) {
 		automaticLayout: true,
 		fontSize,
 		fontFamily: cssVar("--tr-font-family-code") ?? "monospace",
+		// Cyrillic prose is not a homoglyph attack: flagging every с and о makes non-Latin documents
+		// unreadable, and this editor's files are the user's own worktree, not untrusted paste.
+		unicodeHighlight: { ambiguousCharacters: false },
+		// `#130` in a comment is an issue number, not a colour swatch. See panels/SPEC.md.
+		colorDecorators: false,
+		experimentalGpuAcceleration: gpuAcceleration(gpu),
+		fontLigatures: ligatures,
 		...(lineHeight && lineHeight > 0 ? { lineHeight } : {}),
 	} as const;
 }

@@ -1,17 +1,19 @@
 import {
 	RiArrowRightSLine as ChevronRight,
 	RiCircleLine as Circle,
-	RiGitBranchLine as GitBranch,
 	RiCircleFill,
 	RiSettings3Line as Settings,
 } from "@remixicon/react";
 import { useEffect, useRef, useState } from "react";
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
+import { IconTooltip } from "@/components/ui/tooltip";
+import { applyCodeFont } from "@/panels/editorFont";
 import { QuietScrollArea } from "../components/QuietScrollArea";
-import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "../components/ui/resizable";
-import { IconTooltip } from "../components/ui/tooltip";
 import { AnalyticsConsentDialog } from "../panels/AnalyticsConsentDialog";
+import { BranchList } from "../panels/BranchList";
 import { InterviewPromptDialog } from "../panels/InterviewPromptDialog";
 import { ProjectTree } from "../panels/ProjectTree";
+import { SearchOverlay } from "../panels/SearchOverlay";
 import { SettingsDialog } from "../panels/SettingsDialog";
 import { Toaster } from "../panels/Toaster";
 import { openReviewLabel, useOpenBranchReview } from "../panels/useOpenBranchReview";
@@ -23,6 +25,7 @@ import {
 	selectAnalyticsConsentPromptOpen,
 	selectContextProject,
 	useAppStore,
+	workspaceBranchLabel,
 } from "../store";
 import {
 	applyThemePreference,
@@ -34,6 +37,8 @@ import type { ConnectionStatus } from "../transport";
 import { UpdateReadyButton, UpdateSettings, useUpdates } from "../updates";
 import { BrandLogo } from "./BrandLogo";
 import { CollapsedPanelRail } from "./CollapsedPanelRail";
+import { isDesktopShell, requestWindowZoomToggle } from "./electrobunShell";
+import { FindBar } from "./FindBar";
 import { JbcentralQuotaTopbar } from "./JbcentralQuotaTopbar";
 import { LayoutSettings } from "./LayoutSettings";
 import { useLocalLayoutState } from "./layoutState";
@@ -53,6 +58,9 @@ const STATUS_DOT: Record<ConnectionStatus, string> = {
 	disconnected: "text-feedback-error",
 };
 
+const NON_DRAGGABLE_HEADER =
+	".electrobun-webkit-app-region-no-drag, a, button, input, select, textarea, [role='button'], [role='tab']";
+
 export function Shell() {
 	useLocalLayoutState();
 	const status = useAppStore((s) => s.status);
@@ -64,11 +72,29 @@ export function Shell() {
 	const { review: openReview } = useOpenBranchReview(activeWorkspace, status);
 	const hasActiveWorkspace = activeWorkspaceId != null;
 	const updates = useUpdates();
+	const nativeShell = isDesktopShell();
+	const titleBarRef = useRef<HTMLElement>(null);
+	// Bound natively rather than as a JSX handler: this is a window-chrome gesture, not a control, so the
+	// bar stays a plain landmark to assistive tech instead of taking an interactive role.
+	useEffect(() => {
+		const titleBar = titleBarRef.current;
+		if (!titleBar || !nativeShell) return;
+		const zoomOnDoubleClick = (event: MouseEvent) => {
+			// Mirrors electrobun's own drag-region test: anywhere on the bar except a control.
+			const target = event.target as HTMLElement | null;
+			if (target?.closest(NON_DRAGGABLE_HEADER)) return;
+			requestWindowZoomToggle();
+		};
+		titleBar.addEventListener("dblclick", zoomOnDoubleClick);
+		return () => titleBar.removeEventListener("dblclick", zoomOnDoubleClick);
+	}, [nativeShell]);
 
 	const welcomeCenterRef = useRef<HTMLDivElement>(null);
 	const welcomeProjects = useCollapsibleRegion(welcomeCenterRef, "welcome-left");
 
 	const [themeHint] = useState(readThemeHint);
+	const [findRequest, setFindRequest] = useState(0);
+	const [searchOpen, setSearchOpen] = useState(false);
 	const welcomeGeneration = useAppStore((s) => s.welcomeGeneration);
 	const theme = useAppStore((s) => s.theme);
 	const themeMode = useAppStore((s) => s.themeMode);
@@ -83,7 +109,11 @@ export function Shell() {
 		if (welcomeGeneration > 0) writeThemeHint(preference);
 		return preference.themeMode === "system" ? onSystemAppearanceChange(apply) : undefined;
 	}, [themeHint, welcomeGeneration, theme, themeMode, systemThemePair]);
+	const codeFont = useAppStore((s) => s.codeFontFamily);
+	useEffect(() => applyCodeFont(codeFont), [codeFont]);
 	useGlobalHotkeys({
+		onFind: () => setFindRequest((current) => current + 1),
+		...(activeWorkspaceId ? { onSearch: () => setSearchOpen(true) } : {}),
 		onProjects: hasActiveWorkspace
 			? () => {
 					if (!activeWorkspaceId) return;
@@ -116,7 +146,17 @@ export function Shell() {
 	});
 	return (
 		<div data-testid="shell" className="grid h-full grid-cols-[minmax(0,1fr)] grid-rows-[auto_1fr]">
-			<header className="flex items-center justify-between border-b border-border-default bg-container-header-bg px-16 py-8">
+			{searchOpen && activeWorkspaceId ? (
+				<SearchOverlay workspaceId={activeWorkspaceId} onClose={() => setSearchOpen(false)} />
+			) : null}
+			<header
+				ref={titleBarRef}
+				className={`flex items-center justify-between border-b border-border-default bg-container-header-bg py-8 pr-16 ${
+					nativeShell
+						? "electrobun-webkit-app-region-drag pl-[var(--native-titlebar-inset)]"
+						: "pl-16"
+				}`}
+			>
 				<div className="flex min-w-0 items-center gap-12">
 					<BrandLogo />
 					{contextProject ? (
@@ -139,17 +179,21 @@ export function Shell() {
 							</span>
 							{activeWorkspace ? (
 								<>
-									<GitBranch className="size-14 shrink-0 text-text-muted" />
-									<span data-testid="scope-branch" className="truncate text-text-muted">
-										{activeWorkspace.branch}
-									</span>
+									<BranchList
+										projectId={activeWorkspace.projectId}
+										label={workspaceBranchLabel(activeWorkspace)}
+									/>
 									{isUserOwnedWorkspace(activeWorkspace) ? null : (
-										<span
-											data-testid="scope-base"
-											className="hidden shrink-0 text-text-muted md:inline"
+										<IconTooltip
+											label={`This workspace was cut from ${activeWorkspace.baseBranch}, and its changes are measured against it.`}
 										>
-											· from {activeWorkspace.baseBranch}
-										</span>
+											<span
+												data-testid="scope-base"
+												className="hidden shrink-0 select-none text-text-muted md:inline"
+											>
+												· from {activeWorkspace.baseBranch}
+											</span>
+										</IconTooltip>
 									)}
 									{openReview ? (
 										<span
@@ -173,21 +217,23 @@ export function Shell() {
 						/>
 					) : null}
 					<JbcentralQuotaTopbar />
-					<span
-						data-testid="connection-status"
-						data-status={status}
-						role="status"
-						aria-label={STATUS_LABEL[status]}
-						className="inline-flex items-center gap-8 tr-text-ui text-text-muted"
-					>
-						<StatusDot
-							aria-hidden="true"
-							className={`size-8 shrink-0 fill-current ${STATUS_DOT[status]}`}
-						/>
-						<span aria-hidden="true" className="hidden sm:inline">
-							{STATUS_LABEL[status]}
+					{nativeShell && status === "connected" ? null : (
+						<span
+							data-testid="connection-status"
+							data-status={status}
+							role="status"
+							aria-label={STATUS_LABEL[status]}
+							className="inline-flex items-center gap-8 tr-text-ui text-text-muted"
+						>
+							<StatusDot
+								aria-hidden="true"
+								className={`size-8 shrink-0 fill-current ${STATUS_DOT[status]}`}
+							/>
+							<span aria-hidden="true" className="hidden sm:inline">
+								{STATUS_LABEL[status]}
+							</span>
 						</span>
-					</span>
+					)}
 					<IconTooltip label="Settings">
 						<button
 							type="button"
@@ -281,6 +327,7 @@ export function Shell() {
 				</div>
 			)}
 			{analyticsConsentOpen ? <AnalyticsConsentDialog /> : <InterviewPromptDialog />}
+			{findRequest > 0 ? <FindBar request={findRequest} onClose={() => setFindRequest(0)} /> : null}
 			<Toaster />
 		</div>
 	);

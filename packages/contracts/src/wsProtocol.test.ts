@@ -74,3 +74,7 @@ test("session titles normalize to one bounded non-blank line", () => {
 	expect(normalizeSessionTitle("x".repeat(80))).toBe("x".repeat(80));
 	expect(normalizeSessionTitle("x".repeat(81))).toBeNull();
 });
+
+test("this fork's own additive methods sit above every version upstream has taken", () => {
+	expect(PROTOCOL_VERSION).toBe(66);
+});

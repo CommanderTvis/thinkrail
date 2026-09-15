@@ -38,6 +38,7 @@ import {
 	customMessageText,
 	DEFAULT_CONFIG,
 	isAskUserAnswersMessage,
+	isCodeFontFamily,
 	isControlMessage,
 	isLineWidth,
 	isSubagentCompletionMessage,
@@ -57,6 +58,7 @@ import type {
 	ToolResultState,
 } from "../chat/types";
 import {
+	type EditorSelection,
 	type LayoutAttention,
 	layoutResourceIdentity,
 	matchesSkillInvocationCommand,
@@ -67,6 +69,8 @@ import {
 	tupleKey,
 	userText,
 } from "../lib";
+import type { EditorRef } from "../panels/editorEvents";
+import { emitEditorEvent } from "../panels/editorEvents";
 import type {
 	LayoutAuxiliaryRegion,
 	LayoutToolId,
@@ -101,8 +105,33 @@ export interface FileTab {
 	workspaceId: string;
 	name: string;
 	path: string;
+	/** What is on disk, as last read — the base a save compares against and a merge is cut from. */
 	content: string;
-	view?: "rendered" | "source";
+	hash?: string;
+	/** The buffer, while it differs from `content`. Absent means nothing unsaved. */
+	draft?: string;
+	/** Disk content seen changing under an unsaved buffer; `content` stays the merge base. */
+	external?: { content: string; hash: string };
+	view?: "rendered" | "source" | "split";
+	outlineOpen?: boolean;
+	loadedTick?: number;
+}
+/** Same payload as a FileTab, but addressed by absolute path — see contracts' LayoutExternalFileTab. */
+export interface ExternalFileTab {
+	kind: "external-file";
+	id: string;
+	workspaceId: string;
+	name: string;
+	path: string;
+	/** What is on disk, as last read — the base a save compares against and a merge is cut from. */
+	content: string;
+	hash?: string;
+	/** The buffer, while it differs from `content`. Absent means nothing unsaved. */
+	draft?: string;
+	/** Disk content seen changing under an unsaved buffer; `content` stays the merge base. */
+	external?: { content: string; hash: string };
+	view?: "rendered" | "source" | "split";
+	outlineOpen?: boolean;
 	loadedTick?: number;
 }
 export interface ChatTab {
@@ -134,6 +163,7 @@ export interface DiffTab {
 	modified: string;
 	view?: DiffTabView;
 	rendered?: boolean;
+	outlineOpen?: boolean;
 	ignoreWhitespace?: boolean;
 	loadedTick?: number;
 }
@@ -144,7 +174,17 @@ export interface PlanTab {
 	name: string;
 	sessionId: string;
 }
-export type EditorTab = FileTab | ChatTab | DocTab | DiffTab | PlanTab;
+export type EditorTab = FileTab | ExternalFileTab | ChatTab | DocTab | DiffTab | PlanTab;
+
+export type EmbeddedPaneKind = string;
+export interface EmbeddedPaneEntry {
+	hidden?: Partial<Record<EmbeddedPaneKind, boolean>>;
+	focus?: EmbeddedPaneKind;
+}
+
+export function embeddedHostKey(kind: "terminal" | "chat", id: string): string {
+	return tupleKey("embedded-host", kind, id);
+}
 
 export function chatTabId(workspaceId: string, sessionId: string): string {
 	return tupleKey("chat", workspaceId, sessionId);
@@ -179,6 +219,8 @@ export type TabIntent = "preview" | "keep";
 
 export interface LocalLayoutPreferences {
 	defaultPresetId: string;
+	/** Whether a single click opens a file in the reusable preview slot rather than a tab of its own. */
+	previewTabs: boolean;
 	maxSideGroups: number;
 	maxBottomGroups: number;
 }
@@ -187,10 +229,14 @@ export const DEFAULT_LOCAL_LAYOUT_PREFERENCES: LocalLayoutPreferences = {
 	defaultPresetId: "balanced",
 	maxSideGroups: 6,
 	maxBottomGroups: 3,
+	previewTabs: true,
 };
 
 export interface LocalLayoutStatePayload {
 	frame: WorkbenchFrame;
+	/** Restated only by a project switch; every other layout write leaves both untouched. */
+	framesByProject?: Record<string, WorkbenchFrame>;
+	frameProjectId?: string | null;
 	viewsByWorkspace: Record<string, WorkspaceViewState>;
 	documentsByWorkspace: Record<string, WorkspaceLayoutDocument>;
 	attentionByWorkspace: Record<string, LayoutAttention>;
@@ -216,6 +262,8 @@ export interface LayoutOpenOptions {
 	navigation?: CenterNavigationStamp | null;
 	countNavigation?: boolean;
 	claimPreview?: boolean;
+	/** Leave focus where it is instead of moving it to the tab, for an open that hands the caret on. */
+	focusTab?: boolean;
 }
 
 export type LayoutIntent =
@@ -228,6 +276,7 @@ export type LayoutIntent =
 			targetGroupId?: string;
 			activate?: boolean;
 			claimPreview?: boolean;
+			focus?: boolean;
 			navigation?: CenterNavigationStamp | null;
 			countNavigation?: boolean;
 	  }
@@ -282,7 +331,7 @@ export const SettingsSection = {
 	Privacy: "privacy",
 	Feedback: "feedback",
 } as const;
-export type SettingsSection = (typeof SettingsSection)[keyof typeof SettingsSection];
+export type SettingsSection = string;
 
 export interface WorkspaceActivity {
 	projectId: string;
@@ -304,6 +353,7 @@ export interface TerminalTab {
 	title: string;
 	initialCommand?: string;
 	reservationPending?: true;
+	attachPending?: true;
 }
 
 export interface ClosedChat {
@@ -754,6 +804,8 @@ interface AppState {
 	routeChatTarget: RouteChatTarget | null;
 	routeChatTargetGeneration: number;
 	workbenchFrame: WorkbenchFrame | null;
+	workbenchFramesByProject: Record<string, WorkbenchFrame>;
+	workbenchFrameProjectId: string | null;
 	workspaceViewsByWorkspace: Record<string, WorkspaceViewState>;
 	layoutStateReady: boolean;
 	localLayoutPreferences: LocalLayoutPreferences;
@@ -787,6 +839,9 @@ interface AppState {
 	} | null;
 	chatLocationRequest: ChatLocationRequest | null;
 	historyOpenRequest: { id: string; sessionId: string } | null;
+	composerFocusRequest: { id: string; sessionId: string } | null;
+	/** What the editor has highlighted per workspace, and whether the chat is still carrying it. */
+	editorSelectionByWorkspace: Record<string, { selection: EditorSelection; attached: boolean }>;
 	specRequest: {
 		workspaceId: string;
 		path: string;
@@ -794,7 +849,14 @@ interface AppState {
 	} | null;
 	specsByWorkspace: Record<string, SpecGraphNode[]>;
 	reviewsByWorkspace: Record<string, ReviewSnapshot>;
+	/** Per host resource (terminal tab / chat session): which companions the user closed, and which leads. */
+	embeddedPanes: Record<string, Record<string, EmbeddedPaneEntry>>;
+	terminalInputByWorkspace: Record<string, string>;
 	reviewFocusRequest: { workspaceId: string; commentId: string } | null;
+	fileFocusRequest:
+		| { workspaceId: string; path: string; keyPath: readonly string[] }
+		| { workspaceId: string; path: string; line: number }
+		| null;
 	fsChangesByWorkspace: Record<string, { tick: number; paths: string[]; truncated: boolean }>;
 	skillChangeTickByWorkspace: Record<string, number>;
 	skillsSyncedTickBySession: Record<string, number>;
@@ -812,6 +874,9 @@ interface AppState {
 	jbcentralQuotaRefreshSeconds: number;
 	terminalReplayKb: number;
 	terminalWindowsShell: TerminalWindowsShell;
+	editorGpuRendering: boolean;
+	codeFontFamily: string;
+	codeFontLigatures: boolean;
 	composerGrowthLimit: ComposerGrowthLimit;
 	chatLineWidth: number;
 	fileLineWidth: number;
@@ -886,9 +951,11 @@ interface AppState {
 		preferredGroupId?: string,
 	) => CenterNavigationStamp | null;
 	noteNavigation: (workspaceId: string) => void;
-	setFileTabView: (id: string, view: "rendered" | "source") => void;
+	setFileTabView: (id: string, view: "rendered" | "source" | "split") => void;
+	setFileTabOutline: (id: string, open: boolean) => void;
 	setDiffTabView: (id: string, view: DiffTabView) => void;
 	setDiffTabRendered: (id: string, rendered: boolean) => void;
+	setDiffTabOutline: (id: string, open: boolean) => void;
 	setDiffTabIgnoreWhitespace: (id: string, ignoreWhitespace: boolean) => void;
 	changesView: "list" | "tree";
 	setChangesView: (view: "list" | "tree") => void;
@@ -896,7 +963,22 @@ interface AppState {
 	setDiffScope: (workspaceId: string, scope: GitDiffScope) => void;
 	noteFsChanged: (payload: WorkspaceFsChangedPayload) => void;
 	markSkillsSynced: (sessionId: string, syncedTick: number) => void;
-	updateFileTabContent: (workspaceId: string, id: string, content: string, tick: number) => void;
+	updateFileTabContent: (
+		workspaceId: string,
+		id: string,
+		content: string,
+		hash: string,
+		tick: number,
+	) => void;
+	setFileTabDraft: (workspaceId: string, id: string, draft: string) => void;
+	settleFileTabSave: (workspaceId: string, id: string, content: string, hash: string) => void;
+	applyFileTabMerge: (
+		workspaceId: string,
+		id: string,
+		merged: string,
+		disk: { content: string; hash: string },
+	) => void;
+	discardFileTabDraft: (workspaceId: string, id: string) => void;
 	updateDiffTabContent: (
 		workspaceId: string,
 		id: string,
@@ -918,6 +1000,9 @@ interface AppState {
 	confirmTerminalReservation: (workspaceId: string, tabKey: string) => void;
 	rejectTerminalReservation: (workspaceId: string, tabKey: string) => void;
 	consumeTerminalInitialCommand: (workspaceId: string, tabKey: string) => void;
+	/** A line for a terminal ThinkRail does not own the connection to; its instance flushes it. */
+	queueTerminalInput: (workspaceId: string, tabKey: string, text: string) => void;
+	consumeTerminalInput: (workspaceId: string, tabKey: string) => string | null;
 	closeTerminalTab: (workspaceId: string, tabKey: string, syncLayout?: boolean) => void;
 	setActiveTerminalTab: (workspaceId: string, tabKey: string, syncLayout?: boolean) => void;
 	beginChatStart: (workspaceId: string) => void;
@@ -988,6 +1073,11 @@ interface AppState {
 	setStats: (sessionId: string, stats: SessionStats) => void;
 	setCommands: (sessionId: string, commands: SlashCommandInfo[]) => void;
 	setChatDraft: (sessionId: string, text: string) => void;
+	/** Puts text at the top of a chat's draft, keeping what is already typed, and hands it the caret. */
+	addToChatDraft: (sessionId: string, text: string) => void;
+	clearComposerFocus: () => void;
+	setEditorSelection: (workspaceId: string, selection: EditorSelection | null) => void;
+	detachEditorSelection: (workspaceId: string) => void;
 	clearPendingExtUi: (sessionId: string, id: string) => void;
 	applyExtUi: (request: ExtUiRequest) => void;
 	beginLogin: (loginId: string, providerId: string) => void;
@@ -1016,7 +1106,18 @@ interface AppState {
 	setWorkspaceReview: (workspaceId: string, snapshot: ReviewSnapshot) => void;
 	requestReviewFocus: (workspaceId: string, commentId: string) => void;
 	clearReviewFocus: (commentId?: string) => void;
+	requestFileFocus: (workspaceId: string, path: string, keyPath: readonly string[]) => void;
+	requestFileLineFocus: (workspaceId: string, path: string, line: number) => void;
+	clearFileFocus: (path?: string) => void;
 	applyReviewChanged: (payload: ReviewChangedPayload) => void;
+	setEmbeddedPaneHidden: (
+		workspaceId: string,
+		hostKey: string,
+		kind: EmbeddedPaneKind,
+		hidden: boolean,
+	) => void;
+	/** New content arrived for this host: unhide the kind and let it lead. */
+	focusEmbeddedPane: (workspaceId: string, hostKey: string, kind: EmbeddedPaneKind) => void;
 	pushToast: (toast: Omit<Toast, "id">) => string;
 	dismissToast: (id: string) => void;
 }
@@ -1043,6 +1144,9 @@ function configPatch(config: AppConfig) {
 		jbcentralQuotaRefreshSeconds:
 			config.jbcentralQuotaRefreshSeconds ?? DEFAULT_CONFIG.jbcentralQuotaRefreshSeconds,
 		terminalReplayKb: config.terminalReplayKb,
+		editorGpuRendering: config.editorGpuRendering === true,
+		codeFontFamily: isCodeFontFamily(config.codeFontFamily) ? config.codeFontFamily : "",
+		codeFontLigatures: config.codeFontLigatures === true,
 		terminalWindowsShell: isTerminalWindowsShell(config.terminalWindowsShell)
 			? config.terminalWindowsShell
 			: DEFAULT_CONFIG.terminalWindowsShell,
@@ -1079,6 +1183,17 @@ function withExpandedProject(
 	projectId: string,
 ): Record<string, true> {
 	return record[projectId] ? record : { ...record, [projectId]: true };
+}
+
+function toEditorRef(tab: EditorTab): EditorRef | null {
+	if (tab.kind !== "file" && tab.kind !== "external-file" && tab.kind !== "diff") return null;
+	return {
+		id: tab.id,
+		workspaceId: tab.workspaceId,
+		path: tab.path,
+		kind: tab.kind,
+		dirty: tab.kind === "diff" ? false : tab.draft !== undefined && tab.draft !== tab.content,
+	};
 }
 
 function withWorkspaceSelected(history: string[], workspaceId: string): string[] {
@@ -1126,6 +1241,46 @@ function reconcileProjectNavigation(
 	const currentProjectId = selectActiveWorkspaceProjectId(state) ?? state.selectedProjectId;
 	if (!currentProjectId || projects.some((project) => project.id === currentProjectId)) return {};
 	return { selectedProjectId: projects[0]?.id ?? null, activeWorkspaceId: null };
+}
+
+type EditableFileTab = FileTab | ExternalFileTab;
+
+function isEditableFileTab(tab: EditorTab): tab is EditableFileTab {
+	return tab.kind === "file" || tab.kind === "external-file";
+}
+
+function withoutDraft(tab: EditableFileTab): EditableFileTab {
+	const next = { ...tab };
+	delete next.draft;
+	return next;
+}
+
+function withoutExternal(tab: EditableFileTab): EditableFileTab {
+	const next = { ...tab };
+	delete next.external;
+	return next;
+}
+
+function settled(tab: EditableFileTab): EditableFileTab {
+	return withoutExternal(withoutDraft(tab));
+}
+
+/** Every file-buffer write goes through one place, so no call site can forget the workspace guard. */
+function mapFileTab(
+	state: Pick<AppState, "removedWorkspaceIds" | "tabsByWorkspace">,
+	workspaceId: string,
+	id: string,
+	next: (tab: EditableFileTab) => EditableFileTab,
+): Partial<AppState> {
+	if (state.removedWorkspaceIds[workspaceId]) return {};
+	const tabs = state.tabsByWorkspace[workspaceId] ?? [];
+	if (!tabs.some((tab) => tab.id === id && isEditableFileTab(tab))) return {};
+	return {
+		tabsByWorkspace: {
+			...state.tabsByWorkspace,
+			[workspaceId]: tabs.map((tab) => (tab.id === id && isEditableFileTab(tab) ? next(tab) : tab)),
+		},
+	};
 }
 
 function omitKey<T>(record: Record<string, T>, key: string): Record<string, T> {
@@ -1178,6 +1333,7 @@ function layoutOpenIntentFields(options: LayoutOpenOptions) {
 		...(Object.hasOwn(options, "navigation") ? { navigation: options.navigation } : {}),
 		...(options.countNavigation !== undefined ? { countNavigation: options.countNavigation } : {}),
 		...(options.claimPreview ? { claimPreview: true } : {}),
+		...(options.focusTab === false ? { focus: false } : {}),
 	};
 }
 
@@ -1651,6 +1807,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 	routeChatTarget: null,
 	routeChatTargetGeneration: 0,
 	workbenchFrame: null,
+	workbenchFramesByProject: {},
+	workbenchFrameProjectId: null,
 	workspaceViewsByWorkspace: {},
 	layoutStateReady: false,
 	localLayoutPreferences: { ...DEFAULT_LOCAL_LAYOUT_PREFERENCES },
@@ -1679,11 +1837,16 @@ export const useAppStore = create<AppState>((set, get) => ({
 	specRequest: null,
 	specsByWorkspace: {},
 	reviewsByWorkspace: {},
+	embeddedPanes: {},
+	terminalInputByWorkspace: {},
 	reviewFocusRequest: null,
+	fileFocusRequest: null,
 	changesView: "list",
 	diffScopeByWorkspace: {},
 	chatLocationRequest: null,
 	historyOpenRequest: null,
+	composerFocusRequest: null,
+	editorSelectionByWorkspace: {},
 	fsChangesByWorkspace: {},
 	skillChangeTickByWorkspace: {},
 	skillsSyncedTickBySession: {},
@@ -1701,6 +1864,9 @@ export const useAppStore = create<AppState>((set, get) => ({
 	jbcentralQuotaRefreshSeconds: DEFAULT_CONFIG.jbcentralQuotaRefreshSeconds,
 	terminalReplayKb: DEFAULT_CONFIG.terminalReplayKb,
 	terminalWindowsShell: DEFAULT_CONFIG.terminalWindowsShell,
+	editorGpuRendering: DEFAULT_CONFIG.editorGpuRendering,
+	codeFontFamily: DEFAULT_CONFIG.codeFontFamily,
+	codeFontLigatures: DEFAULT_CONFIG.codeFontLigatures,
 	composerGrowthLimit: DEFAULT_CONFIG.composerGrowthLimit,
 	chatLineWidth: DEFAULT_CONFIG.chatLineWidth,
 	fileLineWidth: DEFAULT_CONFIG.fileLineWidth,
@@ -1830,6 +1996,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 				specsByWorkspace: omitKey(state.specsByWorkspace, workspaceId),
 				diffScopeByWorkspace: omitKey(state.diffScopeByWorkspace, workspaceId),
 				reviewsByWorkspace: omitKey(state.reviewsByWorkspace, workspaceId),
+				embeddedPanes: omitKey(state.embeddedPanes, workspaceId),
 				changesRequest:
 					state.changesRequest?.workspaceId === workspaceId ? null : state.changesRequest,
 				specRequest: state.specRequest?.workspaceId === workspaceId ? null : state.specRequest,
@@ -1843,6 +2010,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 						: state.historyOpenRequest,
 				reviewFocusRequest:
 					state.reviewFocusRequest?.workspaceId === workspaceId ? null : state.reviewFocusRequest,
+				fileFocusRequest:
+					state.fileFocusRequest?.workspaceId === workspaceId ? null : state.fileFocusRequest,
 			};
 		});
 		s.removeWorkspace(projectId, workspaceId);
@@ -1931,6 +2100,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 				? {}
 				: {
 						workbenchFrame: payload.frame,
+						workbenchFramesByProject: payload.framesByProject ?? {},
+						workbenchFrameProjectId: payload.frameProjectId ?? null,
 						workspaceViewsByWorkspace: payload.viewsByWorkspace,
 						layoutDocumentsByWorkspace: payload.documentsByWorkspace,
 						layoutAttentionByWorkspace: payload.attentionByWorkspace,
@@ -1949,6 +2120,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 			}
 			return {
 				workbenchFrame: payload.frame,
+				workbenchFramesByProject: payload.framesByProject ?? state.workbenchFramesByProject,
+				workbenchFrameProjectId: payload.frameProjectId ?? state.workbenchFrameProjectId,
 				workspaceViewsByWorkspace: payload.viewsByWorkspace,
 				layoutDocumentsByWorkspace: payload.documentsByWorkspace,
 				layoutAttentionByWorkspace: payload.attentionByWorkspace,
@@ -2148,7 +2321,13 @@ export const useAppStore = create<AppState>((set, get) => ({
 				activeTabByWorkspace: { ...s.activeTabByWorkspace, [tab.workspaceId]: resolvedTab.id },
 			};
 		}),
-	closeTab: (id, syncLayout = true, countNavigation = true, workspaceId) =>
+	closeTab: (id, syncLayout = true, countNavigation = true, workspaceId) => {
+		const targetWorkspaceId = workspaceId ?? get().activeWorkspaceId;
+		const closed = targetWorkspaceId
+			? (get().tabsByWorkspace[targetWorkspaceId] ?? []).find((t) => t.id === id)
+			: undefined;
+		const editor = closed ? toEditorRef(closed) : null;
+		if (editor) emitEditorEvent({ kind: "closed", editor });
 		set((s) => {
 			const wsId = workspaceId ?? s.activeWorkspaceId;
 			if (!wsId || s.removedWorkspaceIds[wsId]) return {};
@@ -2174,8 +2353,11 @@ export const useAppStore = create<AppState>((set, get) => ({
 					? { previewTabByWorkspace: omitKey(s.previewTabByWorkspace, wsId) }
 					: {}),
 			};
-		}),
-	setActiveTab: (id, intent, syncLayout = true) =>
+		});
+	},
+	setActiveTab: (id, intent, syncLayout = true) => {
+		const activeWorkspaceId = get().activeWorkspaceId;
+		const previousId = activeWorkspaceId ? get().activeTabByWorkspace[activeWorkspaceId] : null;
 		set((s) => {
 			const wsId = s.activeWorkspaceId;
 			if (!wsId) return {};
@@ -2196,7 +2378,13 @@ export const useAppStore = create<AppState>((set, get) => ({
 					? { previewTabByWorkspace: omitKey(s.previewTabByWorkspace, wsId) }
 					: {}),
 			};
-		}),
+		});
+		if (activeWorkspaceId && id !== previousId) {
+			const tab = (get().tabsByWorkspace[activeWorkspaceId] ?? []).find((t) => t.id === id);
+			const editor = tab ? toEditorRef(tab) : null;
+			if (editor) emitEditorEvent({ kind: "activated", editor });
+		}
+	},
 	beginCenterNavigation: (workspaceId, preferredGroupId) => {
 		let stamp: CenterNavigationStamp | null = null;
 		set((s) => {
@@ -2224,8 +2412,24 @@ export const useAppStore = create<AppState>((set, get) => ({
 				},
 			};
 		}),
+	setFileTabOutline: (id, open) =>
+		set((s) => {
+			const wsId = s.activeWorkspaceId;
+			if (!wsId) return {};
+			const tabs = s.tabsByWorkspace[wsId] ?? [];
+			if (!tabs.some((t) => t.id === id && t.kind === "file")) return {};
+			return {
+				tabsByWorkspace: {
+					...s.tabsByWorkspace,
+					[wsId]: tabs.map((t) =>
+						t.id === id && t.kind === "file" ? { ...t, outlineOpen: open } : t,
+					),
+				},
+			};
+		}),
 	setDiffTabView: (id, view) => set((s) => patchDiffTab(s, id, { view })),
 	setDiffTabRendered: (id, rendered) => set((s) => patchDiffTab(s, id, { rendered })),
+	setDiffTabOutline: (id, open) => set((s) => patchDiffTab(s, id, { outlineOpen: open })),
 	setDiffTabIgnoreWhitespace: (id, ignoreWhitespace) =>
 		set((s) => patchDiffTab(s, id, { ignoreWhitespace })),
 	setChangesView: (view) => set({ changesView: view }),
@@ -2264,20 +2468,41 @@ export const useAppStore = create<AppState>((set, get) => ({
 				skillsSyncedTickBySession: { ...s.skillsSyncedTickBySession, [sessionId]: synced },
 			};
 		}),
-	updateFileTabContent: (workspaceId, id, content, tick) =>
-		set((s) => {
-			if (s.removedWorkspaceIds[workspaceId]) return {};
-			const tabs = s.tabsByWorkspace[workspaceId] ?? [];
-			if (!tabs.some((tab) => tab.id === id && tab.kind === "file")) return {};
-			return {
-				tabsByWorkspace: {
-					...s.tabsByWorkspace,
-					[workspaceId]: tabs.map((tab) =>
-						tab.id === id && tab.kind === "file" ? { ...tab, content, loadedTick: tick } : tab,
-					),
-				},
-			};
-		}),
+	updateFileTabContent: (workspaceId, id, content, hash, tick) =>
+		set((s) =>
+			mapFileTab(s, workspaceId, id, (tab) => {
+				// A dirty buffer keeps its base for the merge — see store/SPEC.md.
+				if (tab.draft !== undefined && tab.draft !== tab.content) {
+					return content === tab.content
+						? { ...withoutExternal(tab), loadedTick: tick }
+						: { ...tab, external: { content, hash }, loadedTick: tick };
+				}
+				return { ...settled(tab), content, hash, loadedTick: tick };
+			}),
+		),
+	setFileTabDraft: (workspaceId, id, draft) =>
+		set((s) =>
+			mapFileTab(s, workspaceId, id, (tab) =>
+				draft === tab.content ? withoutDraft(tab) : { ...tab, draft },
+			),
+		),
+	settleFileTabSave: (workspaceId, id, content, hash) =>
+		set((s) => mapFileTab(s, workspaceId, id, (tab) => ({ ...settled(tab), content, hash }))),
+	applyFileTabMerge: (workspaceId, id, merged, disk) =>
+		set((s) =>
+			mapFileTab(s, workspaceId, id, (tab) =>
+				merged === disk.content
+					? { ...settled(tab), content: disk.content, hash: disk.hash }
+					: { ...withoutExternal(tab), content: disk.content, hash: disk.hash, draft: merged },
+			),
+		),
+	discardFileTabDraft: (workspaceId, id) =>
+		set((s) =>
+			mapFileTab(s, workspaceId, id, (tab) => {
+				const disk = tab.external;
+				return disk ? { ...settled(tab), content: disk.content, hash: disk.hash } : settled(tab);
+			}),
+		),
 	updateDiffTabContent: (workspaceId, id, original, modified, tick, loadedTarget) =>
 		set((s) => {
 			if (s.removedWorkspaceIds[workspaceId]) return {};
@@ -2364,6 +2589,21 @@ export const useAppStore = create<AppState>((set, get) => ({
 				activeTerminalByWorkspace: { ...s.activeTerminalByWorkspace, [workspaceId]: tabKey },
 			};
 		}),
+	queueTerminalInput: (workspaceId, tabKey, text) =>
+		set((s) => ({
+			terminalInputByWorkspace: {
+				...s.terminalInputByWorkspace,
+				[tupleKey(workspaceId, tabKey)]: text,
+			},
+		})),
+	consumeTerminalInput: (workspaceId, tabKey) => {
+		const key = tupleKey(workspaceId, tabKey);
+		const text = get().terminalInputByWorkspace[key] ?? null;
+		if (text !== null) {
+			set((s) => ({ terminalInputByWorkspace: omitKey(s.terminalInputByWorkspace, key) }));
+		}
+		return text;
+	},
 	setWorkspaceTerminals: (workspaceId, tabs) =>
 		set((s) => {
 			if (s.removedWorkspaceIds[workspaceId]) return {};
@@ -3052,6 +3292,38 @@ export const useAppStore = create<AppState>((set, get) => ({
 		set((s) => withRuntime(s, sessionId, (rt) => ({ ...rt, commands }))),
 	setChatDraft: (sessionId, draft) =>
 		set((s) => withRuntime(s, sessionId, (rt) => ({ ...rt, draft }))),
+	addToChatDraft: (sessionId, text) =>
+		set((s) => {
+			if (!text.trim()) return {};
+			const runtime = withRuntime(s, sessionId, (rt) => ({
+				...rt,
+				draft: [text, rt.draft ?? ""].filter((part) => part.trim()).join("\n\n"),
+			}));
+			if (runtime.sessions === undefined) return {};
+			return {
+				...runtime,
+				composerFocusRequest: { id: randomId("composer-focus"), sessionId },
+			};
+		}),
+	clearComposerFocus: () => set({ composerFocusRequest: null }),
+	// A fresh highlight is offered to the chat again; only the user (or a send) takes it back off.
+	setEditorSelection: (workspaceId, selection) =>
+		set((s) => ({
+			editorSelectionByWorkspace: selection
+				? { ...s.editorSelectionByWorkspace, [workspaceId]: { selection, attached: true } }
+				: omitKey(s.editorSelectionByWorkspace, workspaceId),
+		})),
+	detachEditorSelection: (workspaceId) =>
+		set((s) => {
+			const held = s.editorSelectionByWorkspace[workspaceId];
+			if (!held?.attached) return {};
+			return {
+				editorSelectionByWorkspace: {
+					...s.editorSelectionByWorkspace,
+					[workspaceId]: { ...held, attached: false },
+				},
+			};
+		}),
 	clearPendingExtUi: (sessionId, id) =>
 		set((s) =>
 			withRuntime(s, sessionId, (rt) => {
@@ -3234,6 +3506,22 @@ export const useAppStore = create<AppState>((set, get) => ({
 				? {}
 				: { reviewFocusRequest: null },
 		),
+	requestFileFocus: (workspaceId, path, keyPath) =>
+		set((state) =>
+			state.removedWorkspaceIds[workspaceId]
+				? {}
+				: { fileFocusRequest: { workspaceId, path, keyPath } },
+		),
+	requestFileLineFocus: (workspaceId, path, line) =>
+		set((state) =>
+			state.removedWorkspaceIds[workspaceId]
+				? {}
+				: { fileFocusRequest: { workspaceId, path, line } },
+		),
+	clearFileFocus: (path) =>
+		set((state) =>
+			path !== undefined && state.fileFocusRequest?.path !== path ? {} : { fileFocusRequest: null },
+		),
 	setWorkspaceReview: (workspaceId, snapshot) =>
 		set((s) =>
 			s.removedWorkspaceIds[workspaceId] ||
@@ -3248,6 +3536,34 @@ export const useAppStore = create<AppState>((set, get) => ({
 			return sameReviewSnapshot(s.reviewsByWorkspace[payload.workspaceId], next)
 				? {}
 				: { reviewsByWorkspace: { ...s.reviewsByWorkspace, [payload.workspaceId]: next } };
+		}),
+	setEmbeddedPaneHidden: (workspaceId, hostKey, kind, hidden) =>
+		set((s) => {
+			const entry = s.embeddedPanes[workspaceId]?.[hostKey] ?? {};
+			const next: EmbeddedPaneEntry = {
+				hidden: { ...entry.hidden, [kind]: hidden },
+				...(entry.focus === kind && hidden ? {} : entry.focus ? { focus: entry.focus } : {}),
+			};
+			return {
+				embeddedPanes: {
+					...s.embeddedPanes,
+					[workspaceId]: { ...s.embeddedPanes[workspaceId], [hostKey]: next },
+				},
+			};
+		}),
+	focusEmbeddedPane: (workspaceId, hostKey, kind) =>
+		set((s) => {
+			if (s.removedWorkspaceIds[workspaceId]) return {};
+			const entry = s.embeddedPanes[workspaceId]?.[hostKey] ?? {};
+			return {
+				embeddedPanes: {
+					...s.embeddedPanes,
+					[workspaceId]: {
+						...s.embeddedPanes[workspaceId],
+						[hostKey]: { hidden: { ...entry.hidden, [kind]: false }, focus: kind },
+					},
+				},
+			};
 		}),
 	pushToast: (toast) => {
 		const twin = get().toasts.find(

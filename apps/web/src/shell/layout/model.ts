@@ -1,4 +1,18 @@
 import {
+	RiBookOpenFill,
+	RiBookOpenLine,
+	RiDiscussFill,
+	RiDiscussLine,
+	RiFileFill,
+	RiFileLine,
+	RiFolder2Fill,
+	RiFolder2Line,
+	RiLayout2Fill,
+	RiLayout2Line,
+} from "@remixicon/react";
+import type { ComponentType } from "react";
+import { CustomIcon } from "../../components/CustomIcon";
+import {
 	type LayoutAttention,
 	layoutResourceIdentity,
 	randomId,
@@ -67,36 +81,130 @@ export function createLayoutId(prefix: string): string {
 	return randomId(prefix);
 }
 
-export const LAYOUT_TOOLS: readonly LayoutToolId[] = [
-	"projects",
-	"specs",
-	"files",
-	"changes",
-	"review",
-];
-
-export const LAYOUT_TOOL_DEFAULT_SIDES: Record<LayoutToolId, LayoutSide> = {
-	projects: "left",
-	specs: "right",
-	files: "right",
-	changes: "right",
-	review: "right",
-};
-
-const LAYOUT_TOOL_NAMES: Record<LayoutToolId, string> = {
-	projects: "Projects",
-	specs: "Specs",
-	files: "Files",
-	changes: "Changes",
-	review: "Review",
-};
-
-export function layoutTabName(tab: LayoutTab): string {
-	return tab.kind === "tool" ? LAYOUT_TOOL_NAMES[tab.tool] : tab.name;
+export interface LayoutToolCatalogEntry {
+	id: LayoutToolId;
+	label: string;
+	icon: ComponentType<{ className?: string | undefined }>;
+	activeIcon?: ComponentType<{ className?: string | undefined }>;
+	defaultSide: LayoutSide;
+	dormant: boolean;
+	requiresGit?: true;
 }
 
-export function toolTab(tool: LayoutToolId): LayoutToolTab {
-	return { kind: "tool", id: `tool:${tool}`, name: LAYOUT_TOOL_NAMES[tool], tool };
+/** Tool name, default side, restore order and icon, keyed by tool id. Insertion order is restore order. */
+export type LayoutToolCatalog = ReadonlyMap<LayoutToolId, LayoutToolCatalogEntry>;
+
+function ChangesIcon(props: { className?: string | undefined }): ReturnType<typeof CustomIcon> {
+	return CustomIcon({ name: "file-diff-line", ...props });
+}
+
+function ChangesIconActive(props: {
+	className?: string | undefined;
+}): ReturnType<typeof CustomIcon> {
+	return CustomIcon({ name: "file-diff-fill", ...props });
+}
+
+// Append-only: inserting mid-map shifts every later tool's stored restore index.
+export const BUILTIN_LAYOUT_TOOL_CATALOG: LayoutToolCatalog = new Map<
+	LayoutToolId,
+	LayoutToolCatalogEntry
+>([
+	[
+		"projects",
+		{
+			id: "projects",
+			label: "Projects",
+			icon: RiFolder2Line,
+			activeIcon: RiFolder2Fill,
+			defaultSide: "left",
+			dormant: false,
+		},
+	],
+	[
+		"specs",
+		{
+			id: "specs",
+			label: "Specs",
+			icon: RiBookOpenLine,
+			activeIcon: RiBookOpenFill,
+			defaultSide: "right",
+			dormant: false,
+		},
+	],
+	[
+		"files",
+		{
+			id: "files",
+			label: "Files",
+			icon: RiFileLine,
+			activeIcon: RiFileFill,
+			defaultSide: "right",
+			dormant: false,
+		},
+	],
+	[
+		"changes",
+		{
+			id: "changes",
+			label: "Changes",
+			icon: ChangesIcon,
+			activeIcon: ChangesIconActive,
+			defaultSide: "right",
+			dormant: false,
+		},
+	],
+	[
+		"review",
+		{
+			id: "review",
+			label: "Review",
+			icon: RiDiscussLine,
+			activeIcon: RiDiscussFill,
+			defaultSide: "right",
+			dormant: false,
+		},
+	],
+]);
+
+export function buildLayoutToolCatalog(
+	extra: readonly LayoutToolCatalogEntry[] = [],
+): LayoutToolCatalog {
+	const catalog = new Map(BUILTIN_LAYOUT_TOOL_CATALOG);
+	for (const entry of extra) catalog.set(entry.id, entry);
+	return catalog;
+}
+
+function dormantLayoutToolEntry(tool: LayoutToolId): LayoutToolCatalogEntry {
+	return {
+		id: tool,
+		label: tool,
+		icon: RiLayout2Line,
+		activeIcon: RiLayout2Fill,
+		defaultSide: "right",
+		dormant: true,
+	};
+}
+
+/** Never undefined: an id absent from the catalog resolves to a dormant placeholder built from the id. */
+export function resolveLayoutTool(
+	catalog: LayoutToolCatalog,
+	tool: LayoutToolId,
+): LayoutToolCatalogEntry {
+	return catalog.get(tool) ?? dormantLayoutToolEntry(tool);
+}
+
+export function layoutTabName(
+	tab: LayoutTab,
+	catalog: LayoutToolCatalog = BUILTIN_LAYOUT_TOOL_CATALOG,
+): string {
+	return tab.kind === "tool" ? resolveLayoutTool(catalog, tab.tool).label : tab.name;
+}
+
+export function toolTab(
+	tool: LayoutToolId,
+	catalog: LayoutToolCatalog = BUILTIN_LAYOUT_TOOL_CATALOG,
+): LayoutToolTab {
+	return { kind: "tool", id: `tool:${tool}`, name: resolveLayoutTool(catalog, tool).label, tool };
 }
 
 export function collectCenterGroups(node: LayoutCenterNode): LayoutCenterGroup[] {
@@ -232,7 +340,7 @@ function normalizeWeights(weights: [number, number]): [number, number] {
 	return Number.isFinite(total) ? [first / total, second / total] : [0.5, 0.5];
 }
 
-function withGroupTabs(
+function withCenterTabs(
 	group: LayoutCenterGroup,
 	tabs: LayoutCenterTab[],
 	previewTabId?: string,
@@ -250,7 +358,7 @@ function removeTabFromCenter(
 		if (!group.tabs.some((tab) => tab.id === tabId)) return group;
 		sourceGroupId = group.id;
 		const tabs = group.tabs.filter((tab) => tab.id !== tabId);
-		return withGroupTabs(
+		return withCenterTabs(
 			group,
 			tabs,
 			group.previewTabId === tabId ? undefined : group.previewTabId,
@@ -319,7 +427,7 @@ export function removeLayoutGroup(
 		const target = groups[sourceIndex > 0 ? sourceIndex - 1 : 1];
 		if (!source || !target) return { reason: "The center group no longer exists." };
 		const moved = updateCenterGroup(document.center, target.id, (group) =>
-			withGroupTabs(
+			withCenterTabs(
 				group,
 				[...group.tabs, ...source.tabs],
 				group.previewTabId ?? source.previewTabId,
@@ -419,17 +527,26 @@ export function findPlacedResource(
 	);
 }
 
-export function unplacedTools(document: WorkspaceLayoutDocument): readonly LayoutToolId[] {
-	return LAYOUT_TOOLS.filter((tool) => findPlacedResource(document, toolTab(tool)) === null);
+export function unplacedTools(
+	document: WorkspaceLayoutDocument,
+	catalog: LayoutToolCatalog = BUILTIN_LAYOUT_TOOL_CATALOG,
+): readonly LayoutToolId[] {
+	return [...catalog.keys()].filter(
+		(tool) =>
+			!resolveLayoutTool(catalog, tool).dormant &&
+			findPlacedResource(document, toolTab(tool, catalog)) === null,
+	);
 }
 
 export function unplacedToolsForSide(
 	document: WorkspaceLayoutDocument,
 	side: LayoutSide,
+	catalog: LayoutToolCatalog = BUILTIN_LAYOUT_TOOL_CATALOG,
 ): readonly LayoutToolId[] {
-	return unplacedTools(document).filter(
+	return unplacedTools(document, catalog).filter(
 		(tool) =>
-			(document.toolRestoreTargets[tool]?.region ?? LAYOUT_TOOL_DEFAULT_SIDES[tool]) === side,
+			(document.toolRestoreTargets[tool]?.region ??
+				resolveLayoutTool(catalog, tool).defaultSide) === side,
 	);
 }
 
@@ -455,7 +572,8 @@ export function openCenterTab(
 ): LayoutOperationResult {
 	const resolved = resolvePlacedResource(document, tab);
 	if (resolved.conflictingId) return { reason: "That tab id belongs to another resource." };
-	const previewCompatible = tab.kind === "file" || tab.kind === "diff";
+	const previewCompatible =
+		tab.kind === "file" || tab.kind === "external-file" || tab.kind === "diff";
 	const effectiveIntent = intent === "preview" && !previewCompatible ? "keep" : intent;
 	const existingTab = resolved.placed;
 	const existing = existingTab ? findTabLocation(document, existingTab.id) : null;
@@ -476,18 +594,23 @@ export function openCenterTab(
 	if (!target) return { reason: "The destination group no longer exists." };
 	let tabs = target.tabs;
 	let previewTabId = target.previewTabId;
+	let replaced: string | null = null;
 	const claimsPreviewSlot = previewCompatible && (effectiveIntent === "preview" || claimPreview);
 	if (claimsPreviewSlot && previewTabId) {
 		const slot = tabs.findIndex((candidate) => candidate.id === previewTabId);
-		if (slot >= 0) tabs = tabs.map((candidate, index) => (index === slot ? tab : candidate));
-		else tabs = [...tabs, tab];
+		if (slot >= 0) {
+			tabs = tabs.map((candidate, index) => (index === slot ? tab : candidate));
+			replaced = previewTabId;
+		} else {
+			tabs = [...tabs, tab];
+		}
 	} else {
 		tabs = [...tabs, tab];
 	}
 	if (effectiveIntent === "preview") previewTabId = tab.id;
 	else if (previewCompatible && claimPreview) previewTabId = undefined;
 	const center = updateCenterGroup(document.center, groupId, (group) =>
-		withGroupTabs(group, tabs, previewTabId),
+		withCenterTabs(group, tabs, previewTabId),
 	);
 	return { document: { ...document, center }, focusGroupId: groupId, focusTabId: tab.id };
 }
@@ -504,7 +627,7 @@ export function keepPreview(
 		document: {
 			...document,
 			center: updateCenterGroup(document.center, groupId, (current) =>
-				withGroupTabs(current, current.tabs),
+				withCenterTabs(current, current.tabs),
 			),
 		},
 		focusGroupId: groupId,
@@ -562,25 +685,24 @@ export function moveTabToGroup(
 				? findCenterGroup(document.center, target.groupId)
 				: findAuxiliaryGroup(document, target.area, target.groupId);
 		if (!current) return { reason: "The destination group no longer exists." };
-		const tabs = current.tabs.filter((candidate) => candidate.id !== movingTab.id);
-		const insertion = Math.max(0, Math.min(index ?? tabs.length, tabs.length));
+		const without = current.tabs.filter((candidate) => candidate.id !== movingTab.id);
+		const insertion = Math.max(0, Math.min(index ?? without.length, without.length));
+		const tabs = [...without];
 		tabs.splice(insertion, 0, movingTab);
-		if (current.tabs.every((candidate, position) => candidate.id === tabs[position]?.id)) {
-			return { reason: "That tab is already at this position." };
-		}
+		const centerGroup = current as LayoutCenterGroup;
+		const rebuilt = withCenterTabs(centerGroup, tabs as LayoutCenterTab[], centerGroup.previewTabId);
 		if (target.area === "center") {
 			return {
 				document: {
 					...document,
-					center: updateCenterGroup(
-						document.center,
-						target.groupId,
-						(group) => ({ ...group, tabs }) as LayoutCenterGroup,
-					),
+					center: updateCenterGroup(document.center, target.groupId, () => rebuilt),
 				},
 				focusGroupId: target.groupId,
 				focusTabId: movingTab.id,
 			};
+		}
+		if (current.tabs.every((candidate, position) => candidate.id === tabs[position]?.id)) {
+			return { reason: "That tab is already at this position." };
 		}
 		return {
 			document: {
@@ -618,6 +740,7 @@ export function moveTabToGroup(
 	if (
 		groupIndex < 0 ||
 		movingTab.kind === "file" ||
+		movingTab.kind === "external-file" ||
 		movingTab.kind === "diff" ||
 		movingTab.kind === "chat" ||
 		movingTab.kind === "document"
@@ -640,6 +763,38 @@ export function moveTabToGroup(
 		focusGroupId: group.id,
 		focusTabId: movingTab.id,
 	};
+}
+
+/**
+ * A file opened over a group whose selected tab runs an agent goes beside that group instead: the next
+ * center group in reading order, or a new column split off to the right. See SPEC.md.
+ */
+export function openCenterTabBeside(
+	document: WorkspaceLayoutDocument,
+	attention: LayoutAttention,
+	tab: LayoutCenterTab,
+	groupId: string,
+	intent: "preview" | "keep",
+	claimPreview: boolean,
+	runsAgent: (selected: LayoutTab) => boolean,
+): LayoutOperationResult {
+	const fileLike = tab.kind === "file" || tab.kind === "external-file" || tab.kind === "diff";
+	const plain = () => openCenterTab(document, tab, groupId, intent, claimPreview);
+	if (!fileLike || findPlacedResource(document, tab)) return plain();
+	const selectedId = attention.selectedByGroup[groupId];
+	const selected = findCenterGroup(document.center, groupId)?.tabs.find(
+		(candidate) => candidate.id === selectedId,
+	);
+	if (!selected || !runsAgent(selected)) return plain();
+	const groups = collectCenterGroups(document.center);
+	const neighbour = groups[groups.findIndex((group) => group.id === groupId) + 1];
+	if (neighbour) return openCenterTab(document, tab, neighbour.id, intent, claimPreview);
+	const opened = plain();
+	if (isLayoutUnavailable(opened) || !opened.focusTabId) return opened;
+	const placed = findLayoutTab(opened.document, opened.focusTabId);
+	if (!placed || placed.kind === "tool") return opened;
+	const split = splitCenterGroup(opened.document, groupId, "right", placed);
+	return isLayoutUnavailable(split) ? opened : split;
 }
 
 export function splitCenterGroup(
@@ -669,7 +824,7 @@ export function splitCenterGroup(
 			? {
 					...document,
 					center: updateCenterGroup(document.center, groupId, (group) =>
-						withGroupTabs(
+						withCenterTabs(
 							group,
 							group.tabs.filter((candidate) => candidate.id !== placedTab.id),
 							group.previewTabId === placedTab.id ? undefined : group.previewTabId,
@@ -821,8 +976,6 @@ export function setBottomVisibility(
 	return { ...document, bottom: { ...document.bottom, visible: nextVisible } };
 }
 
-const TOOL_RESTORE_ORDER = LAYOUT_TOOLS;
-
 export function hideSide(
 	document: WorkspaceLayoutDocument,
 	side: LayoutSide,
@@ -858,8 +1011,14 @@ export function hideBottom(
 	};
 }
 
-export function canShowSide(document: WorkspaceLayoutDocument, side: LayoutSide): boolean {
-	return document[side].groups.length > 0 || unplacedToolsForSide(document, side).length > 0;
+export function canShowSide(
+	document: WorkspaceLayoutDocument,
+	side: LayoutSide,
+	catalog: LayoutToolCatalog = BUILTIN_LAYOUT_TOOL_CATALOG,
+): boolean {
+	return (
+		document[side].groups.length > 0 || unplacedToolsForSide(document, side, catalog).length > 0
+	);
 }
 
 export function showBottom(
@@ -867,6 +1026,7 @@ export function showBottom(
 	maxSideGroups: number,
 	maxBottomGroups: number,
 	attention?: LayoutAttention,
+	catalog: LayoutToolCatalog = BUILTIN_LAYOUT_TOOL_CATALOG,
 ): LayoutOperationResult {
 	const populated = document.bottom.groups.some((group) => group.tabs.length > 0);
 	if (populated) {
@@ -885,12 +1045,12 @@ export function showBottom(
 			...(tab ? { focusTabId: tab.id } : {}),
 		};
 	}
-	const tool = TOOL_RESTORE_ORDER.find(
+	const tool = [...catalog.keys()].find(
 		(candidate) =>
 			document.toolRestoreTargets[candidate]?.region === "bottom" &&
-			!findPlacedResource(document, toolTab(candidate)),
+			!findPlacedResource(document, toolTab(candidate, catalog)),
 	);
-	if (tool) return revealTool(document, tool, maxSideGroups, maxBottomGroups);
+	if (tool) return revealTool(document, tool, maxSideGroups, maxBottomGroups, undefined, catalog);
 	if (document.bottom.groups.length > 0) {
 		const shown = setBottomVisibility(document, true);
 		const preferredId = attention?.lastFocusedSideGroupId.bottom;
@@ -919,6 +1079,7 @@ export function showSide(
 	side: LayoutSide,
 	maxSideGroups: number,
 	attention?: LayoutAttention,
+	catalog: LayoutToolCatalog = BUILTIN_LAYOUT_TOOL_CATALOG,
 ): LayoutOperationResult {
 	if (document[side].groups.length > 0) {
 		const shown = setSideVisibility(document, side, true);
@@ -930,17 +1091,17 @@ export function showSide(
 		const tab = group.tabs.find((candidate) => candidate.id === selectedId) ?? group.tabs[0];
 		if (!tab) {
 			const restore =
-				TOOL_RESTORE_ORDER.find(
+				[...catalog.keys()].find(
 					(candidate) =>
 						document.toolRestoreTargets[candidate]?.region === side &&
-						!findPlacedResource(document, toolTab(candidate)),
+						!findPlacedResource(document, toolTab(candidate, catalog)),
 				) ??
-				TOOL_RESTORE_ORDER.find(
+				[...catalog.keys()].find(
 					(candidate) =>
-						LAYOUT_TOOL_DEFAULT_SIDES[candidate] === side &&
-						!findPlacedResource(document, toolTab(candidate)),
+						resolveLayoutTool(catalog, candidate).defaultSide === side &&
+						!findPlacedResource(document, toolTab(candidate, catalog)),
 				);
-			if (restore) return revealTool(shown, restore, maxSideGroups);
+			if (restore) return revealTool(shown, restore, maxSideGroups, undefined, undefined, catalog);
 		}
 		return {
 			document: shown,
@@ -948,17 +1109,19 @@ export function showSide(
 		};
 	}
 	const tool =
-		TOOL_RESTORE_ORDER.find(
+		[...catalog.keys()].find(
 			(candidate) =>
 				document.toolRestoreTargets[candidate]?.region === side &&
-				!findPlacedResource(document, toolTab(candidate)),
+				!findPlacedResource(document, toolTab(candidate, catalog)),
 		) ??
-		TOOL_RESTORE_ORDER.find(
+		[...catalog.keys()].find(
 			(candidate) =>
-				LAYOUT_TOOL_DEFAULT_SIDES[candidate] === side &&
-				!findPlacedResource(document, toolTab(candidate)),
+				resolveLayoutTool(catalog, candidate).defaultSide === side &&
+				!findPlacedResource(document, toolTab(candidate, catalog)),
 		);
-	return tool ? revealTool(document, tool, maxSideGroups) : { document };
+	return tool
+		? revealTool(document, tool, maxSideGroups, undefined, undefined, catalog)
+		: { document };
 }
 
 export function revealTool(
@@ -966,10 +1129,34 @@ export function revealTool(
 	tool: LayoutToolId,
 	maxSideGroups: number,
 	maxBottomGroups = 3,
+	target?: LayoutGroupLocation,
+	catalog: LayoutToolCatalog = BUILTIN_LAYOUT_TOOL_CATALOG,
 ): LayoutOperationResult {
-	const requestedTab = withAvailablePlacementId(document, toolTab(tool));
+	const requestedTab = withAvailablePlacementId(document, toolTab(tool, catalog));
 	const placedTab = resolvePlacedResource(document, requestedTab).placed;
 	const existing = placedTab ? findTabLocation(document, placedTab.id) : null;
+	if (!placedTab && target && target.area !== "center") {
+		const region = document[target.area];
+		const group = region.groups.find((candidate) => candidate.id === target.groupId);
+		if (group) {
+			return {
+				document: {
+					...document,
+					[target.area]: {
+						...region,
+						visible: true,
+						groups: region.groups.map((candidate) =>
+							candidate.id === group.id
+								? { ...candidate, folded: false, tabs: [...candidate.tabs, requestedTab] }
+								: candidate,
+						),
+					},
+				},
+				focusGroupId: group.id,
+				focusTabId: requestedTab.id,
+			};
+		}
+	}
 	if (placedTab && existing && existing.area !== "center") {
 		const region = document[existing.area];
 		const group = region.groups.find((candidate) => candidate.id === existing.groupId);
@@ -992,7 +1179,8 @@ export function revealTool(
 		};
 	}
 	const restore = document.toolRestoreTargets[tool];
-	const region: LayoutAuxiliaryRegion = restore?.region ?? LAYOUT_TOOL_DEFAULT_SIDES[tool];
+	const region: LayoutAuxiliaryRegion =
+		restore?.region ?? resolveLayoutTool(catalog, tool).defaultSide;
 	const groups = document[region].groups;
 	const restoreGroup = restore?.groupId
 		? groups.find((group) => group.id === restore.groupId)

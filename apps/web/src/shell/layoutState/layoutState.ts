@@ -14,13 +14,15 @@ import {
 	applyProjectedLayoutDocument,
 	applyWorkbenchPreset,
 	BUILTIN_LAYOUT_PRESETS,
+	BUILTIN_LAYOUT_TOOL_CATALOG,
 	DEFAULT_LAYOUT_PRESET_ID,
 	emptyWorkspaceView,
 	ensureWorkbenchToolPlacementIds,
+	frameTopology,
 	instantiateWorkbenchFrame,
-	LAYOUT_TOOLS,
 	minimumBottomGroupLimit,
 	minimumSideGroupLimit,
+	reflowWorkspaceViewForFrame,
 	projectWorkspaceLayout,
 	reconcileAttention,
 	validateLayoutDocument,
@@ -33,11 +35,17 @@ const LOCAL_LAYOUT_VERSION = 1;
 const SURFACE_ID_KEY = "thinkrail:layout-surface-id";
 const NATIVE_LAYOUT_PREFERENCE_KEY = "workbench-layout";
 const NATIVE_LAYOUT_MAX_CHARACTERS = 256 * 1024;
-const TOOL_IDS = new Set<string>(LAYOUT_TOOLS);
+const TOOL_IDS = new Set<string>(BUILTIN_LAYOUT_TOOL_CATALOG.keys());
+
+function isKnownToolId(tool: string): boolean {
+	return TOOL_IDS.has(tool);
+}
 
 interface PersistedLocalLayout {
 	version: 1;
 	frame: WorkbenchFrame;
+	framesByProject: Record<string, WorkbenchFrame>;
+	frameProjectId: string | null;
 	viewsByWorkspace: Record<string, WorkspaceViewState>;
 	attentionByWorkspace: Record<string, LayoutAttention>;
 	preferences: LocalLayoutPreferences;
@@ -54,6 +62,7 @@ let stablePreferenceOverride: StablePreferenceAdapter | null | undefined;
 let persistenceKey: string | null = null;
 let activeStablePreferences: StablePreferenceAdapter | null = null;
 let stopPersistence: (() => void) | null = null;
+let stopProjectFrameTracking: (() => void) | null = null;
 let releaseSurfaceLease: (() => void) | null = null;
 let initialization: Promise<void> | null = null;
 const workspaceInitializations = new Map<string, Promise<WorkspaceLayoutDocument>>();
@@ -160,6 +169,17 @@ function retainSurfaceLease(release: () => void): void {
 
 async function resolveSurfaceId(storage: StoragePair, endpoint: string): Promise<string> {
 	if (storageOverride) return claimLayoutSurfaceId(storage.session, async () => true);
+	// A native window's surface identity rides the stable preference channel: sessionStorage lives one
+	// WKWebView process, so keying by it made every desktop launch a brand-new surface. One window per
+	// profile means no claim protocol is needed — the adapter is already scoped to this window.
+	const adapter = getStablePreferenceAdapter();
+	if (adapter) {
+		const existing = adapter.getItem(SURFACE_ID_KEY);
+		if (existing) return existing;
+		const minted = randomId("surface");
+		adapter.setItem(SURFACE_ID_KEY, minted);
+		return minted;
+	}
 	const pendingLease: { release?: () => void } = {};
 	try {
 		const id = await claimLayoutSurfaceId(storage.session, async (candidate) => {
@@ -280,7 +300,7 @@ function isResourceFreeFrame(value: unknown): value is WorkbenchFrame {
 						typeof tool.id !== "string" ||
 						typeof tool.name !== "string" ||
 						typeof tool.tool !== "string" ||
-						!TOOL_IDS.has(tool.tool),
+						!isKnownToolId(tool.tool),
 				)
 			) {
 				return false;
@@ -289,7 +309,7 @@ function isResourceFreeFrame(value: unknown): value is WorkbenchFrame {
 	}
 	if (!isRecord(value.toolRestoreTargets)) return false;
 	return Object.entries(value.toolRestoreTargets).every(([tool, candidate]) => {
-		if (!TOOL_IDS.has(tool) || !isRecord(candidate)) return false;
+		if (!isKnownToolId(tool) || !isRecord(candidate)) return false;
 		return (
 			hasOnlyKeys(candidate, ["region", "groupId", "index"]) &&
 			(candidate.region === "left" ||
@@ -369,7 +389,7 @@ function isWorkspaceView(value: unknown): value is WorkspaceViewState {
 		return (
 			candidate.beforeToolByTabId === undefined ||
 			Object.values(candidate.beforeToolByTabId).every(
-				(tool) => typeof tool === "string" && TOOL_IDS.has(tool),
+				(tool) => typeof tool === "string" && isKnownToolId(tool),
 			)
 		);
 	});
@@ -401,7 +421,8 @@ function parsePreferences(value: unknown): LocalLayoutPreferences | undefined {
 		Number(value.maxSideGroups) > 32 ||
 		!Number.isInteger(value.maxBottomGroups) ||
 		Number(value.maxBottomGroups) < 1 ||
-		Number(value.maxBottomGroups) > 32
+		Number(value.maxBottomGroups) > 32 ||
+		typeof value.previewTabs !== "boolean"
 	) {
 		return undefined;
 	}
@@ -409,18 +430,31 @@ function parsePreferences(value: unknown): LocalLayoutPreferences | undefined {
 		defaultPresetId: value.defaultPresetId,
 		maxSideGroups: Number(value.maxSideGroups),
 		maxBottomGroups: Number(value.maxBottomGroups),
+		previewTabs: value.previewTabs,
 	};
+}
+
+/** A stored frame that no longer validates is dropped, not fatal: that project falls back to Balanced. */
+function parseFramesByProject(value: unknown): Record<string, WorkbenchFrame> {
+	if (!isRecord(value)) return {};
+	const frames: Record<string, WorkbenchFrame> = {};
+	for (const [projectId, frame] of Object.entries(value)) {
+		if (isResourceFreeFrame(frame)) frames[projectId] = frame;
+	}
+	return frames;
 }
 
 function decodeLocalLayout(raw: string): LocalLayoutStatePayload | undefined {
 	try {
-		const parsed = JSON.parse(raw) as unknown;
+		const parsed = JSON.parse(raw);
 		if (
 			!isRecord(parsed) ||
 			parsed.version !== LOCAL_LAYOUT_VERSION ||
 			!hasOnlyKeys(parsed, [
 				"version",
 				"frame",
+				"framesByProject",
+				"frameProjectId",
 				"viewsByWorkspace",
 				"attentionByWorkspace",
 				"preferences",
@@ -435,17 +469,31 @@ function decodeLocalLayout(raw: string): LocalLayoutStatePayload | undefined {
 		const preferences = parsePreferences(parsed.preferences);
 		if (!preferences) return undefined;
 		const frame = parsed.frame;
-		const validGroupIds = frameGroupIds(frame);
+		const framesByProject = parseFramesByProject(parsed.framesByProject);
+		// A surface that has visited two projects holds views from both, each naming the groups of the
+		// frame it was arranged in. Every view is therefore read against its own frame — see SPEC.md.
+		const frames = [frame, ...Object.values(framesByProject)];
+		const groupIdsPerFrame = frames.map((candidate) => frameGroupIds(candidate));
+		const frameForView = (view: WorkspaceViewState): WorkbenchFrame | undefined => {
+			const ids = Object.keys(view.groups);
+			const at = groupIdsPerFrame.findIndex((valid) => ids.every((id) => valid.has(id)));
+			return at < 0 ? undefined : frames[at];
+		};
 		const viewsByWorkspace: Record<string, WorkspaceViewState> = {};
 		const documentsByWorkspace: Record<string, WorkspaceLayoutDocument> = {};
 		const attentionByWorkspace: Record<string, LayoutAttention> = {};
 		for (const [workspaceId, view] of Object.entries(parsed.viewsByWorkspace)) {
-			if (!isWorkspaceView(view) || Object.keys(view.groups).some((id) => !validGroupIds.has(id))) {
-				return undefined;
-			}
+			// A view that cannot be read is that workspace's loss, exactly like one that cannot be placed:
+			// rejecting the payload over it would throw away every frame with it. See SPEC.md.
+			if (!isWorkspaceView(view)) continue;
+			// One view nobody can place is that workspace's loss, never the whole surface's: discarding
+			// the payload drops the frames with it, and the next project adopts whatever is live. It
+			// reopens empty against its project's frame instead. See SPEC.md.
+			const own = frameForView(view);
+			if (!own) continue;
+			const document = projectWorkspaceLayout(own, view);
+			if (validateLayoutDocument(document, 32, 32).length > 0) continue;
 			viewsByWorkspace[workspaceId] = view;
-			const document = projectWorkspaceLayout(frame, view);
-			if (validateLayoutDocument(document, 32, 32).length > 0) return undefined;
 			documentsByWorkspace[workspaceId] = document;
 			attentionByWorkspace[workspaceId] = reconcileAttention(
 				document,
@@ -458,6 +506,8 @@ function decodeLocalLayout(raw: string): LocalLayoutStatePayload | undefined {
 		}
 		return {
 			frame,
+			framesByProject,
+			frameProjectId: typeof parsed.frameProjectId === "string" ? parsed.frameProjectId : null,
 			viewsByWorkspace,
 			documentsByWorkspace,
 			attentionByWorkspace,
@@ -473,6 +523,8 @@ function encodeLocalLayout(state: ReturnType<typeof useAppStore.getState>): stri
 	const value: PersistedLocalLayout = {
 		version: LOCAL_LAYOUT_VERSION,
 		frame: state.workbenchFrame,
+		framesByProject: state.workbenchFramesByProject,
+		frameProjectId: state.workbenchFrameProjectId,
 		viewsByWorkspace: state.workspaceViewsByWorkspace,
 		attentionByWorkspace: state.layoutAttentionByWorkspace,
 		preferences: state.localLayoutPreferences,
@@ -499,11 +551,21 @@ function persistCurrentLayout(): void {
 	}
 }
 
+function startProjectFrameTracking(): void {
+	if (stopProjectFrameTracking) return;
+	stopProjectFrameTracking = useAppStore.subscribe((state, previous) => {
+		if (state.selectedProjectId === previous.selectedProjectId) return;
+		if (state.selectedProjectId) activateProjectFrame(state.selectedProjectId);
+	});
+}
+
 function startPersistence(): void {
 	if (stopPersistence) return;
 	stopPersistence = useAppStore.subscribe((state, previous) => {
 		if (
 			state.workbenchFrame === previous.workbenchFrame &&
+			state.workbenchFramesByProject === previous.workbenchFramesByProject &&
+			state.workbenchFrameProjectId === previous.workbenchFrameProjectId &&
 			state.workspaceViewsByWorkspace === previous.workspaceViewsByWorkspace &&
 			state.layoutAttentionByWorkspace === previous.layoutAttentionByWorkspace &&
 			state.localLayoutPreferences === previous.localLayoutPreferences &&
@@ -582,6 +644,10 @@ export function initializeLocalLayoutState(): Promise<void> {
 			}
 		}
 		startPersistence();
+		startProjectFrameTracking();
+		// Boot lands with a project already selected, and a subscriber only ever hears the next change.
+		const selected = useAppStore.getState().selectedProjectId;
+		if (selected) activateProjectFrame(selected);
 	})();
 	initialization = run.catch((error) => {
 		initialization = null;
@@ -631,6 +697,80 @@ export function ensureWorkspaceLayoutState(workspaceId: string): Promise<Workspa
 	});
 	workspaceInitializations.set(workspaceId, request);
 	return request;
+}
+
+/** A view names groups of the frame it was arranged in, so it travels with the swap — see SPEC.md. */
+function activateProjectFrame(projectId: string): void {
+	const state = useAppStore.getState();
+	const current = state.workbenchFrame;
+	if (!current || !state.layoutStateReady) return;
+	const previousProjectId = state.workbenchFrameProjectId;
+	if (previousProjectId === projectId) return;
+
+	const framesByProject = {
+		...state.workbenchFramesByProject,
+		...(previousProjectId ? { [previousProjectId]: current } : {}),
+	};
+	// Adoption is the migration from a layout saved before frames were per project, and nothing more: an
+	// unclaimed live frame becomes the first project's. The moment any project has a frame of its own,
+	// an unknown project starts from Balanced — adopting a neighbour's frame there is exactly how one
+	// project's split reached every other. See SPEC.md.
+	const unclaimed =
+		previousProjectId === null && Object.keys(state.workbenchFramesByProject).length === 0;
+	const frame = framesByProject[projectId] ?? (unclaimed ? current : balancedFrame());
+	if (frame === current && previousProjectId === null) {
+		state.applyLocalLayoutState(
+			{
+				frame,
+				framesByProject,
+				frameProjectId: projectId,
+				viewsByWorkspace: state.workspaceViewsByWorkspace,
+				documentsByWorkspace: state.layoutDocumentsByWorkspace,
+				attentionByWorkspace: state.layoutAttentionByWorkspace,
+				preferences: state.localLayoutPreferences,
+			},
+			[],
+		);
+		return;
+	}
+	const entering = new Set((state.workspaces[projectId] ?? []).map((workspace) => workspace.id));
+	const viewsByWorkspace = { ...state.workspaceViewsByWorkspace };
+	const documentsByWorkspace = { ...state.layoutDocumentsByWorkspace };
+	const attentionByWorkspace = { ...state.layoutAttentionByWorkspace };
+	const destination = frameGroupIds(frame);
+	const leaving = frameGroupIds(current);
+	const fits = (view: WorkspaceViewState, ids: ReadonlySet<string>) =>
+		Object.keys(view.groups).every((id) => ids.has(id));
+	for (const workspaceId of entering) {
+		const view = viewsByWorkspace[workspaceId];
+		if (!view) continue;
+		// A reflow reads the view through the frame it names; through any other it reads as empty and
+		// every tab is dropped. See SPEC.md.
+		const reflowed =
+			fits(view, destination) || !fits(view, leaving)
+				? view
+				: reflowWorkspaceViewForFrame(current, view, frame);
+		const document = projectWorkspaceLayout(frame, reflowed);
+		viewsByWorkspace[workspaceId] = reflowed;
+		documentsByWorkspace[workspaceId] = document;
+		attentionByWorkspace[workspaceId] = reconcileAttention(
+			document,
+			attentionByWorkspace[workspaceId],
+		);
+	}
+	state.applyLocalLayoutState(
+		{
+			frame,
+			framesByProject,
+			frameProjectId: projectId,
+			viewsByWorkspace,
+			documentsByWorkspace,
+			attentionByWorkspace,
+			preferences: state.localLayoutPreferences,
+		},
+		[...entering],
+		true,
+	);
 }
 
 export function applyLayoutPresetLocally(preset: LayoutPreset): void {
@@ -727,6 +867,11 @@ export async function commitWorkspaceLayout(
 			state.layoutDocumentsByWorkspace[id],
 		);
 	}
+	// Only a *structural* frame change invalidates the projection: a resize writes weights, and rebuilding
+	// the projection on that flashes every panel group at the end of a drag. See layout/SPEC.md.
+	const structureChanged =
+		frameChanged &&
+		(state.workbenchFrame === null || frameTopology(frame) !== frameTopology(state.workbenchFrame));
 	state.applyLocalLayoutState(
 		{
 			frame,
@@ -736,7 +881,7 @@ export async function commitWorkspaceLayout(
 			preferences: state.localLayoutPreferences,
 		},
 		changedWorkspaceIds,
-		frameChanged,
+		structureChanged,
 	);
 	return useAppStore.getState().layoutDocumentsByWorkspace[workspaceId] ?? document;
 }
@@ -778,6 +923,8 @@ export function resetLayoutStateForTests(): void {
 	workspaceInitializations.clear();
 	stopPersistence?.();
 	stopPersistence = null;
+	stopProjectFrameTracking?.();
+	stopProjectFrameTracking = null;
 	releaseSurfaceLease?.();
 	releaseSurfaceLease = null;
 	initialization = null;

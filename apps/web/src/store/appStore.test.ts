@@ -16,6 +16,7 @@ import {
 } from "@thinkrail/contracts";
 import type { ChatTurn, FailureRecovery } from "../chat/types";
 import { userText } from "../lib";
+import { onEditorEvent } from "../panels/editorEvents";
 import type { WorkspaceLayoutDocument } from "../shell/layout";
 import {
 	captureCenterNavigation,
@@ -30,6 +31,7 @@ import {
 } from "./appStore";
 import {
 	projectActivityRollup,
+	selectAttachedEditorSelection,
 	selectCompactionTurnIds,
 	selectCurrentRouteChatTarget,
 	selectDiffScope,
@@ -217,6 +219,49 @@ test("selectLastOpenChatSession: active chat tab first, then the most recent cha
 	expect(selectLastOpenChatSession(useAppStore.getState(), "ws1")).toBe("s2");
 	useAppStore.getState().openTab(fileTab("ws1", "a.ts"), "keep");
 	expect(selectLastOpenChatSession(useAppStore.getState(), "ws1")).toBe("s2");
+});
+
+test("an editor selection is offered to the chat until it is taken off, and a new one offers again", () => {
+	const store = useAppStore.getState();
+	const selection = {
+		path: "src/a.ts",
+		text: "const a = 1;",
+		startLine: 1,
+		endLine: 1,
+		language: "typescript",
+	};
+	expect(selectAttachedEditorSelection(useAppStore.getState(), "ws1")).toBeNull();
+
+	store.setEditorSelection("ws1", selection);
+	expect(selectAttachedEditorSelection(useAppStore.getState(), "ws1")).toEqual(selection);
+
+	store.detachEditorSelection("ws1");
+	expect(selectAttachedEditorSelection(useAppStore.getState(), "ws1")).toBeNull();
+
+	store.setEditorSelection("ws1", { ...selection, endLine: 2 });
+	expect(selectAttachedEditorSelection(useAppStore.getState(), "ws1")?.endLine).toBe(2);
+
+	// An empty selection is the editor saying there is nothing to carry.
+	store.setEditorSelection("ws1", null);
+	expect(selectAttachedEditorSelection(useAppStore.getState(), "ws1")).toBeNull();
+});
+
+test("addToChatDraft: the added text leads, what was typed follows, and the composer is called for", () => {
+	const store = useAppStore.getState();
+	store.openChatSession("ws1", "s1", null, "medium");
+	store.setChatDraft("s1", "explain this");
+
+	store.addToChatDraft("s1", "src/a.ts:1-2\n```typescript\nconst a = 1;\n```");
+	expect(useAppStore.getState().sessions.s1?.draft).toBe(
+		"src/a.ts:1-2\n```typescript\nconst a = 1;\n```\n\nexplain this",
+	);
+	expect(useAppStore.getState().composerFocusRequest?.sessionId).toBe("s1");
+
+	useAppStore.getState().clearComposerFocus();
+	store.addToChatDraft("s1", "   ");
+	expect(useAppStore.getState().composerFocusRequest).toBeNull();
+	store.addToChatDraft("nobody", "text");
+	expect(useAppStore.getState().composerFocusRequest).toBeNull();
 });
 
 test("pi events route to the right session runtime; chats stay independent", () => {
@@ -3531,6 +3576,25 @@ test("explicitly passive hydration never becomes navigation just because the cac
 function fileTab(workspaceId: string, name: string): FileTab {
 	return { kind: "file", id: `${workspaceId}:${name}`, workspaceId, name, path: name, content: "" };
 }
+
+test("closeTab and setActiveTab emit editor lifecycle events for plugins to observe", () => {
+	useAppStore.setState({ activeWorkspaceId: "ws1" });
+	const store = useAppStore.getState();
+	store.openTab(fileTab("ws1", "a.ts"), "keep");
+	store.openTab(fileTab("ws1", "b.ts"), "keep");
+
+	const seen: { kind: string; path: string }[] = [];
+	const off = onEditorEvent((event) => seen.push({ kind: event.kind, path: event.editor.path }));
+
+	useAppStore.getState().setActiveTab("ws1:a.ts");
+	useAppStore.getState().closeTab("ws1:a.ts");
+
+	off();
+	expect(seen).toEqual([
+		{ kind: "activated", path: "a.ts" },
+		{ kind: "closed", path: "a.ts" },
+	]);
+});
 
 test("a preview open replaces the previous preview tab at its index (the strip never reshuffles)", () => {
 	const store = useAppStore.getState();

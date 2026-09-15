@@ -14,10 +14,10 @@ Durable host state—projects, workspaces, cross-frontend app config, terminal c
 
 ## Boundary
 
-- **Owns:** `dataDir()` (`THINKRAIL_DATA_DIR` for dev/e2e isolation, else `~/.thinkrail`); project/workspace/config load-save operations; fieldwise config validation over `DEFAULT_CONFIG` while preserving unknown top-level extension fields; and installation identity in `installation.json` (`{ id }`, the non-rotating per-install UUID, server-only and never wire-broadcast). The former announcement marker is ignored: first observed launch defines first use, not a stored event-sent bit. JSON remains tab-indented.
-- **Public surface (barrel):** `dataDir`, project/workspace/config and terminal-catalog load-save operations, and installation identity operations.
+- **Owns:** `dataDir()` (`THINKRAIL_DATA_DIR` for dev/e2e isolation, else `~/.thinkrail`); project/workspace/config load-save operations; fieldwise config validation over `DEFAULT_CONFIG` while preserving unknown top-level extension fields; installation identity in `installation.json` (`{ id }`, the non-rotating per-install UUID, server-only and never wire-broadcast) — the former announcement marker is ignored: first observed launch defines first use, not a stored event-sent bit; and `readPluginState`/`writePluginState`, namespaced JSON reads/writes under `plugin-state/<id>/<name>.json` (H14) for the plugin loader and each plugin's host context. JSON remains tab-indented.
+- **Public surface (barrel):** `dataDir`, project/workspace/config and terminal-catalog load-save operations, installation identity operations, and `readPluginState`/`writePluginState`.
 - **Allowed deps:** `contracts` (`Project`, `Workspace`, `AppConfig`, `LayoutPreset`, `DEFAULT_CONFIG`,
-  `isTerminalWindowsShell`); Node `fs`/`os`/`path`.
+  `isTerminalWindowsShell`, `TerminalAgentRecord`); `@thinkrail/plugin-api` (`pluginStateFile`); Node `fs`/`os`/`path`.
 - **Forbidden:** importing feature siblings or `host`; persisting a current frame/view, selection/focus, or frontend-surface identity; reading alternate config keys or old schemas; or reading, rewriting, or deleting old host layout snapshots.
 
 Analytics config preserves a saved boolean preference and a valid explicit `analyticsConsentConfirmed`

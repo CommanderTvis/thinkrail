@@ -1,15 +1,15 @@
 import type { GitDiffScope, ReviewAnchor } from "@thinkrail/contracts";
 import { useMemo } from "react";
-import { toast, useAppStore } from "../store";
-import { errorText, getTransport } from "../transport";
-import type { LineSelection } from "./reviewGutter";
-import { fileThreads } from "./reviewModel";
-import { sendReviewComment } from "./reviewSend";
+import type { LineSelection } from "@/panels/reviewGutter";
 import type {
 	ReviewCommentingCallbacks,
 	ReviewThreadActions,
 	ReviewThreadData,
-} from "./reviewWidgets";
+} from "@/panels/reviewWidgets";
+import { toast, useAppStore } from "../store";
+import { errorText, getTransport } from "../transport";
+import { fileThreads } from "./reviewModel";
+import { sendReviewComment } from "./reviewSend";
 
 export interface SideReview {
 	threads: ReviewThreadData[];

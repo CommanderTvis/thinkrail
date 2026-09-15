@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { DiffTab } from "../store";
+import { FrontmatterProperties } from "./FrontmatterProperties";
 import { MarkdownDocument } from "./MarkdownPreview";
 
 const DIFF_MARKS = [
@@ -42,15 +43,20 @@ function Placeholder({ testid, children }: { testid: string; children: string })
 	);
 }
 
+function renderSide(content: string, workspaceId: string, path: string): string {
+	return renderToStaticMarkup(
+		<>
+			<FrontmatterProperties content={content} />
+			<MarkdownDocument content={content} workspaceId={workspaceId} path={path} />
+		</>,
+	);
+}
+
 export default function RenderedDiff({ tab }: { tab: DiffTab }) {
 	const [before, after] = useMemo(
 		() => [
-			renderToStaticMarkup(
-				<MarkdownDocument content={tab.original} workspaceId={tab.workspaceId} path={tab.path} />,
-			),
-			renderToStaticMarkup(
-				<MarkdownDocument content={tab.modified} workspaceId={tab.workspaceId} path={tab.path} />,
-			),
+			renderSide(tab.original, tab.workspaceId, tab.path),
+			renderSide(tab.modified, tab.workspaceId, tab.path),
 		],
 		[tab.original, tab.modified, tab.workspaceId, tab.path],
 	);
