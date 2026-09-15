@@ -4,6 +4,8 @@ export {
 	type ResourceCodeLanguage,
 	ResourceEnvironmentProvider,
 	type ResourceFileReviewProps,
+	type EditorSelectionChange,
+	type ResourceEditorEvents,
 	type ResourceHost,
 	ResourceHostProvider,
 	type ResourceMarkdown,
@@ -32,6 +34,7 @@ export {
 	type ResourceContent,
 	type ResourceDescriptor,
 	type ResourceDiffProps,
+	type ResourceEdit,
 	type ResourceEnvironment,
 	type ResourceIntent,
 	type ResourceRenderer,
@@ -41,7 +44,9 @@ export {
 	type ReviewThreadActions,
 	registerResourceRenderer,
 	rendererImplementationKey,
+	rendererTestId,
 	resolveRenderers,
+	selectResourceRenderer,
 	resourceContent,
 	type SurfaceReview,
 	threadLabel,
@@ -60,6 +65,7 @@ export {
 export { ReviewThreadCard } from "./support/ReviewThreadCard";
 export {
 	RendererView,
+	usePlacedThreadIds,
 	usePreloadResourceView,
 	useRendererSelection,
 } from "./support/rendererMount";

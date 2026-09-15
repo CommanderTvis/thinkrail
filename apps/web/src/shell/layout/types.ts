@@ -10,6 +10,14 @@ export interface LayoutFileTab {
 	path: string;
 }
 
+/** A file outside the worktree (Claude's user/managed-scope configuration), addressed absolutely. */
+export interface LayoutExternalFileTab {
+	kind: "external-file";
+	id: string;
+	name: string;
+	path: string;
+}
+
 export type LayoutDiffTab =
 	| {
 			kind: "diff";
@@ -60,6 +68,7 @@ export interface LayoutToolTab {
 
 export type LayoutCenterTab =
 	| LayoutFileTab
+	| LayoutExternalFileTab
 	| LayoutDiffTab
 	| LayoutChangesTab
 	| LayoutChatTab

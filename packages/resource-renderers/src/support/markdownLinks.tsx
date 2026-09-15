@@ -1,7 +1,11 @@
 import type { ReactNode } from "react";
 import type { Components } from "react-markdown";
-import type { ResourceHost } from "../host";
+import { useT } from "@thinkrail/locales/react";
+import { type ResourceHost, useOptionalResourceHost } from "../host";
+import { remarkHeadingIds } from "./headingIds";
 import { DOCUMENT_ID_PREFIX } from "./markdownHtml";
+
+export { remarkHeadingIds };
 
 export type HrefKind = "empty" | "anchor" | "external" | "relative";
 
@@ -43,38 +47,6 @@ export function slugify(text: string): string {
 function relativePathname(href: string): string {
 	const i = href.search(/[?#]/);
 	return i < 0 ? href : href.slice(0, i);
-}
-
-interface MdNode {
-	type: string;
-	value?: string;
-	children?: MdNode[];
-	data?: { hProperties?: Record<string, unknown> };
-}
-
-function headingText(node: MdNode): string {
-	if (typeof node.value === "string") return node.value;
-	return (node.children ?? []).map(headingText).join("");
-}
-
-export function remarkHeadingIds() {
-	return (tree: MdNode): void => {
-		const seen = new Map<string, number>();
-		walk(tree, (node) => {
-			if (node.type !== "heading") return;
-			const base = slugify(headingText(node));
-			if (!base) return;
-			const n = seen.get(base) ?? 0;
-			seen.set(base, n + 1);
-			const id = n === 0 ? base : `${base}-${n}`;
-			node.data = { ...node.data, hProperties: { ...node.data?.hProperties, id } };
-		});
-	};
-}
-
-function walk(node: MdNode, visit: (n: MdNode) => void): void {
-	visit(node);
-	for (const child of node.children ?? []) walk(child, visit);
 }
 
 function scrollToAnchor(id: string): void {
@@ -122,6 +94,8 @@ export function documentComponents(
 	{ bytesUrl, openFile }: Pick<ResourceHost, "bytesUrl" | "openFile">,
 ): Components {
 	function DocumentLink({ href, children }: { href?: string; children?: ReactNode }) {
+		const t = useT();
+		const specLink = useOptionalResourceHost()?.specLink;
 		const kind = classifyHref(href);
 		if (kind === "anchor" && href) {
 			return (
@@ -134,6 +108,26 @@ export function documentComponents(
 				>
 					{children}
 				</a>
+			);
+		}
+		const spec = specLink?.(ctx.workspaceId, href ?? "") ?? null;
+		if (spec !== null) {
+			const { id, path } = spec;
+			return (
+				<button
+					type="button"
+					data-testid="markdown-spec-link"
+					data-spec-id={id}
+					data-path={path ?? undefined}
+					disabled={!path}
+					title={path ? undefined : t("panels.markdownLinks.unknownSpec", { id })}
+					onClick={() => {
+						if (path) openFile(ctx.workspaceId, path);
+					}}
+					className="cursor-pointer text-left text-primary underline decoration-primary-muted underline-offset-2 hover:decoration-primary disabled:cursor-default disabled:text-text-subtle disabled:no-underline"
+				>
+					{children}
+				</button>
 			);
 		}
 		if (kind === "relative" && href) {

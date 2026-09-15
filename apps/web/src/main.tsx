@@ -40,7 +40,7 @@ function App() {
 	const t = useT();
 	return (
 		<ErrorBoundary label={t("app.errorBoundary.label")} reportId="app">
-			<TooltipProvider delayDuration={250} skipDelayDuration={400}>
+			<TooltipProvider delayDuration={250} skipDelayDuration={400} disableHoverableContent>
 				<AppResourceHost>
 					<Shell />
 				</AppResourceHost>

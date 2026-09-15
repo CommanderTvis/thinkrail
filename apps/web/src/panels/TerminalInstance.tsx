@@ -1,9 +1,4 @@
-import type {
-	TerminalDataPush,
-	TerminalDetachedPush,
-	TerminalExitPush,
-} from "@thinkrail/contracts";
-import { WS_CHANNELS } from "@thinkrail/contracts";
+import { type TerminalDataPush, type TerminalDetachedPush, type TerminalExitPush, WS_CHANNELS } from "@thinkrail/contracts";
 import { ClipboardAddon } from "@xterm/addon-clipboard";
 import { FitAddon } from "@xterm/addon-fit";
 import { Unicode11Addon } from "@xterm/addon-unicode11";

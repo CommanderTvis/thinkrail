@@ -3,6 +3,7 @@ import type {
 	AppConfigUpdate,
 	BackgroundCommandCompletionDetails,
 	BackgroundCommandOutputResult,
+	BranchDetail,
 	BranchList,
 	BranchStatus,
 	ChangeReceipt,
@@ -14,6 +15,7 @@ import type {
 	ExistingWorktreeCandidate,
 	ExtensionCatalogEntry,
 	FileNode,
+	FileWriteResult,
 	GitCommit,
 	GitDiffScope,
 	GithubAuthStatus,
@@ -55,6 +57,7 @@ import type {
 	ReviewCommentStatus,
 	ReviewFixDetails,
 	ReviewSnapshot,
+	SearchHits,
 	SessionResources,
 	SessionStateRecord,
 	SpecGraphSnapshot,
@@ -226,6 +229,7 @@ export const WS_METHODS = {
 	projectSetGroupEnabled: "project.setGroupEnabled",
 	projectSkills: "project.skills",
 	workspaceCreate: "workspace.create",
+	workspaceSuggestName: "workspace.suggestName",
 	workspaceRename: "workspace.rename",
 	workspaceListExisting: "workspace.listExisting",
 	workspaceOpenExisting: "workspace.openExisting",
@@ -247,6 +251,8 @@ export const WS_METHODS = {
 	workspaceWatchReady: "workspace.watchReady",
 	workspaceOpenIn: "workspace.openIn",
 	workspaceReveal: "workspace.reveal",
+	fsRevealPath: "fs.revealPath",
+	fsTrashPath: "fs.trashPath",
 	editorList: "editor.list",
 	gitListBranches: "git.listBranches",
 	gitPrefetch: "git.prefetch",
@@ -260,7 +266,9 @@ export const WS_METHODS = {
 	prReopen: "pr.reopen",
 	fsReadDir: "fs.readDir",
 	fsReadFile: "fs.readFile",
+	fsWriteFile: "fs.writeFile",
 	specGraph: "spec.graph",
+	terminalRename: "terminal.rename",
 	todoList: "todo.list",
 	todoAdd: "todo.add",
 	todoUpdate: "todo.update",
@@ -272,6 +280,9 @@ export const WS_METHODS = {
 	todoGenerateSummary: "todo.generateSummary",
 	gitStatus: "git.status",
 	gitDiffFile: "git.diffFile",
+	gitBranchDetails: "git.branchDetails",
+	gitDeleteBranch: "git.deleteBranch",
+	gitFetchRemotes: "git.fetchRemotes",
 	gitListCommits: "git.listCommits",
 	workspaceTurns: "workspace.turns",
 	changeRevert: "change.revert",
@@ -283,6 +294,7 @@ export const WS_METHODS = {
 	terminalResize: "terminal.resize",
 	terminalClose: "terminal.close",
 	dialogSelectDirectory: "dialog.selectDirectory",
+	dialogSelectFile: "dialog.selectFile",
 	skillList: "skill.list",
 	skillsState: "skills.state",
 	extensionList: "extension.list",
@@ -639,6 +651,7 @@ export interface WsMethodMap {
 		params: { projectId: string; name?: string; baseRef?: string };
 		result: Workspace;
 	};
+	"workspace.suggestName": { params: { projectId: string }; result: { name: string } };
 	"workspace.rename": { params: { id: string; name: string }; result: Workspace };
 	"workspace.listExisting": {
 		params: { projectId: string };
@@ -744,10 +757,17 @@ export interface WsMethodMap {
 		result: OpenPrResult;
 	};
 	"fs.readDir": { params: { workspaceId: string; path: string }; result: FileNode[] };
+	"fs.search": { params: { workspaceId: string; query: string }; result: SearchHits };
 	"fs.readFile": {
 		params: { workspaceId: string; path: string };
 		result: { content: string; meta: ResourceMeta };
 	};
+	"fs.writeFile": {
+		params: { workspaceId: string; path: string; content: string; baseHash: string };
+		result: FileWriteResult;
+	};
+	"fs.revealPath": { params: { workspaceId: string; path: string }; result: Ack };
+	"fs.trashPath": { params: { workspaceId: string; path: string }; result: Ack };
 	"spec.graph": { params: { workspaceId: string }; result: SpecGraphSnapshot };
 	"todo.list": {
 		params: { workspaceId: string; sessionId: string; opened?: "page" | "rail" };
@@ -802,6 +822,12 @@ export interface WsMethodMap {
 			meta: { original: ResourceMeta; modified: ResourceMeta };
 		};
 	};
+	"git.branchDetails": { params: { projectId: string }; result: { branches: BranchDetail[] } };
+	"git.deleteBranch": {
+		params: { projectId: string; branch: string };
+		result: Record<string, never>;
+	};
+	"git.fetchRemotes": { params: { projectId: string }; result: Record<string, never> };
 	"git.listCommits": { params: { workspaceId: string }; result: { commits: GitCommit[] } };
 	"workspace.turns": { params: { workspaceId: string }; result: { turns: TurnChangeSet[] } };
 	"change.revert": {
@@ -824,7 +850,15 @@ export interface WsMethodMap {
 	};
 	"terminal.attach": {
 		params: { workspaceId: string; tabKey: string; title?: string; cols?: number; rows?: number };
-		result: { id: string; created: boolean; replay?: string };
+		result: {
+			id: string;
+			created: boolean;
+			replay?: string;
+		};
+	};
+	"terminal.rename": {
+		params: { workspaceId: string; tabKey: string; title: string };
+		result: Record<string, never>;
 	};
 	"terminal.list": {
 		params: { workspaceId: string };
@@ -837,6 +871,7 @@ export interface WsMethodMap {
 		result: { closed: boolean; busy: boolean };
 	};
 	"dialog.selectDirectory": { params: Record<string, never>; result: { path: string | null } };
+	"dialog.selectFile": { params: Record<string, never>; result: { path: string | null } };
 	"skill.list": { params: { projectId: string }; result: SlashCommandInfo[] };
 	"skills.state": { params: { workspaceId: string }; result: SkillCatalogEntry[] };
 	"extension.list": { params: Record<string, never>; result: ExtensionCatalogEntry[] };

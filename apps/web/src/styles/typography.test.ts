@@ -3,7 +3,6 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { normalizeEol } from "../../scripts/generatedFiles";
-import type { Style, StyleRef, Typography } from "../../scripts/typography";
 import {
 	allStyles,
 	GENERATED_PATH,
@@ -16,7 +15,10 @@ import {
 	renderCss,
 	resolveFamily,
 	resolveStyle,
+	type Style,
+	type StyleRef,
 	styleClassName,
+	type Typography,
 	validate,
 } from "../../scripts/typography";
 
@@ -437,8 +439,11 @@ describe("generated CSS", () => {
 		const monaco = read(
 			join(SRC, "../../../packages/resource-renderers/src/support/monacoSetup.ts"),
 		);
+		const editorFont = read(
+			join(SRC, "../../../packages/resource-renderers/src/support/editorFont.ts"),
+		);
 		const xterm = read(join(SRC, "panels/TerminalInstance.tsx"));
-		expect(monaco).toContain('cssVar("--tr-font-size-s11")');
+		expect(editorFont).toContain('cssVar("--tr-font-size-s11")');
 		expect(xterm).toContain('cssVar("--tr-font-size-s13")');
 		for (const file of [monaco, xterm]) {
 			expect(file).toContain('cssVar("--tr-font-family-code")');

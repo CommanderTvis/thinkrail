@@ -3,6 +3,12 @@ export { AuxiliaryRail, AuxiliaryRailToolButton } from "./AuxiliaryRail";
 export * from "./auxiliaryPresentation";
 export * from "./model";
 export * from "./normalized";
+export { frameTopology } from "./normalized";
 export * from "./presets";
 export * from "./types";
-export { type LayoutTabFocusRequest, Workbench, type WorkbenchProps } from "./Workbench";
+export {
+	type LayoutTabFocusRequest,
+	type PreparedLayoutClose,
+	Workbench,
+	type WorkbenchProps,
+} from "./Workbench";

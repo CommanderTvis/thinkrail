@@ -48,6 +48,11 @@ not this module; the theme-aware highlighter remains app-local.
   (plain-http remote access) or a denied permission has no clipboard, and every caller's answer is the same
   — do nothing loud, the text stays visible/selectable), **`randomId()`** (16 random bytes through
   `getRandomValues`, which remains available to a plain-HTTP remote client),
+  **`zoomGesture.ts`** — what a zoom *gesture* is and where it leaves the scale
+  (`isZoomGesture`, `zoomScaleForWheel`, `clampZoomScale`, and the min/max/step constants): macOS
+  delivers a trackpad pinch as a ctrlKey wheel event, and the step has to follow the delta's *size* or a
+  pinch leaps. Shared by the PDF preview and the diagram pan/zoom, since two surfaces disagreeing about
+  what a pinch means is a bug the user feels in their fingers. Also
   **`DOUBLE_CLICK_SETTLE_MS`** (the click→double-click window, used only where a single click would
   commit something a double click contradicts: a single click (or keyboard activation) on the active
   preview tab, so a double click is not read as two keeps, the Changes review-tab preview, and the Review
@@ -106,6 +111,8 @@ not this module; the theme-aware highlighter remains app-local.
   `shallowEqualArrays`, `userText`, `firstNonBlankLine` (first trimmed non-empty line, `undefined` when
   the text is blank — shared by chat's thinking-heading extraction and history prompt rows), `isShellInert` (a value made only of characters that stay literal in POSIX, PowerShell,
   and cmd, so it may be interpolated into a command a human copies and runs), `parseSkillInvocation`, `matchesSkillInvocationCommand`,
+  `shellQuotePath`, `FILE_DRAG_TYPE`, `startFileDrag`,
+  `carriesFileDrag`, `draggedFile`, the `DraggedFile` type, `mergeText`, `hasConflictMarkers`,
   `relativeTime`, `compactAge`, the render-time default names `chatName` / `terminalName` (+ the
   language-neutral `defaultTerminalTitle` / `defaultTerminalIndex`) / `changesTabName` / `diffTabName` /
   `turnTimeLabel` / `planDocumentName` (stored tab names carry no translated text; these word them for the

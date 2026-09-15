@@ -57,6 +57,26 @@ export interface ResourceFileReviewProps {
 	children: (review: SurfaceReview) => ReactNode;
 }
 
+export interface EditorSelectionChange {
+	workspaceId: string;
+	path: string;
+	text: string;
+	language: string;
+	startLine: number;
+	startColumn: number;
+	endLine: number;
+	endColumn: number;
+	/** The line `endColumn` belongs to, when `endLine` was trimmed back off an unselected trailing line. */
+	endColumnLine?: number;
+	empty: boolean;
+}
+
+export interface ResourceEditorEvents {
+	selectionChange(change: EditorSelectionChange): void;
+	sendToChat(change: EditorSelectionChange): void;
+	close(workspaceId: string, path: string): void;
+}
+
 export interface ResourceHost {
 	markdown: ResourceMarkdown;
 	code: ResourceCodeHost;
@@ -73,11 +93,23 @@ export interface ResourceHost {
 	): () => void;
 	FileReview: ComponentType<ResourceFileReviewProps>;
 	ReviewSend: ComponentType<ResourceReviewSendProps>;
+	editor?: ResourceEditorEvents;
+	/** What a document says about itself above its body: a title, and the type vocabulary its properties offer. */
+	documentHeader?: {
+		title(workspaceId: string, path: string, text: string): string | null;
+		typeSuggestions?: readonly string[];
+		/** Rewrites a body line-for-line when the document names other documents (a spec's `[[id]]`); `content` is the whole file. */
+		linkify?(content: string, body: string): string;
+		urlTransform?: ReactMarkdownProps["urlTransform"];
+	};
+	specLink?(workspaceId: string, href: string): { id: string; path: string | null } | null;
 }
 
 export interface ResourcePreferences {
 	fileLineWidth: number;
 	fileLineWidthBounded: boolean;
+	editorGpuRendering?: boolean;
+	codeFontLigatures?: boolean;
 }
 
 const ResourceHostContext = createContext<ResourceHost | null>(null);

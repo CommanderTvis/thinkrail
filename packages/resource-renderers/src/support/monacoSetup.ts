@@ -22,6 +22,7 @@ import * as monaco from "monaco-editor/editor/editor.api.js";
 import editorWorker from "monaco-editor/editor/editor.worker?worker";
 import onigWasmUrl from "shiki/onig.wasm?url";
 import type { ResourceCodeHost } from "../host";
+import { cssVar, editorFontSize, editorGpuUsable } from "./editorFont";
 import { editorWrappingOptions } from "./editorWrapping";
 import { createShikiTokens, monacoThemeData } from "./shikiTokens";
 
@@ -78,8 +79,14 @@ export function languageForPath(path: string): string {
 	return id;
 }
 
-function cssVar(name: string): string | undefined {
-	return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || undefined;
+let webgpuUsable = false;
+void editorGpuUsable.then((usable) => {
+	webgpuUsable = usable;
+});
+
+/** Monaco's GPU renderer, only where everything it needs answers — see SPEC.md. */
+export function gpuAcceleration(requested: boolean): "on" | "off" {
+	return requested && webgpuUsable ? "on" : "off";
 }
 
 export function fileEditorOptions(
@@ -87,8 +94,10 @@ export function fileEditorOptions(
 	lineWidth: number,
 	bounded: boolean,
 	path: string,
+	gpu = false,
+	ligatures = false,
 ) {
-	const fontSize = Number.parseFloat(cssVar("--tr-font-size-s11") ?? "") || 11;
+	const fontSize = editorFontSize();
 	const lineHeight = Number.parseFloat(cssVar("--tr-line-height-default") ?? "") || undefined;
 	const paddingTop = Number.parseFloat(cssVar("--space-8") ?? "");
 	const options: editor.IStandaloneEditorConstructionOptions = {
@@ -107,6 +116,8 @@ export function fileEditorOptions(
 		automaticLayout: true,
 		fontSize,
 		fontFamily: cssVar("--tr-font-family-code") ?? "monospace",
+		experimentalGpuAcceleration: gpuAcceleration(gpu),
+		fontLigatures: ligatures,
 		...(lineHeight && lineHeight > 0 ? { lineHeight } : {}),
 		scrollbar: {
 			vertical: "auto",
@@ -159,7 +170,7 @@ export function syncFileModel(
 		current?.dispose();
 		return;
 	}
-	if (input.text !== appliedText) current.setValue(input.text);
+	if (input.text !== appliedText && current.getValue() !== input.text) current.setValue(input.text);
 }
 
 export function revealLineNow(codeEditor: editor.IStandaloneCodeEditor, line: number): void {

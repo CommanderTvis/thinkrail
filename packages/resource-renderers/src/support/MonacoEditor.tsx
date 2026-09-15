@@ -1,7 +1,12 @@
 import { useT } from "@thinkrail/locales/react";
-import type { editor } from "monaco-editor/editor/editor.api.js";
+import { type editor, KeyCode, type Selection } from "monaco-editor/editor/editor.api.js";
 import { useId, useLayoutEffect, useRef, useState } from "react";
-import { type ResourceHost, useResourceHost, useResourcePreferences } from "../host";
+import {
+	type EditorSelectionChange,
+	type ResourceHost,
+	useResourceHost,
+	useResourcePreferences,
+} from "../host";
 import type { ResourceDescriptor, ResourceViewProps, SurfaceReview } from "../registry";
 import { MonacoReviewZones } from "./MonacoReviewZones";
 import { decorateEditorContextMenus } from "./monacoMenuIcons";
@@ -28,6 +33,39 @@ function focusLine(review: SurfaceReview): number | null {
 	return range?.kind === "lineRange" ? range.startLine : null;
 }
 
+/**
+ * What the chat is handed: the selected text and the lines it covers, with a trailing line the user did
+ * not really select trimmed off — a selection ending in column 1 of the next line. See SPEC.md.
+ */
+function selectionChange(
+	codeEditor: editor.IStandaloneCodeEditor,
+	range: Selection,
+	workspaceId: string,
+	path: string,
+): EditorSelectionChange {
+	const model = codeEditor.getModel();
+	return {
+		workspaceId,
+		path,
+		text: model?.getValueInRange(range) ?? "",
+		language: model?.getLanguageId() ?? "",
+		startLine: range.startLineNumber,
+		startColumn: range.startColumn,
+		endLine:
+			range.endColumn === 1 && range.endLineNumber > range.startLineNumber
+				? range.endLineNumber - 1
+				: range.endLineNumber,
+		endColumn: range.endColumn,
+		endColumnLine: range.endLineNumber,
+		empty: range.isEmpty(),
+	};
+}
+
+function revealAt(codeEditor: editor.IStandaloneCodeEditor, line: number): void {
+	codeEditor.setPosition({ lineNumber: line, column: 1 });
+	codeEditor.revealLineInCenter(line);
+}
+
 function isEditorViewState(value: unknown): value is editor.ICodeEditorViewState {
 	if (typeof value !== "object" || value === null) return false;
 	return Array.isArray(Reflect.get(value, "cursorState")) && Reflect.has(value, "viewState");
@@ -44,15 +82,34 @@ export default function MonacoEditor({
 	review,
 	viewState,
 	onViewState,
+	edit,
+	focusLine: lineToFocus,
+	onFocusHandled,
 }: ResourceViewProps) {
 	const t = useT();
-	const { fileLineWidth, fileLineWidthBounded } = useResourcePreferences();
-	ensureMonaco(useResourceHost().code);
+	const {
+		fileLineWidth,
+		fileLineWidthBounded,
+		editorGpuRendering = false,
+		codeFontLigatures = false,
+	} = useResourcePreferences();
+	const host = useResourceHost();
+	ensureMonaco(host.code);
 	const scope = useId().replace(/[^\w-]/g, "");
 	const path = resource.path;
 	const text = content.kind === "text" ? content.text : "";
 	const commentLabel = t("review.widget.commentOnSelection");
-	const options = fileEditorOptions(t, fileLineWidth, fileLineWidthBounded, resource.path);
+	const sendLabel = t("panels.monacoEditor.sendSelectionToChat");
+	const editable = edit !== undefined;
+	const baseOptions = fileEditorOptions(
+		t,
+		fileLineWidth,
+		fileLineWidthBounded,
+		resource.path,
+		editorGpuRendering,
+		codeFontLigatures,
+	);
+	const options = editable ? { ...baseOptions, readOnly: false } : baseOptions;
 	const containerRef = useRef<HTMLDivElement | null>(null);
 	const commentingRef = useRef<ReviewCommenting | null>(null);
 	const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
@@ -69,6 +126,12 @@ export default function MonacoEditor({
 		viewState,
 		review,
 		onViewState,
+		sendLabel,
+		edit,
+		events: host.editor,
+		workspaceId: resource.workspaceId,
+		lineToFocus,
+		onFocusHandled,
 	});
 	const [reviewZones, setReviewZones] = useState<MonacoReviewZoneState>({
 		threads: [],
@@ -85,6 +148,12 @@ export default function MonacoEditor({
 			viewState,
 			review,
 			onViewState,
+			sendLabel,
+			edit,
+			events: host.editor,
+			workspaceId: resource.workspaceId,
+			lineToFocus,
+			onFocusHandled,
 		};
 	});
 
@@ -109,7 +178,59 @@ export default function MonacoEditor({
 			: null;
 		threadsRef.current = threads;
 		commentingRef.current = commenting;
+		if (mount.lineToFocus !== undefined) {
+			revealAt(codeEditor, mount.lineToFocus);
+			mount.onFocusHandled?.();
+		}
+		const currentSelection = (range: Selection) => {
+			const latest = latestRef.current;
+			return selectionChange(codeEditor, range, latest.workspaceId, latest.path);
+		};
+		const sendSelection = (): void => {
+			const range = codeEditor.getSelection();
+			if (!range || range.isEmpty() || !codeEditor.getModel()) return;
+			latestRef.current.events?.sendToChat(currentSelection(range));
+		};
+		// Ctrl/Cmd+S is the editor's, never the window's — see SPEC.md.
+		const keys = codeEditor.onKeyDown((event) => {
+			if (!(event.ctrlKey || event.metaKey)) return;
+			if (event.keyCode === KeyCode.KeyS && !event.shiftKey) {
+				event.preventDefault();
+				event.stopPropagation();
+				latestRef.current.edit?.onSave();
+				return;
+			}
+			if (event.keyCode === KeyCode.KeyL && event.shiftKey) {
+				event.preventDefault();
+				event.stopPropagation();
+				sendSelection();
+			}
+		});
+		const chatAction = mount.events
+			? codeEditor.addAction({
+					id: `thinkrail.chat.sendSelection.${codeEditor.getId()}`,
+					label: mount.sendLabel,
+					precondition: "editorHasSelection",
+					contextMenuGroupId: "9_cutcopypaste",
+					contextMenuOrder: 3,
+					run: sendSelection,
+				})
+			: null;
+		const selection = codeEditor.onDidChangeCursorSelection((event) => {
+			if (!codeEditor.getModel()) return;
+			latestRef.current.events?.selectionChange(currentSelection(event.selection));
+		});
+		const changes = codeEditor.onDidChangeModelContent((event) => {
+			if (event.isFlush) return;
+			latestRef.current.edit?.onChange(codeEditor.getValue());
+		});
 		return () => {
+			keys.dispose();
+			chatAction?.dispose();
+			selection.dispose();
+			changes.dispose();
+			const latest = latestRef.current;
+			latest.events?.close(latest.workspaceId, latest.path);
 			const saved = codeEditor.saveViewState();
 			if (saved) latestRef.current.onViewState?.(saved);
 			menuIcons.dispose();
@@ -146,6 +267,13 @@ export default function MonacoEditor({
 		appliedRef.current = { ...appliedRef.current, options };
 		codeEditor.updateOptions(options);
 	}, [options]);
+
+	useLayoutEffect(() => {
+		const codeEditor = editorRef.current;
+		if (lineToFocus === undefined || !codeEditor) return;
+		revealAt(codeEditor, lineToFocus);
+		onFocusHandled?.();
+	}, [lineToFocus, onFocusHandled]);
 
 	const closeComposer = () => threadsRef.current?.closeComposer();
 	const layoutReviewZones = () => threadsRef.current?.layout();

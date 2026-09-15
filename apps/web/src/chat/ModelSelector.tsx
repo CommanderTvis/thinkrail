@@ -66,6 +66,7 @@ export function ModelSelector({
 	onSelectDefault,
 	disabled = false,
 	preferences,
+	showLabel = true,
 }: {
 	models: WireModel[];
 	current: WireModel | null;
@@ -79,6 +80,7 @@ export function ModelSelector({
 	onSelectDefault?: () => void;
 	disabled?: boolean;
 	preferences?: ModelPreferences;
+	showLabel?: boolean;
 }) {
 	const t = useT();
 	const [open, setOpen] = useState(false);
@@ -199,6 +201,7 @@ export function ModelSelector({
 					className,
 				)}
 			>
+				{showLabel ? <span className="tr-text-eyebrow text-text-muted">Model</span> : null}
 				<span className="truncate text-text-muted tr-text-metadata">
 					{current?.name ?? (placeholder || t("chat.modelPicker.selectModel"))}
 				</span>

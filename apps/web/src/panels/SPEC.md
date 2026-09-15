@@ -1544,6 +1544,8 @@ own section. The kebab menu (`plan-menu`, a
   *Template* (the host's discovered PR/MR templates, one picker), *Empty* — and **Generate with agent** /
   **Fill template with agent** (`pr.generate`) replaces the field's text with the host's one-shot draft;
   nothing is pushed until submit, and a `null` draft toasts instead of clearing the field.
+File rows offer both worktree-relative **Copy path** and host **Copy absolute path** in their context
+menu. A compacted folder copies the deepest represented directory for the absolute action.
 
 ## Get right
 

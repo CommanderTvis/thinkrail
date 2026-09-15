@@ -10,6 +10,7 @@ export {
 	firstPromptHead,
 	firstPromptOfTexts,
 	IMAGE_MAX_BASE64_BYTES,
+	isCodeFontFamily,
 	isComposerGrowthLimit,
 	isControlMessage,
 	isDelegationRunDetails,

@@ -147,6 +147,10 @@ function GroupLimitInput({
 		</span>
 	);
 }
+const PANE_DIRECTIONS = [
+	{ direction: "horizontal", label: "Columns" },
+	{ direction: "vertical", label: "Rows" },
+] as const;
 
 export function LayoutSettings() {
 	const t = useT();
