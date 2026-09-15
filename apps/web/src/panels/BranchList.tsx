@@ -4,13 +4,20 @@ import {
 	RiGitBranchLine as GitBranch,
 	RiDeleteBinLine as Trash,
 } from "@remixicon/react";
-import type { BranchDetail } from "@thinkrail/contracts";
+import type { BranchDeleteResult, BranchDetail } from "@thinkrail/contracts";
 import { Popover, PopoverContent, PopoverTrigger } from "@thinkrail/ui/popover";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { useCallback, useEffect, useState } from "react";
 import { toast, useAppStore } from "../store";
 import { errorText, getTransport } from "../transport";
+import { ConfirmDialog } from "./ConfirmDialog";
 import { ConfirmPopover } from "./ConfirmPopover";
+
+type DirtyWorktreeRecovery = Extract<BranchDeleteResult, { recovery: unknown }>;
+
+function isDirtyWorktreeRecovery(result: BranchDeleteResult): result is DirtyWorktreeRecovery {
+	return "recovery" in result;
+}
 
 function Row({
 	detail,
@@ -22,6 +29,8 @@ function Row({
 	onDeleted: () => void;
 }) {
 	const [confirming, setConfirming] = useState(false);
+	const [recovery, setRecovery] = useState<DirtyWorktreeRecovery | null>(null);
+	const [forcePath, setForcePath] = useState<string | null>(null);
 	const held = detail.workspaceId !== undefined;
 	const foreign = !held && detail.worktreePath !== undefined;
 	const reason = held
@@ -30,11 +39,22 @@ function Row({
 			? "This branch is checked out here."
 			: null;
 
-	const remove = () => {
+	const remove = (force = false) => {
 		setConfirming(false);
 		getTransport()
-			.request("git.deleteBranch", { projectId, branch: detail.branch })
-			.then(onDeleted)
+			.request(
+				"git.deleteBranch",
+				force
+					? { projectId, branch: detail.branch, force: true }
+					: { projectId, branch: detail.branch },
+			)
+			.then((result) => {
+				if (isDirtyWorktreeRecovery(result)) {
+					setRecovery(result);
+					return;
+				}
+				onDeleted();
+			})
 			.catch((error) => toast.error(errorText(error), "Couldn't delete the branch"));
 	};
 
@@ -64,14 +84,53 @@ function Row({
 					</IconTooltip>
 				) : null}
 			</span>
+			<ConfirmDialog
+				open={recovery !== null}
+				onOpenChange={(open) => {
+					if (!open) setRecovery(null);
+				}}
+				title={t("panels.branchList.deleteFailed", { branch: detail.branch })}
+				description={<span className="break-all">{recovery?.recovery.message}</span>}
+				confirmLabel={t("panels.branchList.forceRemoveEllipsis")}
+				destructive
+				confirmTestId="branch-force-recovery"
+				onConfirm={() => setForcePath(recovery?.recovery.worktreePath ?? null)}
+			/>
+			<ConfirmDialog
+				open={forcePath !== null}
+				onOpenChange={(open) => {
+					if (!open) setForcePath(null);
+				}}
+				title={t("panels.branchList.forceRemoveTitle")}
+				description={
+					<T
+						i18nKey="panels.branchList.forceRemoveDescription"
+						values={{
+							path: forcePath ?? t("panels.branchList.thisPath"),
+							branch: detail.branch,
+						}}
+						components={[<span key="path" className="break-all" />]}
+					/>
+				}
+				confirmLabel={t("panels.branchList.forceRemove")}
+				destructive
+				confirmTestId="branch-force-confirm"
+				onConfirm={() => remove(true)}
+			/>
 			<ConfirmPopover
 				open={confirming}
 				onOpenChange={setConfirming}
 				title={`Delete ${detail.branch}?`}
 				description={
-					foreign
-						? `The worktree at ${detail.worktreePath} is removed with it. One holding uncommitted work is kept instead, and nothing is deleted.`
-						: "The branch is removed from this repository. Commits only it points at become unreachable."
+					foreign ? (
+						<T
+							i18nKey="panels.branchList.deleteForeignDescription"
+							values={{ path: detail.worktreePath ?? "" }}
+							components={[<span key="path" className="break-all" />]}
+						/>
+					) : (
+						t("panels.branchList.deleteDescription")
+					)
 				}
 				confirmLabel="Delete branch"
 				destructive
