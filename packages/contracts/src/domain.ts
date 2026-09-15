@@ -120,7 +120,7 @@ export interface SpecGraphSnapshot {
 }
 
 export type TodoStatus = "pending" | "in_progress" | "done";
-export type TodoOrigin = "agent" | "user";
+export type TodoOrigin = "agent" | "user" | "adopted";
 
 export type TodoArtifactKind = "file" | "change" | "spec" | "commit";
 
@@ -192,6 +192,8 @@ export interface TodoPlan {
 	 * of silently absent.
 	 */
 	unattributed?: GitFileChange[];
+	/** Committed counterpart of `unattributed`: `base..HEAD` commits no item owns, as wire-only `done` items (`origin: "adopted"`) — host-derived, never stored. See submodule-server-todos. */
+	adoptedCommits?: TodoItem[];
 }
 
 export type DelegationRunStatus = "queued" | "running" | "completed" | "error" | "aborted";
