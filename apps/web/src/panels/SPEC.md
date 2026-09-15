@@ -27,7 +27,14 @@ treatment.
 
 ## Boundary
 
-- **Owns:** `ProjectTree`. Each top-level project row is a compact 28px IDE-tree row:
+- **Owns:** `ProjectTree`. It takes one optional render prop, `renderWorkspaceTabs(workspace)`, whose result
+  hangs under that workspace's row as plain indented rows (`workspace-tabs`), and the workspace list
+  switches from spaced rows to hairline-divided ones (`rack`); only the selected tab draws a rounded,
+  bordered box (the strip's `nested` row style, with tab groups rendering as one unified bubble that highlights
+  as a whole on hover), so the tree reads as shelves with one thing picked
+  rather than as nested guide lines or stacked boxes with doubled edges. The shell uses it to
+  put a workspace's open tabs and start actions in the tree when vertical tabs are at home in Projects
+  (`shell/SPEC.md`, `ProjectsTool`); the tree itself never reads layout state. Each top-level project row is a compact 28px IDE-tree row:
   **always-visible chevron** + folder/name + a collapsed-only plain workspace count (a bare digit, so its
   tooltip says what it counts: "3 workspaces") + an **always-visible Create
   workspace `+` in a fixed right-edge column**. That `+` is the **same control as the Projects-header Add
@@ -1077,8 +1084,13 @@ waits about a second, which is useless for text the user is already looking at.
 - **A tooltip is a label, never a target.** `TooltipContent` is `pointer-events-none` app-wide: anchored
   beside a control it inevitably covers a neighbour, and a panel that swallows the click meant for the
   tab underneath is worse than no tooltip at all. Safe because every label in the app is plain text —
-  an interactive tooltip would need its own component, not this one. `e2e/layout.spec.ts` pins both the
-  computed `pointer-events` and that a covered neighbour is still clickable.
+  an interactive tooltip would need its own component, not this one. The tab tooltip additionally opens
+  **along the strip's own axis** (`right` when vertical, `bottom` when horizontal) so it lands beside the
+  strip rather than on the next tab, and is anchored to the **whole tab row**, not the name button: the
+  button's right edge is exactly where the close cross sits, so a vertical strip's tooltip opened there
+  hides the control the same hover just revealed. Anchoring the row also keeps Radix's trigger off the
+  drag handle, which is what broke dragging when it wrapped the label span. `e2e/layout.spec.ts` pins both the computed `pointer-events` and
+  that a covered neighbour is still clickable.
 
 ## Selecting in the rendered document reaches whichever plugin is listening
 

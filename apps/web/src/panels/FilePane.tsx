@@ -193,7 +193,7 @@ function FilePaneBody({ tab }: { tab: FileTab | ExternalFileTab }) {
 	}
 
 	const view = tab.view ?? "rendered";
-	const paneDirection = "horizontal";
+	const paneDirection = useAppStore((s) => s.localLayoutPreferences.defaultPaneDirection);
 	// Scanning a large document for headings is not free, and this runs on every render of the pane.
 	const headings = useMemo(() => sourceHeadings(buffer), [buffer]);
 	// Overleaf-style: one click lands both sides. The preview scrolls to the heading's rendered element

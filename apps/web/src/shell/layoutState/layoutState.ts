@@ -23,9 +23,10 @@ import {
 	instantiateWorkbenchFrame,
 	minimumBottomGroupLimit,
 	minimumSideGroupLimit,
-	reflowWorkspaceViewForFrame,
 	projectWorkspaceLayout,
 	reconcileAttention,
+	reflowWorkspaceViewForFrame,
+	VERTICAL_TABS_WIDTH,
 	validateLayoutDocument,
 	type WorkbenchFrame,
 	type WorkspaceLayoutDocument,
@@ -423,7 +424,14 @@ function parsePreferences(value: unknown): LocalLayoutPreferences | undefined {
 		!Number.isInteger(value.maxBottomGroups) ||
 		Number(value.maxBottomGroups) < 1 ||
 		Number(value.maxBottomGroups) > 32 ||
-		typeof value.previewTabs !== "boolean"
+		typeof value.verticalCenterTabs !== "boolean" ||
+		!Number.isFinite(value.verticalCenterTabsWidth) ||
+		Number(value.verticalCenterTabsWidth) < VERTICAL_TABS_WIDTH.min ||
+		Number(value.verticalCenterTabsWidth) > VERTICAL_TABS_WIDTH.max ||
+		(value.defaultPaneDirection !== "horizontal" && value.defaultPaneDirection !== "vertical") ||
+		typeof value.previewTabs !== "boolean" ||
+		(value.verticalTabsInProjects !== undefined &&
+			typeof value.verticalTabsInProjects !== "boolean")
 	) {
 		return undefined;
 	}
@@ -431,6 +439,10 @@ function parsePreferences(value: unknown): LocalLayoutPreferences | undefined {
 		defaultPresetId: value.defaultPresetId,
 		maxSideGroups: Number(value.maxSideGroups),
 		maxBottomGroups: Number(value.maxBottomGroups),
+		verticalCenterTabs: value.verticalCenterTabs,
+		verticalCenterTabsWidth: Number(value.verticalCenterTabsWidth),
+		verticalTabsInProjects: value.verticalTabsInProjects === true,
+		defaultPaneDirection: value.defaultPaneDirection,
 		previewTabs: value.previewTabs,
 	};
 }

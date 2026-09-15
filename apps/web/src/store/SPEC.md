@@ -490,7 +490,14 @@ wire reply. See [[module-plugin-blueprint]]. The **Skills-reload badge** rides t
   (survives `ChatView`'s tab-switch remount) and per-session (a sibling/newer chat that loaded the current
   skills is not flagged; a reload clears only its own). Also **`updateFileTabContent(workspaceId, id, content, hash,
   tick)`** — a `FileTab` carries the `tick` its content was loaded at, so `FilePane` detects staleness
-  (`workspaceTick > tab.loadedTick`) across tab switches, and its diff twin
+  (`workspaceTick > tab.loadedTick`) across tab switches. A file tab is a **buffer**, not just content:
+  `content`/`hash` are what disk last said, `draft` is the unsaved text while it differs, and `external`
+  is disk content seen changing *under* an unsaved buffer. That last distinction is the whole point —
+  refreshing a dirty tab must not move `content`, because the three-way merge that resolves it has to be
+  cut from the text the edits were made against; the newer content waits in `external` and the pane says
+  so. **`setFileTabDraft`**, **`settleFileTabSave`**, **`applyFileTabMerge`** and
+  **`discardFileTabDraft`** are the four transitions, each one atomic so no call site can leave a buffer
+  half-updated (a merge, for instance, always moves the base and the draft together). Its diff twin
   **`updateDiffTabContent(workspaceId, id, original, modified, tick, loadedTarget)`** — a `DiffTab` follows the same
   staleness contract in `DiffPane`, in **two** dimensions: the fs tick and the review target the two sides were
   read against, written together so neither can outlive the content it describes. The transient
@@ -531,7 +538,8 @@ Panes mount only while their resource is locally selected, so without that recor
 while it sat in the background would mount with the new target already in hand, conclude nothing changed, and show the *old*
 target's diff under the new target's label; the cached value is what the mount compares against. Its
 per-resource view state: `view` split|inline via
-**`setDiffTabView`**, split the default; a markdown diff's `rendered` flag via **`setDiffTabRendered`**
+**`setDiffTabView`**, unset until the user picks (`DiffPane` derives split-or-inline from the pane's
+width until then — see `panels/SPEC.md`); a markdown diff's `rendered` flag via **`setDiffTabRendered`**
 (swaps raw lines for compiled documents — `DiffPane` offers it for markdown paths only); and
 `ignoreWhitespace` via **`setDiffTabIgnoreWhitespace`** (Monaco's `ignoreTrimWhitespace`). All three go
 through one internal `patchDiffRenderState(state, workspaceId, id, patch)` helper — locate-the-resource-cache
@@ -560,7 +568,30 @@ branch's review — a commit sha means nothing in another worktree — and dropp
   and the intent carries the chat resource so a cache/placement id alias (including an id collision resolved
   by placement-only minting) still selects semantically. That selection deliberately does not focus the tab,
   because the mounted history query owns focus. The shell updates the group's local attention so the target
-  body mounts and consumes the request without publishing a structural snapshot. The `EditorTab` (`FileTab`
+  body mounts and consumes the request without publishing a structural snapshot.
+  The same family carries **`composerFocusRequest { id, sessionId }`** — set by **`addToChatDraft`**,
+  cleared by **`clearComposerFocus()`** — which is how text written into a chat's draft from outside the
+  chat subtree (the editor's "Send selection to chat", a restored queue) also hands over the caret.
+  `addToChatDraft(sessionId, text)` is one action rather than a draft write plus a focus call at each site:
+  the added text leads and whatever was already typed follows it, and the request that lands with it is
+  what `ChatView` turns into a composer focus at the draft's end (see `chat/SPEC.md`). Blank text and an
+  unknown session write nothing and ask for nothing.
+  **`editorSelectionByWorkspace`** is a different kind of transient: not a request but a *standing* one —
+  what the editor has highlighted, and whether the chat is still carrying it. `setEditorSelection` writes it
+  (null when the selection empties or the tab unmounts) and re-arms `attached`, because a fresh highlight is
+  a fresh offer; `detachEditorSelection` is the user declining it, or a send consuming it.
+  A third transient in the same family is **`fileFocusRequest { workspaceId, path, keyPath }`** — set by
+  **`requestFileFocus`**, cleared by **`clearFileFocus(path?)`** once the editor has revealed it. Its one
+  caller, before the plugin-api migration, was the Claude configuration pane opening a file at one of its entries; that pane
+  is now `@thinkrail/plugin-claude-code`'s, and `PluginWebContext`'s `editors.open()` has no `keyPath`
+  option, so this mechanism currently has no caller (`FilePane` still reads `fileFocusRequest` and resolves
+  it, so it works the moment something calls `requestFileFocus` again — nothing here was removed, only its
+  one caller moved somewhere that cannot reach it yet; see `module-plugin-claude-code`'s SPEC.md). It
+  carries a *key path*, never a line: the
+  line is resolved in `FilePane` against the text the editor holds, so nothing here can go stale against
+  an edited file (`panels/SPEC.md`). Like its siblings it stays out of the tab and the layout document —
+  an already-open tab is reused rather than rebuilt, and a caret position is not something a restored
+  layout should re-assert — and it is dropped with its workspace in `applyWorkspaceRemoved`. The `EditorTab` (`FileTab`
   | `ChatTab` | `DocTab` | `DiffTab` | `PlanTab`) + `TerminalTab` + `ClosedChat` + `SessionRuntime` types.
   (Chat *render* types + renderers live in the `chat` module.) The pure context
   selectors in `selectors.ts` resolve the active `Workspace`, its owning project id, and the shell's context

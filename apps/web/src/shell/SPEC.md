@@ -32,6 +32,18 @@ Every child is a directory module with `index.ts` as its public surface:
 - `railDefault.ts` (no barrel, one file) owns `resolvePluginRailDefaults` — the plugin half of "a rail that
   opens on something worth reading" below, pulled out of `WorkspaceWorkbench.tsx` so it is unit-testable
   without that file's panel imports.
+- `ProjectsTool.tsx` (no barrel, one file) is what both shells mount as the Projects tool: `ProjectTree`,
+  plus — while vertical tabs are at home in Projects (`layout/SPEC.md`, *Vertical center tabs*) — each
+  workspace's centre tabs under its row through the panel's `renderWorkspaceTabs` render prop: the live
+  strips from `useCenterTabsInProjects()` for the active workspace, `WorkspaceTabsPreview` for every other.
+  Inactive previews preserve each tab pane as one shared hover bubble, including its accent and member
+  dividers. Hovering either member highlights the whole pane; standalone tabs highlight individually.
+  Clicking a member activates its workspace and selects that member with the pane intact.
+  The tree stays a panel that knows nothing of layout; the shell decides what hangs under a workspace.
+  It also remembers the pane's scroll position across workspace switches: `WorkspaceWorkbench` is keyed
+  by workspace, so every switch rebuilds the Projects scroll area from the top, and with tabs living in
+  the tree a switch is exactly the click that used to leave you where you were. The position is kept
+  in module state (one Projects pane per window) and restored before the first paint.
 
 The sibling dependency graph is: `layoutState → layout`; `chatReconciliation → layout + layoutState`; `terminalReconciliation → layout`; `layoutIntents → layout + chatReconciliation + terminalReconciliation`; `legacySelection` reaches store selectors/actions only; and `WorkspaceWorkbench` composes each active orchestration barrel with `layout`, panels, and render callbacks. Chat resource availability is isolated behind a per-session selector component; the parent workbench never subscribes to the whole `sessions` record, so a streaming runtime cannot invalidate every tab renderer and side tool behind it. Siblings import only through barrels. Tests live with the orchestration module that owns the behavior rather than making store tests import shell runtime effects.
 
@@ -120,7 +132,7 @@ Default-terminal creation no longer depends on a host layout revision. The works
 
 ## Layout settings
 
-Built-in presets remain web-owned. The Layout section presents built-ins plus the host-synchronized custom preset catalog, while default preset selection, independent side/bottom limits, and whether a click previews are local to this frontend surface. The selected default is the explicit Reset frame target; it is not reapplied on workspace switches because every workspace shares the current frame. Capture/rename/delete changes only the shared custom definition. Apply or Reset replaces this window's frame and reflows all retained workspace views, preserving resource identities, then persists locally; another frontend is unaffected.
+Built-in presets remain web-owned. The Layout section presents built-ins plus the host-synchronized custom preset catalog, while default preset selection, independent side/bottom limits, vertical editor tabs, their column width and whether that column lives under its workspace in Projects, the default pane arrangement, and whether a click previews are local to this frontend surface. The selected default is the explicit Reset frame target; it is not reapplied on workspace switches because every workspace shares the current frame. Capture/rename/delete changes only the shared custom definition. Apply or Reset replaces this window's frame and reflows all retained workspace views, preserving resource identities, then persists locally; another frontend is unaffected.
 
 ## Long-operation feedback
 

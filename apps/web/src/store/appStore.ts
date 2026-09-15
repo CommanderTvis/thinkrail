@@ -73,11 +73,13 @@ import type { EditorRef } from "../panels/editorEvents";
 import { emitEditorEvent } from "../panels/editorEvents";
 import type {
 	LayoutAuxiliaryRegion,
+	LayoutTabPane,
 	LayoutToolId,
 	WorkbenchFrame,
 	WorkspaceLayoutDocument,
 	WorkspaceViewState,
 } from "../shell/layout";
+import { VERTICAL_TABS_WIDTH } from "../shell/layout";
 import type { ConnectionStatus } from "../transport";
 import {
 	type HistoryTarget,
@@ -219,16 +221,28 @@ export type TabIntent = "preview" | "keep";
 
 export interface LocalLayoutPreferences {
 	defaultPresetId: string;
-	/** Whether a single click opens a file in the reusable preview slot rather than a tab of its own. */
-	previewTabs: boolean;
 	maxSideGroups: number;
 	maxBottomGroups: number;
+	/** Center tabs as a column beside the editor instead of a strip above it. */
+	verticalCenterTabs: boolean;
+	/** Width of that column, in px. Ignored while `verticalCenterTabs` is off. */
+	verticalCenterTabsWidth: number;
+	/** That column lives under its workspace in Projects instead of beside the editor. Ignored while `verticalCenterTabs` is off. */
+	verticalTabsInProjects: boolean;
+	/** How a pane is arranged when one is first made; joining an existing pane follows that pane. */
+	defaultPaneDirection: LayoutTabPane["direction"];
+	/** Whether a single click opens a file in the reusable preview slot rather than a tab of its own. */
+	previewTabs: boolean;
 }
 
 export const DEFAULT_LOCAL_LAYOUT_PREFERENCES: LocalLayoutPreferences = {
 	defaultPresetId: "balanced",
 	maxSideGroups: 6,
 	maxBottomGroups: 3,
+	verticalCenterTabs: false,
+	verticalCenterTabsWidth: VERTICAL_TABS_WIDTH.default,
+	verticalTabsInProjects: false,
+	defaultPaneDirection: "horizontal",
 	previewTabs: true,
 };
 
@@ -310,6 +324,14 @@ export type LayoutIntent =
 	| { id: string; kind: "close-terminal"; workspaceId: string; tabKey: string }
 	| { id: string; kind: "select-terminal"; workspaceId: string; tabKey: string }
 	| { id: string; kind: "toggle-side"; workspaceId: string; side: "left" | "right" }
+	| {
+			id: string;
+			kind: "pane-with";
+			workspaceId: string;
+			tabId: string;
+			targetId: string;
+			direction: "horizontal" | "vertical";
+	  }
 	| { id: string; kind: "toggle-bottom"; workspaceId: string };
 export type LayoutIntentInput = LayoutIntent extends infer Intent
 	? Intent extends { id: string }

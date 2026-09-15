@@ -5,6 +5,7 @@ import {
 } from "@remixicon/react";
 import { lazy, Suspense, useState } from "react";
 import { IconTooltip } from "@/components/ui/tooltip";
+import { useElementSize } from "@/lib";
 import { copyText, isMarkdownPath } from "@/lib/utils";
 import { editorFontSize } from "@/panels/editorFont";
 import { OutlineColumn, OutlineToggle, scrollToHeading } from "@/panels/Outline";
@@ -65,7 +66,8 @@ export function DiffPane({ tab }: { tab: DiffTab }) {
 	);
 
 	const markdown = isMarkdownPath(tab.path);
-	const view = tab.view ?? "split";
+	const { ref: paneRef, width: paneWidth } = useElementSize();
+	const view = tab.view ?? (narrowForSplit(paneWidth, editorFontSize()) ? "inline" : "split");
 	const rendered = markdown && (tab.rendered ?? false);
 	const outlineOpen = rendered && (tab.outlineOpen ?? false);
 	const ignoreWhitespace = tab.ignoreWhitespace ?? false;
@@ -107,7 +109,7 @@ export function DiffPane({ tab }: { tab: DiffTab }) {
 		</>
 	);
 	return (
-		<div data-testid="diff-pane" className="flex h-full min-h-0 flex-col">
+		<div ref={paneRef} data-testid="diff-pane" className="flex h-full min-h-0 flex-col">
 			<div
 				data-testid="diff-view-toggle"
 				role="toolbar"
