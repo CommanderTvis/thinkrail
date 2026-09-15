@@ -3,14 +3,20 @@ import {
 	type ComposerGrowthLimit,
 	SUBAGENT_SETTINGS_PROTOCOL_VERSION,
 	type SubagentOverride,
+	type ThinkingLevel,
+	type WireModel,
 	type Workspace,
 } from "@thinkrail/contracts";
+import { useEffect, useState } from "react";
 import {
 	type ChatMessageOrder,
 	moveStreamingResponseHandle,
 	STREAMING_RESPONSE_MOVEMENT_LIMITS,
 	type StreamingResponseMovement,
 } from "@/chat/chatPreferences";
+import { ModelSelector } from "@/chat/ModelSelector";
+import { ThinkingSelector } from "@/chat/ThinkingSelector";
+import { useModelCatalog } from "@/chat/useModelCatalog";
 import { cn } from "@/lib";
 import { selectActiveWorkspace, toast, useAppStore } from "@/store";
 import { getTransport } from "@/transport";
@@ -245,6 +251,65 @@ export function SubagentSettings({
 	);
 }
 
+export function DefaultModelSettings() {
+	const { models, refreshing, refresh } = useModelCatalog(true);
+	const [defaultState, setDefaultState] = useState<{
+		model: WireModel | null;
+		thinkingLevel: ThinkingLevel;
+	} | null>(null);
+
+	useEffect(() => {
+		getTransport()
+			.request("model.default", {})
+			.then(setDefaultState)
+			.catch(() => {});
+	}, []);
+
+	const update = (params: { model?: WireModel | null; thinkingLevel?: ThinkingLevel | null }) => {
+		getTransport()
+			.request("model.setDefault", params)
+			.then(setDefaultState)
+			.catch(() => toast.error("Couldn't change the default model"));
+	};
+
+	const currentModel = defaultState?.model ?? null;
+	const currentLevel = defaultState?.thinkingLevel ?? "medium";
+
+	return (
+		<div data-testid="settings-default-model" className="flex flex-col gap-8">
+			<div className="flex flex-col gap-4">
+				<h3 className="tr-title-section text-text-default">Default model</h3>
+				<p className="text-text-muted tr-text-metadata">
+					The model and thinking level new chats and workspaces start with. Leave unset to use the
+					provider's default. Your choice is saved in Pi settings.
+				</p>
+			</div>
+			<div className="flex flex-wrap items-center gap-8">
+				<ModelSelector
+					models={models}
+					current={currentModel}
+					refreshing={refreshing}
+					onRefresh={refresh}
+					onSelect={(m) => {
+						const nextEffort = m.thinkingLevels.includes(currentLevel)
+							? currentLevel
+							: (m.thinkingLevels[0] ?? "off");
+						update({ model: m, thinkingLevel: nextEffort });
+					}}
+					placeholder="Automatic (provider default)"
+					defaultOption="Automatic (provider default)"
+					onSelectDefault={() => update({ model: null, thinkingLevel: null })}
+				/>
+				<ThinkingSelector
+					level={currentLevel}
+					levels={currentModel?.thinkingLevels ?? []}
+					onSelect={(level) => update({ thinkingLevel: level })}
+				/>
+			</div>
+		</div>
+	);
+}
+
 export function ChatSettings() {
 	const messageOrder = useAppStore((state) => state.chatMessageOrder);
 	const growthLimit = useAppStore((state) => state.composerGrowthLimit);
@@ -279,7 +344,9 @@ export function ChatSettings() {
 
 	return (
 		<section data-testid="settings-chat" className="flex flex-col gap-16">
-			<div className="flex flex-col gap-8">
+			<DefaultModelSettings />
+
+			<div className="flex flex-col gap-8 border-border-default border-t pt-16">
 				<div className="flex flex-col gap-4">
 					<h3 className="tr-title-section text-text-default">Message order</h3>
 					<p className="text-text-muted tr-text-metadata">

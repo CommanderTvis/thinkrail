@@ -1,4 +1,4 @@
-import { createReadStream, existsSync, rmSync } from "node:fs";
+import { createReadStream, existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { open, readdir } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { createInterface } from "node:readline";
@@ -1398,6 +1398,11 @@ export interface DefaultModelResult {
 	thinkingLevel: ThinkingLevel;
 }
 
+export interface SetDefaultModelInput {
+	model?: WireModel | null;
+	thinkingLevel?: ThinkingLevel | null;
+}
+
 export async function clampThinkingForModel(
 	ref: Pick<WireModel, "provider" | "id">,
 	level: ThinkingLevel,
@@ -1408,7 +1413,7 @@ export async function clampThinkingForModel(
 
 export async function getDefaultModel(): Promise<DefaultModelResult> {
 	const available = settledAvailableModels(await getPiRuntime());
-	const settings = SettingsManager.create(process.cwd());
+	const settings = SettingsManager.create(process.cwd(), getAgentDir(), { projectTrusted: true });
 	const provider = settings.getDefaultProvider();
 	const modelId = settings.getDefaultModel();
 	const pinned =
@@ -1419,6 +1424,75 @@ export async function getDefaultModel(): Promise<DefaultModelResult> {
 	const saved = settings.getDefaultThinkingLevel() ?? "medium";
 	const thinkingLevel = resolved ? clampThinkingLevel(resolved, saved) : saved;
 	return { model: resolved ? toWireModel(resolved) : null, thinkingLevel };
+}
+
+function unsetGlobalSettings(
+	keys: readonly ("defaultProvider" | "defaultModel" | "defaultThinkingLevel")[],
+): void {
+	const settingsPath = join(getAgentDir(), "settings.json");
+	if (!existsSync(settingsPath)) return;
+	try {
+		const raw = readFileSync(settingsPath, "utf8");
+		const data = JSON.parse(raw) as Record<string, unknown>;
+		let modified = false;
+		for (const key of keys) {
+			if (key in data) {
+				delete data[key];
+				modified = true;
+			}
+		}
+		if (modified) {
+			writeFileSync(settingsPath, `${JSON.stringify(data, null, 2)}\n`);
+		}
+	} catch {
+		// Ignore corrupted or unreadable settings file
+	}
+}
+
+export async function setDefaultModel(input: SetDefaultModelInput): Promise<DefaultModelResult> {
+	const available = settledAvailableModels(await getPiRuntime());
+
+	if (input.model === null) {
+		unsetGlobalSettings(["defaultProvider", "defaultModel"]);
+	} else if (input.model !== undefined) {
+		const target = available.find(
+			(m) => m.provider === input.model?.provider && m.id === input.model?.id,
+		);
+		if (!target) {
+			throw new Error(`Unknown or unavailable model: ${input.model.provider}/${input.model.id}`);
+		}
+		const settings = SettingsManager.create(process.cwd(), getAgentDir(), { projectTrusted: true });
+		settings.setDefaultModelAndProvider(target.provider, target.id);
+		if (input.thinkingLevel === undefined) {
+			const current = settings.getDefaultThinkingLevel();
+			if (current) {
+				const clamped = clampThinkingLevel(target as unknown as Model<string>, current);
+				if (clamped !== current) {
+					settings.setDefaultThinkingLevel(clamped);
+				}
+			}
+		}
+		await settings.flush();
+	}
+
+	if (input.thinkingLevel === null) {
+		unsetGlobalSettings(["defaultThinkingLevel"]);
+	} else if (input.thinkingLevel !== undefined) {
+		const settings = SettingsManager.create(process.cwd(), getAgentDir(), { projectTrusted: true });
+		const provider = settings.getDefaultProvider();
+		const modelId = settings.getDefaultModel();
+		const pinned =
+			provider && modelId
+				? available.find((m) => m.provider === provider && m.id === modelId)
+				: undefined;
+		const level = pinned
+			? clampThinkingLevel(pinned as unknown as Model<string>, input.thinkingLevel)
+			: input.thinkingLevel;
+		settings.setDefaultThinkingLevel(level);
+		await settings.flush();
+	}
+
+	return getDefaultModel();
 }
 
 export function isSessionStreaming(sessionId: string): boolean {

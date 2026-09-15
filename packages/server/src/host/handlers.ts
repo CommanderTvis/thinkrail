@@ -59,6 +59,8 @@ import {
 	removeWorkspaceSessions,
 	renameSession,
 	resolveExtUi,
+	type SetDefaultModelInput,
+	setDefaultModel,
 	setSessionModel,
 	setSessionThinkingLevel,
 	steerSession,
@@ -914,6 +916,10 @@ const handlers: Record<string, Handler> = {
 	},
 	"model.default": () =>
 		observeSetupRead(getDefaultModel, (result) => (result.model ? { model_available: "yes" } : {})),
+	"model.setDefault": (params) => {
+		const p = params as SetDefaultModelInput;
+		return setDefaultModel(p);
+	},
 	"provider.status": () =>
 		observeSetupRead(getProviderStatus, (report) => ({
 			provider_available: providerAvailability(report),
