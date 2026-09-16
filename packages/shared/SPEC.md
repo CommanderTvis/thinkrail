@@ -39,8 +39,10 @@ bundled into `apps/web`. Exposed through explicit subpath exports, not a barrel.
   `server/fs` owns that and re-exports these for its callers; see its SPEC.md for the CAS contract);
   `@thinkrail/shared/jbcentral` → the native Central CLI adapter: absolute executable/version/status
   probing; the minimum supported version and the global opaque PI-extension path; a one-directional auth
-  verdict; an artifact-location watcher; `add pi` / `remove pi` / `login` / `update --install` actions; and
-  the per-OS official install plan. It never edits PI model or credential configuration.
+  verdict; an artifact-location watcher; `add pi` / `remove pi` / `login` / `update --install` actions; the
+  per-OS official install plan; and AI access source listing/switching (`listJbcentralAccessSources`,
+  `switchJbcentralAccessSource`) for accounts with more than one org/workspace. It never edits PI model or
+  credential configuration.
 - **/spawn** — `spawnSyncCaptured()` (sync capture → `{ launched, exitCode, stdout, stderr }`) and
   `spawnDetached()` (fire-and-forget `unref`) over `Bun.spawnSync` / `Bun.spawn`, always
   `windowsHide: true`. Bun 1.4.0 maps that option to libuv `UV_PROCESS_WINDOWS_HIDE`; the seam prevents
@@ -125,7 +127,8 @@ bundled into `apps/web`. Exposed through explicit subpath exports, not a barrel.
   parses a bounded `central --version` result into a compatibility verdict, exposes the
   global opaque artifact path (`~/.pi/agent/extensions/jetbrains-central.ts`, and the `~/.local/bin/`
   installer fallback) and existence only, and invokes only the reviewed argv: `status`, `quota --json`,
-  `add pi`, `remove pi`, `login`, `update --install`, and `proxy start --ensure-updated`. Support is a
+  `add pi`, `remove pi`, `login`, `update --install`, `proxy start --ensure-updated`, `access`,
+  `access <selectionId>`, and `proxy stop`. Support is a
   **minimum version only** (`MINIMUM_CENTRAL_VERSION`,
   `1.4.0` — the first Central release carrying the native PI surface): anything at or above it is supported,
   lower versions require update, and malformed output is
@@ -207,6 +210,24 @@ bundled into `apps/web`. Exposed through explicit subpath exports, not a barrel.
   plan carried to the card; a remote browser never guesses its own OS. **The server's `auth` module is the sole
   caller** and composes these host-local actions and watcher invalidations with `agent`'s runtime-generation
   seam.
+
+  **AI access source listing/switching is two contracts of very different strength, deliberately kept
+  apart.** `listJbcentralAccessSources()` runs `central access` and parses its plain-text rows
+  (`parseJbcentralAccessList`) — a display name, a kind, and the `current` marker — the same class of
+  documented, stable presentation output the status/quota probes already read. But that text never carries
+  the opaque id (`selection_id`, shaped `workspace:<orgId>:<workspaceId>`) `central access <selectionId>`
+  needs to actually switch; Central only ever emits it as a side effect of that same listing call, logged
+  to its own `~/.jetbrains-central/logs/wire_<date>.log`. `parseJbcentralAccessSelectionIds` reads the
+  freshest "AI access options listed" / "AI access option" line batch from that log's tail (bounded to
+  64KB) and pairs each by its logged `index`. **This is not a supported contract** — it is an internal
+  debug side channel with no compatibility guarantee, unlike every other argv this adapter invokes. Any
+  drift (a missing line, a renamed field, a disabled log level) degrades the affected source's
+  `selectionId` to `null` rather than throwing or failing the whole read; the caller disables switching for
+  exactly those sources instead of the feature going dark entirely. `switchJbcentralAccessSource(id)` then
+  runs `access <id>`, and on success best-effort restarts the proxy (`proxy stop` then
+  `proxy start --ensure-updated`, reported as a separate `proxyRestarted` boolean) because Central's own
+  switch output says a restart is required for the new source to take effect — a failed restart does not
+  undo a successful switch, since the org selection itself already changed.
 
 ## Get right (shellEnv)
 

@@ -20,6 +20,8 @@ import type {
 	HistoryScope,
 	HistorySearchResult,
 	InterviewResponse,
+	JbcentralAccessListResult,
+	JbcentralAccessSwitchResult,
 	JbcentralActionResult,
 	JbcentralConnectResult,
 	JbcentralLoginResult,
@@ -104,7 +106,7 @@ export type TemplateReadLocation =
 	| { projectId: string; workspaceId?: never }
 	| { workspaceId?: never; projectId?: never };
 
-export const PROTOCOL_VERSION = 73;
+export const PROTOCOL_VERSION = 74;
 export const DEFAULT_MODEL_PROTOCOL_VERSION = 72;
 export const CHAT_RESOURCES_PROTOCOL_VERSION = 71;
 export const HOST_UPDATE_RUN_PROTOCOL_VERSION = 70;
@@ -112,6 +114,7 @@ export const PLAN_REVIEW_SUBAGENT_PROTOCOL_VERSION = 67;
 export const AGENT_REVIEW_SETTING_PROTOCOL_VERSION = 68;
 export const PLAN_SUMMARY_GENERATION_PROTOCOL_VERSION = 69;
 export const SESSION_STATE_PROTOCOL_VERSION = 73;
+export const JBCENTRAL_ACCESS_PROTOCOL_VERSION = 74;
 export const ANALYTICS_CONSENT_PROTOCOL_VERSION = 65;
 export const SESSION_RENAME_PROTOCOL_VERSION = 66;
 export const SESSION_TITLE_MAX_LENGTH = 80;
@@ -278,6 +281,8 @@ export const WS_METHODS = {
 	providerJbcentralUpdate: "provider.jbcentralUpdate",
 	providerJbcentralQuota: "provider.jbcentralQuota",
 	hostUpdate: "host.update",
+	providerJbcentralAccessList: "provider.jbcentralAccessList",
+	providerJbcentralAccessSwitch: "provider.jbcentralAccessSwitch",
 	settingsUpdate: "settings.update",
 	feedbackRespond: "feedback.respond",
 	historySearch: "history.search",
@@ -737,6 +742,14 @@ export interface WsMethodMap {
 	"provider.jbcentralUpdate": { params: Record<string, never>; result: JbcentralActionResult };
 	"provider.jbcentralQuota": { params: { force?: boolean }; result: JbcentralQuotaSnapshot };
 	"host.update": { params: Record<string, never>; result: Ack };
+	"provider.jbcentralAccessList": {
+		params: Record<string, never>;
+		result: JbcentralAccessListResult;
+	};
+	"provider.jbcentralAccessSwitch": {
+		params: { selectionId: string };
+		result: JbcentralAccessSwitchResult;
+	};
 	"settings.update": { params: { config: AppConfigUpdate }; result: AppConfig };
 	"feedback.respond": { params: { action: InterviewResponse }; result: Ack };
 

@@ -9,6 +9,7 @@ import {
 	HOST_UPDATE_RUN_PROTOCOL_VERSION,
 	isBackgroundCommandCompletionMessage,
 	isTodoReviewFixMessage,
+	JBCENTRAL_ACCESS_PROTOCOL_VERSION,
 	JBCENTRAL_QUOTA_PROTOCOL_VERSION,
 	normalizeSessionTitle,
 	PLAN_REVIEW_SUBAGENT_PROTOCOL_VERSION,
@@ -229,5 +230,12 @@ test("chat resources introduce scoped reads and cancellation, never browser comm
 });
 
 test("this fork's own additive methods sit above every version upstream has taken", () => {
-	expect(PROTOCOL_VERSION).toBe(72);
+	expect(PROTOCOL_VERSION).toBe(74);
+});
+
+test("AI access source switching advances the protocol and names its methods", () => {
+	expect(JBCENTRAL_ACCESS_PROTOCOL_VERSION).toBe(74);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(JBCENTRAL_ACCESS_PROTOCOL_VERSION);
+	expect(WS_METHODS.providerJbcentralAccessList).toBe("provider.jbcentralAccessList");
+	expect(WS_METHODS.providerJbcentralAccessSwitch).toBe("provider.jbcentralAccessSwitch");
 });
