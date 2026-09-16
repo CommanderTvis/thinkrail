@@ -609,6 +609,8 @@ export interface AppConfig extends ThemePreference {
 	codeFontFamily: string;
 	/** Render the code font's ligatures where the surface can. */
 	codeFontLigatures: boolean;
+	/** Model patterns or IDs to filter out from pickers. */
+	hiddenModels: string[];
 }
 
 /** The `settings.update` payload: `null` clears an optional override back to unset (⇒ the default). */
@@ -648,6 +650,59 @@ export function isJbcentralQuotaRefreshSeconds(value: unknown): value is number 
 	);
 }
 
+/**
+ * Tests whether a model matches a filter pattern.
+ * Supports exact model IDs/names/qualified names, wildcard globs (* and ?),
+ * and regular expressions enclosed in /.../.
+ */
+export function matchesModelPattern(model: WireModel, pattern: string): boolean {
+	const trimmed = pattern.trim();
+	if (!trimmed) return false;
+
+	if (trimmed.startsWith("/") && trimmed.lastIndexOf("/") > 0) {
+		const lastSlash = trimmed.lastIndexOf("/");
+		const expr = trimmed.slice(1, lastSlash);
+		const flags = trimmed.slice(lastSlash + 1) || "i";
+		try {
+			const regex = new RegExp(expr, flags);
+			return (
+				regex.test(model.id) ||
+				regex.test(`${model.provider}/${model.id}`) ||
+				regex.test(`${model.provider}:${model.id}`) ||
+				regex.test(model.name)
+			);
+		} catch {
+			// invalid regex falls through
+		}
+	}
+
+	if (trimmed.includes("*") || trimmed.includes("?")) {
+		const escaped = trimmed
+			.replace(/[.+^${}()|[\]\\]/g, "\\$&")
+			.replace(/\*/g, ".*")
+			.replace(/\?/g, ".");
+		const regex = new RegExp(`^${escaped}$`, "i");
+		return (
+			regex.test(model.id) ||
+			regex.test(`${model.provider}/${model.id}`) ||
+			regex.test(`${model.provider}:${model.id}`) ||
+			regex.test(model.name)
+		);
+	}
+
+	const lower = trimmed.toLowerCase();
+	return (
+		model.id.toLowerCase() === lower ||
+		`${model.provider}/${model.id}`.toLowerCase() === lower ||
+		`${model.provider}:${model.id}`.toLowerCase() === lower ||
+		model.name.toLowerCase() === lower
+	);
+}
+
+export function isModelHidden(model: WireModel, hiddenPatterns: readonly string[]): boolean {
+	return hiddenPatterns.some((pattern) => matchesModelPattern(model, pattern));
+}
+
 export const DEFAULT_CONFIG: AppConfig = {
 	theme: "dark",
 	themeMode: "fixed",
@@ -668,6 +723,7 @@ export const DEFAULT_CONFIG: AppConfig = {
 	subagentsEnabled: true,
 	jbcentralQuotaEnabled: true,
 	jbcentralQuotaRefreshSeconds: JBCENTRAL_QUOTA_REFRESH_SECONDS.default,
+	hiddenModels: [],
 };
 
 export function normalizeThemePreference(value: unknown): ThemePreference {

@@ -909,6 +909,7 @@ interface AppState {
 	reviewModel: WireModel | undefined;
 	reviewEffort: ThinkingLevel | undefined;
 	reviewAutoFix: boolean;
+	hiddenModels: string[];
 	customLayoutPresets: LayoutPreset[];
 	toasts: Toast[];
 	setStatus: (status: ConnectionStatus) => void;
@@ -1191,6 +1192,11 @@ function configPatch(config: AppConfig) {
 		reviewModel: config.reviewModel,
 		reviewEffort: config.reviewEffort,
 		reviewAutoFix: config.reviewAutoFix ?? DEFAULT_CONFIG.reviewAutoFix,
+		hiddenModels: Array.isArray(config.hiddenModels)
+			? config.hiddenModels.filter(
+					(id): id is string => typeof id === "string" && id.trim().length > 0,
+				)
+			: DEFAULT_CONFIG.hiddenModels,
 	};
 }
 
@@ -1900,6 +1906,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	reviewModel: DEFAULT_CONFIG.reviewModel,
 	reviewEffort: DEFAULT_CONFIG.reviewEffort,
 	reviewAutoFix: DEFAULT_CONFIG.reviewAutoFix,
+	hiddenModels: DEFAULT_CONFIG.hiddenModels,
 	toasts: [],
 	setStatus: (status) =>
 		set((state) => ({

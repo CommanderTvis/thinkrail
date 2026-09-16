@@ -272,7 +272,7 @@ of the host.
   **`AppConfig`** (`{ theme, themeMode, systemThemePair?, analyticsEnabled, analyticsConsentConfirmed, terminalReplayKb,
   terminalWindowsShell, composerGrowthLimit, chatLineWidth, fileLineWidth, chatLineWidthBounded,
   fileLineWidthBounded, customLayoutPresets, reviewModel?, reviewEffort?, reviewAutoFix, subagentsEnabled,
-  jbcentralQuotaEnabled, jbcentralQuotaRefreshSeconds, plugins, pluginPaths }` — an extensible bag; the line-width fields join
+  jbcentralQuotaEnabled, jbcentralQuotaRefreshSeconds, hiddenModels, plugins, pluginPaths }` — an extensible bag; the line-width fields join
   the wire at protocol v61 and `terminalWindowsShell` at v62. `plugins: Record<string,
   PluginSettingsNamespace>` holds each plugin's own settings namespace keyed by plugin id
   (`PluginSettingsNamespace = { enabled? } & Record<string, unknown>` — the shared `enabled` toggle plus

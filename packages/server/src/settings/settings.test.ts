@@ -306,6 +306,26 @@ test("subagents default on; an old config inherits that default; toggling off ro
 	expect(getConfig().subagentsEnabled).toBe(false);
 });
 
+test("hiddenModels defaults to empty; updating hiddenModels round-trips, trims and deduplicates", () => {
+	expect(DEFAULT_CONFIG.hiddenModels).toEqual([]);
+	writeFileSync(join(dataDir, "config.json"), JSON.stringify({ theme: "dark" }));
+	resetConfigCache();
+	expect(getConfig().hiddenModels).toEqual([]);
+	const next = updateConfig({ hiddenModels: ["  gpt-4-0314 ", "*-0314", "gpt-4-0314", ""] });
+	expect(next.hiddenModels).toEqual(["gpt-4-0314", "*-0314"]);
+	resetConfigCache();
+	expect(getConfig().hiddenModels).toEqual(["gpt-4-0314", "*-0314"]);
+});
+
+test("invalid hiddenModels update is rejected before persistence or broadcast", () => {
+	expect(() =>
+		updateConfig({ hiddenModels: "not-an-array" } as unknown as AppConfigUpdate),
+	).toThrow("array of strings");
+	expect(() => updateConfig({ hiddenModels: [123] } as unknown as AppConfigUpdate)).toThrow(
+		"array of strings",
+	);
+});
+
 test("Windows shell updates reject unknown values before persistence or broadcast", () => {
 	const published: AppConfig[] = [];
 	setSettingsPublisher((config) => published.push(config));

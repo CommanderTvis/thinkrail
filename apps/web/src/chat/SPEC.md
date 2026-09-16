@@ -533,7 +533,10 @@ because the alternative is an attachment the user cannot see, which is worse tha
   optional `container` prop portals their popovers into a host Dialog; optional
   `defaultOption`/`onSelectDefault` render an explicit use-the-default row above the provider groups
   (checked when `current` is null) for callers whose selection is an *override* — `ReviewSettings` —
-  since a plain model list can only ever narrow, never restore the unset state; `ModelSelector` takes
+  since a plain model list can only ever narrow, never restore the unset state; `ModelSelector`
+  filters out models matching `store.hiddenModels` (or an explicit `hiddenModels` prop) while always
+  preserving the active selection, offers an inline quick-hide action on each row and a toggle at the
+  bottom to reveal filtered models with an unhide action; `ModelSelector` takes
   `refreshing`/`onRefresh(force)` — a footer “Refresh catalog” row that passes **`force: true`** (the
   user asked, so bypass pi's freshness throttle) and spins while that awaited refresh runs, plus an
   **unforced** auto-fire on each open, which `useModelCatalog` serves from the host snapshot

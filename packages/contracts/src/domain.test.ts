@@ -8,10 +8,13 @@ import {
 	isDelegationRunDetails,
 	isJbcentralConnected,
 	isJbcentralQuotaRefreshSeconds,
+	isModelHidden,
 	isRetriedAttempt,
 	JBCENTRAL_QUOTA_REFRESH_SECONDS,
+	matchesModelPattern,
 	REQUEST_IMAGE_BASE64_BUDGET,
 } from "./domain";
+import type { WireModel } from "./piProtocol";
 
 describe("isRetriedAttempt", () => {
 	const failed = { role: "assistant", stopReason: "error" };
@@ -71,6 +74,10 @@ describe("config defaults", () => {
 			chatLineWidthBounded: true,
 			fileLineWidthBounded: true,
 		});
+	});
+
+	test("hiddenModels defaults to an empty list", () => {
+		expect(DEFAULT_CONFIG.hiddenModels).toEqual([]);
 	});
 });
 
@@ -231,5 +238,52 @@ describe("isDelegationRunDetails", () => {
 		for (const field of ["roleName", "roleSource", "model", "activity"]) {
 			expect(isDelegationRunDetails({ ...valid, [field]: { malformed: true } })).toBe(false);
 		}
+	});
+});
+
+describe("model filtering", () => {
+	const model: WireModel = {
+		provider: "jbcentral",
+		id: "gpt-4-0314",
+		name: "GPT-4 (0314)",
+		contextWindow: 8192,
+		reasoning: false,
+		thinkingLevels: [],
+	};
+
+	test("matches exact id, provider-qualified id, and name case-insensitively", () => {
+		expect(matchesModelPattern(model, "gpt-4-0314")).toBe(true);
+		expect(matchesModelPattern(model, "GPT-4-0314")).toBe(true);
+		expect(matchesModelPattern(model, "jbcentral/gpt-4-0314")).toBe(true);
+		expect(matchesModelPattern(model, "jbcentral:gpt-4-0314")).toBe(true);
+		expect(matchesModelPattern(model, "GPT-4 (0314)")).toBe(true);
+		expect(matchesModelPattern(model, "gpt-4")).toBe(false);
+		expect(matchesModelPattern(model, "openai/gpt-4-0314")).toBe(false);
+	});
+
+	test("matches wildcard globs", () => {
+		expect(matchesModelPattern(model, "*-0314")).toBe(true);
+		expect(matchesModelPattern(model, "gpt-4*")).toBe(true);
+		expect(matchesModelPattern(model, "*0314*")).toBe(true);
+		expect(matchesModelPattern(model, "jbcentral/*")).toBe(true);
+		expect(matchesModelPattern(model, "*-0613")).toBe(false);
+		expect(matchesModelPattern(model, "claude*")).toBe(false);
+	});
+
+	test("matches regular expressions wrapped in slashes", () => {
+		expect(matchesModelPattern(model, "/-\\d{4}$/")).toBe(true);
+		expect(matchesModelPattern(model, "/^gpt-4/i")).toBe(true);
+		expect(matchesModelPattern(model, "/-\\d{8}$/")).toBe(false);
+	});
+
+	test("empty or blank patterns never match", () => {
+		expect(matchesModelPattern(model, "")).toBe(false);
+		expect(matchesModelPattern(model, "   ")).toBe(false);
+	});
+
+	test("isModelHidden checks across multiple patterns", () => {
+		expect(isModelHidden(model, ["claude*", "*-0314"])).toBe(true);
+		expect(isModelHidden(model, ["claude*", "gpt-4-0613"])).toBe(false);
+		expect(isModelHidden(model, [])).toBe(false);
 	});
 });

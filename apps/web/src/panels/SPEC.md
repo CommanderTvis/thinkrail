@@ -659,7 +659,7 @@ a project picker, the prompt hero, and the reused
   broadcast and rejected calls toast without changing geometry); **`ChatSettings`** (the next live section —
   **Default model** model and thinking effort pickers (`ModelSelector` + `ThinkingSelector` over
   `useModelCatalog`, written via `model.setDefault`, reading `model.default` on mount; placeholder and default
-  option restore automatic provider default), **Message order** radio cards over `store.chatMessageOrder` (Oldest first, the compatibility default /
+  option restore automatic provider default), **Hidden models** (a pattern input and chip list allowing users to blacklist exact model IDs, globs, or regular expressions from model pickers, displaying matching model counts and managing patterns via `settings.update { hiddenModels }`), **Message order** radio cards over `store.chatMessageOrder` (Oldest first, the compatibility default /
   Newest first, the opt-in), one **Streaming response movement** two-handle range over
   `store.streamingResponseMovement`, then the three existing composer-growth cards. The movement control's
   copy is “Choose when the chat moves while an answer grows and where its newest edge lands”; one axis runs

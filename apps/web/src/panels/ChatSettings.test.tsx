@@ -11,6 +11,10 @@ test("Chat settings renders one two-handle streaming movement control", () => {
 	const markup = renderToStaticMarkup(<ChatSettings />);
 	expect(markup).toContain('data-testid="settings-default-model"');
 	expect(markup).toContain("Default model");
+	expect(markup).toContain('data-testid="settings-hidden-models"');
+	expect(markup).toContain("Hidden models");
+	expect(markup).toContain('data-testid="hidden-models-input"');
+	expect(markup).toContain('data-testid="hidden-models-add"');
 	expect(markup).toContain('data-testid="model-selector"');
 	expect(markup).toContain('data-testid="thinking-selector"');
 	expect(markup).toContain("Streaming response movement");

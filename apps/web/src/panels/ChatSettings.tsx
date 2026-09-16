@@ -1,6 +1,8 @@
+import { RiCloseLine as X } from "@remixicon/react";
 import {
 	type AppConfigUpdate,
 	type ComposerGrowthLimit,
+	matchesModelPattern,
 	SUBAGENT_SETTINGS_PROTOCOL_VERSION,
 	type SubagentOverride,
 	type ThinkingLevel,
@@ -310,6 +312,96 @@ export function DefaultModelSettings() {
 	);
 }
 
+export function HiddenModelsSettings() {
+	const hiddenModels = useAppStore((state) => state.hiddenModels);
+	const { models } = useModelCatalog(true);
+	const [patternDraft, setPatternDraft] = useState("");
+
+	const addPattern = (raw: string) => {
+		const trimmed = raw.trim();
+		if (!trimmed || hiddenModels.includes(trimmed)) return;
+		const next = [...hiddenModels, trimmed];
+		saveSetting({ hiddenModels: next }, "Couldn't add hidden model pattern");
+		setPatternDraft("");
+	};
+
+	const removePattern = (pattern: string) => {
+		const next = hiddenModels.filter((p) => p !== pattern);
+		saveSetting({ hiddenModels: next }, "Couldn't remove hidden model pattern");
+	};
+
+	return (
+		<div
+			data-testid="settings-hidden-models"
+			className="flex flex-col gap-8 border-border-default border-t pt-16"
+		>
+			<div className="flex flex-col gap-4">
+				<h3 className="tr-title-section text-text-default">Hidden models</h3>
+				<p className="text-text-muted tr-text-metadata">
+					Filter out dated snapshots, past generations, or unwanted models from model pickers.
+					Accepts exact model IDs, wildcards (e.g. *-2024*, gpt-3.5*), or /regex/.
+				</p>
+			</div>
+			<form
+				onSubmit={(e) => {
+					e.preventDefault();
+					addPattern(patternDraft);
+				}}
+				className="flex items-center gap-8"
+			>
+				<input
+					type="text"
+					data-testid="hidden-models-input"
+					value={patternDraft}
+					onChange={(e) => setPatternDraft(e.target.value)}
+					placeholder="e.g. *-2024*, gpt-3.5*, or model ID"
+					className="h-32 flex-1 rounded-[var(--radius-sm)] border border-control-border-default bg-control-bg px-8 tr-text-ui text-text-default placeholder:text-text-muted outline-none focus:border-control-border-active focus:ring-2 focus:ring-primary"
+				/>
+				<button
+					type="submit"
+					data-testid="hidden-models-add"
+					disabled={!patternDraft.trim() || hiddenModels.includes(patternDraft.trim())}
+					className="flex h-32 items-center justify-center rounded-[var(--radius-sm)] border border-control-border-default bg-control-bg px-12 tr-text-ui text-text-default outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-default disabled:opacity-50"
+				>
+					Add
+				</button>
+			</form>
+			{hiddenModels.length > 0 ? (
+				<div className="flex flex-wrap gap-4 pt-4">
+					{hiddenModels.map((pattern) => {
+						const matchCount = models.filter((m) => matchesModelPattern(m, pattern)).length;
+						return (
+							<div
+								key={pattern}
+								data-testid={`hidden-model-chip-${pattern}`}
+								className="flex items-center gap-4 rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg py-2 pr-4 pl-8 tr-text-metadata text-text-default"
+							>
+								<span className="tr-code-text">{pattern}</span>
+								{matchCount > 0 ? (
+									<span className="text-text-muted">
+										({matchCount} model{matchCount === 1 ? "" : "s"})
+									</span>
+								) : null}
+								<button
+									type="button"
+									data-testid={`hidden-model-remove-${pattern}`}
+									onClick={() => removePattern(pattern)}
+									className="rounded p-2 text-text-muted transition-colors hover:bg-control-bg-hovered hover:text-text-default"
+									title="Remove pattern"
+								>
+									<X className="size-14" />
+								</button>
+							</div>
+						);
+					})}
+				</div>
+			) : (
+				<p className="text-text-muted tr-text-metadata">No hidden model patterns configured.</p>
+			)}
+		</div>
+	);
+}
+
 export function ChatSettings() {
 	const messageOrder = useAppStore((state) => state.chatMessageOrder);
 	const growthLimit = useAppStore((state) => state.composerGrowthLimit);
@@ -345,6 +437,7 @@ export function ChatSettings() {
 	return (
 		<section data-testid="settings-chat" className="flex flex-col gap-16">
 			<DefaultModelSettings />
+			<HiddenModelsSettings />
 
 			<div className="flex flex-col gap-8 border-border-default border-t pt-16">
 				<div className="flex flex-col gap-4">
