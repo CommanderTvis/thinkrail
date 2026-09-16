@@ -41,6 +41,7 @@ import type {
 	ProjectPathStatus,
 	ProjectTrustSummary,
 	ProviderStatusReport,
+	RemoteBranchGroup,
 	ResourceMeta,
 	RevertTarget,
 	ReviewAnchor,
@@ -696,7 +697,10 @@ export interface WsMethodMap {
 			meta: { original: ResourceMeta; modified: ResourceMeta };
 		};
 	};
-	"git.branchDetails": { params: { projectId: string }; result: { branches: BranchDetail[] } };
+	"git.branchDetails": {
+		params: { projectId: string };
+		result: { branches: BranchDetail[]; remoteGroups?: RemoteBranchGroup[] };
+	};
 	"git.deleteBranch": {
 		params: { projectId: string; branch: string; force?: boolean };
 		result: BranchDeleteResult;
