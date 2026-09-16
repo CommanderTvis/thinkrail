@@ -1,5 +1,6 @@
 import { basename } from "node:path";
 import { expect, test } from "@playwright/test";
+import { hasConnectedProvider, type ProviderStatusReport } from "@thinkrail/contracts";
 import {
 	createWorkspaceViaDialog,
 	openAppFresh,
@@ -34,13 +35,9 @@ test("the Welcome provider warning only shows when no provider is connected, and
 
 	// The banner renders nothing until `provider.status` answers, so asking the host first is what makes
 	// this deterministic: `isVisible()` reads a screen the answer has not reached yet.
-	const { providers } = await requestOverWire<{ providers: { configured: boolean }[] }>(
-		page,
-		"provider.status",
-		{},
-	);
+	const report = await requestOverWire<ProviderStatusReport>(page, "provider.status", {});
 	const banner = page.getByTestId("welcome-provider-warning");
-	if (!providers.some((provider) => provider.configured)) {
+	if (!hasConnectedProvider(report)) {
 		await expect(banner).toBeVisible();
 		await expect(banner).toContainText("No model provider connected");
 		await page.getByTestId("welcome-connect-provider").click();
