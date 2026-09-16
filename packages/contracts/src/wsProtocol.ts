@@ -12,6 +12,7 @@ import type {
 	DiffStats,
 	EditorInfo,
 	ExistingWorktreeCandidate,
+	FileKind,
 	FileNode,
 	FileWriteResult,
 	GitCommit,
@@ -21,6 +22,8 @@ import type {
 	HistoryScope,
 	HistorySearchResult,
 	InterviewResponse,
+	JbcentralAccessListResult,
+	JbcentralAccessSwitchResult,
 	JbcentralActionResult,
 	JbcentralConnectResult,
 	JbcentralLoginResult,
@@ -28,6 +31,7 @@ import type {
 	LoginReply,
 	OpenBranchReview,
 	OpenPrResult,
+	PluginRosterEntry,
 	PrDraft,
 	Project,
 	ProjectPathStatus,
@@ -44,11 +48,11 @@ import type {
 	SearchHits,
 	SessionResources,
 	SessionStateRecord,
-	SpecGraphSnapshot,
 	SubagentOverride,
 	Template,
 	TemplateInfo,
 	TemplateScope,
+	TerminalAgentRecord,
 	TodoItem,
 	TodoPlan,
 	TodoStatus,
@@ -95,6 +99,7 @@ export const INITIAL_TERMINAL_TAB_KEY = "thinkrail-initial";
 export interface TerminalTabInfo {
 	tabKey: string;
 	title: string;
+	agent?: TerminalAgentRecord;
 }
 
 export interface TerminalTabsPush {
@@ -107,7 +112,9 @@ export type TemplateReadLocation =
 	| { projectId: string; workspaceId?: never }
 	| { workspaceId?: never; projectId?: never };
 
-export const PROTOCOL_VERSION = 77;
+export type PluginWireName = `plugin.${string}.${string}`;
+
+export const PROTOCOL_VERSION = 78;
 export const MODEL_PICKER_PROTOCOL_VERSION = 77;
 export const CONTEXT_WINDOW_SETTINGS_PROTOCOL_VERSION = 76;
 export const CHANGE_MUTATIONS_PROTOCOL_VERSION = 75;
@@ -120,6 +127,8 @@ export const PLAN_REVIEW_SUBAGENT_PROTOCOL_VERSION = 67;
 export const AGENT_REVIEW_SETTING_PROTOCOL_VERSION = 68;
 export const PLAN_SUMMARY_GENERATION_PROTOCOL_VERSION = 69;
 export const SESSION_STATE_PROTOCOL_VERSION = 73;
+export const JBCENTRAL_ACCESS_PROTOCOL_VERSION = 78;
+export const TERMINAL_IMAGE_MAX_BYTES = 10 * 1024 * 1024;
 export const ANALYTICS_CONSENT_PROTOCOL_VERSION = 65;
 export const SESSION_RENAME_PROTOCOL_VERSION = 66;
 export const SESSION_TITLE_MAX_LENGTH = 80;
@@ -130,6 +139,8 @@ export function normalizeSessionTitle(value: unknown): string | null {
 	return title.length > 0 && title.length <= SESSION_TITLE_MAX_LENGTH ? title : null;
 }
 
+export const REVIEW_TERMINAL_PROTOCOL_VERSION = 78;
+export const PLUGIN_ROSTER_PROTOCOL_VERSION = 78;
 export const WINDOWS_SHELL_SETTINGS_PROTOCOL_VERSION = 62;
 export const PROJECT_TEMPLATE_PREVIEW_PROTOCOL_VERSION = 63;
 export const THEME_SYSTEM_PROTOCOL_VERSION = 58;
@@ -157,6 +168,7 @@ export interface ServerWelcome {
 	projects: Project[];
 	recentProjects: Project[];
 	config: AppConfig;
+	plugins: PluginRosterEntry[];
 }
 
 export interface WorkspaceRemoved {
@@ -203,6 +215,8 @@ export const WS_METHODS = {
 	workspaceReveal: "workspace.reveal",
 	fsRevealPath: "fs.revealPath",
 	fsTrashPath: "fs.trashPath",
+	fsCreatePath: "fs.createPath",
+	fsRenamePath: "fs.renamePath",
 	editorList: "editor.list",
 	gitListBranches: "git.listBranches",
 	gitPrefetch: "git.prefetch",
@@ -211,9 +225,9 @@ export const WS_METHODS = {
 	prPreview: "pr.preview",
 	prOpen: "pr.open",
 	fsReadDir: "fs.readDir",
+	fsSearch: "fs.search",
 	fsReadFile: "fs.readFile",
 	fsWriteFile: "fs.writeFile",
-	specGraph: "spec.graph",
 	terminalRename: "terminal.rename",
 	todoList: "todo.list",
 	todoAdd: "todo.add",
@@ -235,6 +249,7 @@ export const WS_METHODS = {
 	terminalReserve: "terminal.reserve",
 	terminalAttach: "terminal.attach",
 	terminalList: "terminal.list",
+	terminalSaveImage: "terminal.saveImage",
 	terminalWrite: "terminal.write",
 	terminalResize: "terminal.resize",
 	terminalClose: "terminal.close",
@@ -290,6 +305,8 @@ export const WS_METHODS = {
 	providerJbcentralUpdate: "provider.jbcentralUpdate",
 	providerJbcentralQuota: "provider.jbcentralQuota",
 	hostUpdate: "host.update",
+	providerJbcentralAccessList: "provider.jbcentralAccessList",
+	providerJbcentralAccessSwitch: "provider.jbcentralAccessSwitch",
 	settingsUpdate: "settings.update",
 	feedbackRespond: "feedback.respond",
 	historySearch: "history.search",
@@ -305,6 +322,9 @@ export const WS_METHODS = {
 	templateGet: "template.get",
 	templateSave: "template.save",
 	templateDelete: "template.delete",
+	pluginsList: "plugins.list",
+	pluginsRescan: "plugins.rescan",
+	pluginsRetry: "plugins.retry",
 } as const;
 
 export const WS_CHANNELS = {
@@ -331,11 +351,13 @@ export const WS_CHANNELS = {
 	feedbackInterview: "feedback.interview",
 	reviewChanged: "review.changed",
 	reviewFailed: "review.failed",
+	pluginsChanged: "plugins.changed",
 } as const;
 
+export type WsMethod = (typeof WS_METHODS)[keyof typeof WS_METHODS];
 type SameUnion<A extends B, B extends C, C = A> = A;
-type _MethodsMatchMap = SameUnion<(typeof WS_METHODS)[keyof typeof WS_METHODS], WsMethodName>;
-export type WsChannel = (typeof WS_CHANNELS)[keyof typeof WS_CHANNELS];
+type _MethodsMatchMap = SameUnion<WsMethod, Exclude<WsMethodName, PluginWireName>>;
+export type WsChannel = (typeof WS_CHANNELS)[keyof typeof WS_CHANNELS] | PluginWireName;
 
 export const ASK_USER_ANSWERS_CUSTOM_TYPE = "ask-user-answers";
 
@@ -450,12 +472,18 @@ export interface Ack {
 	ok: true;
 }
 
-export interface ReviewSendResult {
+export interface ReviewChatSendResult {
 	sessionId: string;
 	model: WireModel | null;
 	thinkingLevel: ThinkingLevel;
 	reused: boolean;
 }
+
+export interface ReviewTerminalSendResult {
+	terminal: string;
+}
+
+export type ReviewSendResult = ReviewChatSendResult | ReviewTerminalSendResult;
 
 export interface WorkspaceWatchReadyResult {
 	startupNudge: boolean;
@@ -586,7 +614,8 @@ export interface WsMethodMap {
 	};
 	"fs.revealPath": { params: { workspaceId: string; path: string }; result: Ack };
 	"fs.trashPath": { params: { workspaceId: string; path: string }; result: Ack };
-	"spec.graph": { params: { workspaceId: string }; result: SpecGraphSnapshot };
+	"fs.createPath": { params: { workspaceId: string; path: string; kind: FileKind }; result: Ack };
+	"fs.renamePath": { params: { workspaceId: string; path: string; to: string }; result: Ack };
 	"todo.list": {
 		params: { workspaceId: string; sessionId: string; opened?: "page" | "popup" };
 		result: TodoPlan;
@@ -674,6 +703,8 @@ export interface WsMethodMap {
 			id: string;
 			created: boolean;
 			replay?: string;
+			prefill?: string;
+			prefillSubmit?: boolean;
 		};
 	};
 	"terminal.rename": {
@@ -683,6 +714,10 @@ export interface WsMethodMap {
 	"terminal.list": {
 		params: { workspaceId: string };
 		result: { tabs: TerminalTabInfo[] };
+	};
+	"terminal.saveImage": {
+		params: { id: string; data: string; mimeType: string };
+		result: { path: string };
 	};
 	"terminal.write": { params: { id: string; data: string }; result: Ack };
 	"terminal.resize": { params: { id: string; cols: number; rows: number }; result: Ack };
@@ -805,6 +840,14 @@ export interface WsMethodMap {
 	"provider.jbcentralUpdate": { params: Record<string, never>; result: JbcentralActionResult };
 	"provider.jbcentralQuota": { params: { force?: boolean }; result: JbcentralQuotaSnapshot };
 	"host.update": { params: Record<string, never>; result: Ack };
+	"provider.jbcentralAccessList": {
+		params: Record<string, never>;
+		result: JbcentralAccessListResult;
+	};
+	"provider.jbcentralAccessSwitch": {
+		params: { selectionId: string };
+		result: JbcentralAccessSwitchResult;
+	};
 	"settings.update": { params: { config: AppConfigUpdate }; result: AppConfig };
 	"feedback.respond": { params: { action: InterviewResponse }; result: Ack };
 
@@ -832,6 +875,7 @@ export interface WsMethodMap {
 			workspaceId: string;
 			id: string;
 			sessionId?: string;
+			terminal?: string;
 			model?: WireModel;
 			thinkingLevel?: ThinkingLevel;
 		};
@@ -842,6 +886,7 @@ export interface WsMethodMap {
 			workspaceId: string;
 			commentIds?: string[];
 			sessionId?: string;
+			terminal?: string;
 			model?: WireModel;
 			thinkingLevel?: ThinkingLevel;
 		};
@@ -871,6 +916,10 @@ export interface WsMethodMap {
 		params: { workspaceId?: string; scope: TemplateScope; name: string };
 		result: Ack;
 	};
+	"plugins.list": { params: Record<string, never>; result: PluginRosterEntry[] };
+	"plugins.rescan": { params: Record<string, never>; result: PluginRosterEntry[] };
+	"plugins.retry": { params: { id: string }; result: PluginRosterEntry[] };
+	[method: PluginWireName]: { params: unknown; result: unknown };
 }
 
 export type WsMethodName = keyof WsMethodMap;
@@ -905,7 +954,8 @@ export type WsErrorCode =
 	| "SCOPE_IMMUTABLE"
 	| "RANGE_INVALID"
 	| "RECEIPT_UNKNOWN"
-	| "UNSUPPORTED_CHANGE";
+	| "UNSUPPORTED_CHANGE"
+	| "FILE_NOT_FOUND";
 
 export interface WsResponse {
 	id: string;
