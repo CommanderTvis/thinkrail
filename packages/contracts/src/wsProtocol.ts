@@ -19,6 +19,8 @@ import type {
 	HistoryScope,
 	HistorySearchResult,
 	InterviewResponse,
+	JbcentralAccessListResult,
+	JbcentralAccessSwitchResult,
 	JbcentralActionResult,
 	JbcentralConnectResult,
 	JbcentralLoginResult,
@@ -101,7 +103,8 @@ export type TemplateReadLocation =
 	| { projectId: string; workspaceId?: never }
 	| { workspaceId?: never; projectId?: never };
 
-export const PROTOCOL_VERSION = 66;
+export const PROTOCOL_VERSION = 67;
+export const JBCENTRAL_ACCESS_PROTOCOL_VERSION = 67;
 export const ANALYTICS_CONSENT_PROTOCOL_VERSION = 65;
 export const SESSION_RENAME_PROTOCOL_VERSION = 66;
 export const SESSION_TITLE_MAX_LENGTH = 80;
@@ -264,6 +267,8 @@ export const WS_METHODS = {
 	providerJbcentralLogin: "provider.jbcentralLogin",
 	providerJbcentralUpdate: "provider.jbcentralUpdate",
 	providerJbcentralQuota: "provider.jbcentralQuota",
+	providerJbcentralAccessList: "provider.jbcentralAccessList",
+	providerJbcentralAccessSwitch: "provider.jbcentralAccessSwitch",
 	settingsUpdate: "settings.update",
 	feedbackRespond: "feedback.respond",
 	historySearch: "history.search",
@@ -624,6 +629,14 @@ export interface WsMethodMap {
 	"provider.jbcentralLogin": { params: Record<string, never>; result: JbcentralLoginResult };
 	"provider.jbcentralUpdate": { params: Record<string, never>; result: JbcentralActionResult };
 	"provider.jbcentralQuota": { params: { force?: boolean }; result: JbcentralQuotaSnapshot };
+	"provider.jbcentralAccessList": {
+		params: Record<string, never>;
+		result: JbcentralAccessListResult;
+	};
+	"provider.jbcentralAccessSwitch": {
+		params: { selectionId: string };
+		result: JbcentralAccessSwitchResult;
+	};
 	"settings.update": { params: { config: AppConfigUpdate }; result: AppConfig };
 	"feedback.respond": { params: { action: InterviewResponse }; result: Ack };
 

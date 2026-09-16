@@ -24,6 +24,12 @@ drop() {
 	state=${next# }
 	printf '%s\n' "$state" > "$CENTRAL_STUB_STATE"
 }
+add() {
+	if ! has "$1"; then
+		state="$state $1"
+		printf '%s\n' "$state" > "$CENTRAL_STUB_STATE"
+	fi
+}
 if [ -n "${CENTRAL_STUB_LOG:-}" ]; then
 	printf '%s\n' "$*" >> "$CENTRAL_STUB_LOG"
 fi
@@ -125,6 +131,47 @@ if [ "$1" = "proxy" ] && [ "${2:-}" = "start" ] && [ "${3:-}" = "--ensure-update
 		exit 14
 	fi
 	drop proxy-stopped
+	exit 0
+fi
+
+if [ "$1" = "proxy" ] && [ "${2:-}" = "stop" ]; then
+	if has proxy-stop-error; then
+		exit 17
+	fi
+	exit 0
+fi
+
+# Two AI access sources (JB Alumni / JetBrains Team) mirror the real `central access` shape used by the
+# GitHub issue this fixture exists for: display rows never carry the opaque `selection_id` a switch needs,
+# which only ever shows up as a debug side effect logged by this same listing call (see
+# packages/shared/SPEC.md "AI access source listing/switching").
+if [ "$1" = "access" ] && [ -z "${2:-}" ]; then
+	mkdir -p "$HOME/.jetbrains-central/logs"
+	{
+		echo 'time=2026-09-16T13:37:40.519+02:00 level=INFO msg="AI access options listed" cli_version=1.6.2 count=2'
+		echo 'time=2026-09-16T13:37:40.519+02:00 level=INFO msg="AI access option" cli_version=1.6.2 index=0 total=2 type=workspace selection_id=workspace:aaa:bbb display_name="JB Alumni"'
+		echo 'time=2026-09-16T13:37:40.519+02:00 level=INFO msg="AI access option" cli_version=1.6.2 index=1 total=2 type=workspace selection_id=workspace:ccc:ddd display_name="JetBrains Team"'
+	} >> "$HOME/.jetbrains-central/logs/wire_2026-09-16.log"
+	if has access-alumni-current; then
+		printf '  JB Alumni (workspace, current)\n'
+		printf '  JetBrains Team (workspace)\n'
+	else
+		printf '  JB Alumni (workspace)\n'
+		printf '  JetBrains Team (workspace, current)\n'
+	fi
+	exit 0
+fi
+
+if [ "$1" = "access" ] && [ -n "${2:-}" ]; then
+	if has access-switch-error; then
+		printf 'E2E_CENTRAL_CHILD_SENTINEL_access\n' >&2
+		exit 18
+	fi
+	if [ "$2" = "workspace:aaa:bbb" ]; then
+		add access-alumni-current
+	else
+		drop access-alumni-current
+	fi
 	exit 0
 fi
 

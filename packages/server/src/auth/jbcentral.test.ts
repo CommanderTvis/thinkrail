@@ -25,6 +25,7 @@ import {
 import {
 	connectJbcentral,
 	disconnectJbcentral,
+	getJbcentralAccessSources,
 	getJbcentralQuota,
 	getJbcentralStatus,
 	initializeJbcentralRuntime,
@@ -32,6 +33,7 @@ import {
 	resetJbcentralStateForTests,
 	setJbcentralChangedPublisher,
 	startProxyJbcentral,
+	switchJbcentralAccess,
 	updateJbcentral,
 } from "./jbcentral";
 import { getProviderStatus } from "./providerStatus";
@@ -120,6 +122,10 @@ case "$1" in
     rm -f "$THINKRAIL_CENTRAL_TEST_CONTROL/outdated"
     ;;
   proxy)
+    if [ "$2" = "stop" ]; then
+      if [ -f "$THINKRAIL_CENTRAL_TEST_CONTROL/proxy-stop-fail" ]; then exit 9; fi
+      exit 0
+    fi
     [ "$2" = "start" ]
     [ "$3" = "--ensure-updated" ]
     if [ -f "$THINKRAIL_CENTRAL_TEST_CONTROL/proxy-start-fail" ]; then exit 9; fi
@@ -129,6 +135,34 @@ case "$1" in
     fi
     ;;
   login)
+    ;;
+  access)
+    if [ -z "\${2:-}" ]; then
+      mkdir -p "$HOME/.jetbrains-central/logs"
+      {
+        echo 'time=2026-09-16T13:37:40.519+02:00 level=INFO msg="AI access options listed" cli_version=1.6.2 count=2'
+        echo 'time=2026-09-16T13:37:40.519+02:00 level=INFO msg="AI access option" cli_version=1.6.2 index=0 total=2 type=workspace selection_id=workspace:aaa:bbb display_name="JB Alumni"'
+        echo 'time=2026-09-16T13:37:40.519+02:00 level=INFO msg="AI access option" cli_version=1.6.2 index=1 total=2 type=workspace selection_id=workspace:ccc:ddd display_name="JetBrains Team"'
+      } >> "$HOME/.jetbrains-central/logs/wire_2026-09-16.log"
+      if [ -f "$THINKRAIL_CENTRAL_TEST_CONTROL/access-current-alumni" ]; then
+        printf '  JB Alumni (workspace, current)\n'
+        printf '  JetBrains Team (workspace)\n'
+      else
+        printf '  JB Alumni (workspace)\n'
+        printf '  JetBrains Team (workspace, current)\n'
+      fi
+    else
+      if [ -f "$THINKRAIL_CENTRAL_TEST_CONTROL/access-switch-fail" ]; then
+        printf 'synthetic-sensitive-child-output\n' >&2
+        exit 9
+      fi
+      if [ "$2" = "workspace:aaa:bbb" ]; then
+        touch "$THINKRAIL_CENTRAL_TEST_CONTROL/access-current-alumni"
+      else
+        rm -f "$THINKRAIL_CENTRAL_TEST_CONTROL/access-current-alumni"
+      fi
+      printf 'AI access source switched to %s\n' "$2"
+    fi
     ;;
   *)
     exit 8
@@ -368,6 +402,86 @@ describe("watched native Central runtime", () => {
 		control("quota-fail", true);
 		expect(await connectJbcentral()).toEqual({ outcome: "applied" });
 		expect(await getJbcentralQuota({ maxAgeMs: 30_000 })).toEqual({ state: "unavailable" });
+	});
+
+	test("lists AI access sources with a switch id only once Central is connected", async () => {
+		expect(await getJbcentralAccessSources()).toEqual({ outcome: "failed" });
+		expect(await connectJbcentral()).toEqual({ outcome: "applied" });
+		expect(await getJbcentralAccessSources()).toEqual({
+			outcome: "succeeded",
+			sources: [
+				{
+					displayName: "JB Alumni",
+					kind: "workspace",
+					current: false,
+					selectionId: "workspace:aaa:bbb",
+				},
+				{
+					displayName: "JetBrains Team",
+					kind: "workspace",
+					current: true,
+					selectionId: "workspace:ccc:ddd",
+				},
+			],
+		});
+	});
+
+	test("switches the access source, restarts the proxy, and invalidates the cached quota", async () => {
+		expect(await connectJbcentral()).toEqual({ outcome: "applied" });
+		expect(await getJbcentralQuota({ maxAgeMs: 30_000 })).toMatchObject({
+			state: "available",
+			remaining: 19.92,
+		});
+
+		expect(await switchJbcentralAccess("workspace:aaa:bbb")).toEqual({
+			outcome: "succeeded",
+			proxyRestarted: true,
+		});
+		expect(commandLog()).toContain("access workspace:aaa:bbb");
+		expect(commandLog()).toContain("proxy stop");
+		expect(commandLog()).toContain("proxy start --ensure-updated");
+
+		const sources = await getJbcentralAccessSources();
+		expect(sources).toMatchObject({
+			outcome: "succeeded",
+			sources: [
+				{ displayName: "JB Alumni", current: true },
+				{ displayName: "JetBrains Team", current: false },
+			],
+		});
+
+		control("quota-alt", true);
+		expect(await getJbcentralQuota({ maxAgeMs: 30_000 })).toMatchObject({
+			state: "available",
+			remaining: 18.5,
+		});
+	});
+
+	test("a failed switch never restarts the proxy and reports a closed failure", async () => {
+		expect(await connectJbcentral()).toEqual({ outcome: "applied" });
+		control("access-switch-fail", true);
+
+		const result = await switchJbcentralAccess("workspace:aaa:bbb");
+		expect(result).toEqual({ outcome: "failed" });
+		expect(commandLog()).not.toContain("proxy stop");
+	});
+
+	test("a switch that cannot restart the proxy still reports the switch itself as succeeded", async () => {
+		expect(await connectJbcentral()).toEqual({ outcome: "applied" });
+		control("proxy-stop-fail", true);
+
+		expect(await switchJbcentralAccess("workspace:aaa:bbb")).toEqual({
+			outcome: "succeeded",
+			proxyRestarted: false,
+		});
+	});
+
+	test("switching is single-flighted and serialized behind other Central actions", async () => {
+		expect(await connectJbcentral()).toEqual({ outcome: "applied" });
+		const first = switchJbcentralAccess("workspace:aaa:bbb");
+		const second = switchJbcentralAccess("workspace:aaa:bbb");
+		expect(first).toBe(second);
+		expect(await first).toEqual({ outcome: "succeeded", proxyRestarted: true });
 	});
 
 	test("disconnect affects new work while an existing Central chat keeps its generation", async () => {

@@ -618,7 +618,19 @@ a project picker, the prompt hero, and the reused
   lifecycle state. The flag defaults on; the interval defaults to 30 and accepts whole `1–3600` values.
   Off disables (but retains) the interval. The field edits locally, commits on blur/Enter, reports invalid
   range inline, and waits for `settings.changed` rather than installing optimistic authority. Older hosts get
-  neither control. **`GithubSettings`** (the "Local GitHub" block — `github.authStatus()`
+  neither control. On protocol v67+ (`JBCENTRAL_ACCESS_PROTOCOL_VERSION`), the same card additionally mounts
+  **`JbcentralAccessSection`** whenever `isJbcentralConnected(status)` — an account with more than one
+  org/workspace can pick which one Central draws AI credits from (issue #433), because `central` itself has
+  no in-app equivalent to Air's org switcher. It fetches `provider.jbcentralAccessList` on mount and renders
+  each source's display name with a **Switch** button, except the current one (no action — it is already
+  selected) and any source whose `selectionId` came back `null` (an unlabeled **"Switch in a terminal"**
+  hint with a tooltip instead, because ThinkRail's own recovery of that id is a best-effort read of Central's
+  internal debug log — see `packages/shared/SPEC.md` — and can legitimately fail). Fewer than two sources
+  renders nothing: there is nothing to switch to. A click calls `provider.jbcentralAccessSwitch`, reloads the
+  list on success, and shows a **warning, not an error,** when the switch itself succeeded but Central's own
+  required proxy restart did not (the org selection already changed; only the running proxy is stale). A
+  failed switch surfaces a plain inline error and changes nothing. Older hosts show no section at all rather
+  than a broken one. **`GithubSettings`** (the "Local GitHub" block — `github.authStatus()`
   Connected + login / Not connected + Refresh); **`AppearanceSettings`** (a **Draw the editor on the GPU**
   switch — `editorGpuRendering`, off — above the catalog-driven theme
   settings, gated to fixed-only behavior below `THEME_SYSTEM_PROTOCOL_VERSION`. Current hosts explain that

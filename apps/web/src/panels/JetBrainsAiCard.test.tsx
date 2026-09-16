@@ -97,3 +97,21 @@ describe("JetBrainsAiCard proxy prerequisite", () => {
 		expect(markup).not.toContain('data-testid="jetbrains-start-proxy"');
 	});
 });
+
+describe("AI access source switching", () => {
+	// The section fetches sources on mount (useEffect), so a static render — which never runs effects —
+	// always sees an unresolved list here regardless of `accessSourceSwitching` or connection state; the
+	// gate on both of those, and the fetch/switch behavior itself, is covered by
+	// e2e/00-jbcentral-access.spec.ts against a real (fixture) Central process.
+	test("never appears in a fresh, unmounted render", () => {
+		const markup = renderToStaticMarkup(
+			<JetBrainsAiCard
+				status={{ state: "configured", version: "1.7.0", signedOut: false, proxyStopped: false }}
+				install={install}
+				onChanged={() => {}}
+				accessSourceSwitching
+			/>,
+		);
+		expect(markup).not.toContain('data-testid="jbcentral-access-sources"');
+	});
+});

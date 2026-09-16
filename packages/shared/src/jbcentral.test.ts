@@ -9,13 +9,17 @@ import {
 	jbcentralExtensionPath,
 	jbcentralInstall,
 	launchJbcentralLogin,
+	listJbcentralAccessSources,
 	MINIMUM_CENTRAL_VERSION,
+	parseJbcentralAccessList,
+	parseJbcentralAccessSelectionIds,
 	parseJbcentralStatusObservation,
 	parseJbcentralVersion,
 	probeJbcentralStatus,
 	readJbcentralQuota,
 	resolveJbcentralBin,
 	runJbcentralAction,
+	switchJbcentralAccessSource,
 	watchJbcentralArtifact,
 } from "./jbcentral";
 
@@ -811,5 +815,229 @@ describe("Central paths and install guidance", () => {
 			shell: "powershell",
 			command: `irm ${base}/install.ps1 | iex`,
 		});
+	});
+});
+
+function accessRow(name: string, kind: string, current = false): string {
+	const suffix = current ? `, current` : "";
+	return `  ${name} \u001b[38;2;117;117;117m(${kind}${suffix})\u001b[m`;
+}
+
+describe("AI access source listing (parsing)", () => {
+	test("parses display rows, strips ANSI, and reads the current marker", () => {
+		const output = [
+			"Available AI access sources:",
+			accessRow("JB Alumni", "workspace"),
+			accessRow("JetBrains Team", "workspace", true),
+			"",
+		].join("\n");
+		expect(parseJbcentralAccessList(output)).toEqual([
+			{ displayName: "JB Alumni", kind: "workspace", current: false },
+			{ displayName: "JetBrains Team", kind: "workspace", current: true },
+		]);
+	});
+
+	test("ignores the header and blank lines, and returns [] for no sources", () => {
+		expect(parseJbcentralAccessList("No AI access sources loaded\n")).toEqual([]);
+		expect(parseJbcentralAccessList("")).toEqual([]);
+	});
+});
+
+function accessLogLine(msg: string, fields: string): string {
+	return `time=2026-09-16T13:37:40.519+02:00 level=INFO msg="${msg}" cli_version=1.6.2 ${fields}`;
+}
+
+function accessLogBatch(sources: Array<{ selectionId: string; displayName: string }>): string {
+	const lines = [accessLogLine("AI access options listed", `count=${sources.length}`)];
+	sources.forEach((source, index) => {
+		lines.push(
+			accessLogLine(
+				"AI access option",
+				`index=${index} total=${sources.length} type=workspace selection_id=${source.selectionId} display_name="${source.displayName}"`,
+			),
+		);
+	});
+	return lines.join("\n");
+}
+
+describe("AI access selection-id recovery (unsupported side channel)", () => {
+	test("pairs each option line after the freshest 'listed' line by index", () => {
+		const log = accessLogBatch([
+			{ selectionId: "workspace:aaa:bbb", displayName: "JB Alumni" },
+			{ selectionId: "workspace:ccc:ddd", displayName: "JetBrains Team" },
+		]);
+		expect(parseJbcentralAccessSelectionIds(log, 2)).toEqual([
+			"workspace:aaa:bbb",
+			"workspace:ccc:ddd",
+		]);
+	});
+
+	test("takes the LAST batch when the log holds an earlier one too", () => {
+		const stale = accessLogBatch([{ selectionId: "workspace:stale:stale", displayName: "Old" }]);
+		const fresh = accessLogBatch([
+			{ selectionId: "workspace:aaa:bbb", displayName: "JB Alumni" },
+			{ selectionId: "workspace:ccc:ddd", displayName: "JetBrains Team" },
+		]);
+		expect(parseJbcentralAccessSelectionIds(`${stale}\n${fresh}`, 2)).toEqual([
+			"workspace:aaa:bbb",
+			"workspace:ccc:ddd",
+		]);
+	});
+
+	test("degrades to null on any format Central's logging might drift to", () => {
+		expect(parseJbcentralAccessSelectionIds("no matching lines at all", 2)).toBeNull();
+		expect(
+			parseJbcentralAccessSelectionIds(accessLogLine("AI access options listed", "count=2"), 2),
+		).toBeNull();
+		expect(
+			parseJbcentralAccessSelectionIds(
+				[
+					accessLogLine("AI access options listed", "count=2"),
+					accessLogLine("AI access option", "index=9 total=2 selection_id=workspace:x:y"),
+				].join("\n"),
+				2,
+			),
+		).toBeNull();
+	});
+});
+
+describe("listJbcentralAccessSources", () => {
+	test("combines the display list with the best-effort selection ids", async () => {
+		const listOutput = [
+			accessRow("JB Alumni", "workspace"),
+			accessRow("JetBrains Team", "workspace", true),
+		].join("\n");
+		const log = accessLogBatch([
+			{ selectionId: "workspace:aaa:bbb", displayName: "JB Alumni" },
+			{ selectionId: "workspace:ccc:ddd", displayName: "JetBrains Team" },
+		]);
+		const deps = adapterDeps({
+			run: async () => ({ outcome: "exited", exitCode: 0, stdout: listOutput }),
+			listLogFiles: () => ["wire_2026-09-15.log", "wire_2026-09-16.log"],
+			readLogTail: async () => log,
+		});
+		expect(await listJbcentralAccessSources(deps)).toEqual({
+			outcome: "succeeded",
+			sources: [
+				{
+					displayName: "JB Alumni",
+					kind: "workspace",
+					current: false,
+					selectionId: "workspace:aaa:bbb",
+				},
+				{
+					displayName: "JetBrains Team",
+					kind: "workspace",
+					current: true,
+					selectionId: "workspace:ccc:ddd",
+				},
+			],
+		});
+	});
+
+	test("reads the lexicographically-latest wire log, not just any log file", async () => {
+		const listOutput = accessRow("JetBrains Team", "workspace", true);
+		const requestedPaths: string[] = [];
+		const deps = adapterDeps({
+			run: async () => ({ outcome: "exited", exitCode: 0, stdout: listOutput }),
+			listLogFiles: () => [
+				"wire_2026-09-14.log",
+				"wire_2026-09-16.log",
+				"wire_2026-09-15.log",
+				"daemon_stderr.log",
+			],
+			readLogTail: async (path) => {
+				requestedPaths.push(path);
+				return accessLogBatch([
+					{ selectionId: "workspace:ccc:ddd", displayName: "JetBrains Team" },
+				]);
+			},
+		});
+		await listJbcentralAccessSources(deps);
+		expect(requestedPaths).toHaveLength(1);
+		expect(requestedPaths[0]).toContain("wire_2026-09-16.log");
+	});
+
+	test("degrades to null selection ids for every source when the log read fails", async () => {
+		const listOutput = [
+			accessRow("JB Alumni", "workspace"),
+			accessRow("JetBrains Team", "workspace", true),
+		].join("\n");
+		const deps = adapterDeps({
+			run: async () => ({ outcome: "exited", exitCode: 0, stdout: listOutput }),
+			listLogFiles: () => {
+				throw new Error("no logs directory");
+			},
+		});
+		expect(await listJbcentralAccessSources(deps)).toEqual({
+			outcome: "succeeded",
+			sources: [
+				{ displayName: "JB Alumni", kind: "workspace", current: false, selectionId: null },
+				{ displayName: "JetBrains Team", kind: "workspace", current: true, selectionId: null },
+			],
+		});
+	});
+
+	test("returns closed generic failures without probing logs", async () => {
+		expect(
+			await listJbcentralAccessSources(adapterDeps({ which: () => null, exists: () => false })),
+		).toEqual({ outcome: "failed", reason: "not-installed" });
+		expect(
+			await listJbcentralAccessSources(
+				adapterDeps({ run: async () => ({ outcome: "exited", exitCode: 1, stdout: "" }) }),
+			),
+		).toEqual({ outcome: "failed", reason: "nonzero-exit" });
+	});
+});
+
+describe("switchJbcentralAccessSource", () => {
+	test("switches then restarts the proxy through reviewed absolute argv", async () => {
+		const requests: Array<readonly string[]> = [];
+		const deps = adapterDeps({
+			run: async (request) => {
+				requests.push(request.argv);
+				return { outcome: "exited", exitCode: 0, stdout: "" };
+			},
+		});
+		expect(await switchJbcentralAccessSource("workspace:aaa:bbb", deps)).toEqual({
+			outcome: "succeeded",
+			proxyRestarted: true,
+		});
+		expect(requests).toEqual([
+			[CENTRAL_BIN, "access", "workspace:aaa:bbb"],
+			[CENTRAL_BIN, "proxy", "stop"],
+			[CENTRAL_BIN, "proxy", "start", "--ensure-updated"],
+		]);
+	});
+
+	test("reports the switch as succeeded even when the proxy restart fails", async () => {
+		const deps = adapterDeps({
+			run: async (request) =>
+				request.argv[1] === "proxy"
+					? { outcome: "exited", exitCode: 1, stdout: "" }
+					: { outcome: "exited", exitCode: 0, stdout: "" },
+		});
+		expect(await switchJbcentralAccessSource("workspace:aaa:bbb", deps)).toEqual({
+			outcome: "succeeded",
+			proxyRestarted: false,
+		});
+	});
+
+	test("returns closed generic failures and discards raw command output", async () => {
+		const rawOutput = "synthetic-private-child-output";
+		expect(
+			await switchJbcentralAccessSource(
+				"workspace:aaa:bbb",
+				adapterDeps({ which: () => null, exists: () => false }),
+			),
+		).toEqual({ outcome: "failed", reason: "not-installed" });
+		const result = await switchJbcentralAccessSource(
+			"workspace:aaa:bbb",
+			adapterDeps({
+				run: async () => ({ outcome: "exited", exitCode: 7, stdout: rawOutput }),
+			}),
+		);
+		expect(result).toEqual({ outcome: "failed", reason: "nonzero-exit" });
+		expect(JSON.stringify(result)).not.toContain(rawOutput);
 	});
 });
