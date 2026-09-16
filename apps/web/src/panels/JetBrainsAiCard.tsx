@@ -229,7 +229,7 @@ function JbcentralAccessSection({ enabled }: { enabled: boolean }) {
 								{switchingId === source.selectionId ? (
 									<Loader2 className="size-14 animate-spin" />
 								) : null}
-								Switch
+								Switch to this source
 							</Button>
 						)}
 					</div>

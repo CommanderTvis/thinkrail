@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import { DEFAULT_CONFIG, RECENT_MODELS_LIMIT, type ReviewFixDetails } from "./domain";
+import type { ReviewFixDetails } from "./domain";
+import { DEFAULT_CONFIG, RECENT_MODELS_LIMIT } from "./domain";
+import type { WsMethodMap, WsParams, WsRequest, WsResult } from "./wsProtocol";
 import {
 	AGENT_REVIEW_SETTING_PROTOCOL_VERSION,
 	ANALYTICS_CONSENT_PROTOCOL_VERSION,
@@ -11,15 +13,18 @@ import {
 	HOST_UPDATE_RUN_PROTOCOL_VERSION,
 	isBackgroundCommandCompletionMessage,
 	isTodoReviewFixMessage,
+	JBCENTRAL_ACCESS_PROTOCOL_VERSION,
 	JBCENTRAL_QUOTA_PROTOCOL_VERSION,
 	MODEL_PICKER_PROTOCOL_VERSION,
 	normalizeSessionTitle,
 	PLAN_REVIEW_SUBAGENT_PROTOCOL_VERSION,
 	PLAN_SUMMARY_GENERATION_PROTOCOL_VERSION,
+	PLUGIN_ROSTER_PROTOCOL_VERSION,
 	PROJECT_TEMPLATE_PREVIEW_PROTOCOL_VERSION,
 	PROTOCOL_VERSION,
 	RESOURCE_META_PROTOCOL_VERSION,
 	REVIEW_RICH_ANCHORS_PROTOCOL_VERSION,
+	REVIEW_TERMINAL_PROTOCOL_VERSION,
 	SESSION_RENAME_PROTOCOL_VERSION,
 	SESSION_STATE_PROTOCOL_VERSION,
 	SESSION_TITLE_MAX_LENGTH,
@@ -126,7 +131,7 @@ test("host-owned new-chat defaults are pinned to v72", () => {
 });
 
 test("picker metadata and host-kept favorites/recents are pinned to v77", () => {
-	expect(PROTOCOL_VERSION).toBe(77);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(77);
 	expect(MODEL_PICKER_PROTOCOL_VERSION).toBe(77);
 	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(MODEL_PICKER_PROTOCOL_VERSION);
 	expect(DEFAULT_CONFIG.favoriteModels).toEqual([]);
@@ -271,5 +276,56 @@ test("chat resources introduce scoped reads and cancellation, never browser comm
 });
 
 test("this fork's own additive methods sit above every version upstream has taken", () => {
-	expect(PROTOCOL_VERSION).toBe(72);
+	expect(PROTOCOL_VERSION).toBe(78);
+});
+
+test("AI access source switching advances the protocol and names its methods", () => {
+	expect(JBCENTRAL_ACCESS_PROTOCOL_VERSION).toBe(78);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(JBCENTRAL_ACCESS_PROTOCOL_VERSION);
+	expect(WS_METHODS.providerJbcentralAccessList).toBe("provider.jbcentralAccessList");
+	expect(WS_METHODS.providerJbcentralAccessSwitch).toBe("provider.jbcentralAccessSwitch");
+});
+
+test("the plugin roster advances the protocol and names its methods and channel", () => {
+	expect(PLUGIN_ROSTER_PROTOCOL_VERSION).toBe(78);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(PLUGIN_ROSTER_PROTOCOL_VERSION);
+	expect(WS_METHODS.pluginsList).toBe("plugins.list");
+	expect(WS_METHODS.pluginsRescan).toBe("plugins.rescan");
+	expect(WS_METHODS.pluginsRetry).toBe("plugins.retry");
+	expect(WS_CHANNELS.pluginsChanged).toBe("plugins.changed");
+});
+
+test("the plugin method index signature coexists with the fixed literal methods", () => {
+	const existingMethod: keyof WsMethodMap = "project.list";
+	const pluginMethod: keyof WsMethodMap = "plugin.spec-dialect.status";
+	expect(existingMethod).toBe("project.list");
+	expect(pluginMethod).toBe("plugin.spec-dialect.status");
+
+	const existingParams: WsParams<"project.list"> = {};
+	const pluginParams: WsParams<"plugin.spec-dialect.status"> = { anything: true };
+	expect(existingParams).toEqual({});
+	expect(pluginParams).toEqual({ anything: true });
+
+	const existingResult: WsResult<"project.close"> = { ok: true };
+	const pluginResult: WsResult<"plugin.spec-dialect.status"> = "anything";
+	expect(existingResult).toEqual({ ok: true });
+	expect(pluginResult).toBe("anything");
+
+	const existingRequest: WsRequest<"project.close"> = {
+		id: "1",
+		method: "project.close",
+		params: { id: "p1" },
+	};
+	const pluginRequest: WsRequest<"plugin.spec-dialect.status"> = {
+		id: "2",
+		method: "plugin.spec-dialect.status",
+		params: { anything: true },
+	};
+	expect(existingRequest.method).toBe("project.close");
+	expect(pluginRequest.method).toBe("plugin.spec-dialect.status");
+});
+
+test("a review can be sent to an agent terminal from the protocol that names it", () => {
+	expect(REVIEW_TERMINAL_PROTOCOL_VERSION).toBe(78);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(REVIEW_TERMINAL_PROTOCOL_VERSION);
 });
