@@ -6,7 +6,7 @@ import {
 	RiRefreshLine as RefreshCw,
 } from "@remixicon/react";
 import { isModelHidden, matchesModelPattern, type WireModel } from "@thinkrail/contracts";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
 	Command,
 	CommandEmpty,
@@ -16,6 +16,7 @@ import {
 	CommandList,
 } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib";
 import { toast, useAppStore } from "@/store";
 import { getTransport } from "@/transport";
@@ -30,6 +31,35 @@ function subLine(model: WireModel): string {
 	const parts = [`${formatContext(model.contextWindow)} context`];
 	if (model.reasoning) parts.push("reasoning");
 	return parts.join(" · ");
+}
+
+function TruncatedModelName({ name }: { name: string }) {
+	const ref = useRef<HTMLSpanElement>(null);
+	const [open, setOpen] = useState(false);
+
+	const handleOpenChange = (nextOpen: boolean) => {
+		if (nextOpen) {
+			const el = ref.current;
+			if (el && el.scrollWidth > el.clientWidth) {
+				setOpen(true);
+				return;
+			}
+		}
+		setOpen(false);
+	};
+
+	return (
+		<Tooltip open={open} onOpenChange={handleOpenChange} delayDuration={0}>
+			<TooltipTrigger asChild>
+				<span ref={ref} className="truncate">
+					{name}
+				</span>
+			</TooltipTrigger>
+			<TooltipContent side="top" align="start">
+				{name}
+			</TooltipContent>
+		</Tooltip>
+	);
 }
 
 export function ModelSelector({
@@ -134,7 +164,7 @@ export function ModelSelector({
 									<span className="flex w-14 shrink-0 justify-center">
 										{current === null ? <Check className="size-14 text-primary" /> : null}
 									</span>
-									<span className="truncate">{defaultOption}</span>
+									<TruncatedModelName name={defaultOption} />
 								</CommandItem>
 							</CommandGroup>
 						)}
@@ -159,7 +189,7 @@ export function ModelSelector({
 												</span>
 												<span className="flex min-w-0 flex-col">
 													<span className="flex items-center gap-4 truncate">
-														<span className="truncate">{m.name}</span>
+														<TruncatedModelName name={m.name} />
 														{hidden ? (
 															<span className="rounded bg-control-bg px-4 py-2 tr-text-metadata text-text-muted">
 																Hidden

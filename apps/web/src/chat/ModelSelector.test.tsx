@@ -8,7 +8,6 @@ const mockModel = (id: string, name: string, provider = "openai"): WireModel => 
 	name,
 	provider,
 	contextWindow: 128000,
-	maxTokens: 4096,
 	reasoning: false,
 	thinkingLevels: [],
 });
@@ -41,4 +40,23 @@ test("ModelSelector renders placeholder when no model is selected", () => {
 	);
 	expect(markup).toContain('data-testid="model-selector"');
 	expect(markup).toContain("Automatic (provider default)");
+});
+
+test("ModelSelector renders long model names", () => {
+	const current = mockModel(
+		"claude-haiku-4-5-20251001",
+		"Claude Haiku 4.5 (20251001)",
+		"anthropic",
+	);
+	const markup = renderToStaticMarkup(
+		<ModelSelector
+			models={[current]}
+			current={current}
+			onSelect={() => {}}
+			refreshing={false}
+			onRefresh={() => {}}
+		/>,
+	);
+	expect(markup).toContain('data-testid="model-selector"');
+	expect(markup).toContain("Claude Haiku 4.5 (20251001)");
 });
