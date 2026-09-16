@@ -10,6 +10,7 @@ import {
 	layoutOpenOptionsForNavigation,
 	selectAttentionCenterTab,
 	selectCurrentRouteChatTarget,
+	selectSessionState,
 	selectWorkspaceSessionIds,
 	shouldAdvanceAcceptedNavigation,
 	toast,
@@ -328,10 +329,13 @@ export function useWorkspaceChatCatalogReconciliation(
 				for (const summary of [...summaries].sort((a, b) => b.updatedAt - a.updatedAt)) {
 					if (summary.sessionId === handledRouteSessionId || placed.has(summary.sessionId))
 						continue;
+					const isWaiting =
+						selectSessionState(useAppStore.getState(), workspaceId, summary.sessionId)
+							?.needsInput != null;
 					if (
 						handledRouteSessionId === null &&
 						!autoOpenAlreadyAttempted &&
-						(summary.live || (summary.openTodos ?? 0) > 0) &&
+						(summary.live || (summary.openTodos ?? 0) > 0 || isWaiting) &&
 						toOpen.length < AUTO_OPEN_CHAT_LIMIT
 					) {
 						toOpen.push(summary);

@@ -61,7 +61,10 @@ export function deriveAskStates(
 			(tool?.status === "done" && answer === undefined && !isAckResult(tool.raw));
 		states[toolCallId] = {
 			...(answer ? { answer } : {}),
-			superseded: !answer && !terminal && lastUserIndex > call.turnIndex,
+			superseded:
+				!answer &&
+				!terminal &&
+				(lastUserIndex > call.turnIndex || turns.length - 1 > call.turnIndex),
 			terminal,
 		};
 	}
