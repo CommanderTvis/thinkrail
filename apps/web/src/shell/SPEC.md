@@ -329,6 +329,17 @@ does — every remote brought up to date, nothing local moved, no pruning — be
 branch still the one upstream has" is asked here, and the answer was previously only obtainable outside
 the app.
 
+**The same list carries every configured remote, under a `Local`/`Remote` split that mirrors the New
+Workspace and Changes pickers** — `git.branchDetails` carries the same `remoteGroups` `listBranches` already
+computes, so nothing new is parsed in the browser. A
+remote branch has no delete control (removing one is a different, riskier Git operation this list does not
+offer); clicking it opens New Workspace with that branch preselected as the base, since nothing local is
+checked out on it to switch to. Clicking a *local* branch's row instead switches straight to the ThinkRail
+workspace living on it, when one does — a foreign worktree or bare branch keeps only its delete control,
+since there is nowhere for a click to take the user. Each remote's group can be collapsed and expanded (see
+[[submodule-web-panels]] for the shared control and its persistence), the same as in the New Workspace and
+Changes branch pickers.
+
 **"from main" says what it means on hover.** The scope line reads *workspace · from main*, which is a
 preposition and a branch name with nothing joining them — it is the ref the worktree was cut from *and*
 the ref its changes are measured against, and neither is guessable from three words in a topbar. The

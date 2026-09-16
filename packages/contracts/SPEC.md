@@ -191,7 +191,10 @@ of the host.
   canonical full-ref string list, while optional host-authored `remoteGroups` carries each configured
   remote and its `{ ref, branch }` rows for two-layer presentation. The field is additive so a newer UI
   falls back to full refs against an older host; a `null` remote group preserves tracking refs whose
-  configuration was removed without inventing ownership in the browser. **`BranchDeleteResult`** keeps a
+  configuration was removed without inventing ownership in the browser. `git.branchDetails`'s result carries
+  the same optional `remoteGroups` alongside its local `branches`, computed once by `listBranches` and passed
+  through — the topbar's branch list and the New-Workspace/Changes pickers read one remote grouping, not two.
+  **`BranchDeleteResult`** keeps a
   successful `git.deleteBranch` response empty, but makes only the dirty external-worktree refusal
   actionable (`dirty-worktree`, path, and Git message); every other deletion failure remains a normal wire
   error. Its optional request `force` is meaningful solely as the explicitly confirmed retry. The two meanings of a workspace's base are

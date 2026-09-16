@@ -249,7 +249,13 @@ treatment.
   `Other` and keep their full ref as the row label. `BranchList.remoteGroups` is additive: against an older
   host that omits it, the picker falls back to one flat Remote group of full refs. The grouped path uses
   nested cmdk groups; the force-mounted parent hides only when cmdk has hidden every child group. A fork
-  works two remotes, so a list that shows only `origin` hides the ref it branches from. The whole state
+  works two remotes, so a list that shows only `origin` hides the ref it branches from. **Each remote
+  subgroup can be collapsed and expanded** through the shared `RemoteGroupHeading` + `useRemoteGroupCollapse`
+  (`remoteGroupCollapse.ts`): a collapsed remote's rows are unmounted rather than hidden, its heading is
+  `forceMount`ed so cmdk's own empty-group hiding never takes the toggle down with it. Items explicitly
+  opt out of inherited force mounting so search still filters refs. The collapsed/expanded state is
+  remembered per remote name in `localStorage`, shared by every picker and by the topbar's
+  `BranchList` (see [[submodule-web-shell]]) — one preference, not one per surface. The whole state
   *around* it — the list, `refreshing`, `refresh()` — is the shared
   **`useBranchList(projectId, onLoaded?)`** (`branches.ts`, over the offline-degrading
   `listBranchesOrEmpty`), so both pickers are identical **by construction**: the list is **keyed to the
