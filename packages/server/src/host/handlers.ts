@@ -71,6 +71,7 @@ import {
 	cancelLogin,
 	connectJbcentral,
 	disconnectJbcentral,
+	getJbcentralAccessSources,
 	getJbcentralQuota,
 	getProviderStatus,
 	jbcentralLogin,
@@ -78,6 +79,7 @@ import {
 	resolveLogin,
 	startLogin,
 	startProxyJbcentral,
+	switchJbcentralAccess,
 	updateJbcentral,
 } from "../auth";
 import { findOpenBranchReview } from "../branch-review";
@@ -959,6 +961,9 @@ const handlers: Record<string, Handler> = {
 			force: (params as { force?: boolean }).force === true,
 		});
 	},
+	"provider.jbcentralAccessList": () => getJbcentralAccessSources(),
+	"provider.jbcentralAccessSwitch": (params) =>
+		switchJbcentralAccess((params as { selectionId: string }).selectionId),
 	"settings.update": (params) => {
 		return updateConfig((params as { config: AppConfigUpdate }).config);
 	},

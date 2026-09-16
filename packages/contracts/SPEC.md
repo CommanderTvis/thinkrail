@@ -234,6 +234,16 @@ of the host.
   v59 adds **`JbcentralQuotaSnapshot`**, the separate closed quota read: `hidden`, `available`, `stale`, or
   `unavailable`; only available/stale carry finite recurring `remaining` / `total` numbers and an observation
   timestamp. No account/plan/used/top-up/refill field or raw failure text exists;
+  protocol v67 adds the **AI access source wire** — the one exception to "no Central text on the wire"
+  (see [[central-integration]] decision 2): **`JbcentralAccessSourceWire`** (`{ displayName, kind, current,
+  selectionId }`) carries the org/workspace's display name and kind because the switch this wire exists
+  for is unusable without them, while `selectionId` is an opaque token, never parsed by any client; it is
+  `null` when the host's best-effort recovery of that token failed, and a client must not offer a switch
+  action for a `null` source. **`JbcentralAccessListResult`** (`succeeded { sources }` / `failed`) answers
+  `provider.jbcentralAccessList`; **`JbcentralAccessSwitchResult`** (`succeeded { proxyRestarted } /
+  failed`) answers `provider.jbcentralAccessSwitch({ selectionId })` — `proxyRestarted` is reported
+  separately because a successful switch is never undone by a failed restart. No account, licence, org id,
+  workspace id, or diagnostic field crosses this wire beyond the opaque `selectionId`;
   the **theme/config selection** — **`ThemeId`** is an open string on the wire, because the host persists
   opaque selections while the independently shipped web client owns the available manifest catalog;
   **`ThemeMode`** is the closed `"fixed" | "system"` behavior and **`SystemThemePair`** carries one opaque
@@ -255,7 +265,8 @@ of the host.
   introduction so a later web client hides them against an older host without comparing against the moving
   latest protocol; **`JBCENTRAL_QUOTA_PROTOCOL_VERSION`** likewise pins the v59 quota read + settings;
   **`WINDOWS_SHELL_SETTINGS_PROTOCOL_VERSION`** pins the v62 Windows-shell setting so a later web client
-  hides it against a host that can preserve but cannot apply that config field;
+  hides it against a host that can preserve but cannot apply that config field; **`JBCENTRAL_ACCESS_PROTOCOL_VERSION`**
+  pins the v67 AI access source list/switch wire;
   **`AppConfig`** (`{ theme, themeMode, systemThemePair?, analyticsEnabled, analyticsConsentConfirmed, terminalReplayKb,
   terminalWindowsShell, composerGrowthLimit, chatLineWidth, fileLineWidth, chatLineWidthBounded,
   fileLineWidthBounded, customLayoutPresets, reviewModel?, reviewEffort?, reviewAutoFix, subagentsEnabled,

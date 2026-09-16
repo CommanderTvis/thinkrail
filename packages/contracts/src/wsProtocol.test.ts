@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import {
 	ACTIVITY_PROTOCOL_VERSION,
 	ANALYTICS_CONSENT_PROTOCOL_VERSION,
+	JBCENTRAL_ACCESS_PROTOCOL_VERSION,
 	JBCENTRAL_QUOTA_PROTOCOL_VERSION,
 	normalizeSessionTitle,
 	PROJECT_TEMPLATE_PREVIEW_PROTOCOL_VERSION,
@@ -76,5 +77,12 @@ test("session titles normalize to one bounded non-blank line", () => {
 });
 
 test("this fork's own additive methods sit above every version upstream has taken", () => {
-	expect(PROTOCOL_VERSION).toBe(66);
+	expect(PROTOCOL_VERSION).toBe(67);
+});
+
+test("AI access source switching advances the protocol and names its methods", () => {
+	expect(JBCENTRAL_ACCESS_PROTOCOL_VERSION).toBe(67);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(JBCENTRAL_ACCESS_PROTOCOL_VERSION);
+	expect(WS_METHODS.providerJbcentralAccessList).toBe("provider.jbcentralAccessList");
+	expect(WS_METHODS.providerJbcentralAccessSwitch).toBe("provider.jbcentralAccessSwitch");
 });

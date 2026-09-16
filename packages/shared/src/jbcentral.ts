@@ -1,4 +1,4 @@
-import { existsSync, watch } from "node:fs";
+import { existsSync, readdirSync, watch } from "node:fs";
 import { homedir } from "node:os";
 import { basename, dirname, isAbsolute, join } from "node:path";
 import type { JbcentralInstall } from "@thinkrail/contracts";
@@ -108,6 +108,8 @@ export interface JbcentralAdapterDependencies {
 	run?: (request: ProcessRequest) => Promise<ProcessResult>;
 	launchDetached?: (argv: readonly string[]) => LoginHandle | null;
 	watchDirectory?: (path: string, onEntry: (entry: string | null) => void) => WatchHandle;
+	listLogFiles?: (directory: string) => string[];
+	readLogTail?: (path: string, maxBytes: number) => Promise<string>;
 }
 
 interface SemanticVersion {
@@ -401,6 +403,201 @@ export async function readJbcentralQuota(
 	if (result.outcome !== "exited") return { outcome: "failed", reason: result.outcome };
 	if (result.exitCode !== 0) return { outcome: "failed", reason: "nonzero-exit" };
 	return parseJbcentralQuota(result.stdout);
+}
+
+export interface JbcentralAccessSource {
+	displayName: string;
+	kind: string;
+	current: boolean;
+	selectionId: string | null;
+}
+
+export type JbcentralAccessListResult =
+	| { outcome: "succeeded"; sources: JbcentralAccessSource[] }
+	| {
+			outcome: "failed";
+			reason: "not-installed" | "launch-failed" | "timed-out" | "output-too-large" | "nonzero-exit";
+	  };
+
+export type JbcentralAccessSwitchResult =
+	| { outcome: "succeeded"; proxyRestarted: boolean }
+	| { outcome: "failed"; reason: "not-installed" | "launch-failed" | "timed-out" | "nonzero-exit" };
+
+const ACCESS_ROW = /^ {2}(.+) \((\w+)(?:, (current))?\)$/u;
+const ACCESS_LOG_FILE = /^wire_\d{4}-\d{2}-\d{2}\.log$/u;
+const MAX_ACCESS_LOG_TAIL_BYTES = 65_536;
+
+/**
+ * Reads the plain-text rows `central access` prints — the only part of that command's output that is a
+ * documented, stable contract. It carries a display name and kind but never the opaque id a source needs
+ * to actually be selected (see `parseJbcentralAccessSelectionIds`).
+ */
+export function parseJbcentralAccessList(
+	output: string,
+): Array<{ displayName: string; kind: string; current: boolean }> {
+	const rows: Array<{ displayName: string; kind: string; current: boolean }> = [];
+	for (const line of output.replace(ANSI_SGR, "").split("\n")) {
+		const match = ACCESS_ROW.exec(line);
+		if (!match?.[1] || !match[2]) continue;
+		rows.push({ displayName: match[1], kind: match[2], current: match[3] === "current" });
+	}
+	return rows;
+}
+
+/**
+ * Best-effort recovery of the opaque `selection_id` each source needs for a non-interactive switch.
+ * Central never prints it — it only appears as a debug side effect logged by the same `central access`
+ * invocation that produced `expectedCount` display rows, in the freshest "AI access options listed" /
+ * "AI access option" line pair at the end of the wire log. This is not a supported contract: any change
+ * to Central's logging degrades to `null` for every source rather than throwing, and the caller then
+ * disables switching for the affected sources instead of failing the whole read.
+ */
+export function parseJbcentralAccessSelectionIds(
+	log: string,
+	expectedCount: number,
+): (string | null)[] | null {
+	const lines = log.split("\n");
+	let listedAt = -1;
+	for (let i = 0; i < lines.length; i += 1) {
+		if (lines[i]?.includes('msg="AI access options listed"')) listedAt = i;
+	}
+	if (listedAt === -1) return null;
+
+	const ids: (string | null)[] = new Array(expectedCount).fill(null);
+	for (let i = listedAt + 1; i < lines.length && i <= listedAt + expectedCount; i += 1) {
+		const line = lines[i];
+		if (!line?.includes('msg="AI access option"')) break;
+		const index = Number(/\bindex=(\d+)\b/u.exec(line)?.[1]);
+		const selectionId = /\bselection_id=(\S+)\b/u.exec(line)?.[1];
+		if (!selectionId || !Number.isInteger(index) || index < 0 || index >= expectedCount) continue;
+		ids[index] = selectionId;
+	}
+	return ids.some((id) => id !== null) ? ids : null;
+}
+
+function jbcentralLogsDirectory(deps: JbcentralAdapterDependencies): string {
+	return join(homeDirectory(deps), ".jetbrains-central", "logs");
+}
+
+function defaultListLogFiles(directory: string): string[] {
+	return readdirSync(directory);
+}
+
+async function defaultReadLogTail(path: string, maxBytes: number): Promise<string> {
+	const file = Bun.file(path);
+	const size = await file.size;
+	return file.slice(Math.max(0, size - maxBytes)).text();
+}
+
+async function readLatestAccessSelectionIds(
+	deps: JbcentralAdapterDependencies,
+	expectedCount: number,
+): Promise<(string | null)[] | null> {
+	if (expectedCount === 0) return null;
+	const directory = jbcentralLogsDirectory(deps);
+	let entries: string[];
+	try {
+		entries = (deps.listLogFiles ?? defaultListLogFiles)(directory);
+	} catch {
+		return null;
+	}
+	const candidate = entries
+		.filter((entry) => ACCESS_LOG_FILE.test(entry))
+		.sort()
+		.at(-1);
+	if (!candidate) return null;
+
+	let text: string;
+	try {
+		text = await (deps.readLogTail ?? defaultReadLogTail)(
+			join(directory, candidate),
+			MAX_ACCESS_LOG_TAIL_BYTES,
+		);
+	} catch {
+		return null;
+	}
+	return parseJbcentralAccessSelectionIds(text, expectedCount);
+}
+
+export async function listJbcentralAccessSources(
+	deps: JbcentralAdapterDependencies = {},
+): Promise<JbcentralAccessListResult> {
+	const executablePath = resolveJbcentralBin(deps);
+	if (!executablePath) return { outcome: "failed", reason: "not-installed" };
+
+	let result: ProcessResult;
+	try {
+		result = await processRunner(deps)({
+			argv: [executablePath, "access"],
+			captureStdout: true,
+			timeoutMs: STATUS_TIMEOUT_MS,
+			maxStdoutBytes: MAX_STATUS_OUTPUT_BYTES,
+		});
+	} catch {
+		return { outcome: "failed", reason: "launch-failed" };
+	}
+	if (result.outcome !== "exited") return { outcome: "failed", reason: result.outcome };
+	if (result.exitCode !== 0) return { outcome: "failed", reason: "nonzero-exit" };
+
+	const rows = parseJbcentralAccessList(result.stdout);
+	const selectionIds = await readLatestAccessSelectionIds(deps, rows.length);
+	return {
+		outcome: "succeeded",
+		sources: rows.map((row, index) => ({ ...row, selectionId: selectionIds?.[index] ?? null })),
+	};
+}
+
+async function restartJbcentralProxy(deps: JbcentralAdapterDependencies): Promise<boolean> {
+	const executablePath = resolveJbcentralBin(deps);
+	if (!executablePath) return false;
+	const run = processRunner(deps);
+	try {
+		const stop = await run({
+			argv: [executablePath, "proxy", "stop"],
+			captureStdout: false,
+			timeoutMs: ACTION_TIMEOUT_MS,
+			maxStdoutBytes: 0,
+		});
+		if (stop.outcome !== "exited" || stop.exitCode !== 0) return false;
+		const start = await run({
+			argv: [executablePath, "proxy", "start", "--ensure-updated"],
+			captureStdout: false,
+			timeoutMs: ACTION_TIMEOUT_MS,
+			maxStdoutBytes: 0,
+		});
+		return start.outcome === "exited" && start.exitCode === 0;
+	} catch {
+		return false;
+	}
+}
+
+export async function switchJbcentralAccessSource(
+	selectionId: string,
+	deps: JbcentralAdapterDependencies = {},
+): Promise<JbcentralAccessSwitchResult> {
+	const executablePath = resolveJbcentralBin(deps);
+	if (!executablePath) return { outcome: "failed", reason: "not-installed" };
+
+	let result: ProcessResult;
+	try {
+		result = await processRunner(deps)({
+			argv: [executablePath, "access", selectionId],
+			captureStdout: false,
+			timeoutMs: ACTION_TIMEOUT_MS,
+			maxStdoutBytes: 0,
+		});
+	} catch {
+		return { outcome: "failed", reason: "launch-failed" };
+	}
+	if (result.outcome !== "exited") {
+		return {
+			outcome: "failed",
+			reason: result.outcome === "output-too-large" ? "launch-failed" : result.outcome,
+		};
+	}
+	if (result.exitCode !== 0) return { outcome: "failed", reason: "nonzero-exit" };
+
+	return { outcome: "succeeded", proxyRestarted: await restartJbcentralProxy(deps) };
 }
 
 export async function probeJbcentralStatus(

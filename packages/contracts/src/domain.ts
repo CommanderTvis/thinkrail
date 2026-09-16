@@ -412,6 +412,26 @@ export type JbcentralQuotaSnapshot =
 	| { state: "stale"; remaining: number; total: number; observedAt: number }
 	| { state: "unavailable" };
 
+/**
+ * One AI access source (org/workspace) Central can route requests through. `selectionId` is `null` when
+ * the host could not recover the opaque id a switch needs (see `central-integration.md` decision 2) —
+ * the source still displays, but the client must not offer a switch action for it.
+ */
+export interface JbcentralAccessSourceWire {
+	displayName: string;
+	kind: string;
+	current: boolean;
+	selectionId: string | null;
+}
+
+export type JbcentralAccessListResult =
+	| { outcome: "succeeded"; sources: JbcentralAccessSourceWire[] }
+	| { outcome: "failed" };
+
+export type JbcentralAccessSwitchResult =
+	| { outcome: "succeeded"; proxyRestarted: boolean }
+	| { outcome: "failed" };
+
 export type LoginFrame =
 	| { kind: "authUrl"; url: string; instructions?: string }
 	| { kind: "deviceCode"; userCode: string; verificationUri: string; expiresInSeconds?: number }
