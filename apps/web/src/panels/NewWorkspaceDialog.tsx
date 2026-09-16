@@ -18,7 +18,9 @@ import {
 	type WireModel,
 	type Workspace,
 } from "@thinkrail/contracts";
+import type { AgentLauncher } from "@thinkrail/plugin-api/web";
 import { Button } from "@thinkrail/ui/button";
+import { CHIP, CHIP_DISABLED, CHIP_OFF, CHIP_ON } from "@thinkrail/ui/chips";
 import {
 	Command,
 	CommandEmpty,
@@ -27,17 +29,16 @@ import {
 	CommandItem,
 	CommandList,
 } from "@thinkrail/ui/command";
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@thinkrail/ui/dialog";
 import {
-	Dialog,
-	DialogContent,
-	DialogDescription,
-	DialogHeader,
-	DialogTitle,
-} from "@thinkrail/ui/dialog";
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuTrigger,
+} from "@thinkrail/ui/dropdown-menu";
 import { Popover, PopoverContent, PopoverTrigger } from "@thinkrail/ui/popover";
 import { Textarea } from "@thinkrail/ui/textarea";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
-import { cn } from "@thinkrail/ui/utils";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { type DefaultPairOption, ModelEffortPicker } from "@/chat/ModelEffortPicker";
 import {
@@ -50,7 +51,7 @@ import { SkillsButton } from "@/chat/SkillsButton";
 import { SkillsDialog } from "@/chat/SkillsDialog";
 import { useModelCatalog } from "@/chat/useModelCatalog";
 import { useModelPreferences } from "@/chat/useModelPreferences";
-import { CHIP, CHIP_OFF, CHIP_ON } from "@/panels/chips";
+import { cn } from "@/lib";
 import {
 	applyTemplateSlotEdit,
 	beginTemplateSlotSession,
@@ -69,8 +70,10 @@ import {
 	useSlashCommandCompletion,
 	useTemplateCommandPicker,
 } from "@/prompt";
+import { collectWorkbenchCenterGroups } from "@/shell/layout";
 import { selectCatalogModel, toast, useAppStore } from "@/store";
 import { createSessionWithSkillBaseline, errorText, getTransport } from "@/transport";
+import { selectLaunchers, usePluginRegistry } from "../plugins/registry";
 import { BranchPicker } from "./BranchPicker";
 import { useBranchList } from "./branches";
 import { enterDefaultWorkspace } from "./defaultWorkspace";
@@ -89,6 +92,68 @@ export function reconcileModel(
 
 const AGENTS = [{ id: "pi" as const, label: "Bundled agent" }];
 
+function LauncherAgentOption({
+	launcher,
+	selected,
+	onSelect,
+}: {
+	launcher: AgentLauncher;
+	selected: boolean;
+	onSelect: () => void;
+}) {
+	const { available, reason } = launcher.useAvailable();
+	const Icon = launcher.icon;
+	return (
+		<button
+			type="button"
+			data-testid="ws-agent"
+			data-agent={launcher.id}
+			data-selected={selected || undefined}
+			disabled={!available}
+			title={available ? undefined : reason}
+			onClick={onSelect}
+			className={cn(CHIP, selected ? CHIP_ON : CHIP_OFF, !available && CHIP_DISABLED)}
+		>
+			<Icon className="size-14 shrink-0" />
+			{launcher.label}
+		</button>
+	);
+}
+
+function LauncherModelPicker({
+	launcher,
+	modelId,
+	onSelect,
+}: {
+	launcher: AgentLauncher;
+	modelId: string | null;
+	onSelect: (modelId: string | null) => void;
+}) {
+	const models = launcher.useModels ? launcher.useModels() : (launcher.models ?? []);
+	const selected = models.find((model) => model.id === modelId);
+	return (
+		<DropdownMenu>
+			<DropdownMenuTrigger data-testid={`ws-${launcher.id}-model`} className={PILL}>
+				{selected?.icon ? <selected.icon className="size-14 shrink-0 text-text-muted" /> : null}
+				{selected?.label ?? "Default model"}
+			</DropdownMenuTrigger>
+			<DropdownMenuContent align="start">
+				<DropdownMenuItem onSelect={() => onSelect(null)}>Default model</DropdownMenuItem>
+				{models.map((model) => (
+					<DropdownMenuItem
+						key={model.id}
+						data-testid={`ws-${launcher.id}-model-${model.id}`}
+						onSelect={() => onSelect(model.id)}
+					>
+						{model.icon ? <model.icon /> : null}
+						{model.label}
+					</DropdownMenuItem>
+				))}
+			</DropdownMenuContent>
+		</DropdownMenu>
+	);
+}
+
 const PILL_SHAPE =
 	"flex h-32 min-w-0 items-center gap-8 rounded-[var(--radius-sm)] border border-control-border-default bg-clip-padding bg-control-bg px-8 tr-text-ui text-text-default outline-none transition-colors";
 
@@ -105,6 +170,7 @@ export function NewWorkspaceDialog({
 	projectId,
 	initialPrompt,
 	promptNote,
+	initialBaseRef,
 	onCreated,
 	onOpenChange,
 }: {
@@ -112,6 +178,8 @@ export function NewWorkspaceDialog({
 	projectId: string;
 	initialPrompt?: string;
 	promptNote?: string;
+	/** Preselects the worktree base branch — how a remote-branch pick starts a workspace on it. */
+	initialBaseRef?: string;
 	onCreated?: (workspace: Workspace) => void;
 	onOpenChange: (open: boolean) => void;
 }) {
@@ -140,6 +208,8 @@ export function NewWorkspaceDialog({
 	}, []);
 	const attachedImages = usePromptImages();
 	const [agent, setAgent] = useState<string>("pi");
+	const launchers = usePluginRegistry(selectLaunchers);
+	const [launcherModel, setLauncherModel] = useState<string | null>(null);
 	const [creating, setCreating] = useState(false);
 	const [trusting, setTrusting] = useState(false);
 	const [manageSkills, setManageSkills] = useState(false);
@@ -215,7 +285,13 @@ export function NewWorkspaceDialog({
 		attachedImages.reset();
 		hostDefaultAsked.current = false;
 		setExplicitPair(false);
-	}, [open, projectId, initialPrompt, updatePromptDraft, attachedImages.reset]);
+		if (initialBaseRef) {
+			setBaseRef(initialBaseRef);
+			getTransport()
+				.request("git.prefetch", { projectId, ref: initialBaseRef })
+				.catch(() => {});
+		}
+	}, [open, projectId, initialPrompt, initialBaseRef, updatePromptDraft, attachedImages.reset]);
 
 	useEffect(() => {
 		if (!open) return;
@@ -379,10 +455,16 @@ export function NewWorkspaceDialog({
 		refreshing,
 		refresh: refreshBranches,
 	} = useBranchList(open ? selectedProjectId : null, (list) => {
+		if (initialBaseRef) return;
 		setBaseRef(list.defaultBranch);
 		prefetchBase(list.defaultBranch);
 	});
-	const submitEnabled = !creating && !templatePending && attachedImages.pending === 0;
+	const submitEnabled =
+		!creating &&
+		!templatePending &&
+		attachedImages.pending === 0 &&
+		(agent === "pi" || attachedImages.images.length === 0);
+	const selectedLauncher = launchers.find((candidate) => candidate.id === agent);
 
 	const gitless = projects.find((p) => p.id === selectedProjectId)?.hasGit === false;
 	const isolated = target === "worktree" && !gitless;
@@ -419,13 +501,29 @@ export function NewWorkspaceDialog({
 		}
 
 		const store = useAppStore.getState();
+		void refreshProjectWorkspaces(workspace.projectId).catch(() => {});
 		if (isolated) {
-			void refreshProjectWorkspaces(workspace.projectId).catch(() => {});
 			onCreated?.(workspace);
 			store.activateWorkspace(workspace);
 		}
 		onOpenChange(false);
 
+		const launcher = launchers.find((candidate) => candidate.id === agent);
+		if (launcher) {
+			const frame = store.workbenchFrame;
+			const centre = frame ? collectWorkbenchCenterGroups(frame.center)[0]?.id : undefined;
+			store.addTerminal(
+				workspace.id,
+				launcher.terminalCommand({
+					...(launcherModel ? { model: launcherModel } : {}),
+					...(text ? { initialPrompt: text } : {}),
+				}),
+				centre,
+				"center",
+				true,
+			);
+			return;
+		}
 		store.beginChatStart(workspace.id);
 		try {
 			const { result: session, syncedTick } = await createSessionWithSkillBaseline({
@@ -711,13 +809,34 @@ export function NewWorkspaceDialog({
 								data-testid="ws-agent"
 								data-agent={option.id}
 								data-selected={option.id === agent || undefined}
-								onClick={() => setAgent(option.id)}
+								onClick={() => {
+									setAgent(option.id);
+									setLauncherModel(null);
+								}}
 								className={cn(CHIP, option.id === agent ? CHIP_ON : CHIP_OFF)}
 							>
 								{option.label}
 							</button>
 						))}
-						{agent !== "pi" ? null : (
+						{launchers.map((launcher) => (
+							<LauncherAgentOption
+								key={launcher.id}
+								launcher={launcher}
+								selected={agent === launcher.id}
+								onSelect={() => {
+									setAgent(launcher.id);
+									setLauncherModel(null);
+								}}
+							/>
+						))}
+						{selectedLauncher?.models || selectedLauncher?.useModels ? (
+							<LauncherModelPicker
+								key={agent}
+								launcher={selectedLauncher}
+								modelId={launcherModel}
+								onSelect={setLauncherModel}
+							/>
+						) : agent !== "pi" ? null : (
 							<ModelEffortPicker
 								models={models}
 								current={model}
