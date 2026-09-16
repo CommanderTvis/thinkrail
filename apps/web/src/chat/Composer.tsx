@@ -559,11 +559,6 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 							title={submitError}
 							label={submitError}
 						/>
-<<<<<<< HEAD
-					) : null
-				}
-			/>
-=======
 					) : null
 				}
 			/>

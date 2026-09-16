@@ -98,6 +98,7 @@ export function NewWorkspaceDialog({
 	projectId,
 	initialPrompt,
 	promptNote,
+	initialBaseRef,
 	onCreated,
 	onOpenChange,
 }: {
@@ -105,6 +106,8 @@ export function NewWorkspaceDialog({
 	projectId: string;
 	initialPrompt?: string;
 	promptNote?: string;
+	/** Preselects the worktree base branch — how a remote-branch pick starts a workspace on it. */
+	initialBaseRef?: string;
 	onCreated?: (workspace: Workspace) => void;
 	onOpenChange: (open: boolean) => void;
 }) {
@@ -199,7 +202,13 @@ export function NewWorkspaceDialog({
 		setCreating(false);
 		attachedImages.reset();
 		hostDefaultAsked.current = false;
-	}, [open, projectId, initialPrompt, updatePromptDraft, attachedImages.reset]);
+		if (initialBaseRef) {
+			setBaseRef(initialBaseRef);
+			getTransport()
+				.request("git.prefetch", { projectId, ref: initialBaseRef })
+				.catch(() => {});
+		}
+	}, [open, projectId, initialPrompt, initialBaseRef, updatePromptDraft, attachedImages.reset]);
 
 	useEffect(() => {
 		if (!open) return;
@@ -348,6 +357,7 @@ export function NewWorkspaceDialog({
 		refreshing,
 		refresh: refreshBranches,
 	} = useBranchList(open ? selectedProjectId : null, (list) => {
+		if (initialBaseRef) return;
 		setBaseRef(list.defaultBranch);
 		prefetchBase(list.defaultBranch);
 	});
