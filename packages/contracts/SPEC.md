@@ -286,7 +286,7 @@ of the host.
   **`AppConfig`** (`{ theme, themeMode, systemThemePair?, analyticsEnabled, analyticsConsentConfirmed, terminalReplayKb,
   terminalWindowsShell, composerGrowthLimit, chatLineWidth, fileLineWidth, chatLineWidthBounded,
   fileLineWidthBounded, customLayoutPresets, defaultModel?, defaultEffort?, reviewModel?, reviewEffort?,
-  reviewAutoFix, agentReviewEnabled, subagentsEnabled, jbcentralQuotaEnabled, jbcentralQuotaRefreshSeconds, plugins, pluginPaths }` — an extensible bag; the line-width fields join
+  reviewAutoFix, agentReviewEnabled, subagentsEnabled, jbcentralQuotaEnabled, jbcentralQuotaRefreshSeconds, hiddenModels, plugins, pluginPaths }` — an extensible bag; the line-width fields join
   the wire at protocol v61 and `terminalWindowsShell` at v62. **`DEFAULT_MODEL_PROTOCOL_VERSION`** pins
   v72's AppConfig `defaultModel`/`defaultEffort` and host-side default resolution; the Settings controls are
   hidden against older hosts. `defaultModel` is a full allowlisted `WireModel`, `defaultEffort` is an optional

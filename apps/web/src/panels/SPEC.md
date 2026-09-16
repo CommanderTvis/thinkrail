@@ -644,7 +644,7 @@ a project picker, the prompt hero, and the reused
   with an accessible range error; Escape restores the host value, Enter saves when valid, and a changed
   authoritative width from `settings.changed` replaces a stale draft. Mutations converge only on that
   broadcast and rejected calls toast without changing geometry); **`ChatSettings`** (the next live section —
-  **Message order** radio cards over `store.chatMessageOrder` (Oldest first, the compatibility default /
+  **Hidden models** (a pattern input and chip list allowing users to blacklist exact model IDs, globs, or regular expressions from model pickers, displaying matching model counts and managing patterns via `settings.update { hiddenModels }`), **Message order** radio cards over `store.chatMessageOrder` (Oldest first, the compatibility default /
   Newest first, the opt-in), one **Streaming response movement** two-handle range over
   `store.streamingResponseMovement`, then the three existing composer-growth cards. The movement control's
   copy is “Choose when the chat moves while an answer grows and where its newest edge lands”; one axis runs
