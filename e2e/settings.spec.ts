@@ -76,3 +76,33 @@ test("Chat settings displays Default model section with model selector and effor
 	await page.keyboard.press("Escape");
 	await expect(dialog).toBeHidden();
 });
+
+test("Chat settings allows configuring hidden model patterns", async ({ page }) => {
+	await page.goto("/");
+	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
+
+	await page.getByTestId("open-settings").click();
+	const dialog = page.getByTestId("settings-dialog");
+	await expect(dialog).toBeVisible();
+
+	await page.getByTestId("settings-nav-chat").click();
+	await expect(page.getByTestId("settings-chat")).toBeVisible();
+	const hiddenSection = page.getByTestId("settings-hidden-models");
+	await expect(hiddenSection).toBeVisible();
+	await expect(hiddenSection).toContainText("Hidden models");
+
+	const input = page.getByTestId("hidden-models-input");
+	await expect(input).toBeVisible();
+	await input.fill("*-snapshot-test");
+	await page.getByTestId("hidden-models-add").click();
+
+	const chip = page.getByTestId("hidden-model-chip-*-snapshot-test");
+	await expect(chip).toBeVisible();
+	await expect(chip).toContainText("*-snapshot-test");
+
+	await page.getByTestId("hidden-model-remove-*-snapshot-test").click();
+	await expect(chip).toBeHidden();
+
+	await page.keyboard.press("Escape");
+	await expect(dialog).toBeHidden();
+});

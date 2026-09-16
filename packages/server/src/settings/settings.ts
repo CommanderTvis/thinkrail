@@ -77,6 +77,7 @@ export function updateConfig(partial: AppConfigUpdate): AppConfig {
 		systemThemePair,
 		jbcentralQuotaEnabled,
 		jbcentralQuotaRefreshSeconds,
+		hiddenModels,
 		...rest
 	} = runtimeUpdate;
 	if (subagentsEnabled !== undefined && typeof subagentsEnabled !== "boolean") {
@@ -84,6 +85,13 @@ export function updateConfig(partial: AppConfigUpdate): AppConfig {
 	}
 	if (jbcentralQuotaEnabled !== undefined && typeof jbcentralQuotaEnabled !== "boolean") {
 		throw new Error("jbcentralQuotaEnabled must be a boolean");
+	}
+	if (
+		runtimeUpdate.hiddenModels !== undefined &&
+		(!Array.isArray(runtimeUpdate.hiddenModels) ||
+			!runtimeUpdate.hiddenModels.every((item) => typeof item === "string"))
+	) {
+		throw new Error("hiddenModels must be an array of strings");
 	}
 	if (
 		runtimeUpdate.editorGpuRendering !== undefined &&
@@ -147,6 +155,11 @@ export function updateConfig(partial: AppConfigUpdate): AppConfig {
 		...(subagentsEnabled === undefined ? {} : { subagentsEnabled }),
 		...(jbcentralQuotaEnabled === undefined ? {} : { jbcentralQuotaEnabled }),
 		...(jbcentralQuotaRefreshSeconds === undefined ? {} : { jbcentralQuotaRefreshSeconds }),
+		...(hiddenModels === undefined
+			? {}
+			: {
+					hiddenModels: [...new Set(hiddenModels.map((s) => s.trim()).filter((s) => s.length > 0))],
+				}),
 	};
 	const next: AppConfig = {
 		...merged,

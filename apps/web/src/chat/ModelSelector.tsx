@@ -1,9 +1,11 @@
 import {
 	RiCheckLine as Check,
 	RiArrowDownSLine as ChevronDown,
+	RiEyeLine as Eye,
+	RiEyeOffLine as EyeOff,
 	RiRefreshLine as RefreshCw,
 } from "@remixicon/react";
-import type { WireModel } from "@thinkrail/contracts";
+import { isModelHidden, matchesModelPattern, type WireModel } from "@thinkrail/contracts";
 import { useState } from "react";
 import {
 	Command,
@@ -15,6 +17,8 @@ import {
 } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib";
+import { toast, useAppStore } from "@/store";
+import { getTransport } from "@/transport";
 
 function formatContext(tokens: number): string {
 	if (tokens >= 1_000_000) return `${Math.round(tokens / 100_000) / 10}M`.replace(".0", "");
@@ -40,6 +44,7 @@ export function ModelSelector({
 	defaultOption,
 	onSelectDefault,
 	showLabel = true,
+	hiddenModels: propHiddenModels,
 }: {
 	models: WireModel[];
 	current: WireModel | null;
@@ -52,13 +57,41 @@ export function ModelSelector({
 	defaultOption?: string;
 	onSelectDefault?: () => void;
 	showLabel?: boolean;
+	hiddenModels?: readonly string[];
 }) {
 	const [open, setOpen] = useState(false);
-	const providers = [...new Set(models.map((m) => m.provider))];
+	const [showHidden, setShowHidden] = useState(false);
+	const storeHiddenModels = useAppStore((s) => s.hiddenModels);
+	const activeHidden = propHiddenModels ?? storeHiddenModels ?? [];
+
+	const isHidden = (m: WireModel) => isModelHidden(m, activeHidden);
+	const hiddenCount = models.filter(isHidden).length;
+
+	const visibleModels = showHidden
+		? models
+		: models.filter(
+				(m) => !isHidden(m) || (current?.provider === m.provider && current?.id === m.id),
+			);
+	const providers = [...new Set(visibleModels.map((m) => m.provider))];
 
 	const select = (model: WireModel) => {
 		onSelect(model);
 		setOpen(false);
+	};
+
+	const hideModel = (model: WireModel) => {
+		if (isModelHidden(model, activeHidden)) return;
+		const next = [...activeHidden, model.id];
+		getTransport()
+			.request("settings.update", { config: { hiddenModels: next } })
+			.catch(() => toast.error("Couldn't hide model"));
+	};
+
+	const unhideModel = (model: WireModel) => {
+		const next = activeHidden.filter((p) => p !== model.id && !matchesModelPattern(model, p));
+		getTransport()
+			.request("settings.update", { config: { hiddenModels: next } })
+			.catch(() => toast.error("Couldn't unhide model"));
 	};
 
 	return (
@@ -107,10 +140,11 @@ export function ModelSelector({
 						)}
 						{providers.map((provider) => (
 							<CommandGroup key={provider} heading={provider}>
-								{models
+								{visibleModels
 									.filter((m) => m.provider === provider)
 									.map((m) => {
 										const isCurrent = current?.provider === m.provider && current?.id === m.id;
+										const hidden = isHidden(m);
 										return (
 											<CommandItem
 												key={`${m.provider}:${m.id}`}
@@ -118,18 +152,55 @@ export function ModelSelector({
 												data-testid="model-option"
 												data-model-id={m.id}
 												onSelect={() => select(m)}
+												className={cn(hidden && "opacity-60")}
 											>
 												<span className="flex w-14 shrink-0 justify-center">
 													{isCurrent ? <Check className="size-14 text-primary" /> : null}
 												</span>
 												<span className="flex min-w-0 flex-col">
-													<span className="truncate">{m.name}</span>
+													<span className="flex items-center gap-4 truncate">
+														<span className="truncate">{m.name}</span>
+														{hidden ? (
+															<span className="rounded bg-control-bg px-4 py-2 tr-text-metadata text-text-muted">
+																Hidden
+															</span>
+														) : null}
+													</span>
 													<span className="truncate text-text-muted tr-text-metadata">
 														{subLine(m)}
 													</span>
 												</span>
-												<span className="ml-auto shrink-0 text-text-muted tr-text-metadata">
-													{m.id}
+												<span className="ml-auto flex shrink-0 items-center gap-4 text-text-muted tr-text-metadata">
+													<span>{m.id}</span>
+													{hidden ? (
+														<button
+															type="button"
+															data-testid="model-unhide-button"
+															title="Unhide model"
+															onPointerDown={(e) => e.stopPropagation()}
+															onClick={(e) => {
+																e.stopPropagation();
+																unhideModel(m);
+															}}
+															className="rounded p-2 text-text-muted transition-colors hover:bg-control-bg-hovered hover:text-text-default"
+														>
+															<Eye className="size-14" />
+														</button>
+													) : (
+														<button
+															type="button"
+															data-testid="model-hide-button"
+															title="Hide model"
+															onPointerDown={(e) => e.stopPropagation()}
+															onClick={(e) => {
+																e.stopPropagation();
+																hideModel(m);
+															}}
+															className="rounded p-2 text-text-muted transition-colors hover:bg-control-bg-hovered hover:text-text-default"
+														>
+															<EyeOff className="size-14" />
+														</button>
+													)}
 												</span>
 											</CommandItem>
 										);
@@ -138,6 +209,28 @@ export function ModelSelector({
 						))}
 					</CommandList>
 				</Command>
+				{hiddenCount > 0 ? (
+					<button
+						type="button"
+						data-testid="model-toggle-hidden"
+						onClick={() => setShowHidden((prev) => !prev)}
+						className="flex w-full items-center gap-8 border-border-default border-t px-8 py-4 tr-text-metadata text-text-muted outline-none transition-colors hover:bg-control-bg-hovered hover:text-text-default"
+					>
+						{showHidden ? (
+							<>
+								<EyeOff className="size-14 shrink-0" />
+								<span>Hide filtered models</span>
+							</>
+						) : (
+							<>
+								<Eye className="size-14 shrink-0" />
+								<span>
+									Show {hiddenCount} hidden model{hiddenCount === 1 ? "" : "s"}
+								</span>
+							</>
+						)}
+					</button>
+				) : null}
 				<button
 					type="button"
 					data-testid="model-refresh"

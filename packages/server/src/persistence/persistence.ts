@@ -133,6 +133,11 @@ export function loadConfig(): AppConfig {
 		terminalWindowsShell: isTerminalWindowsShell(value.terminalWindowsShell)
 			? value.terminalWindowsShell
 			: DEFAULT_CONFIG.terminalWindowsShell,
+		hiddenModels: Array.isArray(value.hiddenModels)
+			? value.hiddenModels.filter(
+					(id): id is string => typeof id === "string" && id.trim().length > 0,
+				)
+			: DEFAULT_CONFIG.hiddenModels,
 	};
 }
 
