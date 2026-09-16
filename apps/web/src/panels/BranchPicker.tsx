@@ -18,6 +18,8 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from "@thinkrail/ui/popover";
 import { type ReactNode, useState } from "react";
 import { hasRemoteBranches, remoteBranchPresentation } from "./branchGroups";
+import { RemoteGroupHeading } from "./RemoteGroupHeading";
+import { useRemoteGroupCollapse } from "./remoteGroupCollapse";
 
 export function BranchPicker({
 	branches,
@@ -44,6 +46,7 @@ export function BranchPicker({
 }) {
 	const t = useT();
 	const [open, setOpen] = useState(false);
+	const { isCollapsed, toggle } = useRemoteGroupCollapse();
 	const remote = remoteBranchPresentation(branches);
 	const local = branches?.local ?? [];
 	const defaultBranch = branches?.defaultBranch;
@@ -53,6 +56,7 @@ export function BranchPicker({
 		<CommandItem
 			key={ref}
 			value={ref}
+			forceMount={false}
 			data-testid="branch-option"
 			data-branch={ref}
 			data-active={ref === selected ? true : undefined}
@@ -148,15 +152,28 @@ export function BranchPicker({
 									forceMount
 									className="not-has-[[cmdk-group]:not([hidden])]:hidden"
 								>
-									{remote.groups.map((group) => (
-										<CommandGroup
-											key={group.remote === null ? "remote:null" : `remote:${group.remote}`}
-											heading={group.remote ?? t("panels.branchPicker.otherRemote")}
-											className="pl-8"
-										>
-											{group.branches.map(({ ref, branch }) => renderItem(ref, branch))}
-										</CommandGroup>
-									))}
+									{remote.groups.map((group) => {
+										const label = group.remote ?? t("panels.branchPicker.otherRemote");
+										const collapsed = isCollapsed(group.remote);
+										return (
+											<CommandGroup
+												key={group.remote === null ? "remote:null" : `remote:${group.remote}`}
+												forceMount
+												heading={
+													<RemoteGroupHeading
+														label={label}
+														collapsed={collapsed}
+														onToggle={() => toggle(group.remote)}
+													/>
+												}
+												className="pl-8"
+											>
+												{collapsed
+													? null
+													: group.branches.map(({ ref, branch }) => renderItem(ref, branch))}
+											</CommandGroup>
+										);
+									})}
 								</CommandGroup>
 							) : null
 						) : remote.refs.length > 0 ? (
