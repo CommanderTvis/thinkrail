@@ -504,7 +504,9 @@ function samePathKey(path: string): string {
 }
 
 /** Every local branch with the checkout occupying it, if any — see SPEC.md. */
-export async function branchDetails(projectId: string): Promise<{ branches: BranchDetail[] }> {
+export async function branchDetails(
+	projectId: string,
+): Promise<{ branches: BranchDetail[]; remoteGroups?: RemoteBranchGroup[] }> {
 	const root = project(projectId).path;
 	const list = await listBranches(projectId);
 	const occupied = new Map<
@@ -547,6 +549,7 @@ export async function branchDetails(projectId: string): Promise<{ branches: Bran
 				...(at?.workspaceName ? { workspaceName: at.workspaceName } : {}),
 			};
 		}),
+		...(list.remoteGroups ? { remoteGroups: list.remoteGroups } : {}),
 	};
 }
 

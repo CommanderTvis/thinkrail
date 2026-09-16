@@ -5,6 +5,7 @@ import { join } from "node:path";
 import type { Workspace } from "@thinkrail/contracts";
 import { changedFileArgs, diffBaseRef, resolveDiffRange } from "./diffScope";
 import {
+	branchDetails,
 	countUnpushedCommits,
 	deleteBranch,
 	gitCommitPaths,
@@ -188,6 +189,17 @@ test("listBranches with no remote returns local branches and falls back to the r
 	expect(local.sort()).toEqual(["feature/x", "main"]);
 	expect(remote).toEqual([]);
 	expect(defaultBranch).toBe("main");
+});
+
+test("branchDetails carries the same remote grouping listBranches computes, alongside local occupancy", async () => {
+	git(repo, "remote", "add", "origin", "https://example.invalid/origin.git");
+	git(repo, "update-ref", "refs/remotes/origin/feature-remote", "HEAD");
+
+	const { branches, remoteGroups } = await branchDetails("p1");
+	expect(branches.map((b) => b.branch)).toEqual(["main"]);
+	expect(remoteGroups).toEqual([
+		{ remote: "origin", branches: [{ ref: "origin/feature-remote", branch: "feature-remote" }] },
+	]);
 });
 
 test("deleteBranch exposes dirty external worktree recovery and only forces it on request", async () => {

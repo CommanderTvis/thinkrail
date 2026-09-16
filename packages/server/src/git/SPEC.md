@@ -22,7 +22,9 @@ ref off the workspace-create critical path.
   branch looked free. A branch a ThinkRail workspace is living on is refused **by the host**, not only by
   the UI that draws the button disabled — the host is the one that knows, and the answer must not depend
   on which client asked. So is the branch that is currently checked out. Deletion is `branch -D` on a ref
-  that has already passed `assertSafeRef`.
+  that has already passed `assertSafeRef`. Its result also carries `listBranches`' own `remoteGroups`,
+  computed once and passed through, so the browser's branch list can show every remote without a second
+  request or its own remote/branch parsing.
 - **Fetch is every remote, and nothing else.** The branch list's Fetch runs `git fetch --all`, which is
   what the action means to anyone who has used an IDE's: refs come up to date and nothing local moves. It
   does **not** prune — a remote branch that vanished upstream is news, not garbage to collect behind

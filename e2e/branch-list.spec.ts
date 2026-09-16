@@ -31,6 +31,90 @@ test("the branch chip lists branches with their worktrees, and guards deletion",
 	await expect(mine).toHaveCount(1);
 });
 
+test("left-clicking a branch checked out by a ThinkRail workspace switches to it", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	const first = await createWorkspaceViaDialog(page);
+	await createWorkspaceViaDialog(page);
+
+	await page.getByTestId("scope-branch").click();
+	const list = page.getByTestId("branch-list");
+	const firstRow = list.getByTestId("branch-row").filter({ hasText: first.branch });
+	await firstRow.getByTestId("branch-open-workspace").click();
+
+	await expect(list).toBeHidden();
+	await expect(page.getByTestId("scope-name")).toHaveText(first.name);
+});
+
+test("the branch list groups branches from every configured remote, and a remote-only branch opens New Workspace prefilled", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	await createWorkspaceViaDialog(page);
+	git(E2E_FIXTURE_REPO, "remote", "add", "list-origin", "https://example.invalid/origin.git");
+	git(E2E_FIXTURE_REPO, "remote", "add", "list-upstream", "https://example.invalid/upstream.git");
+	git(E2E_FIXTURE_REPO, "update-ref", "refs/remotes/list-origin/remote-only-branch", "HEAD");
+	git(E2E_FIXTURE_REPO, "update-ref", "refs/remotes/list-upstream/other-remote-branch", "HEAD");
+
+	await page.getByTestId("scope-branch").click();
+	const list = page.getByTestId("branch-list");
+	await expect(
+		list.getByTestId("remote-group-toggle").filter({ hasText: "list-origin" }),
+	).toBeVisible();
+	await expect(
+		list.getByTestId("remote-group-toggle").filter({ hasText: "list-upstream" }),
+	).toBeVisible();
+	const remoteRow = list.getByTestId("branch-remote-row").filter({ hasText: "remote-only-branch" });
+	await expect(remoteRow).toBeVisible();
+
+	await remoteRow.getByTestId("branch-remote-open").click();
+	await expect(list).toBeHidden();
+	const dialog = page.getByTestId("new-workspace-dialog");
+	await expect(dialog).toBeVisible();
+	await expect(page.getByTestId("ws-branch-picker")).toContainText(
+		"list-origin/remote-only-branch",
+	);
+});
+
+test("a remote group can be collapsed and expanded, and stays that way in every branch picker", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	await createWorkspaceViaDialog(page);
+	git(E2E_FIXTURE_REPO, "remote", "add", "collapse-origin", "https://example.invalid/origin.git");
+	git(E2E_FIXTURE_REPO, "update-ref", "refs/remotes/collapse-origin/collapsible-branch", "HEAD");
+
+	await page.getByTestId("scope-branch").click();
+	const list = page.getByTestId("branch-list");
+	const toggle = list.getByTestId("remote-group-toggle").filter({ hasText: "collapse-origin" });
+	const row = list.getByTestId("branch-remote-row").filter({ hasText: "collapsible-branch" });
+	await expect(row).toBeVisible();
+	await toggle.click();
+	await expect(row).toBeHidden();
+
+	// Closing and reopening the popover keeps the remote collapsed.
+	await page.keyboard.press("Escape");
+	await expect(list).toBeHidden();
+	await page.getByTestId("scope-branch").click();
+	await expect(
+		list.getByTestId("branch-remote-row").filter({ hasText: "collapsible-branch" }),
+	).toBeHidden();
+
+	// The same collapse preference applies in the New Workspace dialog's branch picker.
+	await page.keyboard.press("Escape");
+	await page.getByTestId("add-workspace").first().click();
+	const dialog = page.getByTestId("new-workspace-dialog");
+	await expect(dialog).toBeVisible();
+	await page.getByTestId("ws-branch-picker").click();
+	await expect(
+		page.getByTestId("branch-option").filter({ hasText: "collapsible-branch" }),
+	).toBeHidden();
+	await expect(
+		page.getByTestId("remote-group-toggle").filter({ hasText: "collapse-origin" }),
+	).toBeVisible();
+});
+
 test("a branch held by a worktree ThinkRail did not make is still the user's to delete", async ({
 	page,
 }) => {
@@ -117,4 +201,15 @@ test("Fetch brings the remotes up to date from the branch list", async ({ page }
 	await expect.poll(seen, { timeout: 30_000 }).not.toBe(before);
 	// The list is still there afterwards, re-read rather than left as it was.
 	await expect(page.getByTestId("branch-list")).toBeVisible();
+});
+
+test("the topbar branch list marks its Local branches, mirroring the Changes picker", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	await createWorkspaceViaDialog(page);
+
+	await page.getByTestId("scope-branch").click();
+	const list = page.getByTestId("branch-list");
+	await expect(list.getByText("Local", { exact: true })).toBeVisible();
 });

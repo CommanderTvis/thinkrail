@@ -30,6 +30,7 @@ import type {
 	Project,
 	ProjectPathStatus,
 	ProviderStatusReport,
+	RemoteBranchGroup,
 	ReviewAnchor,
 	ReviewComment,
 	ReviewCommentKind,
@@ -500,7 +501,10 @@ export interface WsMethodMap {
 		params: { workspaceId: string; path: string; scope?: GitDiffScope };
 		result: { original: string; modified: string };
 	};
-	"git.branchDetails": { params: { projectId: string }; result: { branches: BranchDetail[] } };
+	"git.branchDetails": {
+		params: { projectId: string };
+		result: { branches: BranchDetail[]; remoteGroups?: RemoteBranchGroup[] };
+	};
 	"git.deleteBranch": {
 		params: { projectId: string; branch: string; force?: boolean };
 		result: BranchDeleteResult;
