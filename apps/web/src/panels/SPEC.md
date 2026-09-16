@@ -333,7 +333,8 @@ on it. The open-project orchestration lives in the shared **`useOpenProject`** h
 Above the cards, `WelcomePanel` composes **`ProviderWarningBanner`** — a slim gold banner shown **only when
 no provider is connected** ("No model provider connected — the agent can't run") with a **Connect a provider**
 CTA that opens Settings → Providers (`store.openSettings("providers")`). It reads `provider.status` (a
-provider is "connected" iff any `configured`) on mount and re-checks whenever the settings dialog toggles, so
+provider is "connected" iff any `configured` or Central is connected) on mount and re-checks whenever the
+settings dialog toggles or provider configuration changes, so
 it disappears the moment the user connects one; a transport error degrades to *not* nagging (offline ≠ "no
 provider"). All provider **management** lives in Settings, not here (the always-on strip is gone).
 
