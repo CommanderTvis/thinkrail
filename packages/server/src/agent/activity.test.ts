@@ -139,6 +139,12 @@ test("only the most recent questionnaire decides — an old answered one does no
 	expect(deriveActivityStatus(inputs({ messages }))).toBe("waiting");
 });
 
+test("an ask_user_question followed by subsequent assistant work is superseded and not waiting", () => {
+	const messages = [...awaiting, assistant("stop")];
+	expect(deriveActivityStatus(inputs({ messages }))).toBeNull();
+	expect(awaitingQuestionToolCallId(messages)).toBeNull();
+});
+
 const assistant = (stopReason: string) =>
 	({
 		role: "assistant",

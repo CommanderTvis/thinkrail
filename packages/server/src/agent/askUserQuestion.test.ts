@@ -575,6 +575,18 @@ test("assessAnswerability: a later free-form user message supersedes the questio
 	expect(assessAnswerability(messages, "tc")).toEqual({ ok: false, reason: "superseded" });
 });
 
+test("assessAnswerability: a later assistant message without ask_user_question supersedes the questionnaire", () => {
+	const messages = [
+		askCall("tc"),
+		ackResult("tc"),
+		{
+			role: "assistant",
+			content: [{ type: "text", text: "continuing work" }],
+		} as unknown as AgentMessage,
+	];
+	expect(assessAnswerability(messages, "tc")).toEqual({ ok: false, reason: "superseded" });
+});
+
 test("assessAnswerability: an answers message for ANOTHER call neither answers nor supersedes", () => {
 	const messages = [askCall("tc"), ackResult("tc"), askCall("tc2"), answersMessage("tc2")];
 	expect(assessAnswerability(messages, "tc").ok).toBe(true);
