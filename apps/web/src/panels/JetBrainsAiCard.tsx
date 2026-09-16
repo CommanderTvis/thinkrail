@@ -23,7 +23,7 @@ import {
 	type JbcentralStatus,
 } from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
-import { useT } from "@thinkrail/locales/react";
+import { T, useT } from "@thinkrail/locales/react";
 import { Button, IconButton, withIconClass } from "@thinkrail/ui/button";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { copyText, hostWording } from "@/lib";
@@ -235,7 +235,7 @@ function JbcentralAccessSection({ enabled }: { enabled: boolean }) {
 						) : (
 							<Button
 								variant="outline"
-								size="sm"
+								size="m"
 								data-testid="jbcentral-access-switch"
 								disabled={switchingId !== null}
 								onClick={() => void switchTo(source.selectionId as string)}
@@ -243,7 +243,7 @@ function JbcentralAccessSection({ enabled }: { enabled: boolean }) {
 								{switchingId === source.selectionId ? (
 									<Loader2 className="size-14 animate-spin" />
 								) : null}
-								Switch
+								{t("settings.jbcentral.access.switch")}
 							</Button>
 						)}
 					</div>
