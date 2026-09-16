@@ -1,4 +1,5 @@
 import { RiAlertLine as TriangleAlert } from "@remixicon/react";
+import { hasConnectedProvider } from "@thinkrail/contracts";
 import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useAppStore } from "@/store";
@@ -7,11 +8,12 @@ import { getTransport } from "@/transport";
 export function ProviderWarningBanner() {
 	const [hasProvider, setHasProvider] = useState<boolean | null>(null);
 	const settingsOpen = useAppStore((s) => s.settingsOpen);
+	const providerVersion = useAppStore((s) => s.providerVersion);
 
 	const check = useCallback(async () => {
 		try {
 			const report = await getTransport().request("provider.status", {});
-			setHasProvider(report.providers.some((p) => p.configured));
+			setHasProvider(hasConnectedProvider(report));
 		} catch {
 			setHasProvider(true);
 		}
@@ -19,7 +21,7 @@ export function ProviderWarningBanner() {
 
 	useEffect(() => {
 		if (!settingsOpen) void check();
-	}, [check, settingsOpen]);
+	}, [check, settingsOpen, providerVersion]);
 
 	if (hasProvider !== false) return null;
 
