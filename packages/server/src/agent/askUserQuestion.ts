@@ -240,6 +240,11 @@ export function assessAnswerability(
 		if (view.role === "toolResult" && view.toolCallId === toolCallId && !isAckDetails(view.details))
 			return { ok: false, reason: "not_awaiting" };
 		if (view.role === "user") return { ok: false, reason: "superseded" };
+		if (
+			view.role === "assistant" &&
+			toolCallsOf(view).every((b) => b.name !== ASK_USER_QUESTION_TOOL_NAME)
+		)
+			return { ok: false, reason: "superseded" };
 	}
 	return { ok: true, args };
 }
@@ -250,10 +255,13 @@ export function awaitingQuestionToolCallId(messages: readonly AgentMessage[]): s
 		const view = views[i];
 		if (!view) continue;
 		if (view.role === "user") return null;
-		for (const block of toolCallsOf(view)) {
-			const { id } = block;
-			if (id === undefined || block.name !== ASK_USER_QUESTION_TOOL_NAME) continue;
-			if (assessAnswerability(messages, id).ok) return id;
+		if (view.role === "assistant") {
+			for (const block of toolCallsOf(view)) {
+				const { id } = block;
+				if (id === undefined || block.name !== ASK_USER_QUESTION_TOOL_NAME) continue;
+				if (assessAnswerability(messages, id).ok) return id;
+			}
+			return null;
 		}
 	}
 	return null;

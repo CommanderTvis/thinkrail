@@ -30,7 +30,7 @@ export function deriveAskStates(
 		const answer = askAnswers[toolCallId];
 		states[toolCallId] = {
 			...(answer ? { answer } : {}),
-			superseded: !answer && lastUserIndex > turnIndex,
+			superseded: !answer && (lastUserIndex > turnIndex || turns.length - 1 > turnIndex),
 		};
 	}
 	return states;

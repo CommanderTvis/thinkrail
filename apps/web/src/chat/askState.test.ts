@@ -40,6 +40,20 @@ test("a user turn AFTER an unanswered call supersedes it; one before does not", 
 	expect(states.tc2).toEqual({ superseded: false });
 });
 
+test("an assistant turn AFTER an unanswered call supersedes it", () => {
+	const textAssistantTurn: ChatTurn = {
+		kind: "assistant",
+		id: "a2",
+		streaming: false,
+		message: {
+			role: "assistant",
+			content: [{ type: "text", text: "Moving forward..." }],
+		} as unknown as AssistantMessage,
+	};
+	const states = deriveAskStates([userTurn("u1"), askTurn("a1", "tc1"), textAssistantTurn], {});
+	expect(states.tc1).toEqual({ superseded: true });
+});
+
 test("non-ask tool calls derive no state", () => {
 	const turns: ChatTurn[] = [
 		{
