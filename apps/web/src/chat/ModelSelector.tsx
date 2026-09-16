@@ -3,11 +3,16 @@ import {
 	RiArrowDownSLine as ChevronDown,
 	RiArrowRightSLine as ChevronRight,
 	RiPushpin2Line as Pin,
+	RiEyeLine as Eye,
+	RiEyeOffLine as EyeOff,
 	RiRefreshLine as RefreshCw,
 	RiStarFill as StarFill,
 	RiStarLine as StarLine,
 } from "@remixicon/react";
-import { sameModel, type WireModel } from "@thinkrail/contracts";
+import {
+	sameModel,
+	type WireModel,
+} from "@thinkrail/contracts";
 import {
 	Command,
 	CommandEmpty,
@@ -19,6 +24,7 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from "@thinkrail/ui/popover";
 import { cn } from "@thinkrail/ui/utils";
 import { useState } from "react";
+import { useAppStore } from "@/store";
 import { formatContext } from "./modelPicker";
 import { ProviderGlyph } from "./ProviderGlyph";
 import {
@@ -83,26 +89,38 @@ export function ModelSelector({
 	const [open, setOpen] = useState(false);
 	const [query, setQuery] = useState("");
 	const [expansion, setExpansion] = useState<GroupExpansion>(() => initialGroupExpansion(null, []));
+	const [showHidden, setShowHidden] = useState(false);
+	const storeHiddenModels = useAppStore((state) => state.hiddenModels);
+	const toggleModelVisibility = useAppStore((state) => state.toggleModelVisibility);
+	const isHidden = (model: WireModel) => storeHiddenModels.some((hidden) => sameModel(hidden, model));
+	const hiddenCount = models.filter(isHidden).length;
+	const visibleModels = showHidden
+		? models
+		: models.filter(
+				(model) => !isHidden(model) || sameModel(current, model),
+			);
 
 	const pinnedModels = preferences?.favorites ?? [];
 	const searching = query !== "";
-	const groups = pickerGroups(models, {
+	const groups = pickerGroups(visibleModels, {
 		pinned: pinnedModels,
 		query,
 		expansion,
 		row: groupRow,
 	});
-	const emptyState = pickerEmptyState(query, models.length);
+	const emptyState = pickerEmptyState(query, visibleModels.length);
 
 	const select = (model: WireModel) => {
 		onSelect(model);
 		setOpen(false);
 		setQuery("");
 	};
+	const toggleHidden = (model: WireModel) => toggleModelVisibility(model);
 
 	const renderModel = (model: WireModel, section: string) => {
 		const isCurrent = sameModel(current, model);
 		const isPinned = pinnedModels.some((pinned) => sameModel(pinned, model));
+		const hidden = isHidden(model);
 		const grouped = section === "all";
 		return (
 			<CommandItem
@@ -123,7 +141,10 @@ export function ModelSelector({
 					<ProviderGlyph provider={model.provider} className="mt-2 text-text-muted" />
 				)}
 				<span className="flex min-w-0 flex-1 flex-col">
-					<span className="truncate">{model.name}</span>
+					<span className="flex items-center gap-4 truncate">
+						<span className="truncate">{model.name}</span>
+						{hidden ? <span className="text-text-muted tr-text-metadata">Hidden</span> : null}
+					</span>
 					<span className="truncate text-text-muted tr-text-metadata">{subLine(model)}</span>
 				</span>
 				<span className="mt-2 shrink-0 text-text-subtle tr-text-metadata">{model.id}</span>
@@ -149,6 +170,18 @@ export function ModelSelector({
 						{isPinned ? <StarFill className="size-12" /> : <StarLine className="size-12" />}
 					</button>
 				) : null}
+				<button
+					type="button"
+					data-testid={hidden ? "model-unhide-button" : "model-hide-button"}
+					title={hidden ? "Unhide model" : "Hide model"}
+					onClick={(event) => {
+						event.stopPropagation();
+						toggleHidden(model);
+					}}
+					className="mt-2 rounded p-2 text-text-muted transition-colors hover:bg-control-bg-hovered hover:text-text-default"
+				>
+					{hidden ? <Eye className="size-14" /> : <EyeOff className="size-14" />}
+				</button>
 			</CommandItem>
 		);
 	};
@@ -247,6 +280,17 @@ export function ModelSelector({
 						))}
 					</CommandList>
 				</Command>
+				{hiddenCount > 0 ? (
+					<button
+						type="button"
+						data-testid="model-toggle-hidden"
+						onClick={() => setShowHidden((previous) => !previous)}
+						className="flex w-full items-center gap-8 border-border-default border-t px-8 py-4 tr-text-metadata text-text-muted outline-none transition-colors hover:bg-control-bg-hovered hover:text-text-default"
+					>
+						{showHidden ? <EyeOff className="size-14" /> : <Eye className="size-14" />}
+						{showHidden ? "Hide filtered models" : `Show ${hiddenCount} hidden model${hiddenCount === 1 ? "" : "s"}`}
+					</button>
+				) : null}
 				<div className="pointer-events-none relative -mt-24 flex items-end justify-end bg-[linear-gradient(to_top,var(--container-elevated-bg),transparent)] px-8 pt-24 pb-8">
 					<button
 						type="button"
