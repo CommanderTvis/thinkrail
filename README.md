@@ -42,7 +42,8 @@ create the tools it needs based on how you actually work.
   pushing the workspace branch and opening or updating its GitHub PR through your own `gh`.
 - **Agent tools beyond the shell.** Web research, and inline diagrams and option comparisons rendered right
   in the chat.
-- **Your providers, your credentials.** Sign in with [JetBrains AI](https://www.jetbrains.com/ai/) or
+- **Your providers, your credentials.** Sign in with [JetBrains AI](https://www.jetbrains.com/ai/) and
+  choose which organization supplies AI credits in Providers settings, or
   connect any provider through `pi`'s own auth. ThinkRail has no accounts of its own.
 - **Desktop app or browser.** A native desktop app, or the `thinkrail` CLI that opens the same app in your
   browser. Both embed the same engine host; app state lives under `~/.thinkrail`.

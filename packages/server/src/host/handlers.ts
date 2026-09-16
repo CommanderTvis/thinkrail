@@ -70,6 +70,7 @@ import {
 	cancelLogin,
 	connectJbcentral,
 	disconnectJbcentral,
+	getJbcentralAccessSources,
 	getJbcentralQuota,
 	getProviderStatus,
 	jbcentralLogin,
@@ -77,6 +78,7 @@ import {
 	resolveLogin,
 	startLogin,
 	startProxyJbcentral,
+	switchJbcentralAccess,
 	updateJbcentral,
 } from "../auth";
 import { findBranchReviewOutcome } from "../branch-review";
@@ -1046,6 +1048,8 @@ const handlers: WsHandlers = {
 		ctx.runHostUpdate();
 		return { ok: true } as const;
 	},
+	"provider.jbcentralAccessList": () => getJbcentralAccessSources(),
+	"provider.jbcentralAccessSwitch": (params) => switchJbcentralAccess(params.selectionId),
 	"settings.update": (params) => {
 		const config = params.config;
 		return updateConfig(config);

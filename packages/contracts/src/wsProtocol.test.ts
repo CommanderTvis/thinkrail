@@ -19,6 +19,7 @@ import {
 	HOST_UPDATE_RUN_PROTOCOL_VERSION,
 	isBackgroundCommandCompletionMessage,
 	isTodoReviewFixMessage,
+	JBCENTRAL_ACCESS_PROTOCOL_VERSION,
 	JBCENTRAL_QUOTA_PROTOCOL_VERSION,
 	MODEL_PICKER_PROTOCOL_VERSION,
 	normalizeSessionTitle,
@@ -180,7 +181,6 @@ test("picker metadata and host-kept favorites/recents are pinned to v77", () => 
 });
 
 test("the project trust summary and pi-level resource consent are pinned to v81", () => {
-	expect(PROTOCOL_VERSION).toBe(81);
 	expect(PROJECT_TRUST_PROTOCOL_VERSION).toBe(81);
 	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(PROJECT_TRUST_PROTOCOL_VERSION);
 	expect(WS_METHODS.projectTrustSummary).toBe("project.trustSummary");
@@ -320,4 +320,12 @@ test("chat resources introduce scoped reads and cancellation, never browser comm
 	expect(WS_METHODS.subagentStop).toBe("subagent.stop");
 	expect(WS_METHODS.subagentStopAll).toBe("subagent.stopAll");
 	expect(Object.values(WS_METHODS)).not.toContain("backgroundCommand.start");
+});
+
+test("AI access source switching advances the protocol and names its methods", () => {
+	expect(PROTOCOL_VERSION).toBe(82);
+	expect(JBCENTRAL_ACCESS_PROTOCOL_VERSION).toBe(82);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(JBCENTRAL_ACCESS_PROTOCOL_VERSION);
+	expect(WS_METHODS.providerJbcentralAccessList).toBe("provider.jbcentralAccessList");
+	expect(WS_METHODS.providerJbcentralAccessSwitch).toBe("provider.jbcentralAccessSwitch");
 });

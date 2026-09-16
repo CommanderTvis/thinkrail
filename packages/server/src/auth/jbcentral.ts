@@ -1,4 +1,6 @@
 import type {
+	JbcentralAccessListResult,
+	JbcentralAccessSwitchResult,
 	JbcentralAction,
 	JbcentralActionFailureReason,
 	JbcentralActionResult,
@@ -16,9 +18,11 @@ import {
 	type JbcentralStatusObservation,
 	jbcentralExtensionPath,
 	launchJbcentralLogin,
+	listJbcentralAccessSources as listJbcentralAccessSourcesCli,
 	probeJbcentralStatus,
 	readJbcentralQuota,
 	runJbcentralAction,
+	switchJbcentralAccessSource as switchJbcentralAccessSourceCli,
 	watchJbcentralArtifact,
 } from "@thinkrail/shared/jbcentral";
 import {
@@ -57,6 +61,7 @@ let bootstrapped = false;
 let bootstrapTask: Promise<void> | null = null;
 let stopArtifactWatcher: (() => void) | null = null;
 let stopped = false;
+let accessSwitchTask: Promise<JbcentralAccessSwitchResult> | null = null;
 
 let requestedSequence = 0;
 let settledSequence = 0;
@@ -578,6 +583,37 @@ export function jbcentralLogin(): Promise<JbcentralLoginResult> {
 	return task;
 }
 
+export async function getJbcentralAccessSources(): Promise<JbcentralAccessListResult> {
+	const status = await getJbcentralStatus();
+	if (!isJbcentralConnected(status)) return { outcome: "failed" };
+	const result = await listJbcentralAccessSourcesCli();
+	return result.outcome === "succeeded"
+		? { outcome: "succeeded", sources: result.sources }
+		: { outcome: "failed" };
+}
+
+export function switchJbcentralAccess(selectionId: string): Promise<JbcentralAccessSwitchResult> {
+	if (accessSwitchTask) return accessSwitchTask;
+	const task = actionTail
+		.then(async (): Promise<JbcentralAccessSwitchResult> => {
+			const status = await getJbcentralStatus();
+			if (!isJbcentralConnected(status)) return { outcome: "failed" };
+			const result = await switchJbcentralAccessSourceCli(selectionId);
+			if (result.outcome !== "succeeded") return { outcome: "failed" };
+			invalidateStatusObservation();
+			invalidateQuotaFreshness();
+			return { outcome: "succeeded", proxyRestarted: result.proxyRestarted };
+		})
+		.catch((): JbcentralAccessSwitchResult => ({ outcome: "failed" }));
+	accessSwitchTask = task;
+	actionTail = task.then(() => undefined);
+	void task.finally(() => {
+		if (accessSwitchTask === task) accessSwitchTask = null;
+		publishChanged();
+	});
+	return task;
+}
+
 export async function resetJbcentralStateForTests(): Promise<void> {
 	stopJbcentralRuntime();
 	await Promise.allSettled([actionTail, rebuildTask, statusTask, quotaTask]);
@@ -606,6 +642,7 @@ export async function resetJbcentralStateForTests(): Promise<void> {
 	actionTail = Promise.resolve();
 	actionFlights.clear();
 	loginTask = null;
+	accessSwitchTask = null;
 	publishApplied = () => {};
 	publishChanged = () => {};
 }
