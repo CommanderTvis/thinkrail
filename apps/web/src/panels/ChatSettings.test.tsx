@@ -9,6 +9,10 @@ import { ChatSettings, SubagentSettings } from "./ChatSettings";
 
 test("Chat settings renders one two-handle streaming movement control", () => {
 	const markup = renderToStaticMarkup(<ChatSettings />);
+	expect(markup).toContain('data-testid="settings-hidden-models"');
+	expect(markup).toContain("Hidden models");
+	expect(markup).toContain('data-testid="hidden-models-input"');
+	expect(markup).toContain('data-testid="hidden-models-add"');
 	expect(markup).toContain("Streaming response movement");
 	expect(markup).toContain(
 		"Choose when the chat moves while an answer grows and where its newest edge lands.",

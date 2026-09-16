@@ -997,6 +997,7 @@ interface AppState {
 	recentModels: WireModel[];
 	reviewAutoFix: boolean;
 	agentReviewEnabled: boolean;
+	hiddenModels: string[];
 	customLayoutPresets: LayoutPreset[];
 	toasts: Toast[];
 	setStatus: (status: ConnectionStatus) => void;
@@ -1300,6 +1301,11 @@ function configPatch(config: AppConfig) {
 		recentModels: config.recentModels ?? DEFAULT_CONFIG.recentModels,
 		reviewAutoFix: config.reviewAutoFix ?? DEFAULT_CONFIG.reviewAutoFix,
 		agentReviewEnabled: config.agentReviewEnabled ?? DEFAULT_CONFIG.agentReviewEnabled,
+		hiddenModels: Array.isArray(config.hiddenModels)
+			? config.hiddenModels.filter(
+					(id): id is string => typeof id === "string" && id.trim().length > 0,
+				)
+			: DEFAULT_CONFIG.hiddenModels,
 	};
 }
 
@@ -2135,6 +2141,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	recentModels: DEFAULT_CONFIG.recentModels,
 	reviewAutoFix: DEFAULT_CONFIG.reviewAutoFix,
 	agentReviewEnabled: DEFAULT_CONFIG.agentReviewEnabled,
+	hiddenModels: DEFAULT_CONFIG.hiddenModels,
 	toasts: [],
 	resourceSnapshots: {},
 	resourceRevision: 0,
