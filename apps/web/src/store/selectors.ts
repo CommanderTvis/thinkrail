@@ -6,20 +6,22 @@ import {
 	DEFAULT_WORKSPACE_NAME,
 	firstPromptOfTexts,
 	type GitDiffScope,
+	isModelHidden,
 	isSessionWorking,
 	MCP_PROTOCOL_VERSION,
 	type McpServerResourceSummary,
 	MODEL_PICKER_PROTOCOL_VERSION,
 	ONBOARDING_PROTOCOL_VERSION,
+	type PluginRosterEntry,
 	PROJECT_CLONE_PROTOCOL_VERSION,
 	PROJECT_TRUST_PROTOCOL_VERSION,
 	type Project,
+	REVIEW_TERMINAL_PROTOCOL_VERSION,
 	SESSION_RENAME_PROTOCOL_VERSION,
 	SESSION_STATE_PROTOCOL_VERSION,
 	type SessionResources,
 	type SessionState,
 	type SessionStateRecord,
-	type SpecGraphNode,
 	type SubagentResourceSummary,
 	sameModel,
 	type WireModel,
@@ -32,6 +34,7 @@ import type { LoginState } from "../auth";
 import {
 	chatDisplayName,
 	compactAge,
+	type EditorSelection,
 	isAbsolutePath,
 	isMcpActiveState,
 	isMcpAttentionState,
@@ -552,6 +555,22 @@ export function selectReadyCompletionAck(
 	return completion.completionId;
 }
 
+interface CompletionActivationState extends CompletionAckState {
+	directActivatedCompletionBySession: Record<string, string>;
+}
+
+export function selectReadyCompletionActivation(
+	state: CompletionActivationState,
+	workspaceId: string,
+	sessionId: string,
+): string | null {
+	const completionId = selectReadyCompletionAck(state, workspaceId, sessionId);
+	if (!completionId || state.directActivatedCompletionBySession[sessionId] !== completionId) {
+		return null;
+	}
+	return completionId;
+}
+
 interface ActiveWorkspaceState {
 	activeWorkspaceId: string | null;
 	workspaces: Record<string, Workspace[]>;
@@ -679,6 +698,59 @@ export function selectChatAttended(
 	return tab?.kind === "chat" && tab.sessionId === sessionId;
 }
 
+export function selectShownTerminalKeys(
+	state: CenterResourceCacheState,
+	workspaceId: string,
+): string[] {
+	const document = state.layoutDocumentsByWorkspace[workspaceId];
+	if (!document) return [];
+	const attention = state.layoutAttentionByWorkspace[workspaceId];
+	const known = new Set((state.terminalsByWorkspace[workspaceId] ?? []).map((tab) => tab.tabKey));
+	const shown = (group: { id: string; tabs: readonly LayoutTab[] }): string | null => {
+		const selectedId = attention ? readLayoutSelection(attention, group.id) : undefined;
+		const tab = group.tabs.find((candidate) => candidate.id === selectedId) ?? group.tabs[0];
+		return tab?.kind === "terminal" && known.has(tab.tabKey) ? tab.tabKey : null;
+	};
+	const center: { id: string; key: string | null }[] = [];
+	const collect = (node: WorkspaceLayoutDocument["center"]): void => {
+		if (node.kind === "split") {
+			collect(node.children[0]);
+			collect(node.children[1]);
+		} else center.push({ id: node.id, key: shown(node) });
+	};
+	collect(document.center);
+	const auxiliary = (["bottom", "right", "left"] as const).flatMap((region) =>
+		document[region].groups.map((group) => ({ id: group.id, region, key: shown(group) })),
+	);
+	const lastCenter = center.find((group) => group.id === attention?.lastFocusedCenterGroupId);
+	const lastBottom = auxiliary.find(
+		(group) => group.region === "bottom" && group.id === attention?.lastFocusedSideGroupId.bottom,
+	);
+	const ordered = [lastCenter, lastBottom, ...center, ...auxiliary];
+	return [...new Set(ordered.flatMap((group) => (group?.key ? [group.key] : [])))];
+}
+
+/**
+ * The file the user is *in*: the selected tab of the focused center group, whatever renders it. A path is
+ * a path — an editor, a markdown preview and a PDF all say the same thing about where the user is, and a
+ * diff tab is still a file. Null for a tab that is not a file at all (chat, terminal, a tool pane).
+ */
+export function selectAttentionCenterFilePath(
+	state: LayoutAttentionState,
+	workspaceId: string,
+): string | null {
+	const tab = selectAttentionCenterTab(state, workspaceId);
+	if (!tab) return null;
+	switch (tab.kind) {
+		case "file":
+		case "external-file":
+		case "diff":
+			return tab.path;
+		default:
+			return null;
+	}
+}
+
 export function selectAttentionCenterResourceCacheKey(
 	state: CenterResourceCacheState,
 	workspaceId: string,
@@ -721,6 +793,12 @@ export function isDefaultWorkspace(workspace: Pick<Workspace, "kind">): boolean 
 
 export function isExternalWorkspace(workspace: Pick<Workspace, "kind">): boolean {
 	return workspace.kind === "external";
+}
+
+export function workspaceBranchLabel(workspace: Pick<Workspace, "kind" | "branch">): string {
+	return workspace.branch === "HEAD" && !isDefaultWorkspace(workspace)
+		? "detached HEAD"
+		: workspace.branch;
 }
 
 export function isUserOwnedWorkspace(workspace: Pick<Workspace, "kind">): boolean {
@@ -950,11 +1028,6 @@ export function matchesWorktreePath(reported: string, rel: string): boolean {
 	return isAbsolutePath(path) && path.endsWith(`/${rel}`);
 }
 
-export function specPathMatcher(nodes: SpecGraphNode[]): (path: string) => boolean {
-	const paths = nodes.map((node) => node.path);
-	return (reported) => paths.some((rel) => matchesWorktreePath(reported, rel));
-}
-
 export function workspaceName(
 	t: Translator,
 	workspace: { kind?: Workspace["kind"] | undefined; name: string },
@@ -1033,6 +1106,20 @@ export function selectCompactionTurnIds(
 			.filter((turn) => turn.kind === "compaction")
 			.map((turn) => turn.id),
 	);
+}
+
+/**
+ * Whether Claude Code is what runs in this terminal, by the host's process-table watch (`agent`, a tick
+ * behind) — the plugin's own live-reported status is no longer store state a core selector can reach; see
+ * plugin-claude-code/SPEC.md.
+ */
+export function selectTerminalRunsClaude(
+	state: { terminalsByWorkspace: Record<string, TerminalTab[]> },
+	workspaceId: string,
+	tabKey: string,
+): boolean {
+	const terminal = state.terminalsByWorkspace[workspaceId]?.find((tab) => tab.tabKey === tabKey);
+	return terminal?.agent?.kind === "claude";
 }
 
 export function selectWorkspaceTick(
@@ -1134,6 +1221,17 @@ export function selectLastOpenChatSession(
 	return null;
 }
 
+/** The highlight the chat would carry: present only while the user has not taken it back off. */
+export function selectAttachedEditorSelection(
+	state: {
+		editorSelectionByWorkspace: Record<string, { selection: EditorSelection; attached: boolean }>;
+	},
+	workspaceId: string,
+): EditorSelection | null {
+	const held = state.editorSelectionByWorkspace[workspaceId];
+	return held?.attached ? held.selection : null;
+}
+
 export function selectReviewDraftCount(
 	state: { reviewsByWorkspace: Record<string, { comments: { status: string }[] }> },
 	workspaceId: string | null,
@@ -1163,9 +1261,76 @@ export function selectPickerModels(
 	models: readonly WireModel[],
 	hidden: readonly ModelRef[],
 	keep: readonly (ModelRef | null | undefined)[],
+	hiddenPatterns: readonly string[] = [],
 ): WireModel[] {
 	return models.filter(
 		(model) =>
-			!hidden.some((h) => sameModel(h, model)) || keep.some((kept) => sameModel(kept, model)),
+			(!hidden.some((h) => sameModel(h, model)) && !isModelHidden(model, hiddenPatterns)) ||
+			keep.some((kept) => sameModel(kept, model)),
+	);
+}
+
+export function selectPluginRoster(state: {
+	pluginRoster: PluginRosterEntry[];
+}): PluginRosterEntry[] {
+	return state.pluginRoster;
+}
+
+/** The workspace's open file tabs whose file was deleted on disk, NUL-joined so a selector compares by value. */
+export function selectDeletedFileTabPaths(
+	state: { tabsByWorkspace: Record<string, EditorTab[]> },
+	workspaceId: string,
+): string {
+	return (state.tabsByWorkspace[workspaceId] ?? [])
+		.flatMap((tab) =>
+			(tab.kind === "file" || tab.kind === "external-file") && tab.deletedOnDisk ? [tab.path] : [],
+		)
+		.join("\u0000");
+}
+
+export type ReviewTarget =
+	| { kind: "chat"; sessionId: string; title: string }
+	| { kind: "terminal"; tabKey: string; title: string };
+
+export function selectCanSendReviewToTerminal(state: ProtocolState): boolean {
+	return (
+		state.protocolVersion !== null && state.protocolVersion >= REVIEW_TERMINAL_PROTOCOL_VERSION
+	);
+}
+
+export function reviewTargets(
+	untitledChat: string,
+	tabs: readonly EditorTab[],
+	terminals: readonly TerminalTab[],
+	terminalsAllowed: boolean,
+): ReviewTarget[] {
+	const targets: ReviewTarget[] = [];
+	for (const tab of tabs) {
+		if (tab.kind === "chat") {
+			targets.push({
+				kind: "chat",
+				sessionId: tab.sessionId,
+				title: tab.name.trim() || untitledChat,
+			});
+		}
+	}
+	if (!terminalsAllowed) return targets;
+	for (const terminal of terminals) {
+		if (terminal.agent)
+			targets.push({ kind: "terminal", tabKey: terminal.tabKey, title: terminal.title });
+	}
+	return targets;
+}
+
+export function selectReviewDiscussionOpen(
+	state: { terminalsByWorkspace: Record<string, TerminalTab[]> },
+	workspaceId: string,
+	comment: { sessionId?: string; terminal?: string },
+): boolean {
+	if (comment.sessionId !== undefined) return true;
+	return (
+		comment.terminal !== undefined &&
+		(state.terminalsByWorkspace[workspaceId]?.some((tab) => tab.tabKey === comment.terminal) ??
+			false)
 	);
 }

@@ -2,6 +2,9 @@ import {
 	RiCheckLine as Check,
 	RiArrowDownSLine as ChevronDown,
 	RiArrowRightSLine as ChevronRight,
+	RiEyeLine as Eye,
+	RiEyeOffLine as EyeOff,
+	RiOpenaiLine as Openai,
 	RiPushpin2Line as Pin,
 	RiRefreshLine as RefreshCw,
 	RiStarFill as StarFill,
@@ -21,6 +24,7 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from "@thinkrail/ui/popover";
 import { cn } from "@thinkrail/ui/utils";
 import { useState } from "react";
+import { useAppStore } from "@/store";
 import { formatContext } from "./modelPicker";
 import { ProviderGlyph } from "./ProviderGlyph";
 import {
@@ -86,26 +90,37 @@ export function ModelSelector({
 	const [open, setOpen] = useState(false);
 	const [query, setQuery] = useState("");
 	const [expansion, setExpansion] = useState<GroupExpansion>(() => initialGroupExpansion(null, []));
+	const [showHidden, setShowHidden] = useState(false);
+	const storeHiddenModels = useAppStore((state) => state.hiddenModelRefs);
+	const toggleModelVisibility = useAppStore((state) => state.toggleModelVisibility);
+	const isHidden = (model: WireModel) =>
+		storeHiddenModels.some((hidden) => sameModel(hidden, model));
+	const hiddenCount = models.filter(isHidden).length;
+	const visibleModels = showHidden
+		? models
+		: models.filter((model) => !isHidden(model) || sameModel(current, model));
 
 	const pinnedModels = preferences?.favorites ?? [];
 	const searching = query !== "";
-	const groups = pickerGroups(t, models, {
+	const groups = pickerGroups(t, visibleModels, {
 		pinned: pinnedModels,
 		query,
 		expansion,
 		row: groupRow,
 	});
-	const emptyState = pickerEmptyState(query, models.length);
+	const emptyState = pickerEmptyState(query, visibleModels.length);
 
 	const select = (model: WireModel) => {
 		onSelect(model);
 		setOpen(false);
 		setQuery("");
 	};
+	const toggleHidden = (model: WireModel) => toggleModelVisibility(model);
 
 	const renderModel = (model: WireModel, section: string) => {
 		const isCurrent = sameModel(current, model);
 		const isPinned = pinnedModels.some((pinned) => sameModel(pinned, model));
+		const hidden = isHidden(model);
 		const grouped = section === "all";
 		return (
 			<CommandItem
@@ -126,7 +141,14 @@ export function ModelSelector({
 					<ProviderGlyph provider={model.provider} className="mt-2 text-text-muted" />
 				)}
 				<span className="flex min-w-0 flex-1 flex-col">
-					<span className="truncate">{model.name}</span>
+					<span className="flex items-center gap-4 truncate">
+						<span className="truncate">{model.name}</span>
+						{hidden ? (
+							<span className="text-text-muted tr-text-metadata">
+								{t("chat.modelPicker.hidden")}
+							</span>
+						) : null}
+					</span>
 					<span className="truncate text-text-muted tr-text-metadata">{subLine(t, model)}</span>
 				</span>
 				<span className="mt-2 shrink-0 text-text-subtle tr-text-metadata">{model.id}</span>
@@ -156,6 +178,18 @@ export function ModelSelector({
 						)}
 					/>
 				) : null}
+				<button
+					type="button"
+					data-testid={hidden ? "model-unhide-button" : "model-hide-button"}
+					title={hidden ? t("chat.modelPicker.unhideModel") : t("chat.modelPicker.hideModel")}
+					onClick={(event) => {
+						event.stopPropagation();
+						toggleHidden(model);
+					}}
+					className="mt-2 rounded p-2 text-text-muted transition-colors hover:bg-control-bg-hovered hover:text-text-default"
+				>
+					{hidden ? <Eye className="size-14" /> : <EyeOff className="size-14" />}
+				</button>
 			</CommandItem>
 		);
 	};
@@ -201,8 +235,17 @@ export function ModelSelector({
 					className,
 				)}
 			>
-				{showLabel ? <span className="tr-text-eyebrow text-text-muted">Model</span> : null}
-				<span className="truncate text-text-muted tr-text-metadata">
+				{showLabel ? (
+					<span className="tr-text-eyebrow text-text-muted">{t("chat.modelPicker.model")}</span>
+				) : null}
+				<span className="flex min-w-0 items-center gap-4 truncate text-text-muted tr-text-metadata">
+					{current?.provider.startsWith("openai") ? (
+						<Openai
+							data-testid="model-provider-mark"
+							className="size-14 shrink-0"
+							aria-hidden="true"
+						/>
+					) : null}
 					{current?.name ?? (placeholder || t("chat.modelPicker.selectModel"))}
 				</span>
 				<ChevronDown className="size-16 shrink-0 text-text-muted" />
@@ -262,6 +305,19 @@ export function ModelSelector({
 						))}
 					</CommandList>
 				</Command>
+				{hiddenCount > 0 ? (
+					<button
+						type="button"
+						data-testid="model-toggle-hidden"
+						onClick={() => setShowHidden((previous) => !previous)}
+						className="flex w-full items-center gap-8 border-border-default border-t px-8 py-4 tr-text-metadata text-text-muted outline-none transition-colors hover:bg-control-bg-hovered hover:text-text-default"
+					>
+						{showHidden ? <EyeOff className="size-14" /> : <Eye className="size-14" />}
+						{showHidden
+							? t("chat.modelPicker.hideFiltered")
+							: t("chat.modelPicker.showHidden", { count: hiddenCount })}
+					</button>
+				) : null}
 				<div className="pointer-events-none relative -mt-24 flex items-end justify-end bg-[linear-gradient(to_top,var(--container-elevated-bg),transparent)] px-8 pt-24 pb-8">
 					<Button
 						variant="outline"
