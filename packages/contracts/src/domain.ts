@@ -389,6 +389,10 @@ export interface ProviderStatusReport {
 	jbcentralInstall: JbcentralInstall;
 }
 
+export function hasConnectedProvider(report: ProviderStatusReport): boolean {
+	return report.providers.some((p) => p.configured) || isJbcentralConnected(report.jbcentral);
+}
+
 export type JbcentralActionResult =
 	| { outcome: "applied" }
 	| { outcome: "failed"; reason: JbcentralActionFailureReason };

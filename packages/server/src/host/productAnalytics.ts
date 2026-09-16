@@ -4,7 +4,7 @@ import type {
 	OpenPrResult,
 	ProviderStatusReport,
 } from "@thinkrail/contracts";
-import { isJbcentralConnected } from "@thinkrail/contracts";
+import { hasConnectedProvider } from "@thinkrail/contracts";
 import { errorCodeOf } from "@thinkrail/shared/codedError";
 import { settledAvailableModels, usePiRuntime } from "../agent";
 import {
@@ -49,11 +49,7 @@ export function failureReason(error: unknown): FailureReason {
 export function providerAvailability(
 	report: ProviderStatusReport,
 ): SetupState["provider_available"] {
-	if (
-		report.providers.some((provider) => provider.configured) ||
-		isJbcentralConnected(report.jbcentral)
-	)
-		return "yes";
+	if (hasConnectedProvider(report)) return "yes";
 	switch (report.jbcentral.state) {
 		case "probe-failed":
 		case "configuring":

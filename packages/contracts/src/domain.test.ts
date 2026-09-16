@@ -3,6 +3,7 @@ import {
 	ACCEPTED_IMAGE_TYPES,
 	base64EncodedLength,
 	DEFAULT_CONFIG,
+	hasConnectedProvider,
 	IMAGE_MAX_BASE64_BYTES,
 	isDelegationRunDetails,
 	isJbcentralConnected,
@@ -102,6 +103,56 @@ describe("JetBrains Central health", () => {
 		expect(isJbcentralConnected({ state: "supported", version: "1.6.2", signedOut: false })).toBe(
 			false,
 		);
+	});
+
+	test("hasConnectedProvider recognizes configured providers or healthy Central", () => {
+		const install = {
+			platform: "darwin" as const,
+			shell: "bash" as const,
+			command: "install central",
+		};
+		const absent = { state: "absent" as const };
+		const stopped = {
+			state: "configured" as const,
+			version: "1.6.2",
+			signedOut: false,
+			proxyStopped: true,
+		};
+		const connected = {
+			state: "configured" as const,
+			version: "1.6.2",
+			signedOut: false,
+			proxyStopped: false,
+		};
+
+		expect(
+			hasConnectedProvider({
+				providers: [{ id: "anthropic", name: "Anthropic", configured: true }],
+				jbcentral: absent,
+				jbcentralInstall: install,
+			}),
+		).toBe(true);
+		expect(
+			hasConnectedProvider({
+				providers: [{ id: "anthropic", name: "Anthropic", configured: false }],
+				jbcentral: connected,
+				jbcentralInstall: install,
+			}),
+		).toBe(true);
+		expect(
+			hasConnectedProvider({
+				providers: [{ id: "anthropic", name: "Anthropic", configured: false }],
+				jbcentral: stopped,
+				jbcentralInstall: install,
+			}),
+		).toBe(false);
+		expect(
+			hasConnectedProvider({
+				providers: [],
+				jbcentral: absent,
+				jbcentralInstall: install,
+			}),
+		).toBe(false);
 	});
 });
 

@@ -4,6 +4,7 @@ export {
 	base64EncodedLength,
 	COMPOSER_GROWTH_LIMITS,
 	DEFAULT_CONFIG,
+	hasConnectedProvider,
 	IMAGE_MAX_BASE64_BYTES,
 	isCodeFontFamily,
 	isComposerGrowthLimit,
