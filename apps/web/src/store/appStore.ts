@@ -56,6 +56,7 @@ import type {
 	ChatAttachment,
 	ChatTurn,
 	CompactionState,
+	DraftImage,
 	ExtUiDialogRequest,
 	ToolResultState,
 } from "../chat/types";
@@ -419,6 +420,7 @@ export interface SessionRuntime {
 	stats: SessionStats | null;
 	commands: SlashCommandInfo[];
 	draft: string;
+	draftImages: DraftImage[];
 	pendingExtUi: ExtUiDialogRequest | null;
 	extUiQueue: ExtUiDialogRequest[];
 	extUiStatus: Record<string, string>;
@@ -450,6 +452,7 @@ function newRuntime(
 		stats: null,
 		commands: [],
 		draft: "",
+		draftImages: [],
 		pendingExtUi: null,
 		extUiQueue: [],
 		extUiStatus: {},
@@ -1179,6 +1182,7 @@ interface AppState {
 	setStats: (sessionId: string, stats: SessionStats) => void;
 	setCommands: (sessionId: string, commands: SlashCommandInfo[]) => void;
 	setChatDraft: (sessionId: string, text: string) => void;
+	setChatDraftImages: (sessionId: string, images: DraftImage[]) => void;
 	/** Puts text at the top of a chat's draft, keeping what is already typed, and hands it the caret. */
 	addToChatDraft: (sessionId: string, text: string) => void;
 	clearComposerFocus: () => void;
@@ -3749,6 +3753,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 		set((s) => withRuntime(s, sessionId, (rt) => ({ ...rt, commands }))),
 	setChatDraft: (sessionId, draft) =>
 		set((s) => withRuntime(s, sessionId, (rt) => ({ ...rt, draft }))),
+	setChatDraftImages: (sessionId, draftImages) =>
+		set((s) => withRuntime(s, sessionId, (rt) => ({ ...rt, draftImages }))),
 	addToChatDraft: (sessionId, text) =>
 		set((s) => {
 			if (!text.trim()) return {};

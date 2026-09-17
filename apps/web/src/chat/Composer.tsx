@@ -45,7 +45,7 @@ import { FileChip } from "./FileChip";
 import { ModelSelector } from "./ModelSelector";
 import { imagePasteDropHandlers, PromptImageChips, usePromptImages } from "./promptImages";
 import { ThinkingSelector } from "./ThinkingSelector";
-import type { ChatAttachment } from "./types";
+import type { ChatAttachment, DraftImage } from "./types";
 
 export type SubmitBehavior = "send" | "steer" | "followUp" | "interrupt";
 
@@ -123,6 +123,8 @@ function highlightTint(state: SlotHighlightState): string {
 interface ComposerProps {
 	value: string;
 	onChange: (value: string) => void;
+	images?: DraftImage[];
+	onImagesChange?: (images: DraftImage[]) => void;
 	isStreaming: boolean;
 	growthLimit: ComposerGrowthLimit;
 	commands: SlashCommandItem[];
@@ -167,6 +169,8 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 	{
 		value,
 		onChange,
+		images: propsImages,
+		onImagesChange,
 		isStreaming,
 		growthLimit,
 		commands,
@@ -194,7 +198,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 ) {
 	const ref = useRef<HTMLTextAreaElement>(null);
 	const [caret, setCaret] = useState(0);
-	const attachedImages = usePromptImages();
+	const attachedImages = usePromptImages({ images: propsImages, onImagesChange });
 	const { images } = attachedImages;
 	const [submitError, setSubmitError] = useState<string | null>(null);
 	const pendingImages = attachedImages.pending;

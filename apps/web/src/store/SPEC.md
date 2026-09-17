@@ -187,11 +187,11 @@ selected-log state belong to chat integration, not domain persistence. See
   received Pi event; the compare-and-install fence for an authoritative transcript read) /
   **`syncedConnectionGeneration`** (which connected host generation the runtime's transcript was last read
   from) / `stats` / **`statsRefreshTick`** (browser-local invalidation for the mounted chat's authoritative
-  stats read) / `commands` / `draft` and its **extension-UI state** (`pendingExtUi` (typed by
+  stats read) / `commands` / `draft` and `draftImages` and its **extension-UI state** (`pendingExtUi` (typed by
   `chat`'s `ExtUiDialogRequest`) + `extUiQueue` (overlapping dialogs FIFO so none orphans its server
   promise) + `extUiStatus` / `extUiWidget`). `openChatSession` creates a runtime; `closeChatRuntime` /
   `clearWorkspaceState` drop it; per-session mutators (`appendUserMessage` / **`appendErrorTurn`** / `setStats` / `setCommands` /
-  `setCurrentModel` / `setThinkingLevel` / `setChatDraft` / `clearPendingExtUi`) take a `sessionId`.
+  `setCurrentModel` / `setThinkingLevel` / `setChatDraft` / `setChatDraftImages` / `clearPendingExtUi`) take a `sessionId`.
   **`appendErrorTurn(sessionId, text)`** appends an `error` turn for a **rejected** turn-driving wire call
   (`session.prompt`/`steer`/`followUp`/`create`) — e.g. `prompt()` throwing "no API key" / a bad model —
   so a failed send lands in the chat instead of being swallowed; it carries no recovery action because Pi
@@ -292,7 +292,7 @@ selected-log state belong to chat integration, not domain persistence. See
   connectionGeneration)`** is the separate authoritative path for an existing runtime after successful
   compaction or reconnect. It compare-and-installs only at the expected Pi-event revision, rejects a removed
   workspace/session or cross-workspace identity, replaces turns/tool results/ask answers/queue/model/thinking
-  + streaming state, and preserves draft/stats/statsRefreshTick/commands/extension UI/placement/history/focus. It marks the
+  + streaming state, and preserves draft (text and images)/stats/statsRefreshTick/commands/extension UI/placement/history/focus. It marks the
   connected generation and advances the revision so two reads cannot regress one another. When the latest
   live compaction matches the durable record, its id + estimated-after count survive, and `resuming` survives
   only while the returned summary is still streaming. The
