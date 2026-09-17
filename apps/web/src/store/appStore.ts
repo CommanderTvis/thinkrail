@@ -65,7 +65,7 @@ import { assistantFailure, assistantFailureText } from "../chat/assistantFailure
 import type { ChatMessageOrder } from "../chat/chatPreferences";
 import type { HydratedRuntime } from "../chat/hydrate";
 import { insertRoundCloser } from "../chat/roundCloser";
-import type { ChatAttachment, ChatTurn, CompactionState, ExtUiDialogRequest, ToolResultState } from "../chat/types";
+import type { ChatAttachment, ChatTurn, CompactionState, ExtUiDialogRequest, ToolResultState, DraftImage } from "../chat/types";
 import { ancestorPaths, defaultTerminalIndex, defaultTerminalTitle, isPreviewCompatibleTabKind, type LayoutAttention, layoutResourceIdentity, matchesSkillInvocationCommand, parseSkillInvocation, randomId, readLayoutNavigationClock, shallowEqualArrays, tupleKey, userText, type EditorSelection } from "../lib";
 import { type LayoutAuxiliaryRegion, type LayoutToolId, type WorkbenchFrame, type WorkspaceLayoutDocument, type WorkspaceViewState, type LayoutTabPane, VERTICAL_TABS_WIDTH } from "../shell/layout";
 import { type EditorRef, emitEditorEvent } from "../panels/editorEvents";
@@ -460,6 +460,7 @@ export interface SessionRuntime {
 	stats: SessionStats | null;
 	commands: SlashCommandInfo[];
 	draft: string;
+	draftImages: DraftImage[];
 	pendingExtUi: ExtUiDialogRequest | null;
 	extUiQueue: ExtUiDialogRequest[];
 	extUiStatus: Record<string, string>;
@@ -491,6 +492,7 @@ function newRuntime(
 		stats: null,
 		commands: [],
 		draft: "",
+		draftImages: [],
 		pendingExtUi: null,
 		extUiQueue: [],
 		extUiStatus: {},
@@ -1293,6 +1295,7 @@ interface AppState {
 	setStats: (sessionId: string, stats: SessionStats) => void;
 	setCommands: (sessionId: string, commands: SlashCommandInfo[]) => void;
 	setChatDraft: (sessionId: string, text: string) => void;
+	setChatDraftImages: (sessionId: string, images: DraftImage[]) => void;
 	/** Puts text at the top of a chat's draft, keeping what is already typed, and hands it the caret. */
 	addToChatDraft: (sessionId: string, text: string) => void;
 	clearComposerFocus: () => void;
@@ -4288,6 +4291,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 		set((s) => withRuntime(s, sessionId, (rt) => ({ ...rt, commands }))),
 	setChatDraft: (sessionId, draft) =>
 		set((s) => withRuntime(s, sessionId, (rt) => ({ ...rt, draft }))),
+	setChatDraftImages: (sessionId, draftImages) =>
+		set((s) => withRuntime(s, sessionId, (rt) => ({ ...rt, draftImages }))),
 	addToChatDraft: (sessionId, text) =>
 		set((s) => {
 			if (!text.trim()) return {};

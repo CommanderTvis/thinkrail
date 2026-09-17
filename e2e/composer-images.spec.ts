@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { createWorkspaceViaDialog, openFixtureProject } from "./fixtures/app";
+import { createWorkspaceViaDialog, openFixtureProject, revealWorkbenchTool } from "./fixtures/app";
 
 async function openChatComposer(page: import("@playwright/test").Page): Promise<void> {
 	await openFixtureProject(page);
@@ -135,4 +135,31 @@ test("/compact preserves attached images and its draft until the images are remo
 	await page.getByRole("button", { name: "Remove image" }).click();
 	await expect(page.getByTestId("composer-command-error")).toHaveCount(0);
 	await expect(input).toHaveValue(command);
+});
+
+test("pasted draft images and draft text persist when switching tabs and back", async ({
+	page,
+}) => {
+	await openChatComposer(page);
+	const input = page.getByTestId("chat-input");
+	await input.fill("draft text to preserve");
+	await pastePng(page, 640, 480);
+
+	const chip = page.getByTestId("composer-image");
+	await expect(chip).toHaveCount(1);
+	await expect(chip).toContainText("pasted.png");
+
+	await revealWorkbenchTool(page, "files");
+	const readme = page.getByTestId("file-node").filter({ hasText: "README.md" });
+	await expect(readme).toBeVisible();
+	await readme.dblclick();
+	await expect(page.getByTestId("editor-tab").filter({ hasText: "README.md" })).toBeVisible();
+
+	await page.locator('[data-testid="editor-tab"][data-kind="chat"]').click();
+
+	await expect(input).toHaveValue("draft text to preserve");
+	await expect(chip).toHaveCount(1);
+	await expect(chip).toContainText("pasted.png");
+	await expect(chip).toHaveAttribute("data-width", "640");
+	await expect(chip).toHaveAttribute("data-height", "480");
 });
