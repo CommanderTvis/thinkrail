@@ -822,7 +822,7 @@ because the alternative is an attachment the user cannot see, which is worse tha
   still untouched (`stripUntouchedSlots`), and always clears the session — sent **or** queued
   (steer/followUp), same rule. Switching tabs needs no
   explicit cleanup: the workbench visibility gate mounts only a group's locally selected body, so leaving a
-  chat tab unmounts `Composer` (and its session) while the store's `draft` text itself persists. **Hint chip**:
+  chat tab unmounts `Composer` (and its session) while the store's draft (text and attached images) itself persists. **Hint chip**:
   while a session is active (and the menu is not, so the two absolutely-positioned overlays never share
   the same anchor rect), a small pill above the textarea — `slot {slotIdx+1}/{n} · ⇥ next · esc done`
   (`data-testid="slot-hint"`) — clickable, tap steps to the next slot (same mirroring rule as `Tab`), the

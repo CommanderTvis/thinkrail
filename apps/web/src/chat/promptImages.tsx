@@ -27,18 +27,29 @@ export interface PromptImagesController {
 	reset: () => void;
 }
 
-export function usePromptImages(): PromptImagesController {
-	const [images, setImages] = useState<PromptImage[]>([]);
+const EMPTY_IMAGES: PromptImage[] = [];
+
+export function usePromptImages(
+	options: { images?: PromptImage[]; onImagesChange?: (images: PromptImage[]) => void } = {},
+): PromptImagesController {
+	const { images: controlledImages, onImagesChange } = options;
+	const [localImages, setLocalImages] = useState<PromptImage[]>(controlledImages ?? EMPTY_IMAGES);
+	const images = onImagesChange ? (controlledImages ?? EMPTY_IMAGES) : localImages;
 	const imagesRef = useRef<PromptImage[]>([]);
+	imagesRef.current = images;
 	const [pending, setPending] = useState(0);
 	const [errors, setErrors] = useState<PromptImageError[]>([]);
 	// Bumped on reset; a stale-generation decode discards its results (still balancing pending).
 	const generation = useRef(0);
 
-	const commit = useCallback((next: PromptImage[]) => {
-		imagesRef.current = next;
-		setImages(next);
-	}, []);
+	const commit = useCallback(
+		(next: PromptImage[]) => {
+			imagesRef.current = next;
+			if (onImagesChange) onImagesChange(next);
+			else setLocalImages(next);
+		},
+		[onImagesChange],
+	);
 
 	const addFiles = useCallback(
 		(files: File[]) => {
