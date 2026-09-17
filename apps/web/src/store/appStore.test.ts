@@ -264,6 +264,35 @@ test("addToChatDraft: the added text leads, what was typed follows, and the comp
 	expect(useAppStore.getState().composerFocusRequest).toBeNull();
 });
 
+test("setChatDraftImages updates attached draft images and isolates them per session", () => {
+	const store = useAppStore.getState();
+	store.openChatSession("ws1", "s1", null, "medium");
+	store.openChatSession("ws1", "s2", null, "medium");
+
+	const imageA = {
+		id: "img-1",
+		name: "photo.png",
+		content: { type: "image" as const, data: "base64dataA", mimeType: "image/png" },
+		width: 100,
+		height: 100,
+	};
+	const imageB = {
+		id: "img-2",
+		name: "diagram.png",
+		content: { type: "image" as const, data: "base64dataB", mimeType: "image/png" },
+	};
+
+	store.setChatDraftImages("s1", [imageA]);
+	store.setChatDraftImages("s2", [imageB]);
+
+	expect(rt("s1").draftImages).toEqual([imageA]);
+	expect(rt("s2").draftImages).toEqual([imageB]);
+
+	store.setChatDraftImages("s1", []);
+	expect(rt("s1").draftImages).toEqual([]);
+	expect(rt("s2").draftImages).toEqual([imageB]);
+});
+
 test("pi events route to the right session runtime; chats stay independent", () => {
 	const store = useAppStore.getState();
 	store.openChatSession("ws1", "a", null, "medium");
@@ -1790,6 +1819,13 @@ test("reconcileSession replaces stale host state while preserving browser-local 
 	const store = useAppStore.getState();
 	store.openChatSession("ws1", "sync", null, "medium");
 	store.setChatDraft("sync", "keep my draft");
+	store.setChatDraftImages("sync", [
+		{
+			id: "img-sync",
+			name: "kept.png",
+			content: { type: "image", data: "data", mimeType: "image/png" },
+		},
+	]);
 	store.appendUserMessage("sync", "old summarized prompt");
 	store.handlePiEvent(agentStart, "sync");
 	store.handlePiEvent({ type: "compaction_start", reason: "overflow" }, "sync");
@@ -1852,6 +1888,13 @@ test("reconcileSession replaces stale host state while preserving browser-local 
 		resuming: true,
 	});
 	expect(after.draft).toBe("keep my draft");
+	expect(after.draftImages).toEqual([
+		{
+			id: "img-sync",
+			name: "kept.png",
+			content: { type: "image", data: "data", mimeType: "image/png" },
+		},
+	]);
 	expect(after.queue).toEqual({ steering: [], followUp: ["continue afterward"] });
 	expect(after.thinkingLevel).toBe("high");
 	expect(after.syncedConnectionGeneration).toBe(7);

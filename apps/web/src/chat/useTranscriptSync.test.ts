@@ -25,6 +25,7 @@ function runtime(overrides: Partial<SessionRuntime> = {}): SessionRuntime {
 		stats: null,
 		commands: [],
 		draft: "",
+		draftImages: [],
 		pendingExtUi: null,
 		extUiQueue: [],
 		extUiStatus: {},

@@ -228,6 +228,7 @@ export default function ChatView({
 		stats,
 		commands,
 		draft,
+		draftImages,
 		queue,
 		pendingExtUi,
 		extUiStatus,
@@ -1028,6 +1029,8 @@ export default function ChatView({
 							ref={composerRef}
 							value={draft}
 							onChange={(v) => useAppStore.getState().setChatDraft(sessionId, v)}
+							images={draftImages}
+							onImagesChange={(imgs) => useAppStore.getState().setChatDraftImages(sessionId, imgs)}
 							isStreaming={isStreaming}
 							growthLimit={composerGrowthLimit}
 							commands={mergedCommands}

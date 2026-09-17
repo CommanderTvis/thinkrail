@@ -11,6 +11,12 @@ export interface ChatAttachment {
 	content: ImageContent;
 }
 
+export interface DraftImage extends ChatAttachment {
+	id: string;
+	width?: number;
+	height?: number;
+}
+
 export type ExtUiDialogRequest = Extract<
 	ExtUiRequest,
 	{ kind: "select" | "confirm" | "input" | "editor" }

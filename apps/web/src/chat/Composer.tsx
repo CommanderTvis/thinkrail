@@ -47,10 +47,10 @@ import {
 	useSlashCommandCompletion,
 } from "@/prompt";
 import { FileChip } from "./FileChip";
-import { type AttachedImage, fileToAttachedImage } from "./imageAttachment";
+import { fileToAttachedImage } from "./imageAttachment";
 import { ModelSelector } from "./ModelSelector";
 import { ThinkingSelector } from "./ThinkingSelector";
-import type { ChatAttachment } from "./types";
+import type { ChatAttachment, DraftImage } from "./types";
 
 export type SubmitBehavior = "send" | "steer" | "followUp" | "interrupt";
 
@@ -93,10 +93,7 @@ export interface MentionCandidate {
 	kind: "file" | "dir";
 }
 
-interface PendingImage extends AttachedImage {
-	id: string;
-	name: string;
-}
+type PendingImage = DraftImage;
 
 interface AttachError {
 	id: string;
@@ -135,6 +132,8 @@ function highlightTint(state: SlotHighlightState): string {
 interface ComposerProps {
 	value: string;
 	onChange: (value: string) => void;
+	images?: DraftImage[];
+	onImagesChange?: (images: DraftImage[]) => void;
 	isStreaming: boolean;
 	growthLimit: ComposerGrowthLimit;
 	commands: SlashCommandItem[];
@@ -175,10 +174,14 @@ export interface ComposerHandle {
 	focusDraftEnd: () => void;
 }
 
+const EMPTY_IMAGES: DraftImage[] = [];
+
 export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Composer(
 	{
 		value,
 		onChange,
+		images: propsImages,
+		onImagesChange,
 		isStreaming,
 		growthLimit,
 		commands,
@@ -206,12 +209,18 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 ) {
 	const ref = useRef<HTMLTextAreaElement>(null);
 	const [caret, setCaret] = useState(0);
-	const [images, setImages] = useState<PendingImage[]>([]);
-	const imagesRef = useRef<PendingImage[]>([]);
+	const [localImages, setLocalImages] = useState<DraftImage[]>(propsImages ?? EMPTY_IMAGES);
+	const images = onImagesChange ? (propsImages ?? EMPTY_IMAGES) : localImages;
+	const imagesRef = useRef<DraftImage[]>(images);
+	imagesRef.current = images;
 	const [submitError, setSubmitError] = useState<string | null>(null);
-	const commitImages = (next: PendingImage[]) => {
+	const commitImages = (next: DraftImage[]) => {
 		imagesRef.current = next;
-		setImages(next);
+		if (onImagesChange) {
+			onImagesChange(next);
+		} else {
+			setLocalImages(next);
+		}
 		if (next.length === 0) setSubmitError(null);
 	};
 	const [pendingImages, setPendingImages] = useState(0);
