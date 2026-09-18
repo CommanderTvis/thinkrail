@@ -22,7 +22,8 @@ identities. A tab's shell outlives every client that looks at it; each frontend 
   (addressed) and `terminal.tabs` (broadcast), via injected publishers; the bounded per-terminal output
   recorder replayed on attach.
 - **Public surface (barrel):** `reserveTerminal`, `attachTerminal`, `listTerminals`, `terminalRefs`,
-  `writeTerminal`, `writeTerminalFromHost`, `submitToAgent`, `resizeTerminal`, `renameTerminal`, `closeTerminalTab`,
+  `saveTerminalImage`, `writeTerminal`, `writeTerminalFromHost`, `submitToAgent`, `resizeTerminal`,
+  `renameTerminal`, `closeTerminalTab`,
   `resumeClientTerminals`, `closeWorkspaceTerminals`, `persistTerminalSessions`, `reviveTerminalSessions`,
   `closeAllTerminals`, `resetTerminalState` (test seam), `workspaceForProcess`, `agentRecordOf`,
   `setAgentRecord`, `setTerminalPublisher`, `setTerminalTabsPublisher`, `setTerminalObserver`,
@@ -45,6 +46,15 @@ identities. A tab's shell outlives every client that looks at it; each frontend 
   `bun-pty`, `Bun.which`, `process.env`.
 - **Forbidden:** `host`; sibling features; `packages/server/src/plugins`. No WebSocket type crosses this
   boundary — clients are opaque keys.
+
+## Clipboard images
+
+`saveTerminalImage` checks terminal attachment ownership before storing an image. The terminal owns a
+private, lazily created temporary directory, removed on PTY exit or disposal. Generated filenames ignore
+clipboard filenames. PNG, JPEG, GIF and WebP signatures, canonical base64, a 10 MiB image limit and a
+100 MiB per-terminal budget are checked before writing. Files remain available across UI detach/reattach,
+but are temporary and do not survive terminal shutdown as a supported contract. OS temporary storage
+handles leftovers after a host crash. No plugin or agent detection participates.
 
 ## Decisions
 
@@ -237,7 +247,10 @@ reported what it is running, and how Claude Code names a session, so a tab says 
 of "Terminal 3". `renameTerminal` strips null bytes and bounds the length, because this is arbitrary
 output from whatever happens to be running; an empty title means "no opinion" and restores the tab's own
 name rather than blanking it. `adoptedTitle` (`terminalTitle.ts`, unit-tested) takes no agent kind at
-all — it drops one leading run of non-letter/non-digit/non-space characters plus the whitespace after it,
+all. It first removes a bracketed symbolic status and its pipe-delimited label (for example,
+`[ ! ] Action Required | `), preserving the remaining task and workspace title. Brackets containing
+letters or numbers are ordinary title content. Status remains the plugin badge's responsibility.
+It then drops one leading run of non-letter/non-digit/non-space characters plus the whitespace after it,
 unconditionally, so it needs no per-agent case and no core change when a new agent plugin wants the same
 treatment. This is what strips Claude's own glyph — the `✳` at rest, a spinner frame while it works —
 because the tab already wears the Claude mark and its own activity spinner, and "✳ ◑ Open WebUI…" was the

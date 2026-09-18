@@ -18,6 +18,7 @@ import {
 	type PersistedTerminalSessions,
 	saveTerminalSessions,
 } from "../persistence";
+import { createClipboardImages } from "./clipboardImages";
 import { createTerminalCompletionQueue } from "./completionQueue";
 import { createMouseModeGuard, type MouseModeGuard } from "./mouseModeGuard";
 import {
@@ -36,6 +37,7 @@ import { forgetTerminalTokens, terminalMcpUrl } from "./terminalTokens";
 type PushToClient = (clientKey: string, channel: string, data: unknown) => TerminalDeliveryResult;
 
 interface TerminalEntry {
+	images: ReturnType<typeof createClipboardImages>;
 	pty: IPty;
 	workspaceId: string;
 	tabKey: string;
@@ -265,6 +267,7 @@ function spawnForTab(
 		},
 	});
 	const entry: TerminalEntry = {
+		images: createClipboardImages(),
 		pty,
 		workspaceId,
 		tabKey,
@@ -285,6 +288,7 @@ function spawnForTab(
 	});
 	pty.onExit(({ exitCode }) => {
 		if (terminals.get(id) !== entry) return;
+		entry.images.dispose();
 		terminals.delete(id);
 		const index = tabIndex(entry.workspaceId, entry.tabKey);
 		ptyByTab.delete(index);
@@ -448,6 +452,18 @@ function announceDisplaced(id: string, caller: string): void {
 	pushToClient(caller, WS_CHANNELS.terminalDetached, push);
 }
 
+export function saveTerminalImage(
+	id: string,
+	data: string,
+	mimeType: string,
+	caller: string,
+): string {
+	const entry = attachedEntry(id, caller);
+	if (!entry)
+		throw new Error("This terminal is no longer attached. Paste again after reconnecting.");
+	return entry.images.save(data, mimeType);
+}
+
 export function writeTerminal(id: string, data: string, caller: string): void {
 	const entry = attachedEntry(id, caller);
 	if (!entry) {
@@ -478,6 +494,7 @@ export function resizeTerminal(id: string, cols: number, rows: number, caller: s
 }
 
 function disposeTerminalEntry(id: string, entry: TerminalEntry): void {
+	entry.images.dispose();
 	terminals.delete(id);
 	ptyByTab.delete(tabIndex(entry.workspaceId, entry.tabKey));
 	entry.output.dispose();

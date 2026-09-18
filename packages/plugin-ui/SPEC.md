@@ -69,7 +69,7 @@ It excludes tests and never traverses dependency trees: the former recursive pac
   and the heavy pieces stay behind their own subpaths precisely so a consumer's bundler still code-splits
   Monaco/shiki/mermaid out of the initial chunk (`lazy(() => import("@thinkrail/plugin-ui/editor"))`).
   `./tokens.css` is a stylesheet, not a barrel, so it carries no checked surface below.
-- **Public surface (`.`):** `Button`, `ButtonProps`, `buttonVariants`, `menuItemClass`, `CHIP`, `CHIP_DISABLED`,
+- **Public surface (`.`):** `AccountRow`, `AccountUsageWindow`, `accountReadingLabel`, `Button`, `ButtonProps`, `buttonVariants`, `menuItemClass`, `CHIP`, `CHIP_DISABLED`,
   `CHIP_OFF`, `CHIP_ON`, `cn`, `Command`, `CommandEmpty`, `CommandGroup`, `CommandInput`, `CommandItem`,
   `CommandList`, `CommandSeparator`, `ContextMenu`, `ContextMenuContent`, `ContextMenuItem`,
   `ContextMenuSeparator`, `ContextMenuTrigger`, `Dialog`, `DialogClose`, `DialogContent`,
@@ -125,6 +125,15 @@ range even though its selected text was present; the Codex IPC browser test pins
   `apps/web`'s `lib` cannot become a dependency of a UI kit without inverting the app/package
   relationship, so the handful of lines these two components need are copied rather than shared. Treat a
   behavior fix to path/color handling as needing both copies checked, not just one.
+
+## Account presentation
+
+`AccountRow`, `AccountUsageWindow`, and `accountReadingLabel` own the common agent account presentation.
+Rows pair a label with a right-aligned value. Usage windows show a clamped used percentage, an accessible
+native progress bar, and a relative reset time; past resets identify stale readings instead of implying
+zero usage. Reading timestamps show both age and absolute time. Plugins normalize provider timestamps
+to milliseconds and retain ownership of fetching, empty/error states, and provider severity. A provider
+without severity uses the normal accent; the kit invents no warning thresholds.
 
 ## The token-name contract
 

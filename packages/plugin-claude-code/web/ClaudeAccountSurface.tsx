@@ -1,63 +1,7 @@
 import type { PluginWebContext } from "@thinkrail/plugin-api/web";
-import type React from "react";
+import { AccountRow, AccountUsageWindow, accountReadingLabel } from "@thinkrail/plugin-ui";
 import { useEffect, useRef, useState } from "react";
-import type { ClaudeAccount, ClaudeUsageWindow, claudeCodeContract } from "../contracts";
-
-/** Claude Code has already decided how alarmed to be; the bar wears its answer, not a second opinion. */
-const TONES: Record<ClaudeUsageWindow["severity"], string> = {
-	critical: "bg-feedback-error",
-	warning: "bg-feedback-warning",
-	normal: "bg-primary",
-};
-
-function ago(ms: number): string {
-	const minutes = Math.max(0, Math.round(ms / 60_000));
-	if (minutes < 1) return "just now";
-	if (minutes < 60) return `${minutes}m ago`;
-	const hours = Math.round(minutes / 60);
-	return hours < 48 ? `${hours}h ago` : `${Math.round(hours / 24)}d ago`;
-}
-
-/** A window whose reset has already passed says so — the reading is old, not the window empty. */
-function resetLabel(resetsAt: string): string | null {
-	const at = Date.parse(resetsAt);
-	if (Number.isNaN(at)) return null;
-	const minutes = Math.round((at - Date.now()) / 60_000);
-	if (minutes <= 0) return "Reset since this reading";
-	if (minutes < 60) return `Resets in ${minutes}m`;
-	const hours = Math.round(minutes / 60);
-	return hours < 48 ? `Resets in ${hours}h` : `Resets in ${Math.round(hours / 24)}d`;
-}
-
-function UsageBar({ window }: { window: ClaudeUsageWindow }) {
-	const reset = window.resetsAt ? resetLabel(window.resetsAt) : null;
-	return (
-		<div data-testid="claude-usage-window" data-window={window.id} className="flex flex-col gap-2">
-			<div className="flex items-baseline justify-between gap-8">
-				<span className="truncate tr-text-ui text-text-default">{window.label}</span>
-				<span data-testid="claude-usage-percent" className="shrink-0 tr-text-ui text-text-default">
-					{window.percent}%
-				</span>
-			</div>
-			<div className="h-4 w-full overflow-hidden rounded-[var(--radius-sm)] bg-control-bg">
-				<div
-					className={`h-full w-[var(--fill)] ${TONES[window.severity]}`}
-					style={{ "--fill": `${window.percent}%` } as React.CSSProperties}
-				/>
-			</div>
-			{reset ? <span className="tr-text-metadata text-text-subtle">{reset}</span> : null}
-		</div>
-	);
-}
-
-function Row({ label, value }: { label: string; value: string }) {
-	return (
-		<div className="flex items-baseline justify-between gap-8">
-			<span className="shrink-0 tr-text-ui text-text-muted">{label}</span>
-			<span className="min-w-0 truncate tr-text-ui text-text-default">{value}</span>
-		</div>
-	);
-}
+import type { ClaudeAccount, claudeCodeContract } from "../contracts";
 
 export function createClaudeAccountSurface(ctx: PluginWebContext<typeof claudeCodeContract>) {
 	return function ClaudeAccountSurface({ reloads }: { reloads: number }) {
@@ -107,10 +51,12 @@ export function createClaudeAccountSurface(ctx: PluginWebContext<typeof claudeCo
 					{account.version ? <AccountRow label="Version" value={account.version} /> : null}
 					{account.loggedIn ? (
 						<>
-							{account.email ? <Row label="Email" value={account.email} /> : null}
-							{account.subscription ? <Row label="Plan" value={account.subscription} /> : null}
+							{account.email ? <AccountRow label="Email" value={account.email} /> : null}
+							{account.subscription ? (
+								<AccountRow label="Plan" value={account.subscription} />
+							) : null}
 							{account.organization ? (
-								<Row label="Organization" value={account.organization} />
+								<AccountRow label="Organization" value={account.organization} />
 							) : null}
 						</>
 					) : (
@@ -128,18 +74,23 @@ export function createClaudeAccountSurface(ctx: PluginWebContext<typeof claudeCo
 							No usage reading yet — Claude Code records one while it works.
 						</p>
 					) : (
-						account.usage.map((window) => <UsageBar key={window.id} window={window} />)
+						account.usage.map((window) => (
+							<AccountUsageWindow
+								key={window.id}
+								id={window.id}
+								label={window.label}
+								percent={window.percent}
+								resetsAt={window.resetsAt ? Date.parse(window.resetsAt) : null}
+								severity={window.severity}
+								testIdPrefix="claude"
+							/>
+						))
 					)}
 					{account.usageFetchedAt ? (
 						<span data-testid="claude-usage-age" className="tr-text-metadata text-text-subtle">
-							{busy ? (
-								"Asking Claude Code for the current numbers…"
-							) : (
-								<>
-									Claude Code read this {ago(Date.now() - Date.parse(account.usageFetchedAt))}, on{" "}
-									{new Date(account.usageFetchedAt).toLocaleString()}.
-								</>
-							)}
+							{busy
+								? "Asking Claude Code for the current numbers…"
+								: accountReadingLabel("Claude Code", Date.parse(account.usageFetchedAt))}
 						</span>
 					) : null}
 				</section>

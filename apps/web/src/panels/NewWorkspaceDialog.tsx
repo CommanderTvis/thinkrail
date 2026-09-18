@@ -416,6 +416,7 @@ export function NewWorkspaceDialog({
 		attachedImages.pending === 0 &&
 		(agent === "pi" || attachedImages.images.length === 0);
 	const selectedLauncher = launchers.find((candidate) => candidate.id === agent);
+	const selectedLauncherModel = selectedLauncher?.models?.find((m) => m.id === launcherModel);
 
 	const gitless = projects.find((p) => p.id === selectedProjectId)?.hasGit === false;
 	const isolated = target === "worktree" && !gitless;
@@ -465,7 +466,7 @@ export function NewWorkspaceDialog({
 			store.addTerminal(
 				workspace.id,
 				launcher.terminalCommand({
-					...(launcherModel ? { model: launcherModel } : {}),
+					...(selectedLauncherModel ? { model: selectedLauncherModel.id } : {}),
 					...(text ? { initialPrompt: text } : {}),
 				}),
 				centre,
@@ -783,9 +784,11 @@ export function NewWorkspaceDialog({
 						))}
 						{selectedLauncher?.models ? (
 							<DropdownMenu>
-								<DropdownMenuTrigger data-testid="ws-claude-model" className={PILL}>
-									{selectedLauncher.models.find((m) => m.id === launcherModel)?.label ??
-										"Default model"}
+								<DropdownMenuTrigger data-testid={`ws-${agent}-model`} className={PILL}>
+									{selectedLauncherModel?.icon ? (
+										<selectedLauncherModel.icon className="size-14 shrink-0 text-text-muted" />
+									) : null}
+									{selectedLauncherModel?.label ?? "Default model"}
 								</DropdownMenuTrigger>
 								<DropdownMenuContent align="start">
 									<DropdownMenuItem onSelect={() => setLauncherModel(null)}>
@@ -794,7 +797,7 @@ export function NewWorkspaceDialog({
 									{selectedLauncher.models.map((m) => (
 										<DropdownMenuItem
 											key={m.id}
-											data-testid={`ws-claude-model-${m.id}`}
+											data-testid={`ws-${agent}-model-${m.id}`}
 											onSelect={() => setLauncherModel(m.id)}
 										>
 											{m.icon ? <m.icon /> : null}

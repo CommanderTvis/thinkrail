@@ -348,6 +348,12 @@ against a fixture transcript under the lane's `HOME`.
 `attachPath`/`cwdLabel` are pinned by `@thinkrail/plugin-ui`'s `TerminalFacts.test.ts`.
 `assets/marketplace/claude-plugin/tests/test-hooks.sh` (bash) is this package's `bun run test`'s second half, unchanged.
 
+## Account presentation
+
+The Account surface uses plugin-ui's shared account rows, usage windows, and reading timestamps,
+matching the Codex pane. Percentages explicitly say used; Claude's own severity still selects the bar
+color. The plugin keeps ownership of reading and refreshing the account and explaining missing data.
+
 ## History
 
 Moved out of core as part of the plugin-api adoption (`plugin-adoption.md`, "Claude Code integration,

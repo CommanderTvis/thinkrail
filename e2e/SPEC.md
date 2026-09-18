@@ -16,6 +16,12 @@ isolated host, seed real git and persistence fixtures, drive Chromium through th
 machine-global resource it used. The default suite excludes provider-backed `@agent` tests; those remain
 explicit, authenticated, on-demand runs.
 
+Browser hosts use a separate short, worktree-and-lane-qualified `CODEX_HOME` from `fixtures/paths.ts`.
+Its Unix IPC socket must fit macOS's sockaddr path limit even when the fixture repo's path does not.
+Setup and teardown own this directory just like the lane HOME; it never points at the user's Codex
+configuration or IPC socket. Codex IDE-context coverage uses the real browser and native IPC frames,
+without starting an agent or contacting a provider.
+
 ## Execution model
 
 `bun run e2e` is the complete no-agent gate. It builds the web bundle once and runs machine-adaptive,
@@ -332,4 +338,3 @@ unavailable, which is the wiring that would rot silently. The Claude runner's ow
 document text out of `stream-json` frames while ignoring thinking deltas and the CLI's other traffic, is
 pinned by `blueprint/runners.test.ts`; the end-to-end proof that the format survives that host is a manual
 run of the real app.
-

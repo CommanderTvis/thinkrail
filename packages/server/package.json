@@ -23,6 +23,7 @@
 		"@thinkrail/plugin-blueprint": "workspace:*",
 		"@thinkrail/plugin-branch-graph": "workspace:*",
 		"@thinkrail/plugin-claude-code": "workspace:*",
+		"@thinkrail/plugin-codex": "workspace:*",
 		"@thinkrail/plugin-discord": "workspace:*",
 		"@thinkrail/plugin-file-icons": "workspace:*",
 		"@thinkrail/plugin-pdf-preview": "workspace:*",

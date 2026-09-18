@@ -61,6 +61,12 @@ of the host.
   (`/providers/*`, `/api/*`, `/bedrock-provider`, … — they statically load the Node provider SDKs); and
   importing `server` / `shared` / `web`.
 
+## Terminal image paste
+
+`terminal.saveImage` accepts a live terminal id, MIME type, and base64 image from its attached client.
+It returns a host-local path; ordinary terminal input delivers that path without submitting it.
+Images are limited to 10 MiB each (PNG, JPEG, GIF, WebP). Protocol 68 introduces this method.
+
 ## Contents
 
 - **piProtocol.ts** — `import type` re-exports from the pi package roots (type-only → erased at build):

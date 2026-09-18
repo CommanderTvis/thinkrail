@@ -18,6 +18,7 @@ import {
 	E2E_CENTRAL_BAD_EXTENSION_SOURCE,
 	E2E_CENTRAL_EXTENSION_SOURCE,
 	E2E_CENTRAL_STATE,
+	E2E_CODEX_HOME_DIR,
 	E2E_DATA_DIR,
 	E2E_FAKE_BIN_DIR,
 	E2E_FIXTURE_REPO,
@@ -60,6 +61,8 @@ export default function globalSetup(config?: FullConfig): void | Promise<void> {
 	try {
 		const globalCentralArtifact = centralMode ? findGlobalCentralArtifact() : undefined;
 		rmSync(E2E_DATA_DIR, { recursive: true, force: true });
+		removeTree(E2E_CODEX_HOME_DIR);
+		mkdirSync(E2E_CODEX_HOME_DIR, { recursive: true, mode: 0o700 });
 		mkdirSync(E2E_DATA_DIR, { recursive: true });
 		writeFileSync(join(E2E_DATA_DIR, "config.json"), JSON.stringify(CONFIRMED_ANALYTICS_CONFIG));
 		writeFileSync(
