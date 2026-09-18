@@ -13,6 +13,7 @@ const modules = {
 	"packages/plugin-branch-graph": "@thinkrail/plugin-branch-graph",
 	"packages/plugin-blueprint": "@thinkrail/plugin-blueprint",
 	"packages/plugin-claude-code": "@thinkrail/plugin-claude-code",
+	"packages/plugin-codex": "@thinkrail/plugin-codex",
 	"packages/plugin-discord": "@thinkrail/plugin-discord",
 	"packages/plugin-file-icons": "@thinkrail/plugin-file-icons",
 	"packages/plugin-pdf-preview": "@thinkrail/plugin-pdf-preview",
@@ -67,6 +68,11 @@ function fixture(): string {
 			"@thinkrail/plugin-api": "workspace:*",
 			"@thinkrail/contracts": "workspace:*",
 			"@thinkrail/shared": "workspace:*",
+		},
+		"packages/plugin-codex": {
+			"@thinkrail/plugin-api": "workspace:*",
+			"@thinkrail/contracts": "workspace:*",
+			"@thinkrail/plugin-ui": "workspace:*",
 		},
 		"packages/plugin-pdf-preview": {
 			"@thinkrail/plugin-api": "workspace:*",

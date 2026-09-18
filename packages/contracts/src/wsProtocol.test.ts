@@ -79,7 +79,7 @@ test("session titles normalize to one bounded non-blank line", () => {
 });
 
 test("this fork's own additive methods sit above every version upstream has taken", () => {
-	expect(PROTOCOL_VERSION).toBe(67);
+	expect(PROTOCOL_VERSION).toBe(68);
 });
 
 test("AI access source switching advances the protocol and names its methods", () => {

@@ -2,6 +2,24 @@ import { describe, expect, it } from "bun:test";
 import { adoptedTitle } from "./terminalTitle";
 
 describe("adoptedTitle", () => {
+	it("removes bracketed ASCII status and its label without consuming the task or workspace", () => {
+		for (const marker of ["[ ! ]", "[!]", "[ * ]"]) {
+			const title = `${marker} Action Required | Describe the image | my-workspace`;
+			expect(adoptedTitle(title)).toBe("Describe the image | my-workspace");
+			expect(adoptedTitle(adoptedTitle(title))).toBe("Describe the image | my-workspace");
+		}
+	});
+
+	it("preserves ordinary bracketed titles and status words in task names", () => {
+		for (const title of [
+			"[RFC] Action Required | Design",
+			"Action Required | Design",
+			"Task [ ! ] | Design",
+		]) {
+			expect(adoptedTitle(title)).toBe(title);
+		}
+	});
+
 	it("drops Claude Code's leading spinner glyph, whichever frame it is on", () => {
 		expect(adoptedTitle("✳ Claude Code")).toBe("Claude Code");
 		expect(adoptedTitle("◑ Open WebUI to the network")).toBe("Open WebUI to the network");

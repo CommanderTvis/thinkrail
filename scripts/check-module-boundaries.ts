@@ -100,6 +100,11 @@ const MODULE_RULES: readonly ModuleRule[] = [
 		internal: PLUGIN_WEB_MUST_NOT_REACH_HOST,
 	},
 	{
+		root: "packages/plugin-codex",
+		allowed: ["packages/plugin-api", "packages/contracts", "packages/plugin-ui"],
+		internal: PLUGIN_WEB_MUST_NOT_REACH_HOST,
+	},
+	{
 		root: "packages/plugin-pdf-preview",
 		allowed: ["packages/plugin-api", "packages/contracts", "packages/plugin-ui"],
 	},
@@ -135,6 +140,7 @@ const MODULE_RULES: readonly ModuleRule[] = [
 				[
 					"plugin-blueprint",
 					"plugin-claude-code",
+					"plugin-codex",
 					"plugin-discord",
 					"plugin-visualize",
 					"plugin-spec-dialect",
@@ -168,6 +174,7 @@ const MODULE_RULES: readonly ModuleRule[] = [
 				[
 					"plugin-blueprint",
 					"plugin-claude-code",
+					"plugin-codex",
 					"plugin-discord",
 					"plugin-visualize",
 					"plugin-spec-dialect",
@@ -193,6 +200,7 @@ const MODULE_RULES: readonly ModuleRule[] = [
 				[
 					"plugin-blueprint",
 					"plugin-claude-code",
+					"plugin-codex",
 					"plugin-discord",
 					"plugin-visualize",
 					"plugin-spec-dialect",
@@ -211,6 +219,7 @@ const MODULE_RULES: readonly ModuleRule[] = [
 				[
 					"plugin-blueprint",
 					"plugin-claude-code",
+					"plugin-codex",
 					"plugin-discord",
 					"plugin-visualize",
 					"plugin-spec-dialect",

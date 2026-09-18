@@ -107,7 +107,8 @@ export type TemplateReadLocation =
 
 export type PluginWireName = `plugin.${string}.${string}`;
 
-export const PROTOCOL_VERSION = 67;
+export const PROTOCOL_VERSION = 68;
+export const TERMINAL_IMAGE_MAX_BYTES = 10 * 1024 * 1024;
 export const JBCENTRAL_ACCESS_PROTOCOL_VERSION = 67;
 export const ANALYTICS_CONSENT_PROTOCOL_VERSION = 65;
 export const SESSION_RENAME_PROTOCOL_VERSION = 66;
@@ -227,6 +228,7 @@ export const WS_METHODS = {
 	terminalReserve: "terminal.reserve",
 	terminalAttach: "terminal.attach",
 	terminalList: "terminal.list",
+	terminalSaveImage: "terminal.saveImage",
 	terminalWrite: "terminal.write",
 	terminalResize: "terminal.resize",
 	terminalClose: "terminal.close",
@@ -545,6 +547,10 @@ export interface WsMethodMap {
 	"terminal.list": {
 		params: { workspaceId: string };
 		result: { tabs: TerminalTabInfo[] };
+	};
+	"terminal.saveImage": {
+		params: { id: string; data: string; mimeType: string };
+		result: { path: string };
 	};
 	"terminal.write": { params: { id: string; data: string }; result: Ack };
 	"terminal.resize": { params: { id: string; cols: number; rows: number }; result: Ack };

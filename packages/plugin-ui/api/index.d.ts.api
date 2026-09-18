@@ -1,4 +1,5 @@
 // ---- index.d.ts ----
+export { AccountRow, AccountUsageWindow, accountReadingLabel } from "./Account";
 export { Button, type ButtonProps, buttonVariants } from "./button";
 export { CHIP, CHIP_DISABLED, CHIP_OFF, CHIP_ON } from "./chips";
 export { cn } from "./cn";
@@ -11,13 +12,37 @@ export { Outline, OutlineColumn, OutlineToggle, scrollToHeading } from "./Outlin
 export { buildOutlineTree, type HeadingEntry, type OutlineNode } from "./outlineTree";
 export { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from "./popover";
 export { type ImperativePanelGroupHandle, type ImperativePanelHandle, ResizableHandle, ResizablePanel, ResizablePanelGroup, } from "./resizable";
+export { abbreviateHomePath, RowAction, ScopeChip, ScopedSettingRow, type ScopedSettingSource, SettingsToolbar, SourcePath, } from "./ScopedSetting";
+export { type SettingValue, SettingValueDialog, shapeOf, type ValueShape, } from "./SettingValueDialog";
 export { SvgAsset } from "./SvgAsset";
+export { attachPath, cwdLabel, TerminalAttachButton, TerminalFactChip, } from "./TerminalFacts";
 export { ToggleSegment } from "./ToggleSegment";
 export { ToolFileLink } from "./ToolFileLink";
 export { Textarea } from "./textarea";
 export { Toast, ToastClose, ToastDescription, ToastProvider, ToastTitle, ToastViewport, toastVariants, } from "./toast";
 export { IconTooltip, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./tooltip";
 export { useThemeSwap } from "./useThemeSwap";
+
+// ---- Account.d.ts ----
+declare const TONES: {
+    critical: string;
+    warning: string;
+    normal: string;
+};
+export declare function accountReadingLabel(provider: string, fetchedAt: number): string;
+export declare function AccountRow({ label, value }: {
+    label: string;
+    value: string;
+}): import("react").JSX.Element;
+export declare function AccountUsageWindow({ id, label, percent, resetsAt, severity, testIdPrefix, }: {
+    id: string;
+    label: string;
+    percent: number;
+    resetsAt: number | null;
+    severity?: keyof typeof TONES;
+    testIdPrefix: string;
+}): import("react").JSX.Element;
+export {};
 
 // ---- button.d.ts ----
 import { type VariantProps } from "class-variance-authority";
@@ -173,6 +198,67 @@ export declare function ResizableHandle({ direction, withHandle, className, ...p
     withHandle?: boolean;
 }): import("react").JSX.Element;
 
+// ---- ScopedSetting.d.ts ----
+import type { ReactNode } from "react";
+export declare function abbreviateHomePath(path: string): string;
+export declare function ScopeChip({ scope, testId }: {
+    scope: string;
+    testId?: string;
+}): import("react").JSX.Element;
+export declare function SourcePath({ path, onOpen, testId, }: {
+    path: string;
+    onOpen: (path: string) => void;
+    testId?: string;
+}): import("react").JSX.Element;
+export declare function RowAction({ testid, label, tone, onClick, }: {
+    testid: string;
+    label: string;
+    tone?: "neutral" | "danger";
+    onClick: () => void;
+}): import("react").JSX.Element;
+export interface ScopedSettingSource {
+    scope: string;
+    path: string | null;
+}
+export declare function ScopedSettingRow({ testIdPrefix, settingKey, docsUrl, docsTitle, source, value, shadowed, onOpen, actions, }: {
+    testIdPrefix: string;
+    settingKey: string;
+    docsUrl?: string | undefined;
+    docsTitle?: string | undefined;
+    source: ScopedSettingSource;
+    value: ReactNode;
+    shadowed: readonly (ScopedSettingSource & {
+        value: unknown;
+    })[];
+    onOpen: (path: string) => void;
+    actions?: ReactNode;
+}): import("react").JSX.Element;
+export declare function SettingsToolbar({ query, onQuery, onAdd, testIdPrefix, }: {
+    query: string;
+    onQuery: (query: string) => void;
+    onAdd?: (() => void) | undefined;
+    testIdPrefix: string;
+}): import("react").JSX.Element;
+
+// ---- SettingValueDialog.d.ts ----
+export type SettingValue = string | number | boolean | string[];
+export type ValueShape = "text" | "number" | "switch" | "list";
+export declare function shapeOf(value: unknown): ValueShape | null;
+export declare function SettingValueDialog({ testIdPrefix, open, settingKey, currentValue, choices, shapeFor, knownKeys, knownKeysOnly, keyPlaceholder, submitLabel, onClose, onSubmit, }: {
+    testIdPrefix: string;
+    open: boolean;
+    settingKey: string;
+    currentValue: unknown;
+    choices?: (key: string) => readonly string[] | undefined;
+    shapeFor?: (key: string) => ValueShape | undefined;
+    knownKeys: readonly string[];
+    knownKeysOnly?: boolean;
+    keyPlaceholder?: string;
+    submitLabel: string;
+    onClose: () => void;
+    onSubmit: (key: string, value: SettingValue) => void;
+}): import("react").JSX.Element;
+
 // ---- SvgAsset.d.ts ----
 import { type ReactNode } from "react";
 /**
@@ -187,6 +273,21 @@ export declare function SvgAsset({ url, className, testid, name, fallback, }: {
     name?: string | undefined;
     fallback?: ReactNode;
 }): string | number | bigint | boolean | import("react").JSX.Element | Iterable<ReactNode> | Promise<string | number | bigint | boolean | Iterable<ReactNode> | import("react").ReactElement<unknown, string | import("react").JSXElementConstructor<any>> | import("react").ReactPortal | null | undefined> | null;
+
+// ---- TerminalFacts.d.ts ----
+export declare function cwdLabel(cwd: string | undefined): string | null;
+export declare function attachPath(path: string, worktreePath: string | undefined, cwd: string | undefined): string;
+export declare function TerminalFactChip({ kind, label, title, }: {
+    kind: string;
+    label: string;
+    title: string;
+}): import("react").JSX.Element;
+export declare function TerminalAttachButton({ title, pickFile, onAttach, onError, }: {
+    title: string;
+    pickFile: () => Promise<string | null>;
+    onAttach: (path: string) => void;
+    onError: (cause: unknown) => void;
+}): import("react").JSX.Element;
 
 // ---- textarea.d.ts ----
 import type * as React from "react";

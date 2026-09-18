@@ -9,6 +9,25 @@ references: [central-integration]
 tags: [v1, ui]
 ---
 
+## Terminal links
+
+Plain HTTP(S) URLs, including wrapped URLs, are detected by xterm's web-links addon. Explicit OSC 8
+HTTP(S) hyperlinks use the same activation callback. Clicking either kind, with or without Command/Ctrl,
+opens the destination directly through `window.open(url, "_blank", "noopener,noreferrer")`; the desktop
+shell's existing external-navigation handler opens it in the system browser. No blank-window redirect or
+xterm confirmation dialog is involved. Other OSC 8 schemes retain xterm's default rejection. Browser
+regressions exercise actual terminal output and pointer activation for both link forms.
+
+## Terminal image paste
+
+The terminal captures clipboard images before xterm's text-only handler, uploads them through
+`terminal.saveImage`, and inserts each host path using quoting and negotiated bracketed paste, without
+Enter. Text-only pastes stay with xterm. Image pastes ignore accompanying text and preserve image bytes
+and dimensions. Input during upload is queued; failure clears queued input and shows an error rather
+than submitting an incomplete prompt. Keyboard, accessory, file-drop and queued prompt input share this
+ordering. Unmount, exit, or takeover cancels delivery; a reclaimed terminal accepts input immediately
+and ignores both success and failure from the old upload. No plugin is involved.
+
 ## Responsibility
 
 The layout-agnostic, store-driven feature views. A panel fills its container and never knows its
@@ -1351,7 +1370,9 @@ opening at line 1 leaves the reader hunting for the row they just clicked.
   `useLaunchers()` registration — each rendered through its own `LauncherAgentOption` so
   `launcher.useAvailable()` is that component's own single hook call. A selected launcher's
   `terminalCommand()` opens a terminal exactly where the old hardcoded `claude` branch did; the Claude
-  Code plugin's own `ctx.launcher()` registration is what exercises this path now.
+  Code and Codex plugins exercise this path. One lookup against the selected launcher's model list
+  supplies both the picker's label and the submitted override; an unrelated agent's held model choice
+  displays Default model and passes no override.
 - **Editor events** (`editorEvents.ts`): a plain `Set`-based emitter (`emitEditorEvent`/`onEditorEvent`),
   plus `findEditorRef(workspaceId, path)` — the one place that turns those two into an `EditorRef` by
   looking up the live tab, shared by every emitter that only has a path (`openTabs`, `fileSave`,
@@ -2026,7 +2047,7 @@ they must not receive chat's trimmed endpoint paired with an untrimmed column an
   purpose — `addon-webgl` is *not* loaded, and loading it would be a regression (see `architecture.md`
   Decision #11: the DOM renderer is a prerequisite for touch, and `WebglAddon.dispose()` leaks its WebGL2
   context, which our per-worktree terminal churn would hit). Addons are exactly `fit`, `clipboard`,
-  `unicode11` and `web-fonts`; anything else pinned but unimported is dead weight and a trap for the next
+  `unicode11`, `web-fonts`, and `web-links`; anything else pinned but unimported is dead weight and a trap for the next
   reader. `web-fonts` is load-bearing rather than cosmetic: our code font ships as per-alphabet woff2 subsets,
   so the Cyrillic/CJK file lands *after* xterm has measured the character cell (which it does once, at
   construction, and never again — unlike Monaco, which re-measures an untrusted early reading). Without the
