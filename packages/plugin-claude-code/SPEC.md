@@ -409,6 +409,9 @@ against a fixture transcript under the lane's `HOME`.
 
 ## Account presentation
 
+The Account surface uses plugin-ui's shared account rows, usage windows, and reading timestamps,
+matching the Codex pane. Percentages explicitly say used; Claude's own severity still selects the bar
+color. The plugin keeps ownership of reading and refreshing the account and explaining missing data.
 The CLI version appears in its own Claude Code section, separate from account identity and usage.
 
 ## History

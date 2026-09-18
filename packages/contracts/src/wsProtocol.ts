@@ -238,6 +238,7 @@ export const WS_METHODS = {
 	terminalReserve: "terminal.reserve",
 	terminalAttach: "terminal.attach",
 	terminalList: "terminal.list",
+	terminalSaveImage: "terminal.saveImage",
 	terminalWrite: "terminal.write",
 	terminalResize: "terminal.resize",
 	terminalClose: "terminal.close",
@@ -648,6 +649,10 @@ export interface WsMethodMap {
 	"terminal.list": {
 		params: { workspaceId: string };
 		result: { tabs: TerminalTabInfo[] };
+	};
+	"terminal.saveImage": {
+		params: { id: string; data: string; mimeType: string };
+		result: { path: string };
 	};
 	"terminal.write": { params: { id: string; data: string }; result: Ack };
 	"terminal.resize": { params: { id: string; cols: number; rows: number }; result: Ack };

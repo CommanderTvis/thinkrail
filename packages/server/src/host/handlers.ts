@@ -175,6 +175,7 @@ import {
 	renameTerminal,
 	reserveTerminal,
 	resizeTerminal,
+	saveTerminalImage,
 	submitToAgent,
 	writeTerminal,
 } from "../terminal";
@@ -789,6 +790,10 @@ const handlers: Record<string, Handler> = {
 	"terminal.list": (params) => ({
 		tabs: listTerminals((params as { workspaceId: string }).workspaceId),
 	}),
+	"terminal.saveImage": (params, ctx) => {
+		const p = params as { id: string; data: string; mimeType: string };
+		return { path: saveTerminalImage(p.id, p.data, p.mimeType, ctx.clientKey) };
+	},
 	"terminal.write": (params, ctx) => {
 		const p = params as { id: string; data: string };
 		writeTerminal(p.id, p.data, ctx.clientKey);

@@ -14,6 +14,7 @@ import {
 	E2E_CENTRAL_EXTENSION_SOURCE,
 	E2E_CENTRAL_LOG,
 	E2E_CENTRAL_STATE,
+	E2E_CODEX_HOME_DIR,
 	E2E_DATA_DIR,
 	E2E_EDITOR_LOG,
 	E2E_FAKE_BIN_DIR,
@@ -90,7 +91,7 @@ export default defineConfig({
 			HOME: E2E_HOME_DIR,
 			USERPROFILE: E2E_HOME_DIR,
 			CLAUDE_CONFIG_DIR: `${E2E_HOME_DIR}/.claude`,
-			CODEX_HOME: `${E2E_HOME_DIR}/.codex`,
+			CODEX_HOME: E2E_CODEX_HOME_DIR,
 			GEMINI_CLI_HOME: E2E_HOME_DIR,
 			PI_CODING_AGENT_DIR: E2E_PI_AGENT_DIR,
 			// Keep the suite hermetic: `model.list` fires a detached pi.dev catalog refresh (issue #98) that

@@ -8,6 +8,7 @@ import { ClipboardAddon } from "@xterm/addon-clipboard";
 import { FitAddon } from "@xterm/addon-fit";
 import { Unicode11Addon } from "@xterm/addon-unicode11";
 import { WebFontsAddon } from "@xterm/addon-web-fonts";
+import { WebLinksAddon } from "@xterm/addon-web-links";
 import { type IBufferCell, type IBufferLine, type ITheme, Terminal as XTerm } from "@xterm/xterm";
 import {
 	type ForwardedRef,
@@ -31,6 +32,7 @@ import { createExtendedKeyState } from "./extendedKeys";
 import { createPtySizeSync, runAfterTerminalRelayout } from "./ptySizeSync";
 import { stripAnsiDim, terminalContrastFloor } from "./terminalContrast";
 import { attachPath } from "./terminalCwd";
+import { installTerminalImagePaste } from "./terminalImagePaste";
 import { createTerminalPrebindBuffer } from "./terminalPrebindBuffer";
 
 const RESIZE_DEBOUNCE_MS = 60;
@@ -159,6 +161,7 @@ function TerminalInstance(
 	const hostRef = useRef<HTMLDivElement>(null);
 	const termRef = useRef<XTerm | null>(null);
 	const serverIdRef = useRef<string | null>(null);
+	const imagePasteRef = useRef<ReturnType<typeof installTerminalImagePaste> | null>(null);
 	const fitFnRef = useRef<(() => void) | null>(null);
 	const reattachRef = useRef<(() => void) | null>(null);
 	const initialCommandRef = useRef(initialCommand);
@@ -168,8 +171,7 @@ function TerminalInstance(
 		ref,
 		() => ({
 			write(data) {
-				const id = serverIdRef.current;
-				if (id) sendTerminalWrite(getTransport().request("terminal.write", { id, data }));
+				imagePasteRef.current?.write(data);
 			},
 			bufferTail(lines, options) {
 				const term = termRef.current;
@@ -191,8 +193,9 @@ function TerminalInstance(
 		const id = serverIdRef.current;
 		if (!queuedInput || !id) return;
 		const text = useAppStore.getState().consumeTerminalInput(workspaceId, tabKey);
-		if (text) void getTransport().request("terminal.write", { id, data: `${text}\r` });
+		if (text) imagePasteRef.current?.write(`${text}\r`);
 	}, [queuedInput, tabKey, workspaceId]);
+	const [pasteError, setPasteError] = useState<string | null>(null);
 	const [ready, setReady] = useState(false);
 	const [exited, setExited] = useState(false);
 	const [failureMessage, setFailureMessage] = useState<string | null>(null);
@@ -213,7 +216,11 @@ function TerminalInstance(
 		const focusedTab =
 			initialFocusTarget instanceof Element ? initialFocusTarget.closest('[role="tab"]') : null;
 		const initialFocusRequestsTerminal = focusedTab?.parentElement?.dataset.kind === "terminal";
+		const openLink = (_event: MouseEvent, url: string): void => {
+			window.open(url, "_blank", "noopener,noreferrer");
+		};
 		const term = new XTerm({
+			linkHandler: { activate: openLink },
 			allowProposedApi: true,
 			cursorBlink: true,
 			fontSize: Number.parseFloat(cssVar("--tr-font-size-s13") ?? "") || 13,
@@ -224,6 +231,7 @@ function TerminalInstance(
 		});
 		const fit = new FitAddon();
 		term.loadAddon(fit);
+		term.loadAddon(new WebLinksAddon(openLink));
 		tryLoad(() => {
 			term.loadAddon(new Unicode11Addon());
 			term.unicode.activeVersion = "11";
@@ -233,6 +241,16 @@ function TerminalInstance(
 		tryLoad(() => term.loadAddon(webFonts));
 		termRef.current = term;
 		term.open(host);
+		const imagePaste = installTerminalImagePaste(host, {
+			id: () => serverIdRef.current,
+			bracketed: () => term.modes.bracketedPasteMode,
+			save: (id, data, mimeType) =>
+				getTransport().request("terminal.saveImage", { id, data, mimeType }),
+			write: (id, data) =>
+				sendTerminalWrite(getTransport().request("terminal.write", { id, data })),
+			error: setPasteError,
+		});
+		imagePasteRef.current = imagePaste;
 		const updateScrollEdges = () => {
 			const buffer = term.buffer.active;
 			const next = {
@@ -282,8 +300,7 @@ function TerminalInstance(
 					// Anything handled here is handled entirely here.
 					event.preventDefault();
 					event.stopPropagation();
-					const id = serverIdRef.current;
-					if (id) sendTerminalWrite(getTransport().request("terminal.write", { id, data: bytes }));
+					imagePaste.write(bytes);
 					return false;
 				}
 			}
@@ -291,8 +308,7 @@ function TerminalInstance(
 			if (event.isComposing) return true;
 			const bytes = imeControlBytes(event);
 			if (bytes === null) return true;
-			const id = serverIdRef.current;
-			if (id) sendTerminalWrite(getTransport().request("terminal.write", { id, data: bytes }));
+			imagePaste.write(bytes);
 			return false;
 		});
 
@@ -342,15 +358,13 @@ function TerminalInstance(
 			if (prebind.acceptData(ev)) return;
 			if (ev.id === serverIdRef.current) writeFrame(ev);
 		});
-		const onData = term.onData((data) => {
-			const id = serverIdRef.current;
-			if (id) sendTerminalWrite(getTransport().request("terminal.write", { id, data }));
-		});
+		const onData = term.onData((data) => imagePaste.write(data));
 
 		let attachGeneration = 0;
 
 		const handleExit = (ev: TerminalExitPush): void => {
 			if (ev.id !== serverIdRef.current) return;
+			imagePaste.cancel();
 			serverIdRef.current = null;
 			term.write(`\r\n[process exited${ev.exitCode === 0 ? "" : ` with code ${ev.exitCode}`}]\r\n`);
 			setExited(true);
@@ -365,6 +379,7 @@ function TerminalInstance(
 			(payload) => {
 				const ev = payload as TerminalDetachedPush;
 				if (ev.workspaceId !== workspaceId || ev.tabKey !== tabKey) return;
+				imagePaste.cancel();
 				serverIdRef.current = null;
 				attachGeneration += 1;
 				setReady(false);
@@ -433,20 +448,10 @@ function TerminalInstance(
 						// Typed, never submitted: the user decides whether to spend a resume — unless the
 						// surface that owns this terminal promised to bring its agent back. See SPEC.md.
 						if (prefill && serverIdRef.current === id) {
-							sendTerminalWrite(
-								getTransport().request("terminal.write", {
-									id,
-									data: prefillSubmit ? `${prefill}\r` : prefill,
-								}),
-							);
+							imagePaste.write(prefillSubmit ? `${prefill}\r` : prefill);
 						}
 						if (created && serverIdRef.current === id && initialCommandRef.current) {
-							sendTerminalWrite(
-								getTransport().request("terminal.write", {
-									id,
-									data: `${initialCommandRef.current}\r`,
-								}),
-							);
+							imagePaste.write(`${initialCommandRef.current}\r`);
 							initialCommandRef.current = undefined;
 							useAppStore.getState().consumeTerminalInitialCommand(workspaceId, tabKey);
 						}
@@ -495,6 +500,8 @@ function TerminalInstance(
 			clearTimeout(fitTimer);
 			resizeObserver.disconnect();
 			stopThemeWatch();
+			imagePaste.dispose();
+			imagePasteRef.current = null;
 			onData.dispose();
 			onViewportScroll.dispose();
 			onBufferWrite.dispose();
@@ -533,7 +540,7 @@ function TerminalInstance(
 		const id = serverIdRef.current;
 		if (!id) return;
 		const data = `${shellQuotePath(attachPath(file.path, worktreePath, undefined))} `;
-		sendTerminalWrite(getTransport().request("terminal.write", { id, data }));
+		imagePasteRef.current?.write(data);
 	};
 	useEffect(() => {
 		const host = hostRef.current;
@@ -569,6 +576,15 @@ function TerminalInstance(
 			data-visible="true"
 			className="absolute inset-0 z-0 flex flex-col"
 		>
+			{pasteError ? (
+				<div
+					role="alert"
+					data-testid="terminal-paste-error"
+					className="px-12 py-4 tr-text-metadata text-feedback-error"
+				>
+					{pasteError}
+				</div>
+			) : null}
 			<QuietScrollFrame
 				viewportSelector=".xterm-scrollable-element"
 				surface="terminal"

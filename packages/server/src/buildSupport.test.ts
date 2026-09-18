@@ -28,6 +28,7 @@ test("runtime source manifest covers the launcher artifact surface", () => {
 		"spec-dialect",
 		"blueprint",
 		"claude-code",
+		"codex",
 		"discord",
 		"visualize",
 		"branch-graph",
