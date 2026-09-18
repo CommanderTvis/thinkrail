@@ -18,6 +18,7 @@
 		"./tooltip": "./tooltip.tsx",
 		"./utils": "./utils.ts",
 		"./theme": "./theme.ts",
+		"./Account": "./Account.tsx",
 		"./Outline": "./Outline.tsx",
 		"./ScopedSetting": "./ScopedSetting.tsx",
 		"./SettingValueDialog": "./SettingValueDialog.tsx",
@@ -41,7 +42,7 @@
 	},
 	"dependencies": {
 		"@monaco-editor/react": "4.7.0",
-		"@radix-ui/react-context-menu": "2.3.7",
+		"@radix-ui/react-context-menu": "2.3.1",
 		"@radix-ui/react-dialog": "1.1.17",
 		"@radix-ui/react-dropdown-menu": "2.1.18",
 		"@radix-ui/react-popover": "1.1.17",
