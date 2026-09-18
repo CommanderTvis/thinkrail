@@ -4,7 +4,7 @@ type: module-design
 status: active
 title: plugin-claude-code — configuration pane, IDE bridge, and terminal status for Claude Code
 parent: module-plugin-api
-depends-on: [module-plugin-api, module-contracts, module-shared, module-plugin-ui]
+depends-on: [module-plugin-api, module-contracts, module-shared, module-ui]
 references: [module-server, module-web, submodule-server-terminal, submodule-server-mcp]
 tags: [v1, plugins, claude-code]
 ---
@@ -242,7 +242,7 @@ the environment still stamped, so re-enabling needs no restart.
 recoloured to `currentColor` the same way the file-icons plugin's generator does (MIT). It is a factory,
 `createClaudeGlyph(ctx)`, built once in `activate(ctx)` and passed the resolved `ctx.assetUrl("claude.svg")`
 so the returned component only ever fetches the one URL; rendering goes through the kit's `SvgAsset`
-(`@thinkrail/plugin-ui`), the same fetch-once-per-URL inline-SVG primitive the file-icons plugin uses.
+(`@thinkrail/ui`), the same fetch-once-per-URL inline-SVG primitive the file-icons plugin uses.
 The manifest names the same file as `asset:claude.svg`, so core's rail and plugin list draw it from this
 plugin's assets too, with no Claude-specific case in core.
 
@@ -275,7 +275,7 @@ The original `TerminalAttachFile` component listed a live worktree directory (`f
 per-entry rows) — a capability no `PluginWebContext` exposes today; only `ctx.pickFile()` (one native
 host dialog) is generic across plugins. The migrated attach chip is one button that calls `ctx.pickFile()`
 directly and types `@path` for whatever it returns, dropping the in-app filtered browser. `attachPath`'s
-relativize-against-cwd logic is unchanged and still covered — it now lives in `@thinkrail/plugin-ui`'s
+relativize-against-cwd logic is unchanged and still covered — it now lives in `@thinkrail/ui`'s
 `TerminalFacts` with `cwdLabel`, the fact chip and the attach button, shared with the Codex plugin; what's gone is
 being able to browse the worktree without leaving the terminal. `apps/web/src/panels/terminalCwd.ts` keeps
 a separate, smaller copy of `attachPath` alone (no `cwdLabel`) — core's own drag-a-
@@ -381,7 +381,7 @@ plan can be applied.
   every domain type/schema), `./host` (default export, a `PluginHostModule`), `./web` (default export, a
   `PluginWebModule`), `./build-support` (`buildSupport`).
 - **Allowed deps:** `@thinkrail/plugin-api` (+ `/host`, `/web`), `@thinkrail/contracts`,
-  `@thinkrail/shared`, `@thinkrail/plugin-ui`, `typebox`, `zustand`, `react`, `@remixicon/react`,
+  `@thinkrail/shared`, `@thinkrail/ui`, `typebox`, `zustand`, `react`, `@remixicon/react`,
   Node/Bun built-ins.
 - **Forbidden:** `@thinkrail/server`, `apps/*`, another plugin's host half, the app's
   store/transport/panels/chat modules, `terminalTokens.ts`/`terminalManager.ts` directly (reached only
@@ -404,11 +404,14 @@ its last usage, reads resuming across appended data with a half-written line hel
 transcripts summed, a missing file spending nothing); `web/store.test.ts` pins that a push without
 `usage` keeps the last one. `e2e/plugins/claude-code/claude-terminal-facts.spec.ts` drives it end to end
 against a fixture transcript under the lane's `HOME`.
-`attachPath`/`cwdLabel` are pinned by `@thinkrail/plugin-ui`'s `TerminalFacts.test.ts`.
+`attachPath`/`cwdLabel` are pinned by `@thinkrail/ui`'s `TerminalFacts.test.ts`.
 `assets/marketplace/claude-plugin/tests/test-hooks.sh` (bash) is this package's `bun run test`'s second half, unchanged.
 
 ## Account presentation
 
+The Account surface uses `@thinkrail/ui`'s shared account rows, usage windows, and reading timestamps,
+matching the Codex pane. Percentages explicitly say used; Claude's own severity still selects the bar
+color. The plugin keeps ownership of reading and refreshing the account and explaining missing data.
 The CLI version appears in its own Claude Code section, separate from account identity and usage.
 
 ## History
