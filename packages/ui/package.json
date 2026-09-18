@@ -21,6 +21,7 @@
 		"./toggle-segment": "./toggle-segment.tsx",
 		"./tooltip": "./tooltip.tsx",
 		"./utils": "./utils.ts",
+		"./Account": "./Account.tsx",
 		"./Outline": "./Outline.tsx",
 		"./ScopedSetting": "./ScopedSetting.tsx",
 		"./SettingValueDialog": "./SettingValueDialog.tsx",

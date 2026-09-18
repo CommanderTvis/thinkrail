@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { type Workspace, WS_CHANNELS } from "@thinkrail/contracts";
@@ -15,6 +15,7 @@ import {
 	resetTerminalState,
 	resizeTerminal,
 	reviveTerminalSessions,
+	saveTerminalImage,
 	setAgentRecord,
 	setRevivePrefillHook,
 	setTerminalPublisher,
@@ -184,6 +185,21 @@ test("a shell spawn failure is actionable when restoring a tab", () => {
 	const retried = attachTerminal(WS, "tab-a", "client-1");
 	expect(retried.created).toBe(true);
 	expect(retried.replay).toBeUndefined();
+});
+
+test("clipboard uploads require the attached owner and last until terminal close", () => {
+	const image =
+		"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==";
+	const { id } = attachTerminal(WS, "image-tab", "client-1");
+	expect(() => saveTerminalImage(id, image, "image/png", "client-2")).toThrow("no longer attached");
+	const path = saveTerminalImage(id, image, "image/png", "client-1");
+	expect(readFileSync(path).toString("base64")).toBe(image);
+	attachTerminal(WS, "image-tab", "client-2");
+	expect(existsSync(path)).toBe(true);
+	expect(() => saveTerminalImage(id, image, "image/png", "client-1")).toThrow("no longer attached");
+	closeTerminalTab(WS, "image-tab", true);
+	expect(existsSync(path)).toBe(false);
+	expect(() => saveTerminalImage(id, image, "image/png", "client-2")).toThrow("no longer attached");
 });
 
 test("attaching twice to a tab returns the SAME shell", () => {
@@ -388,7 +404,7 @@ test(
 	"a host restart gives the tabs back with fresh shells",
 	async () => {
 		const first = attachTerminal(WS, "tab-a", "client-1", { title: "Kept" });
-		const marker = await printTerminalMarker(first.id, "KEPT", "client-1");
+		await printTerminalMarker(first.id, "KEPT", "client-1");
 		persistTerminalSessions();
 		resetTerminalState();
 
@@ -408,7 +424,7 @@ test(
 	"a revived terminal has no persisted recording",
 	async () => {
 		const first = attachTerminal(WS, "tab-a", "client-1");
-		const marker = await printTerminalMarker(first.id, "SERVED_ONCE", "client-1");
+		await printTerminalMarker(first.id, "SERVED_ONCE", "client-1");
 		persistTerminalSessions();
 		resetTerminalState();
 		reviveTerminalSessions();
