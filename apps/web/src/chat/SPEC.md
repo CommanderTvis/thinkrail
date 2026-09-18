@@ -311,11 +311,13 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   append-only refresh preserves row identity and manual folds instead of remounting the transcript.
   Works during the run, after completion, and after a host restart (transcripts persist on disk; only
   the in-memory registry is lost — and its absence is precisely what stops the polling).
-- **`askState`** — the questionnaire lifecycle seam: the pure `deriveAskStates(turns, askAnswers)` +
-  `AskStatesContext`/`useAskState` (provided by `ChatView`, `null` standalone). The ask tool is **ack +
-  terminate** (its tool result is just an ack; the reply arrives later as an `ask-user-answers` message),
-  so "answered / superseded / awaiting" is a fact about the transcript, not a tool status — derived once
-  per runtime snapshot and consumed by the card via context, keeping it props-driven everywhere else.
+- **`askState`** — the questionnaire lifecycle seam: the pure
+  `deriveAskStates(turns, askAnswers, toolResults)` + `AskStatesContext`/`useAskState` (provided by
+  `ChatView`, `null` standalone). A live blocking ask resolves through its native tool result; a
+  restart-repaired eligible ack resolves later through `ask-user-answers`; a stopped/error/length result is
+  terminal because Pi never executes tools from a length-truncated assistant response. "Answered /
+  superseded / stopped / awaiting" is therefore derived once from all three transcript
+  projections and consumed by the card and plan glance, keeping both props-driven everywhere else.
   The same seam supplies an opaque **per-mounted-ChatView focus scope**: an awaiting card claims attention
   once within that scope (so Virtuoso remounts cannot steal focus), while a fresh mount creates a new scope
   and may focus the still-pending question again. "Fresh mount" is broader than closing/reopening the chat:
@@ -1013,13 +1015,13 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   **The glance state** keeps the plan honest as the user's status window: `planGlance(isStreaming,
   askStates)` — derived from session state in `ChatView`, **never stored**, so the agent can't make it
   lie — renders the `in_progress` step as working (dot), **waiting for your answer**
-  (`MessageCircleQuestion` — the same glyph as the `ask_user_question` card, when the agent stopped with
-  an awaiting question), or **paused** (`CirclePause`, any other stop: turn ended, error). A stop with no
+  (`MessageCircleQuestion` — the same glyph as the `ask_user_question` card, while a live tool blocks or a
+  restart-repaired session awaits), or **paused** (`CirclePause`, any other stop: turn ended, error). A stop with no
   pending question never claims the user owes an answer. **The header strip reflects the agent's state,
   not the checkboxes** (`stripStatus`, decoupled from the `in_progress` step): it shows "waiting for
   your answer" **even when every item is done** (the earlier strip hid it whenever there was no
-  in-progress step, so an agent blocked on a question read as "finished"); "working" while it runs;
-  "paused" only when it stopped with open steps left; and nothing extra on a clean finish (all done,
+  in-progress step, so an agent blocked on a question read as "finished"); waiting outranks the raw live
+  run flag; "working" covers other runs; "paused" only when it stopped with open steps left; and nothing extra on a clean finish (all done,
   idle). The glance stays **chat-local and is not the Projects rail's authority**, even though the rail's
   host-derived `ActivityStatus` overlaps it: `askStates` exists here for a job status cannot do —
   `useAskState(toolCallId)` renders *which* questionnaire is awaiting — so `planGlance` is a one-line

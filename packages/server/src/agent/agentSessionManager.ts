@@ -38,7 +38,11 @@ import type {
 	TranscriptMessage,
 	WireModel,
 } from "@thinkrail/contracts";
-import { isTranscriptMessageRole, normalizeSessionTitle } from "@thinkrail/contracts";
+import {
+	assistantToolCallsAreExecutable,
+	isTranscriptMessageRole,
+	normalizeSessionTitle,
+} from "@thinkrail/contracts";
 import type { ParentContext } from "pi-delegation";
 import { RECURSION_GUARD_TOOLS } from "pi-subagents";
 import { logger } from "../log";
@@ -52,7 +56,15 @@ import {
 	TRANSCRIPT_TAIL_MAX_BYTES,
 	type WorkspaceActivityRow,
 } from "./activity";
-import { ANSWERABILITY_ERRORS, assessAnswerability, buildAnswersMessage } from "./askUserQuestion";
+import {
+	ANSWERABILITY_ERRORS,
+	ASK_USER_QUESTION_TOOL_NAME,
+	type AskUserQuestionWaiters,
+	assessAnswerability,
+	buildAnswersMessage,
+	createAskUserQuestionWaiters,
+	hasQuestionAck,
+} from "./askUserQuestion";
 import {
 	disposeSessionChildren,
 	removeWorkspaceDelegation,
@@ -101,6 +113,7 @@ interface Entry {
 	publishedActivity: ActivityStatus | null;
 	rawActivity: ActivityStatus | null;
 	lastActivityMs: number;
+	askUserQuestionWaiters: AskUserQuestionWaiters;
 }
 
 const sessions = new Map<string, Entry>();
@@ -153,6 +166,7 @@ function effectivePendingCount(entry: Entry): number {
 function activityOf(entry: Entry): ActivityStatus | null {
 	return deriveActivityStatus({
 		isStreaming: entry.session.isStreaming,
+		hasPendingQuestion: entry.askUserQuestionWaiters.isWaitingForAnswer(),
 		pendingMessageCount: effectivePendingCount(entry),
 		messages: entry.session.messages,
 		lastSettlement: entry.lastSettlement,
@@ -494,6 +508,7 @@ async function prepareSessionEntry(
 	session: AgentSession,
 	workspaceId: string,
 	generation: PiRuntimeGeneration,
+	askUserQuestionWaiters: AskUserQuestionWaiters,
 	lastSettlement: AgentSettlement | null | undefined = undefined,
 ): Promise<PreparedSessionEntry> {
 	const { sessionId } = session;
@@ -514,11 +529,23 @@ async function prepareSessionEntry(
 		publishedActivity: null,
 		rawActivity: null,
 		lastActivityMs: Date.now(),
+		askUserQuestionWaiters,
 	};
 	entry.rawActivity = activityOf(entry);
 	const seededRecencyMs = messagesActivityMs(session.messages);
 	if (seededRecencyMs !== null) entry.lastActivityMs = seededRecencyMs;
 	entry.unsubscribe = session.subscribe((event) => {
+		if (
+			event.type === "message_end" &&
+			event.message.role === "assistant" &&
+			assistantToolCallsAreExecutable(event.message.stopReason)
+		) {
+			for (const block of event.message.content) {
+				if (block.type === "toolCall" && block.name === ASK_USER_QUESTION_TOOL_NAME)
+					entry.askUserQuestionWaiters.expect(block.id);
+			}
+		}
+		if (event.type === "turn_end") entry.askUserQuestionWaiters.persistTurn(event.toolResults);
 		if (event.type === "message_start" && event.message.role === "user") {
 			const lane = deliveredStuckEmptyLane(entry, event.message.content);
 			if (lane) {
@@ -610,9 +637,15 @@ async function registerSession(
 	session: AgentSession,
 	workspaceId: string,
 	generation: PiRuntimeGeneration,
+	askUserQuestionWaiters: AskUserQuestionWaiters,
 	announceCreation = false,
 ): Promise<CreateSessionResult> {
-	const prepared = await prepareSessionEntry(session, workspaceId, generation);
+	const prepared = await prepareSessionEntry(
+		session,
+		workspaceId,
+		generation,
+		askUserQuestionWaiters,
+	);
 	prepared.entry.registered = true;
 	sessions.set(session.sessionId, prepared.entry);
 	applySubagentTools(prepared.entry);
@@ -625,6 +658,7 @@ async function registerSession(
 export async function createSession(input: CreateSessionInput): Promise<CreateSessionResult> {
 	const generation = await getPiRuntimeGeneration();
 	const settingsManager = buildSessionSettings(input.cwd);
+	const askUserQuestionWaiters = createAskUserQuestionWaiters();
 	let model: Model<string> | undefined;
 	if (input.model) {
 		try {
@@ -644,11 +678,12 @@ export async function createSession(input: CreateSessionInput): Promise<CreateSe
 			() => skillAdmissionResolver(input.workspaceId),
 			generation.excludedSessionExtensionPaths,
 			[subagentsExtensionFor(input.workspaceId, () => subagentsEnabled(input.workspaceId))],
+			askUserQuestionWaiters,
 		),
 		...(model ? { model } : {}),
 		...(input.thinkingLevel ? { thinkingLevel: input.thinkingLevel } : {}),
 	});
-	return registerSession(session, input.workspaceId, generation, true);
+	return registerSession(session, input.workspaceId, generation, askUserQuestionWaiters, true);
 }
 
 function summaryOf(sessionId: string, entry: Entry): SessionSummary {
@@ -895,6 +930,7 @@ async function openDiskSession(sessionId: string, workspaceId: string, cwd: stri
 	const generation = await getPiRuntimeGeneration();
 	const settingsManager = buildSessionSettings(cwd);
 	const sessionManager = SessionManager.open(info.path);
+	const askUserQuestionWaiters = createAskUserQuestionWaiters();
 	const persistedModel = persistedSessionModelRef(sessionManager.buildSessionContext().model);
 	let exactModel: Model<string> | undefined;
 	if (persistedModel) {
@@ -916,6 +952,7 @@ async function openDiskSession(sessionId: string, workspaceId: string, cwd: stri
 			() => skillAdmissionResolver(workspaceId),
 			generation.excludedSessionExtensionPaths,
 			[subagentsExtensionFor(workspaceId, () => subagentsEnabled(workspaceId))],
+			askUserQuestionWaiters,
 		),
 		...(exactModel ? { model: exactModel } : {}),
 	});
@@ -923,7 +960,7 @@ async function openDiskSession(sessionId: string, workspaceId: string, cwd: stri
 		session.dispose();
 		return;
 	}
-	await registerSession(session, workspaceId, generation);
+	await registerSession(session, workspaceId, generation, askUserQuestionWaiters);
 }
 
 async function ensureSessionAttachedInternal(
@@ -985,10 +1022,20 @@ export async function answerQuestion(
 	toolCallId: string,
 	result: AskUserQuestionResult,
 ): Promise<void> {
-	const session = mustGet(sessionId);
-	const verdict = assessAnswerability(session.messages, toolCallId);
+	const entry = mustGetEntry(sessionId);
+	const live = entry.askUserQuestionWaiters.answer(toolCallId, result);
+	if (live.handled) {
+		syncSessionActivity(sessionId);
+		await live.persisted;
+		syncSessionActivity(sessionId);
+		return;
+	}
+	const verdict = assessAnswerability(entry.session.messages, toolCallId);
 	if (!verdict.ok) throw new Error(`${ANSWERABILITY_ERRORS[verdict.reason]}: ${toolCallId}`);
-	await session.sendCustomMessage(buildAnswersMessage(toolCallId, verdict.args, result), {
+	if (!hasQuestionAck(entry.session.messages, toolCallId)) {
+		throw new Error(`${ANSWERABILITY_ERRORS.not_awaiting}: ${toolCallId}`);
+	}
+	await entry.session.sendCustomMessage(buildAnswersMessage(toolCallId, verdict.args, result), {
 		triggerTurn: true,
 	});
 	syncSessionActivity(sessionId);
@@ -1091,6 +1138,16 @@ function queueContentOf(entry: Entry): SessionQueueContent {
 	return {
 		steering: entry.queuedMessages.steering.map(project),
 		followUp: entry.queuedMessages.followUp.map(project),
+	};
+}
+
+function mergeQueueContent(
+	before: SessionQueueContent,
+	after: SessionQueueContent,
+): SessionQueueContent {
+	return {
+		steering: [...before.steering, ...after.steering],
+		followUp: [...before.followUp, ...after.followUp],
 	};
 }
 
@@ -1228,12 +1285,35 @@ export async function removeQueuedSession(
 	return { removed, queue: queueStateOf(entry) };
 }
 
+const ACCEPTED_ANSWER_STOP_GRACE_MS = 1_000;
+
+async function waitForAcceptedAnswerGrace(
+	acceptedResult: Promise<void> | null,
+	timeoutMs: number,
+): Promise<void> {
+	if (!acceptedResult) return;
+	let timer: ReturnType<typeof setTimeout> | undefined;
+	const timeout = new Promise<void>((resolve) => {
+		timer = setTimeout(resolve, Math.max(0, timeoutMs));
+		timer.unref?.();
+	});
+	await Promise.race([acceptedResult.catch(() => {}), timeout]);
+	if (timer) clearTimeout(timer);
+}
+
 export async function abortSession(
 	sessionId: string,
 	restoreQueue = false,
+	acceptedAnswerGraceMs = ACCEPTED_ANSWER_STOP_GRACE_MS,
 ): Promise<SessionQueueContent | undefined> {
 	const entry = mustGetEntry(sessionId);
-	const restoredQueue = restoreQueue ? clearQueueSession(sessionId) : undefined;
+	let restoredQueue = restoreQueue ? clearQueueSession(sessionId) : undefined;
+	const acceptedResult = entry.askUserQuestionWaiters.prepareAbort();
+	await waitForAcceptedAnswerGrace(acceptedResult, acceptedAnswerGraceMs);
+	if (sessions.get(sessionId) !== entry) return restoredQueue;
+	if (restoredQueue) {
+		restoredQueue = mergeQueueContent(restoredQueue, clearQueueSession(sessionId));
+	}
 	await entry.session.abort();
 	return restoredQueue;
 }
@@ -1371,6 +1451,7 @@ function disposeSession(sessionId: string): Promise<void> {
 		disposeSessionChildren(entry.workspaceId, sessionId).catch(() => {}),
 	);
 	cancelExtUiForSession(sessionId);
+	entry.askUserQuestionWaiters.abandon();
 	entry.unsubscribe();
 	entry.session.dispose();
 	sessions.delete(sessionId);
@@ -1392,6 +1473,7 @@ export function disposeAllSessions(): void {
 			disposeSessionChildren(entry.workspaceId, sessionId).catch(() => {}),
 		);
 		cancelExtUiForSession(sessionId);
+		entry.askUserQuestionWaiters.abandon();
 		entry.unsubscribe();
 		entry.session.dispose();
 	}
@@ -1402,7 +1484,21 @@ export function disposeAllSessions(): void {
 export async function settleSessionsForShutdown(timeoutMs = 2000): Promise<void> {
 	const settling = new Set<Promise<unknown>>();
 	for (const [sessionId, entry] of sessions) {
-		if (entry.session.isStreaming) settling.add(entry.session.abort());
+		const acceptedResult = entry.askUserQuestionWaiters.prepareShutdown();
+		if (acceptedResult) {
+			settling.add(
+				acceptedResult
+					.catch(() => {})
+					.then(async () => {
+						if (sessions.get(sessionId) === entry && entry.session.isStreaming) {
+							await entry.session.abort();
+						}
+					}),
+			);
+		}
+		if (entry.session.isStreaming && !entry.askUserQuestionWaiters.hasRecoverableCall()) {
+			settling.add(entry.session.abort());
+		}
 		settling.add(
 			trackCascade(
 				entry.workspaceId,
