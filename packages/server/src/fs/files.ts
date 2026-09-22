@@ -1,6 +1,20 @@
-import { readdirSync, readFileSync, statSync } from "node:fs";
-import { isAbsolute, join, relative, resolve } from "node:path";
-import type { FileNode, FileWriteResult, SearchHit, SearchHits } from "@thinkrail/contracts";
+import {
+	existsSync,
+	mkdirSync,
+	readdirSync,
+	readFileSync,
+	renameSync,
+	statSync,
+	writeFileSync,
+} from "node:fs";
+import { dirname, isAbsolute, join, relative, resolve } from "node:path";
+import type {
+	FileKind,
+	FileNode,
+	FileWriteResult,
+	SearchHit,
+	SearchHits,
+} from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
 import { readFileAt, writeFileAt } from "@thinkrail/shared/textFile";
 import { loadWorkspaces } from "../persistence";
@@ -66,6 +80,27 @@ export function readExistingFile(abs: string): { content: string; hash: string }
 
 export function readFile(workspaceId: string, path: string): { content: string; hash: string } {
 	return readExistingFile(resolveInWorktree(workspaceId, path).abs);
+}
+
+/** Creates an empty file or folder, and any folders on the way to it; never overwrites. */
+export function createPath(workspaceId: string, path: string, kind: FileKind): void {
+	const { abs } = resolveInWorktree(workspaceId, path);
+	if (existsSync(abs)) throw new Error(`${path} already exists`);
+	mkdirSync(dirname(abs), { recursive: true });
+	if (kind === "dir") mkdirSync(abs);
+	else writeFileSync(abs, "", { flag: "wx" });
+}
+
+/** Moves a file or folder within the worktree; refuses to replace anything but itself (a case-only rename). */
+export function renamePath(workspaceId: string, path: string, to: string): void {
+	const from = resolveInWorktree(workspaceId, path);
+	const target = resolveInWorktree(workspaceId, to);
+	if (from.abs === from.root) throw new Error("The workspace folder itself cannot be renamed");
+	if (existsSync(target.abs) && statSync(target.abs).ino !== statSync(from.abs).ino) {
+		throw new Error(`${to} already exists`);
+	}
+	mkdirSync(dirname(target.abs), { recursive: true });
+	renameSync(from.abs, target.abs);
 }
 
 export function writeFile(

@@ -11,6 +11,7 @@ import type {
 	DiffStats,
 	EditorInfo,
 	ExistingWorktreeCandidate,
+	FileKind,
 	FileNode,
 	FileWriteResult,
 	GitCommit,
@@ -198,6 +199,8 @@ export const WS_METHODS = {
 	workspaceReveal: "workspace.reveal",
 	fsRevealPath: "fs.revealPath",
 	fsTrashPath: "fs.trashPath",
+	fsCreatePath: "fs.createPath",
+	fsRenamePath: "fs.renamePath",
 	editorList: "editor.list",
 	gitListBranches: "git.listBranches",
 	gitPrefetch: "git.prefetch",
@@ -554,6 +557,8 @@ export interface WsMethodMap {
 	"fs.revealPath": { params: { workspaceId: string; path: string }; result: Ack };
 	"fs.trashPath": { params: { workspaceId: string; path: string }; result: Ack };
 	"spec.graph": { params: { workspaceId: string }; result: SpecGraphSnapshot };
+	"fs.createPath": { params: { workspaceId: string; path: string; kind: FileKind }; result: Ack };
+	"fs.renamePath": { params: { workspaceId: string; path: string; to: string }; result: Ack };
 	"todo.list": {
 		params: { workspaceId: string; sessionId: string };
 		result: TodoPlan;
