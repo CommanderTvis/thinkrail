@@ -221,11 +221,10 @@ identities. A tab's shell outlives every client that looks at it; each frontend 
 - **Revive, not reconnect, across a host restart.** Shells cannot survive it. **Membership is persisted on
   every change** (open / close / archive), not only at `stop()` — the host has no crash isolation, so an
   ungraceful exit is an ordinary path and a shutdown-only file would resurrect a closed tab and spawn a shell
-  for it. `stop()` additionally captures a full set of recordings before `closeAllTerminals()`;
-  `reviveTerminalSessions()` restores tabs whose first successful attach spawns a fresh shell showing the old
-  picture. A failed spawn does not consume the pending recording, so correcting the shell and retrying the
-  same tab still restores it. Recordings are best-effort, so an unclean exit gives back the right tabs with
-  blank screens.
+  for it. `reviveTerminalSessions()` restores tabs whose first successful attach spawns a fresh, blank shell.
+  The tab identity, title, and a live agent's resume offer persist, but terminal output does not: old output
+  beside a new prompt reads as current and buries the editable resume command. A failed spawn leaves the tab
+  available for retry.
 - **Not tmux.** Would buy restart survival at the cost of a dep we can't assume on Windows, a competing tab
   model, env-propagation breakage, and `capture-pane` polling. We already accept no crash isolation.
 
@@ -285,14 +284,14 @@ decision stays the user's; the tab is otherwise an ordinary shell.
   moment that plugin clears it. A conversation the user finished before closing is not something to
   resurrect. The judgement is the poll's, not the shell's: when the app quits, every pty dies *before* the
   shutdown persist runs, and the exit handler destroys the tab's entry — so a record still set at pty exit
-  means the shell died out from under a live agent, and `onExit` moves it into `carriedAgent` the same way
-  it carries the final screen into the replay. Without that carry the shutdown persist found no entry and
+  means the shell died out from under a live agent, and `onExit` moves it into `carriedAgent`. Without that
+  carry the shutdown persist found no entry and
   wrote `agent: null` for every tab whose shell had already died — which was most of them, every quit — and
   the session id at the moment of closing was lost. A conversation the user actually ended is still not
   carried: the poll cleared the record when the agent exited, so there is nothing left at pty exit to
   carry.
-- **The prefill is consumed by the first revived shell**, like the replay, rather than held for every
-  later reattach — the offer belongs to the interrupted session, and typing into a shell already in use
+- **The prefill is consumed by the first revived shell**, rather than held for every later reattach — the
+  offer belongs to the interrupted session, and typing into a shell already in use
   would be an intrusion. **Handed over is not the same as answered**, though: a line typed at a prompt and
   never run is gone with the shell, so an offer the user did not act on is *carried* (`carriedAgent`) and
   persisted again, and the next start makes it once more. It stops being made when something actually runs
@@ -329,9 +328,9 @@ decision stays the user's; the tab is otherwise an ordinary shell.
   **never record the alt screen**, tracking it as a *stream* since a switch can split across PTY reads
   and both screens can appear in one; **never record a mode sequence itself** (replaying `?1049h` would flip
   the fresh terminal to the alt screen); applied in one write on bind. **`restore()` parses what it is handed
-  instead of copying it** — the persisted string is a `snapshot()`, so a verbatim copy moves its mode preamble
+  instead of copying it** — the held string is a `snapshot()`, so a verbatim copy moves its mode preamble
   into the body, where it stops being a re-derivable summary and becomes literal bytes that every later
-  snapshot replays and re-persists: one bad mode then outlives the run that observed it, across restarts.
+  snapshot replays and re-persists.
 - Attach hands back the recording and then **discards** held batcher output — the replay already contains it.
 - **`mouseModeGuard.ts` fixes the *live* half of the same class of bug the recorder rule above fixes for
   restore:** a TUI that leaves SGR mouse tracking (1000/1002/1003/1006) enabled without a matching `DECRST`
