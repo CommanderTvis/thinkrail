@@ -173,13 +173,99 @@ identities. A tab's shell outlives every client that looks at it; each frontend 
 - **Revive, not reconnect, across a host restart.** Shells cannot survive it. **Membership is persisted on
   every change** (open / close / archive), not only at `stop()` — the host has no crash isolation, so an
   ungraceful exit is an ordinary path and a shutdown-only file would resurrect a closed tab and spawn a shell
-  for it. `stop()` additionally captures a full set of recordings before `closeAllTerminals()`;
-  `reviveTerminalSessions()` restores tabs whose first successful attach spawns a fresh shell showing the old
-  picture. A failed spawn does not consume the pending recording, so correcting the shell and retrying the
-  same tab still restores it. Recordings are best-effort, so an unclean exit gives back the right tabs with
-  blank screens.
+  for it. `reviveTerminalSessions()` restores tabs whose first successful attach spawns a fresh, blank shell.
+  The tab identity, title, and a live agent's resume offer persist, but terminal output does not: old output
+  beside a new prompt reads as current and buries the editable resume command. A failed spawn leaves the tab
+  available for retry.
 - **Not tmux.** Would buy restart survival at the cost of a dep we can't assume on Windows, a competing tab
   model, env-propagation breakage, and `capture-pane` polling. We already accept no crash isolation.
+
+## Tab titles
+
+A tab adopts the title the program inside it sets for itself (OSC 0/2) — how a terminal has always
+reported what it is running, and how Claude Code names a session, so a tab says what it is doing instead
+of "Terminal 3". `renameTerminal` strips null bytes and bounds the length, because this is arbitrary
+output from whatever happens to be running; an empty title means "no opinion" and restores the tab's own
+name rather than blanking it. `adoptedTitle` (`terminalTitle.ts`, unit-tested) takes no agent kind at
+all — it drops one leading run of non-letter/non-digit/non-space characters plus the whitespace after it,
+unconditionally, so it needs no per-agent case and no core change when a new agent plugin wants the same
+treatment. This is what strips Claude's own glyph — the `✳` at rest, a spinner frame while it works —
+because the tab already wears the Claude mark and its own activity spinner, and "✳ ◑ Open WebUI…" was the
+mark twice; any other agent's leading status glyph is stripped the same way, for free. A title with no
+such leading run (`~` and `$` opening a real shell title, an ordinary word or number) passes through
+unchanged. `adoptedTitle` runs both from `renameTerminal` (every OSC-driven rename) and from
+`setAgentRecord` itself, whenever a tab's record changes. Whichever plugin's poll recognises the agent runs a tick
+behind its first title (set the instant it starts), so the same rule is re-applied to every tab of the
+workspace whenever `setAgentRecord` fires — the title adopted before the agent was known loses its glyph
+the moment the agent is. Warp resolves this the same way and adds one rule worth keeping in mind before a
+manual rename lands: a **custom title always wins over OSC**
+(`app/src/terminal/model/terminal_model.rs`), otherwise the next prompt would overwrite the name the
+user chose.
+
+## Resuming an agent session
+
+A terminal that had Claude running when the host went down comes back with the invocation to resume it
+**typed at the prompt but not run**. Restoring a session spends tokens and re-reads context, so the
+decision stays the user's; the tab is otherwise an ordinary shell.
+
+- **Unless a plugin promised otherwise.** `setRevivePrefillHook`'s `submit` is the seam by which a plugin
+  that owns a terminal — the Blueprint plugin's author, which promises the pair comes back together — says
+  "this one is mine, run it". Attach then returns `prefillSubmit`, and the client sends the offer with a
+  trailing `\r` instead of leaving it at the prompt. This module knows nothing about blueprints: the host
+  composes every plugin's hook into the one it installs, the same way it composes every other cross-feature
+  edge. Without it the author terminal came back with `claude --resume <id>` sitting unsubmitted, which
+  reads as "revive is broken" rather than "here is an offer" — the tab was restored by the layout, so the
+  plugin's own restore saw it as already present and issued nothing.
+
+- **Two halves, two sources.** The *command* comes from the process table — `captureProcessCommand` reads
+  the agent's argv once, when the Claude Code plugin's poll first sees it, so the flags the user chose
+  (`--chrome`, a model) survive. The poll itself stays name-only: `args=` is unbounded and would be carried
+  for every process on the machine every tick, to be discarded. The *session id* exists only inside the
+  agent, and reaches us as a field on the plugin's own status report — so the plugin's route handler calls
+  `ctx.setAgentRecord` with it directly, this module's only way to learn one arrived at all. **Either half
+  is written the moment it lands**: the report reaches the host within milliseconds of the agent starting
+  while the poll can be a tick behind, and persistence runs on membership changes, of which an agent
+  appearing is deliberately not one — so both the detection and the report persist on their own. **Without
+  a report there is no id, and the offer becomes `--continue`**: Claude's own "latest conversation in this
+  directory", which is the session that just died in that worktree, rather than a guessed id (a guess at
+  *which* session is worse than none, and this is not one). The same fallback covers an id whose
+  conversation is not on disk. A host that crashed under a running session therefore always comes back
+  with a revive to press Enter on, plugin or no plugin.
+- **Only a session that was still running.** Persistence records the pair only while some plugin's poll
+  keeps reporting a live agent for that tab (`setAgentRecord` with a non-null record), and clears both the
+  moment that plugin clears it. A conversation the user finished before closing is not something to
+  resurrect. The judgement is the poll's, not the shell's: when the app quits, every pty dies *before* the
+  shutdown persist runs, and the exit handler destroys the tab's entry — so a record still set at pty exit
+  means the shell died out from under a live agent, and `onExit` moves it into `carriedAgent`. Without that
+  carry the shutdown persist found no entry and
+  wrote `agent: null` for every tab whose shell had already died — which was most of them, every quit — and
+  the session id at the moment of closing was lost. A conversation the user actually ended is still not
+  carried: the poll cleared the record when the agent exited, so there is nothing left at pty exit to
+  carry.
+- **The prefill is consumed by the first revived shell**, rather than held for every later reattach — the
+  offer belongs to the interrupted session, and typing into a shell already in use
+  would be an intrusion. **Handed over is not the same as answered**, though: a line typed at a prompt and
+  never run is gone with the shell, so an offer the user did not act on is *carried* (`carriedAgent`) and
+  persisted again, and the next start makes it once more. It stops being made when something actually runs
+  in that tab — the poll seeing an agent there retires it, whether that is the resumed session or anything
+  else — or when the tab is closed. This is deliberately the opposite of the first rule here, which
+  dropped the offer the moment a shell was handed it: that made "not now" indistinguishable from "no", and
+  a user who reopened the app twice lost the session for good.
+- **The offer is verified against disk.** Claude writes a conversation only when
+  the session has something to save, so one started and killed before its first prompt leaves an id that
+  resolves to nothing and produces `No conversation found with session ID`. `agentSessionExists` checks
+  for `~/.claude/projects/<cwd with / and . as ->/<id>.jsonl` before offering, which is also what keeps a
+  carried offer from outliving the conversation it names.
+- `resumeCommand` rebuilds rather than appends: an existing `--resume` (from a previous restore) or a
+  `--continue` is dropped, since `--resume a --resume b` is not a command anyone meant to run. The id is
+  required to be a UUID, so nothing from the process table can be pasted into a shell as anything else.
+  **Only the invocation survives — the executable and its flags.** The process table reports argv
+  unquoted, so `claude 'solve issue 130'` arrives as `claude solve issue 130`, and a rebuild that kept
+  every word would hand the resumed session its opening prompt again as a new message. Positional words
+  are dropped; a word after a flag is kept as that flag's value unless the flag is one the `claude` CLI
+  takes no value for (`BOOLEAN_FLAGS`). An unlisted boolean flag followed by a prompt is the accepted
+  ceiling: its first prompt word rides along as a value. `continueCommand` is the same rebuild ending in
+  `--continue`.
 
 ## Restrictions
 
@@ -194,9 +280,9 @@ identities. A tab's shell outlives every client that looks at it; each frontend 
   **never record the alt screen**, tracking it as a *stream* since a switch can split across PTY reads
   and both screens can appear in one; **never record a mode sequence itself** (replaying `?1049h` would flip
   the fresh terminal to the alt screen); applied in one write on bind. **`restore()` parses what it is handed
-  instead of copying it** — the persisted string is a `snapshot()`, so a verbatim copy moves its mode preamble
+  instead of copying it** — the held string is a `snapshot()`, so a verbatim copy moves its mode preamble
   into the body, where it stops being a re-derivable summary and becomes literal bytes that every later
-  snapshot replays and re-persists: one bad mode then outlives the run that observed it, across restarts.
+  snapshot replays and re-persists.
 - Attach hands back the recording and then **discards** held batcher output — the replay already contains it.
 
 ## Validation

@@ -504,14 +504,9 @@ export function persistTerminalSessions(): void {
 	for (const [workspaceId, tabs] of tabsByWorkspace) {
 		if (tabs.length === 0) continue;
 		sessions[workspaceId] = tabs.map(({ tabKey, title, defaultTitle }) => {
-			const index = tabIndex(workspaceId, tabKey);
-			const id = ptyByTab.get(index);
-			const entry = id === undefined ? undefined : terminals.get(id);
-			const recorded = entry ? entry.recorder.snapshot() : pendingReplay.get(index);
 			return {
 				tabKey,
 				title: defaultTitle ?? title,
-				...(recorded ? { recorded } : {}),
 			};
 		});
 	}
@@ -526,9 +521,6 @@ export function reviveTerminalSessions(): void {
 			if (!isValidTerminalTabKey(tab?.tabKey)) continue;
 			const title = isValidTerminalTitle(tab.title) ? tab.title : "Terminal";
 			restored.push({ tabKey: tab.tabKey, title, defaultTitle: title });
-			if (typeof tab.recorded === "string" && tab.recorded !== "") {
-				pendingReplay.set(tabIndex(workspaceId, tab.tabKey), tab.recorded);
-			}
 		}
 		if (restored.length > 0) tabsByWorkspace.set(workspaceId, restored);
 	}

@@ -299,6 +299,7 @@ export function saveWorkspaces(workspaces: Workspace[]): void {
 export interface PersistedTerminalTab {
 	tabKey: string;
 	title: string;
+	/** The agent invocation live in this tab at shutdown, so reopening can offer to resume it. */
 	recorded?: string;
 }
 
