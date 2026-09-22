@@ -1,6 +1,16 @@
-import { readdirSync, readFileSync, realpathSync, statSync } from "node:fs";
+import {
+	existsSync,
+	mkdirSync,
+	readdirSync,
+	readFileSync,
+	realpathSync,
+	renameSync,
+	statSync,
+	writeFileSync,
+} from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import type {
+	FileKind,
 	FileNode,
 	FileWriteResult,
 	ResourceMeta,
@@ -8,7 +18,7 @@ import type {
 	SearchHits,
 } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
-import { readFileAt, writeFileAt } from "@thinkrail/shared/textFile";
+import { writeFileAt } from "@thinkrail/shared/textFile";
 import { loadWorkspaces } from "../persistence";
 import { decodeText, resourceMeta } from "./content";
 
@@ -103,19 +113,7 @@ function missingAsNotFound(err: unknown, abs: string): never {
 }
 
 /** A file that is gone reads as `FILE_NOT_FOUND`, so a client can tell it from a failed request. */
-export function readExistingFile(abs: string): { content: string; hash: string } {
-	try {
-		return readFileAt(abs);
-	} catch (err) {
-		missingAsNotFound(err, abs);
-	}
-}
-
-export function readFile(
-	workspaceId: string,
-	path: string,
-): { content: string; meta: ResourceMeta } {
-	const { abs } = resolveInWorktree(workspaceId, path, true);
+function readResource(abs: string, path: string): { content: string; meta: ResourceMeta } {
 	let bytes: Uint8Array;
 	try {
 		bytes = readFileSync(abs);
@@ -124,6 +122,38 @@ export function readFile(
 	}
 	const meta = resourceMeta(bytes, path);
 	return { content: meta.text ? decodeText(bytes) : "", meta };
+}
+
+export function readExistingFile(abs: string): { content: string; meta: ResourceMeta } {
+	return readResource(abs, abs);
+}
+
+export function readFile(
+	workspaceId: string,
+	path: string,
+): { content: string; meta: ResourceMeta } {
+	return readResource(resolveInWorktree(workspaceId, path, true).abs, path);
+}
+
+/** Creates an empty file or folder, and any folders on the way to it; never overwrites. */
+export function createPath(workspaceId: string, path: string, kind: FileKind): void {
+	const { abs } = resolveInWorktree(workspaceId, path, true);
+	if (existsSync(abs)) throw new Error(`${path} already exists`);
+	mkdirSync(dirname(abs), { recursive: true });
+	if (kind === "dir") mkdirSync(abs);
+	else writeFileSync(abs, "", { flag: "wx" });
+}
+
+/** Moves a file or folder within the worktree; refuses to replace anything but itself (a case-only rename). */
+export function renamePath(workspaceId: string, path: string, to: string): void {
+	const from = resolveInWorktree(workspaceId, path, true);
+	const target = resolveInWorktree(workspaceId, to, true);
+	if (from.abs === from.root) throw new Error("The workspace folder itself cannot be renamed");
+	if (existsSync(target.abs) && statSync(target.abs).ino !== statSync(from.abs).ino) {
+		throw new Error(`${to} already exists`);
+	}
+	mkdirSync(dirname(target.abs), { recursive: true });
+	renameSync(from.abs, target.abs);
 }
 
 export function writeFile(
