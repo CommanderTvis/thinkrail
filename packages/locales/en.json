@@ -898,6 +898,7 @@
 	"panels.existingWorktree.openFailed": "Couldn't finish opening the existing worktree",
 	"panels.existingWorktree.title": "Open existing worktree",
 	"panels.filePane.changedOnDisk": "This file changed on disk while you were editing it.",
+	"panels.filePane.deletedOnDisk": "This file was deleted on disk. What you see is the last version the tab read.",
 	"panels.filePane.discardEdits": "Discard mine, take the file",
 	"panels.filePane.mergeIntoEdits": "Merge into my edits",
 	"panels.filePane.outsideWorktree": "outside worktree",

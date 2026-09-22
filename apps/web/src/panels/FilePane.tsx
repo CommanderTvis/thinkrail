@@ -12,6 +12,7 @@ import {
 	UnplacedReviewStrip,
 	usePlacedThreadIds,
 } from "@thinkrail/resource-renderers";
+import { OutlineColumn, OutlineToggle, scrollToHeading } from "@thinkrail/ui/Outline";
 import { LoadingRegion } from "@thinkrail/ui/skeleton";
 import { ToggleSegment } from "@thinkrail/ui/toggle-segment";
 import { Suspense, useCallback, useMemo, useState } from "react";
@@ -19,7 +20,7 @@ import { OutlineColumn, OutlineToggle, scrollToHeading } from "@/panels/Outline"
 import { EmbeddedSplit } from "../components/EmbeddedSplit";
 import { abbreviateHomePath, isPhoneViewport, usePhoneViewport } from "../lib";
 import { type ExternalFileTab, type FileTab, useAppStore } from "../store";
-import { getTransport } from "../transport";
+import { getTransport, wsErrorCode } from "../transport";
 import { isFileTabDirty, mergeDiskIntoDraft, saveFileTab } from "./fileSave";
 import { jsonKeyLine } from "./jsonKeyLine";
 import { type HeadingEntry, sourceHeadings } from "./outlineTree";
@@ -40,6 +41,7 @@ function FilePaneBody({ tab }: { tab: FileTab | ExternalFileTab }) {
 	const setFileTabSplit = useAppStore((state) => state.setFileTabSplit);
 	const setFileTabOutline = useAppStore((state) => state.setFileTabOutline);
 	const paneDirection = useAppStore((state) => state.localLayoutPreferences.defaultPaneDirection);
+	const setFileTabDeleted = useAppStore((state) => state.setFileTabDeleted);
 	const review = useFileReview(tab.workspaceId, tab.path, "inline");
 	const reviewComments = useAppStore(
 		(state) => state.reviewsByWorkspace[tab.workspaceId]?.comments,
@@ -67,9 +69,23 @@ function FilePaneBody({ tab }: { tab: FileTab | ExternalFileTab }) {
 	);
 	const [outlineLine, setOutlineLine] = useState<number | undefined>(undefined);
 
+	const deleted = tab.deletedOnDisk === true;
 	useLiveTabContent(tab, {
 		read: () =>
-			getTransport().request("fs.readFile", { workspaceId: tab.workspaceId, path: tab.path }),
+			getTransport()
+				.request("fs.readFile", { workspaceId: tab.workspaceId, path: tab.path })
+				.then(
+					(fresh) => {
+						if (deleted) setFileTabDeleted(tab.workspaceId, tab.id, false);
+						return fresh;
+					},
+					(cause: unknown) => {
+						if (wsErrorCode(cause) === "FILE_NOT_FOUND") {
+							setFileTabDeleted(tab.workspaceId, tab.id, true);
+						}
+						throw cause;
+					},
+				),
 		applyFresh: ({ content, meta }, tick) =>
 			useAppStore.getState().updateFileTabContent(tab.workspaceId, tab.id, content, meta, tick),
 		keepCurrent: (tick) =>
@@ -152,7 +168,14 @@ function FilePaneBody({ tab }: { tab: FileTab | ExternalFileTab }) {
 		</div>
 	);
 
-	const diskBar = tab.external ? (
+	const diskBar = deleted ? (
+		<div
+			data-testid="file-deleted-on-disk"
+			className="flex shrink-0 items-center gap-8 border-feedback-error border-b bg-container-header-bg px-8 py-4 tr-text-metadata text-text-default"
+		>
+			{t("panels.filePane.deletedOnDisk")}
+		</div>
+	) : tab.external ? (
 		<div
 			data-testid="file-disk-changed"
 			className="flex shrink-0 flex-wrap items-center gap-8 border-feedback-warning border-b bg-container-header-bg px-8 py-4 tr-text-metadata text-text-default"
