@@ -142,10 +142,10 @@ afterEach(() => {
 	else process.env.THINKRAIL_DATA_DIR = savedDataDir;
 });
 
-test("a shell spawn failure is actionable and preserves replay for retry", () => {
+test("a shell spawn failure is actionable when restoring a tab", () => {
 	const savedShell = process.env.SHELL;
 	saveTerminalSessions({
-		[WS]: [{ tabKey: "tab-a", title: "Terminal", recorded: "remembered output" }],
+		[WS]: [{ tabKey: "tab-a", title: "Terminal" }],
 	});
 	reviveTerminalSessions();
 	process.env.SHELL = join(dataDir, "missing-shell");
@@ -162,7 +162,7 @@ test("a shell spawn failure is actionable and preserves replay for retry", () =>
 
 	const retried = attachTerminal(WS, "tab-a", "client-1");
 	expect(retried.created).toBe(true);
-	expect(retried.replay).toContain("remembered output");
+	expect(retried.replay).toBeUndefined();
 });
 
 test("attaching twice to a tab returns the SAME shell", () => {
@@ -352,7 +352,7 @@ test("a shell with something running refuses to close until forced", async () =>
 });
 
 test(
-	"a host restart gives the tabs back with fresh shells showing the old output",
+	"a host restart gives the tabs back with fresh shells",
 	async () => {
 		const first = attachTerminal(WS, "tab-a", "client-1", { title: "Kept" });
 		await waitForTerminalOutput(first.id);
@@ -366,13 +366,13 @@ test(
 		const revived = attachTerminal(WS, "tab-a", "client-1");
 		expect(revived.created).toBe(true);
 		expect(revived.id).not.toBe(first.id);
-		expect(revived.replay ?? "").not.toBe("");
+		expect(revived.replay).toBeUndefined();
 	},
 	TERMINAL_TEST_TIMEOUT_MS,
 );
 
 test(
-	"a revived recording is served once, not to every later attach",
+	"a revived terminal has no persisted recording",
 	async () => {
 		const first = attachTerminal(WS, "tab-a", "client-1");
 		await waitForTerminalOutput(first.id);
@@ -381,11 +381,7 @@ test(
 		reviveTerminalSessions();
 
 		const revived = attachTerminal(WS, "tab-a", "client-1");
-		closeTerminalTab(WS, "tab-a", true);
-		const fresh = attachTerminal(WS, "tab-a", "client-1");
-
-		expect(revived.replay ?? "").not.toBe("");
-		expect(fresh.replay ?? "").toBe("");
+		expect(revived.replay).toBeUndefined();
 	},
 	TERMINAL_TEST_TIMEOUT_MS,
 );
@@ -477,16 +473,16 @@ test(
 );
 
 test(
-	"a dead tab's last screen survives a host restart",
+	"a dead tab's last screen does not survive a host restart",
 	async () => {
 		const first = attachTerminal(WS, "tab-a", "client-1");
-		const marker = await exitTerminalWithMarker(first.id, "LAST_WORDS", "client-1");
+		await exitTerminalWithMarker(first.id, "LAST_WORDS", "client-1");
 
 		persistTerminalSessions();
 		resetTerminalState();
 		reviveTerminalSessions();
 
-		expect(attachTerminal(WS, "tab-a", "client-1").replay ?? "").toContain(marker);
+		expect(attachTerminal(WS, "tab-a", "client-1").replay).toBeUndefined();
 	},
 	TERMINAL_TEST_TIMEOUT_MS,
 );
