@@ -1079,6 +1079,16 @@ workspace path — it reads as a broken feature rather than an absent one.
   which is what the row shows. The tree does not remove the row itself: the worktree watcher's
   `fsChanged` push re-reads the listing, the same path every external delete already takes, and a
   failure is a toast.
+- **New file, new folder, rename: one name popup.** `New file…` / `New folder…` create inside a folder
+  row and beside a file row (for a compact chain, inside its deepest folder, which is what the row
+  shows); `Rename…` renames the row in place, its stem selected so typing keeps the extension.
+  `PathNameDialog` draws the name's own file-type icon as it is typed — the same `FileTypeIcon` lookup the
+  tree uses, so an extension the icon set knows resolves the moment it is complete. `validPathName`
+  refuses a blank, padded, rooted, or `.`/`..` segment; the host's containment is the real gate. The calls
+  are `fs.createPath` / `fs.renamePath`; a created file opens as a kept tab, a created child expands its
+  folder, and the tree itself changes only through the watcher's push. The menu does not hand focus back
+  to the row when it closes into the popup: the dialog's focus trap would take it back with the whole
+  name selected. A tab open on a renamed file is left on the old path, and so marks itself deleted.
 - **An open file whose file is deleted says so, and keeps its buffer.** `FilePane`'s live read maps
   `fs.readFile`'s `FILE_NOT_FOUND` to the tab's `deletedOnDisk` flag and a later successful read clears
   it. The pane shows a banner and the tab strip a `deleted` mark beside the unsaved dot (fed by

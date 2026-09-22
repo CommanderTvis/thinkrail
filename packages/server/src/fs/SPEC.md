@@ -41,6 +41,11 @@ for a substring.
 - **A read of a file that is gone says so.** `readExistingFile(abs)` (behind `readFile` and the host's
   external-file read) turns `ENOENT` into `CodedError("FILE_NOT_FOUND")`, the one read failure a client
   acts on: an open tab marks its file deleted on disk rather than guessing from an error string.
+- **Create and rename never overwrite.** `createPath(workspaceId, path, kind)` makes an empty file or
+  folder, plus any folders on the way (a typed `a/b.md` is a path), and refuses an existing path;
+  `renamePath(workspaceId, path, to)` moves within the worktree and refuses an existing target unless it
+  is the same inode — a case-only rename on a case-insensitive disk. Both go through the same containment;
+  the workspace folder itself is not renamed.
 - **`searchWorktree(workspaceId, query)` is a plain substring sweep, deliberately.** It walks the
   worktree from the root, reuses the same `git check-ignore` batch per directory that `readDir` uses (so a
   project with no git simply has nothing ignored and everything is walked), skips `.git`, skips a file over
@@ -49,7 +54,7 @@ for a substring.
   a ripgrep the user may not have installed. Line text is capped at 400 characters per hit — a minified
   bundle must not travel over the wire as one match.
 - **Public surface (barrel):** `readDir`, `readFile`, `readExistingFile`, `readFileAt`, `writeFile`,
-  `writeFileAt`, `contentHash`, `resolveWorktreeFile`, `searchWorktree`.
-- **Allowed deps:** `persistence` (workspace lookup); `contracts` (`FileNode`, `FileWriteResult`);
-  `@thinkrail/shared/textFile` + `@thinkrail/shared/codedError`; Node `fs`/`path`.
+  `writeFileAt`, `createPath`, `renamePath`, `contentHash`, `resolveWorktreeFile`, `searchWorktree`.
+- **Allowed deps:** `persistence` (workspace lookup); `contracts` (`FileKind`, `FileNode`,
+  `FileWriteResult`); `@thinkrail/shared/textFile` + `@thinkrail/shared/codedError`; Node `fs`/`path`.
 - **Forbidden:** `host`; sibling features.

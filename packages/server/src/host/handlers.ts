@@ -2,6 +2,7 @@ import type {
 	AppConfigUpdate,
 	AskUserQuestionResult,
 	ExtUiResponse,
+	FileKind,
 	GitDiffScope,
 	HistoryScope,
 	ImageContent,
@@ -91,7 +92,15 @@ import {
 	revealPathInFileManager,
 } from "../editors";
 import { recordAcceptedMessage, respondToInterview } from "../feedback";
-import { readDir, readFile, resolveWorktreeFile, searchWorktree, writeFile } from "../fs";
+import {
+	createPath,
+	readDir,
+	readFile,
+	renamePath,
+	resolveWorktreeFile,
+	searchWorktree,
+	writeFile,
+} from "../fs";
 import {
 	branchDetails,
 	countUnpushedCommits,
@@ -522,6 +531,16 @@ const handlers: Record<string, Handler> = {
 			throw new Error("The workspace folder itself cannot be deleted from here");
 		}
 		await trashFile(abs);
+		return {};
+	},
+	"fs.createPath": (params) => {
+		const p = params as { workspaceId: string; path: string; kind: FileKind };
+		createPath(p.workspaceId, p.path, p.kind);
+		return {};
+	},
+	"fs.renamePath": (params) => {
+		const p = params as { workspaceId: string; path: string; to: string };
+		renamePath(p.workspaceId, p.path, p.to);
 		return {};
 	},
 	"fs.readFile": (params) => {

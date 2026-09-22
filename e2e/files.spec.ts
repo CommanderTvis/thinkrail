@@ -131,6 +131,65 @@ test("deleting a previewed file leaves the workbench interactive", async ({ page
 	await expect(page.getByTestId("markdown-view-toggle")).toBeVisible();
 });
 
+test("a folder row creates a file inside it, whose icon follows the name as it is typed", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	const workspace = await createWorkspaceViaDialog(page);
+	mkdirSync(join(workspace.worktreePath, "docs"), { recursive: true });
+	writeFileSync(join(workspace.worktreePath, "docs", "keep.txt"), "");
+	await page.getByTestId("tab-files").click();
+
+	const folder = page
+		.locator('[data-testid="file-node"][data-kind="dir"]')
+		.filter({ hasText: /^docs$/ });
+	await folder.click({ button: "right" });
+	await page.getByTestId("file-node-new-file").click();
+
+	const dialog = page.getByTestId("path-name-dialog");
+	const input = dialog.getByTestId("path-name-input");
+	await expect(dialog.getByTestId("path-name-confirm")).toBeDisabled();
+	await input.fill("notes");
+	await expect(dialog.getByTestId("file-type-icon")).toHaveAttribute("data-icon", "file");
+	await input.fill("notes.md");
+	await expect(dialog.getByTestId("file-type-icon")).toHaveAttribute("data-icon", "markdown");
+	await input.press("Enter");
+
+	await expect(dialog).toHaveCount(0);
+	await expect.poll(() => existsSync(join(workspace.worktreePath, "docs", "notes.md"))).toBe(true);
+	await expect(page.getByTestId("editor-tab").filter({ hasText: "notes.md" })).toBeVisible();
+	await expect(page.getByTestId("file-node").filter({ hasText: /^notes\.md$/ })).toBeVisible();
+});
+
+test("a file row creates a folder beside it, and renames itself", async ({ page }) => {
+	await openFixtureProject(page);
+	const workspace = await createWorkspaceViaDialog(page);
+	writeFileSync(join(workspace.worktreePath, "draft.txt"), "draft\n");
+	await page.getByTestId("tab-files").click();
+
+	const draft = page.getByTestId("file-node").filter({ hasText: /^draft\.txt$/ });
+	await draft.click({ button: "right" });
+	await page.getByTestId("file-node-new-folder").click();
+	await page.getByTestId("path-name-input").fill("assets");
+	await page.getByTestId("path-name-confirm").click();
+	await expect.poll(() => existsSync(join(workspace.worktreePath, "assets"))).toBe(true);
+	await expect(
+		page.locator('[data-testid="file-node"][data-kind="dir"]').filter({ hasText: /^assets$/ }),
+	).toBeVisible();
+
+	await draft.click({ button: "right" });
+	await page.getByTestId("file-node-rename").click();
+	const input = page.getByTestId("path-name-input");
+	await expect(input).toHaveValue("draft.txt");
+	// The stem is selected, so typing replaces the name and keeps the extension.
+	await page.keyboard.type("final");
+	await expect(input).toHaveValue("final.txt");
+	await page.keyboard.press("Enter");
+	await expect.poll(() => existsSync(join(workspace.worktreePath, "final.txt"))).toBe(true);
+	expect(existsSync(join(workspace.worktreePath, "draft.txt"))).toBe(false);
+	await expect(page.getByTestId("file-node").filter({ hasText: /^final\.txt$/ })).toBeVisible();
+});
+
 test("an open tab says when its file is deleted on disk, and recovers when it returns", async ({
 	page,
 }) => {

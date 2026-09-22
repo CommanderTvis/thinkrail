@@ -1,6 +1,9 @@
 import {
 	RiClipboardLine as Clipboard,
+	RiFileAddLine as FileAdd,
+	RiFolderAddLine as FolderAdd,
 	RiFolderOpenLine as FolderOpen,
+	RiEditLine as Rename,
 	RiDeleteBin6Line as Trash2,
 } from "@remixicon/react";
 import type { FileNode } from "@thinkrail/contracts";
@@ -9,6 +12,7 @@ import {
 	ContextMenu,
 	ContextMenuContent,
 	ContextMenuItem,
+	ContextMenuSeparator,
 	ContextMenuTrigger,
 } from "@/components/ui/context-menu";
 import { startFileDrag } from "@/lib";
@@ -19,10 +23,19 @@ import { errorText, getTransport } from "../transport";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { type ResolvedFolderChain, resolveFolderChain } from "./folderChains";
 import { openFileInTab } from "./openTabs";
+import { PathNameDialog } from "./PathNameDialog";
 import { TreeRow } from "./TreeRow";
 import { useWorkspaceRead } from "./useWorkspaceRead";
 
 type SetPathsExpanded = (paths: readonly string[], expanded: boolean) => void;
+
+function parentOf(path: string): string {
+	return path.slice(0, Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\"), 0));
+}
+
+function childPath(parent: string, name: string): string {
+	return parent === "" || parent === "." ? name : `${parent}/${name}`;
+}
 
 /** Each platform's file manager has its own name, and the wrong one reads as a bug. */
 const REVEAL_LABEL =
@@ -89,6 +102,12 @@ function FileNodeRow({
 	const isDir = node.kind === "dir";
 	const [directory, setDirectory] = useState<ResolvedFolderChain<FileNode> | null>(null);
 	const [confirmDelete, setConfirmDelete] = useState(false);
+	const [naming, setNamingState] = useState<"file" | "dir" | "rename" | null>(null);
+	const namingFromMenu = useRef(false);
+	const setNaming = (next: "file" | "dir" | "rename" | null) => {
+		namingFromMenu.current = next !== null;
+		setNamingState(next);
+	};
 	const pendingExpand = useRef(false);
 
 	const { reload } = useWorkspaceRead(
@@ -122,6 +141,25 @@ function FileNodeRow({
 		if (nextExpanded) reload();
 	};
 	const open = (intent: TabIntent) => void openFileInTab(workspaceId, node.path, intent);
+	const create = (kind: "file" | "dir", name: string) => {
+		const path = childPath(isDir ? (directory?.path ?? node.path) : parentOf(node.path), name);
+		void getTransport()
+			.request("fs.createPath", { workspaceId, path, kind })
+			.then(() => {
+				if (isDir && !expanded) toggleDirectory();
+				if (kind === "file") void openFileInTab(workspaceId, path, "keep");
+			})
+			.catch((err) => toast.error(errorText(err, `Couldn't create ${name}`)));
+	};
+	const rename = (name: string) => {
+		void getTransport()
+			.request("fs.renamePath", {
+				workspaceId,
+				path: node.path,
+				to: childPath(parentOf(node.path), name),
+			})
+			.catch((err) => toast.error(errorText(err, `Couldn't rename ${node.name}`)));
+	};
 
 	return (
 		<li>
@@ -147,7 +185,22 @@ function FileNodeRow({
 						/>
 					</div>
 				</ContextMenuTrigger>
-				<ContextMenuContent data-testid="file-node-actions">
+				<ContextMenuContent
+					data-testid="file-node-actions"
+					onCloseAutoFocus={(event) => {
+						// The name dialog owns focus; handing it back to the row would reselect the whole name.
+						if (namingFromMenu.current) event.preventDefault();
+					}}
+				>
+					<ContextMenuItem data-testid="file-node-new-file" onSelect={() => setNaming("file")}>
+						<FileAdd />
+						New file…
+					</ContextMenuItem>
+					<ContextMenuItem data-testid="file-node-new-folder" onSelect={() => setNaming("dir")}>
+						<FolderAdd />
+						New folder…
+					</ContextMenuItem>
+					<ContextMenuSeparator />
 					<ContextMenuItem
 						data-testid="file-node-reveal"
 						onSelect={() => {
@@ -168,12 +221,40 @@ function FileNodeRow({
 						<Clipboard />
 						Copy path
 					</ContextMenuItem>
+					<ContextMenuItem data-testid="file-node-rename" onSelect={() => setNaming("rename")}>
+						<Rename />
+						Rename…
+					</ContextMenuItem>
 					<ContextMenuItem data-testid="file-node-delete" onSelect={() => setConfirmDelete(true)}>
 						<Trash2 />
 						{isDir ? "Delete folder" : "Delete file"}
 					</ContextMenuItem>
 				</ContextMenuContent>
 			</ContextMenu>
+			{naming === "rename" ? (
+				<PathNameDialog
+					title={`Rename ${node.name}`}
+					kind={isDir ? "dir" : "file"}
+					initialName={node.name}
+					confirmLabel="Rename"
+					onCancel={() => setNaming(null)}
+					onSubmit={(name) => {
+						setNaming(null);
+						rename(name);
+					}}
+				/>
+			) : naming ? (
+				<PathNameDialog
+					title={naming === "dir" ? "New folder" : "New file"}
+					kind={naming}
+					confirmLabel="Create"
+					onCancel={() => setNaming(null)}
+					onSubmit={(name) => {
+						setNaming(null);
+						create(naming, name);
+					}}
+				/>
+			) : null}
 			<ConfirmDialog
 				open={confirmDelete}
 				onOpenChange={setConfirmDelete}
