@@ -537,7 +537,8 @@ because the alternative is an attachment the user cannot see, which is worse tha
   filters out models matching `store.hiddenModels` (or an explicit `hiddenModels` prop) while always
   preserving the active selection, offers an inline quick-hide action on each row and a toggle at the
   bottom to reveal filtered models with an unhide action, and displays a tooltip on hover when a model
-  name truncates in the row; `ModelSelector` takes
+  name truncates in the row. Its trigger and OpenAI model rows carry the OpenAI mark; provider marks
+  identify models only, never an agent integration. `ModelSelector` takes
   `refreshing`/`onRefresh(force)` — a footer “Refresh catalog” row that passes **`force: true`** (the
   user asked, so bypass pi's freshness throttle) and spins while that awaited refresh runs, plus an
   **unforced** auto-fire on each open, which `useModelCatalog` serves from the host snapshot

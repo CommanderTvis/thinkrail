@@ -3,6 +3,7 @@ import {
 	RiArrowDownSLine as ChevronDown,
 	RiEyeLine as Eye,
 	RiEyeOffLine as EyeOff,
+	RiOpenaiLine as Openai,
 	RiRefreshLine as RefreshCw,
 } from "@remixicon/react";
 import { isModelHidden, matchesModelPattern, type WireModel } from "@thinkrail/contracts";
@@ -31,6 +32,11 @@ function subLine(model: WireModel): string {
 	const parts = [`${formatContext(model.contextWindow)} context`];
 	if (model.reasoning) parts.push("reasoning");
 	return parts.join(" · ");
+}
+
+function ModelProviderGlyph({ model, className }: { model: WireModel; className?: string }) {
+	if (!model.provider.startsWith("openai")) return null;
+	return <Openai data-testid="model-provider-mark" className={className} aria-hidden="true" />;
 }
 
 function TruncatedModelName({ name }: { name: string }) {
@@ -141,6 +147,7 @@ export function ModelSelector({
 				)}
 			>
 				{showLabel ? <span className="tr-text-eyebrow text-text-muted">Model</span> : null}
+				{current ? <ModelProviderGlyph model={current} className="size-14 shrink-0" /> : null}
 				<span className="truncate text-text-muted tr-text-metadata">
 					{current?.name ?? (placeholder || "Select model")}
 				</span>
@@ -189,6 +196,7 @@ export function ModelSelector({
 												</span>
 												<span className="flex min-w-0 flex-col">
 													<span className="flex items-center gap-4 truncate">
+														<ModelProviderGlyph model={m} className="size-14 shrink-0" />
 														<TruncatedModelName name={m.name} />
 														{hidden ? (
 															<span className="rounded bg-control-bg px-4 py-2 tr-text-metadata text-text-muted">
