@@ -10,9 +10,9 @@ tags: [ui, resilience]
 ## Responsibility
 
 The app's dependency-light shared React primitives: the error boundary that keeps one failed region from
-unmounting the root, project-custom icons, `FileTypeIcon` (what a file wears), the binary attention dot and
-working-icon treatment used by feature panels (currently the Projects rail), the quiet-scroll frame used by
-shell and feature panels, and the shared loading-skeleton primitive. Also houses the `ui/`
+unmounting the root, project-custom icons, the Pi mark for Pi-owned UI, `FileTypeIcon` (what a file wears),
+the binary attention dot and working-icon treatment used by feature panels (currently the Projects rail), the
+quiet-scroll frame used by shell and feature panels, and the shared loading-skeleton primitive. Also houses the `ui/`
 sub-module (shadcn primitives), which has its own spec.
 
 ## File-type icons
@@ -45,6 +45,8 @@ plugin degrades every file row to the Remix fallback rather than losing the icon
   via a CSS `mask-image` span (`.custom-icon*` classes in `index.css`), so a custom glyph sizes with
   `size-*` and colours with `text-*` exactly like a Remix icon. Names are a typed union
   (`CustomIconName`); today: `file-diff-line`/`file-diff-fill` (the Changes tool glyph).
+- **`PiGlyph.tsx`** — embeds Pi's mark as a `currentColor` SVG so Pi tabs and new-chat controls use the
+  same theme-aware identity without a network asset.
 - **`QuietScrollArea.tsx`** — the store-free overflow observer and two presentation surfaces:
   `QuietScrollArea` owns an ordinary native scroll viewport, while `QuietScrollFrame` observes a
   third-party descendant scroll control without taking over its content or input and can receive the
@@ -76,7 +78,7 @@ plugin degrades every file row to the Remix fallback rather than losing the icon
   vocabulary and its rules are below.
 - **Public surface:** `ErrorBoundary`, `isChunkLoadError`, `SkeletonRows`, `LoadingRegion` — imported
   directly via `@/components/ErrorBoundary` / `@/components/Skeleton` (no barrel); `FileTypeIcon` via
-  `@/components/FileTypeIcon`; `AttentionDot` via `@/components/AttentionDot`; `RunningIcon` via
+  `@/components/FileTypeIcon`; `PiGlyph` via `@/components/PiGlyph`; `AttentionDot` via `@/components/AttentionDot`; `RunningIcon` via
   `@/components/RunningIcon`; `CustomIcon`, `CustomIconName` via
   `@/components/CustomIcon`; `QuietScrollArea`, `QuietScrollFrame`, and the `QuietScrollEdges` type via
   `@/components/QuietScrollArea`. The `ui/` primitives are their own sub-module
