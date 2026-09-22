@@ -1,6 +1,7 @@
 import {
 	RiFileTransferLine as FileSymlink,
 	RiGitBranchLine as GitBranch,
+	RiLoader4Line as Loader2,
 	RiChatNewLine as MessageSquarePlus,
 	RiTerminalBoxLine as SquareTerminal,
 } from "@remixicon/react";
@@ -25,6 +26,7 @@ import { useShallow } from "zustand/react/shallow";
 import { prepareChatTitle } from "../chat/chatTitle";
 import { useAutoPlanSummary } from "../chat/useChatTodos";
 import { ErrorBoundary } from "../components/ErrorBoundary";
+import { PiGlyph } from "../components/PiGlyph";
 import { preloadedLazy } from "../components/preloadedLazy";
 import { QuietScrollArea } from "../components/QuietScrollArea";
 import { type LayoutAttention, layoutResourceIdentity, readLayoutSelection } from "../lib";
@@ -1030,6 +1032,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 							/>
 						);
 					}
+					if (tab.kind === "chat") return <PiGlyph className="size-14 shrink-0" />;
 					return null;
 				}}
 				renderTabAdornment={(tab) => {
@@ -1140,7 +1143,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 								</>
 							) : (
 								<>
-									<MessageSquarePlus className="size-14" /> New chat
+									<PiGlyph className="size-14" /> New chat
 								</>
 							)}
 						</button>
