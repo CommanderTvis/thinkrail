@@ -2,7 +2,6 @@ import {
 	RiFileTransferLine as FileSymlink,
 	RiGitBranchLine as GitBranch,
 	RiLoader4Line as Loader2,
-	RiChatNewLine as MessageSquarePlus,
 	RiTerminalBoxLine as SquareTerminal,
 } from "@remixicon/react";
 import { DropdownMenuItem } from "@thinkrail/ui/dropdown-menu";
@@ -20,6 +19,7 @@ import {
 } from "react";
 import { prepareChatTitle } from "../chat/chatTitle";
 import { ErrorBoundary } from "../components/ErrorBoundary";
+import { PiGlyph } from "../components/PiGlyph";
 import { QuietScrollArea } from "../components/QuietScrollArea";
 import { LoadingRegion } from "../components/Skeleton";
 import { type LayoutAttention, layoutResourceIdentity, readLayoutSelection } from "../lib";
@@ -795,6 +795,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 							/>
 						);
 					}
+					if (tab.kind === "chat") return <PiGlyph className="size-14 shrink-0" />;
 					return null;
 				}}
 				renderTabAdornment={(tab) => {
@@ -905,7 +906,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 								</>
 							) : (
 								<>
-									<MessageSquarePlus className="size-14" /> New chat
+									<PiGlyph className="size-14" /> New chat
 								</>
 							)}
 						</button>
