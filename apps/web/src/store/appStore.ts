@@ -127,6 +127,8 @@ export interface FileTab {
 	draft?: string;
 	/** Disk content seen changing under an unsaved buffer; `content` stays the merge base. */
 	external?: { content: string; hash: string };
+	/** The file was deleted on disk after the tab read it; the buffer stays. */
+	deletedOnDisk?: true;
 	split?: boolean;
 	outlineOpen?: boolean;
 	loadedTick?: number;
@@ -145,6 +147,8 @@ export interface ExternalFileTab {
 	draft?: string;
 	/** Disk content seen changing under an unsaved buffer; `content` stays the merge base. */
 	external?: { content: string; hash: string };
+	/** The file was deleted on disk after the tab read it; the buffer stays. */
+	deletedOnDisk?: true;
 	loadedTick?: number;
 }
 export interface ChatTab {
@@ -1095,6 +1099,7 @@ interface AppState {
 		disk: { content: string; hash: string },
 	) => void;
 	discardFileTabDraft: (workspaceId: string, id: string) => void;
+	setFileTabDeleted: (workspaceId: string, id: string, deleted: boolean) => void;
 	updateDiffTabContent: (
 		workspaceId: string,
 		id: string,
@@ -2886,6 +2891,14 @@ export const useAppStore = create<AppState>((set, get) => ({
 			mapFileTab(s, workspaceId, id, (tab) => {
 				const disk = tab.external;
 				return disk ? onDisk(settled(tab), disk.content, disk.hash) : settled(tab);
+			}),
+		),
+	setFileTabDeleted: (workspaceId, id, deleted) =>
+		set((s) =>
+			mapFileTab(s, workspaceId, id, (tab) => {
+				if (deleted) return { ...tab, deletedOnDisk: true };
+				const { deletedOnDisk: _gone, ...rest } = tab;
+				return rest;
 			}),
 		),
 	updateDiffTabContent: (
