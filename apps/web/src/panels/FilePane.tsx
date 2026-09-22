@@ -7,7 +7,7 @@ import { EmbeddedSplit } from "../components/EmbeddedSplit";
 import { LoadingRegion } from "../components/Skeleton";
 import type { ExternalFileTab, FileTab } from "../store";
 import { useAppStore } from "../store";
-import { getTransport } from "../transport";
+import { getTransport, wsErrorCode } from "../transport";
 import { coreViewerFor } from "./coreViewers";
 import { isFileTabDirty, mergeDiskIntoDraft, saveFileTab } from "./fileSave";
 import { jsonKeyLine } from "./jsonKeyLine";
@@ -25,6 +25,7 @@ const loading = <LoadingRegion rows={12} className="h-full p-12" />;
 function FilePaneBody({ tab }: { tab: FileTab | ExternalFileTab }) {
 	const setFileTabView = useAppStore((s) => s.setFileTabView);
 	const setFileTabOutline = useAppStore((s) => s.setFileTabOutline);
+	const setFileTabDeleted = useAppStore((s) => s.setFileTabDeleted);
 	const review = useFileReview(tab.workspaceId, tab.path, "inline");
 	const reviewComments = useAppStore((s) => s.reviewsByWorkspace[tab.workspaceId]?.comments);
 	const fileHasDraft = useMemo(
@@ -62,16 +63,30 @@ function FilePaneBody({ tab }: { tab: FileTab | ExternalFileTab }) {
 		setByteRevision((current) => current + 1);
 	}, [binary, fsChange, tab.path]);
 
+	const deleted = tab.deletedOnDisk === true;
 	useLiveTabContent(tab, {
 		// A binary viewer renders from its own bytes over its own route, never from tab.content. An
 		// external tab's path is outside the worktree, so the worktree-scoped read cannot refresh it.
 		read: (): Promise<{ content: string; hash: string }> =>
 			binary
 				? Promise.resolve({ content: "", hash: "" })
-				: (getTransport().request("fs.readFile", {
-						workspaceId: tab.workspaceId,
-						path: tab.path,
-					}) as Promise<{ content: string; hash: string }>),
+				: (
+						getTransport().request("fs.readFile", {
+							workspaceId: tab.workspaceId,
+							path: tab.path,
+						}) as Promise<{ content: string; hash: string }>
+					).then(
+						(fresh) => {
+							if (deleted) setFileTabDeleted(tab.workspaceId, tab.id, false);
+							return fresh;
+						},
+						(cause: unknown) => {
+							if (wsErrorCode(cause) === "FILE_NOT_FOUND") {
+								setFileTabDeleted(tab.workspaceId, tab.id, true);
+							}
+							throw cause;
+						},
+					),
 		applyFresh: ({ content, hash }, tick) =>
 			useAppStore.getState().updateFileTabContent(tab.workspaceId, tab.id, content, hash, tick),
 		keepCurrent: (tick) =>
@@ -125,7 +140,14 @@ function FilePaneBody({ tab }: { tab: FileTab | ExternalFileTab }) {
 		</div>
 	) : null;
 
-	const diskBar = tab.external ? (
+	const diskBar = deleted ? (
+		<div
+			data-testid="file-deleted-on-disk"
+			className="flex shrink-0 items-center gap-8 border-feedback-error border-b bg-container-header-bg px-8 py-4 tr-text-metadata text-text-default"
+		>
+			This file was deleted on disk. What you see is the last version the tab read.
+		</div>
+	) : tab.external ? (
 		<div
 			data-testid="file-disk-changed"
 			className="flex shrink-0 flex-wrap items-center gap-8 border-feedback-warning border-b bg-container-header-bg px-8 py-4 tr-text-metadata text-text-default"

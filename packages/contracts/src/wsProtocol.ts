@@ -843,7 +843,8 @@ export type WsErrorCode =
 	| "UNKNOWN_COMMIT"
 	| "PUSH_AUTH_FAILED"
 	| "SUBAGENT_TRANSCRIPT_NOT_FOUND"
-	| "RESOURCE_UNAVAILABLE";
+	| "RESOURCE_UNAVAILABLE"
+	| "FILE_NOT_FOUND";
 
 export interface WsResponse {
 	id: string;

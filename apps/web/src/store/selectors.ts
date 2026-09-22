@@ -751,3 +751,15 @@ export function selectAgentReviewCommentCount(
 		(c) => c.author === "agent" && c.status !== "resolved" && c.status !== "dismissed",
 	).length;
 }
+
+/** The workspace's open file tabs whose file was deleted on disk, NUL-joined so a selector compares by value. */
+export function selectDeletedFileTabPaths(
+	state: { tabsByWorkspace: Record<string, EditorTab[]> },
+	workspaceId: string,
+): string {
+	return (state.tabsByWorkspace[workspaceId] ?? [])
+		.flatMap((tab) =>
+			(tab.kind === "file" || tab.kind === "external-file") && tab.deletedOnDisk ? [tab.path] : [],
+		)
+		.join("\u0000");
+}
