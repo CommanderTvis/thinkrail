@@ -25,6 +25,7 @@ test("ModelSelector renders the trigger button with current model", () => {
 	);
 	expect(markup).toContain('data-testid="model-selector"');
 	expect(markup).toContain("GPT-4o");
+	expect(markup).toContain('data-testid="model-provider-mark"');
 });
 
 test("ModelSelector renders placeholder when no model is selected", () => {
@@ -59,4 +60,5 @@ test("ModelSelector renders long model names", () => {
 	);
 	expect(markup).toContain('data-testid="model-selector"');
 	expect(markup).toContain("Claude Haiku 4.5 (20251001)");
+	expect(markup).not.toContain('data-testid="model-provider-mark"');
 });
