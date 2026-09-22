@@ -195,7 +195,7 @@ regions of the layout, rather than teaching the layout engine about plugins dire
   (forbidden dep, `plugin-spec-dialect/SPEC.md`), so the host supplies the scroll surface the way it
   supplies the tab chrome around every tool.
 - **Tab decorations:** `renderTabIcon`/`renderTabAdornment` try the builtin per-kind cases first (the
-  external-file badge, the dirty dot, review flags, …) and only then ask
+  embedded Pi mark for chats, the external-file badge, the dirty dot, review flags, …) and only then ask
   `selectTabDecorators()` — first non-null registration wins, built from the same `TabRef` for both the
   icon and the adornment slot, so one decorator answers for a tab's icon and its badge together, not two
   independently-timed guesses. The Claude terminal/tool-tab mark was the last builtin case here; it

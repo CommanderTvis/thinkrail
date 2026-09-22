@@ -17,7 +17,6 @@ import {
 	RiArrowLeftSLine as ChevronLeft,
 	RiGitPullRequestLine as GitCompareArrows,
 	RiListCheck3 as ListTodo,
-	RiChatNewLine as MessageSquarePlus,
 	RiMoreLine as MoreHorizontal,
 	RiLayoutLeftLine as PanelLeftOpen,
 	RiLayoutRightLine as PanelRightOpen,
@@ -76,6 +75,7 @@ import {
 } from "@/components/ui/resizable";
 import { IconTooltip } from "@/components/ui/tooltip";
 import { FileTypeIcon } from "../../components/FileTypeIcon";
+import { PiGlyph } from "../../components/PiGlyph";
 import {
 	abbreviateHomePath,
 	DOUBLE_CLICK_SETTLE_MS,
@@ -1797,7 +1797,7 @@ function CenterGroupStrip({
 							onClick={() => onNewChat(group.id)}
 							className="flex w-32 shrink-0 items-center justify-center text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
 						>
-							<MessageSquarePlus className="size-16" />
+							<PiGlyph className="size-16" />
 						</button>
 					</IconTooltip>
 				</>
