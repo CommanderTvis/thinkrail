@@ -1,18 +1,22 @@
 import {
 	RiClipboardLine as Clipboard,
+	RiFileAddLine as FileAdd,
+	RiFolderAddLine as FolderAdd,
 	RiFolderOpenLine as FolderOpen,
+	RiEditLine as Rename,
 	RiDeleteBin6Line as Trash2,
 } from "@remixicon/react";
 import type { FileNode } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
 import { describeResource, PENDING_TEXT_META } from "@thinkrail/resource-renderers";
-import { LoadingRegion } from "@thinkrail/ui/skeleton";
 import {
 	ContextMenu,
 	ContextMenuContent,
 	ContextMenuItem,
+	ContextMenuSeparator,
 	ContextMenuTrigger,
 } from "@thinkrail/ui/context-menu";
+import { LoadingRegion } from "@thinkrail/ui/skeleton";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { absoluteWorkspacePath, copyText, startFileDrag } from "@/lib";
 import { statusLetter } from "../chat/planView";
@@ -25,16 +29,25 @@ import {
 	useAppStore,
 } from "../store";
 import { errorText, getTransport } from "../transport";
+import { ConfirmDialog } from "./ConfirmDialog";
 import { type ChangeMarks, statusMarkClass } from "./changesModel";
 import { holdEditorWarm, useEditorWarm, warmOnHover } from "./editorWarm";
-import { ConfirmDialog } from "./ConfirmDialog";
 import { type ResolvedFolderChain, resolveFolderChain } from "./folderChains";
 import { openFileInTab } from "./openTabs";
+import { PathNameDialog } from "./PathNameDialog";
 import { TreeRow } from "./TreeRow";
 import { useWorkspaceRead } from "./useWorkspaceRead";
 
 type SetPathsExpanded = (paths: readonly string[], expanded: boolean) => void;
 type WarmFile = ((path: string) => void) | undefined;
+
+function parentOf(path: string): string {
+	return path.slice(0, Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\"), 0));
+}
+
+function childPath(parent: string, name: string): string {
+	return parent === "" || parent === "." ? name : `${parent}/${name}`;
+}
 
 /** Each platform's file manager has its own name, and the wrong one reads as a bug. */
 const REVEAL_KEY =
@@ -94,6 +107,7 @@ export function FileTree({
 				<FileNodeRow
 					key={node.path}
 					node={node}
+					siblings={nodes}
 					workspaceId={workspaceId}
 					marks={marks}
 					focus={focus}
@@ -109,6 +123,7 @@ export function FileTree({
 
 function FileNodeRow({
 	node,
+	siblings,
 	workspaceId,
 	marks,
 	focus,
@@ -118,6 +133,7 @@ function FileNodeRow({
 	warmFile,
 }: {
 	node: FileNode;
+	siblings: readonly FileNode[];
 	workspaceId: string;
 	marks: ChangeMarks;
 	focus: TreeFocus;
@@ -130,6 +146,12 @@ function FileNodeRow({
 	const isDir = node.kind === "dir";
 	const [directory, setDirectory] = useState<ResolvedFolderChain<FileNode> | null>(null);
 	const [confirmDelete, setConfirmDelete] = useState(false);
+	const [naming, setNamingState] = useState<"file" | "dir" | "rename" | null>(null);
+	const namingFromMenu = useRef(false);
+	const setNaming = (next: "file" | "dir" | "rename" | null) => {
+		namingFromMenu.current = next !== null;
+		setNamingState(next);
+	};
 	const pendingExpand = useRef(false);
 
 	const { reload } = useWorkspaceRead(
@@ -157,6 +179,10 @@ function FileNodeRow({
 	const representedPath = directory?.path ?? node.path;
 	const expanded = expandedPaths.has(representedPath);
 	const children = directory?.children ?? null;
+	const nameExists = (name: string) =>
+		(naming === "rename" || !isDir ? siblings : (children ?? [])).some(
+			(entry) => entry.name === name,
+		);
 	const toggleDirectory = () => {
 		const nextExpanded = !expanded;
 		pendingExpand.current = nextExpanded && directory === null;
@@ -175,6 +201,21 @@ function FileNodeRow({
 					focus.onRevealed();
 				}
 			: undefined;
+	const create = async (kind: "file" | "dir", name: string) => {
+		const path = childPath(isDir ? (directory?.path ?? node.path) : parentOf(node.path), name);
+		await getTransport().request("fs.createPath", { workspaceId, path, kind });
+		setNaming(null);
+		if (isDir && !expanded) toggleDirectory();
+		if (kind === "file") void openFileInTab(workspaceId, path, "keep");
+	};
+	const rename = async (name: string) => {
+		await getTransport().request("fs.renamePath", {
+			workspaceId,
+			path: node.path,
+			to: childPath(parentOf(node.path), name),
+		});
+		setNaming(null);
+	};
 
 	return (
 		<li>
@@ -193,7 +234,11 @@ function FileNodeRow({
 							expanded={expanded}
 							label={label}
 							labelClassName={
-								fileStatus ? statusMarkClass(fileStatus) : dirChanged ? statusMarkClass("modified") : ""
+								fileStatus
+									? statusMarkClass(fileStatus)
+									: dirChanged
+										? statusMarkClass("modified")
+										: ""
 							}
 							trailing={
 								fileStatus ? (
@@ -216,7 +261,9 @@ function FileNodeRow({
 								isDir || !warmFile
 									? undefined
 									: (trigger) =>
-											trigger === "focus" ? warmFile(node.path) : warmOnHover(() => warmFile(node.path))
+											trigger === "focus"
+												? warmFile(node.path)
+												: warmOnHover(() => warmFile(node.path))
 							}
 							onDragStart={(event) =>
 								startFileDrag(event.dataTransfer, {
@@ -227,7 +274,22 @@ function FileNodeRow({
 						/>
 					</div>
 				</ContextMenuTrigger>
-				<ContextMenuContent data-testid="file-node-actions">
+				<ContextMenuContent
+					data-testid="file-node-actions"
+					onCloseAutoFocus={(event) => {
+						// The name dialog owns focus; handing it back to the row would reselect the whole name.
+						if (namingFromMenu.current) event.preventDefault();
+					}}
+				>
+					<ContextMenuItem data-testid="file-node-new-file" onSelect={() => setNaming("file")}>
+						<FileAdd />
+						{t("panels.fileTree.newFile")}
+					</ContextMenuItem>
+					<ContextMenuItem data-testid="file-node-new-folder" onSelect={() => setNaming("dir")}>
+						<FolderAdd />
+						{t("panels.fileTree.newFolder")}
+					</ContextMenuItem>
+					<ContextMenuSeparator />
 					<ContextMenuItem
 						data-testid="file-node-reveal"
 						onSelect={() => {
@@ -257,18 +319,48 @@ function FileNodeRow({
 							{t("panels.fileTree.copyAbsolutePath")}
 						</ContextMenuItem>
 					)}
+					<ContextMenuItem data-testid="file-node-rename" onSelect={() => setNaming("rename")}>
+						<Rename />
+						{t("panels.fileTree.rename")}
+					</ContextMenuItem>
 					<ContextMenuItem data-testid="file-node-delete" onSelect={() => setConfirmDelete(true)}>
 						<Trash2 />
 						{isDir ? t("panels.fileTree.deleteFolder") : t("panels.fileTree.deleteFile")}
 					</ContextMenuItem>
 				</ContextMenuContent>
 			</ContextMenu>
+			{naming === "rename" ? (
+				<PathNameDialog
+					title={t("panels.fileTree.renameTitle", { name: node.name })}
+					kind={isDir ? "dir" : "file"}
+					initialName={node.name}
+					confirmLabel={t("panels.fileTree.renameConfirm")}
+					nameExists={nameExists}
+					onCancel={() => setNaming(null)}
+					onSubmit={rename}
+				/>
+			) : naming ? (
+				<PathNameDialog
+					title={
+						naming === "dir"
+							? t("panels.fileTree.newFolderTitle")
+							: t("panels.fileTree.newFileTitle")
+					}
+					kind={naming}
+					confirmLabel={t("panels.fileTree.createConfirm")}
+					nameExists={nameExists}
+					onCancel={() => setNaming(null)}
+					onSubmit={(name) => create(naming, name)}
+				/>
+			) : null}
 			<ConfirmDialog
 				open={confirmDelete}
 				onOpenChange={setConfirmDelete}
 				title={t("panels.fileTree.deleteTitle", { name: label })}
 				description={
-					isDir ? t("panels.fileTree.deleteFolderDescription") : t("panels.fileTree.deleteFileDescription")
+					isDir
+						? t("panels.fileTree.deleteFolderDescription")
+						: t("panels.fileTree.deleteFileDescription")
 				}
 				confirmLabel={t("panels.fileTree.deleteConfirm")}
 				destructive
@@ -288,6 +380,7 @@ function FileNodeRow({
 						<FileNodeRow
 							key={child.path}
 							node={child}
+							siblings={children}
 							workspaceId={workspaceId}
 							marks={marks}
 							focus={focus}
