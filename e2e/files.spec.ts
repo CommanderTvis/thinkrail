@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { expect, test } from "@playwright/test";
 import {
@@ -129,4 +129,31 @@ test("deleting a previewed file leaves the workbench interactive", async ({ page
 		.filter({ hasText: /^README\.md$/ })
 		.click();
 	await expect(page.getByTestId("markdown-view-toggle")).toBeVisible();
+});
+
+test("an open tab says when its file is deleted on disk, and recovers when it returns", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	const workspace = await createWorkspaceViaDialog(page);
+	const file = join(workspace.worktreePath, "fleeting.txt");
+	writeFileSync(file, "here for now\n");
+	await page.getByTestId("tab-files").click();
+	await page
+		.getByTestId("file-node")
+		.filter({ hasText: /^fleeting\.txt$/ })
+		.dblclick();
+	await expect(page.getByTestId("editor-pane")).toContainText("here for now");
+
+	const tab = page.getByTestId("editor-tab").filter({ hasText: "fleeting.txt" });
+	rmSync(file);
+	await expect(tab.getByTestId("file-deleted-mark")).toBeVisible();
+	await expect(page.getByTestId("file-deleted-on-disk")).toBeVisible();
+	await expect(page.getByTestId("editor-pane")).toContainText("here for now");
+	await expect(page.getByTestId("file-node").filter({ hasText: /^fleeting\.txt$/ })).toHaveCount(0);
+
+	writeFileSync(file, "back again\n");
+	await expect(tab.getByTestId("file-deleted-mark")).toHaveCount(0);
+	await expect(page.getByTestId("file-deleted-on-disk")).toHaveCount(0);
+	await expect(page.getByTestId("editor-pane")).toContainText("back again");
 });

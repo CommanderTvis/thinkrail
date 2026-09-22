@@ -497,7 +497,10 @@ wire reply. See [[module-plugin-blueprint]]. The **Skills-reload badge** rides t
   cut from the text the edits were made against; the newer content waits in `external` and the pane says
   so. **`setFileTabDraft`**, **`settleFileTabSave`**, **`applyFileTabMerge`** and
   **`discardFileTabDraft`** are the four transitions, each one atomic so no call site can leave a buffer
-  half-updated (a merge, for instance, always moves the base and the draft together). Its diff twin
+  half-updated (a merge, for instance, always moves the base and the draft together).
+  **`setFileTabDeleted(workspaceId, id, deleted)`** is separate on purpose: whether the file exists is not a
+  fact about the buffer, so `deletedOnDisk` rides beside it untouched by those four, and
+  **`selectDeletedFileTabPaths`** gives the tab strip its marks. Its diff twin
   **`updateDiffTabContent(workspaceId, id, original, modified, tick, loadedTarget)`** — a `DiffTab` follows the same
   staleness contract in `DiffPane`, in **two** dimensions: the fs tick and the review target the two sides were
   read against, written together so neither can outlive the content it describes. The transient

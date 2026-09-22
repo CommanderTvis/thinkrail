@@ -46,6 +46,7 @@ import {
 	layoutOpenOptionsForNavigation,
 	selectCanRenameChat,
 	selectContextProject,
+	selectDeletedFileTabPaths,
 	selectDiffTabTargetRef,
 	selectReviewDraftCount,
 	selectWorkspaceById,
@@ -692,6 +693,11 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 		() => new Set(dirtyTabPaths ? dirtyTabPaths.split("\u0000") : []),
 		[dirtyTabPaths],
 	);
+	const deletedTabPaths = useAppStore((state) => selectDeletedFileTabPaths(state, workspaceId));
+	const deletedPaths = useMemo(
+		() => new Set(deletedTabPaths ? deletedTabPaths.split("\u0000") : []),
+		[deletedTabPaths],
+	);
 	const [discardTarget, setDiscardTarget] = useState<{ name: string; close: () => void } | null>(
 		null,
 	);
@@ -771,14 +777,28 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 					return null;
 				}}
 				renderTabAdornment={(tab) => {
-					if ((tab.kind === "file" || tab.kind === "external-file") && dirtyPaths.has(tab.path)) {
+					const fileTab = tab.kind === "file" || tab.kind === "external-file";
+					if (fileTab && (dirtyPaths.has(tab.path) || deletedPaths.has(tab.path))) {
 						return (
-							<span
-								data-testid="file-unsaved-dot"
-								role="img"
-								aria-label="Unsaved changes"
-								className="size-6 shrink-0 rounded-full bg-feedback-warning"
-							/>
+							<>
+								{deletedPaths.has(tab.path) ? (
+									<span
+										data-testid="file-deleted-mark"
+										title="Deleted on disk"
+										className="shrink-0 tr-text-eyebrow text-feedback-error"
+									>
+										deleted
+									</span>
+								) : null}
+								{dirtyPaths.has(tab.path) ? (
+									<span
+										data-testid="file-unsaved-dot"
+										role="img"
+										aria-label="Unsaved changes"
+										className="size-6 shrink-0 rounded-full bg-feedback-warning"
+									/>
+								) : null}
+							</>
 						);
 					}
 					if (tab.kind === "tool" && tab.tool === "review" && reviewDraftCount > 0) {

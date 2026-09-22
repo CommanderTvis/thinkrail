@@ -23,7 +23,8 @@ of the host.
   names* (`WsResponse.errorCode`, today `UNKNOWN_COMMIT`, `PUSH_AUTH_FAILED`, and
   `SUBAGENT_TRANSCRIPT_NOT_FOUND` — the latter is `subagent.getTranscript`'s **permanent** miss, the
   signal that stops the transcript dialog's polling, while transport blips stay plain-`error` transients
-  worth retrying), so a client can react to one specific failure
+  worth retrying — and `FILE_NOT_FOUND`, `fs.readFile`'s miss, which marks an open tab deleted on disk
+  where a dropped request must not), so a client can react to one specific failure
   instead of pattern-matching an error message. A failure earns a code only when a client behaves differently
   for it; everything else stays a plain `error` string. Expected method-specific outcomes remain typed method
   results rather than generic WS failures; no current-layout protocol exists.

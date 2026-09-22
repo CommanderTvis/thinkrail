@@ -726,7 +726,11 @@ export interface WsResume {
 
 export type WsClientMessage = WsRequest | WsAck | WsResume;
 
-export type WsErrorCode = "UNKNOWN_COMMIT" | "PUSH_AUTH_FAILED" | "SUBAGENT_TRANSCRIPT_NOT_FOUND";
+export type WsErrorCode =
+	| "UNKNOWN_COMMIT"
+	| "PUSH_AUTH_FAILED"
+	| "SUBAGENT_TRANSCRIPT_NOT_FOUND"
+	| "FILE_NOT_FOUND";
 
 export interface WsResponse {
 	id: string;

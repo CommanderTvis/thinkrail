@@ -38,6 +38,9 @@ for a substring.
   `contentHash`/`readFileAt`/`writeFileAt` themselves live in `@thinkrail/shared/textFile` (path-agnostic:
   no worktree containment) — this module re-exports them and owns `resolveInWorktree`, the containment
   every path here goes through before reaching them.
+- **A read of a file that is gone says so.** `readExistingFile(abs)` (behind `readFile` and the host's
+  external-file read) turns `ENOENT` into `CodedError("FILE_NOT_FOUND")`, the one read failure a client
+  acts on: an open tab marks its file deleted on disk rather than guessing from an error string.
 - **`searchWorktree(workspaceId, query)` is a plain substring sweep, deliberately.** It walks the
   worktree from the root, reuses the same `git check-ignore` batch per directory that `readDir` uses (so a
   project with no git simply has nothing ignored and everything is walked), skips `.git`, skips a file over
@@ -45,8 +48,8 @@ for a substring.
   (`truncated`), which is what keeps a sweep of a large tree bounded without a query language, an index, or
   a ripgrep the user may not have installed. Line text is capped at 400 characters per hit — a minified
   bundle must not travel over the wire as one match.
-- **Public surface (barrel):** `readDir`, `readFile`, `readFileAt`, `writeFile`, `writeFileAt`,
-  `contentHash`, `resolveWorktreeFile`, `searchWorktree`.
+- **Public surface (barrel):** `readDir`, `readFile`, `readExistingFile`, `readFileAt`, `writeFile`,
+  `writeFileAt`, `contentHash`, `resolveWorktreeFile`, `searchWorktree`.
 - **Allowed deps:** `persistence` (workspace lookup); `contracts` (`FileNode`, `FileWriteResult`);
-  `@thinkrail/shared/textFile`; Node `fs`/`path`.
+  `@thinkrail/shared/textFile` + `@thinkrail/shared/codedError`; Node `fs`/`path`.
 - **Forbidden:** `host`; sibling features.

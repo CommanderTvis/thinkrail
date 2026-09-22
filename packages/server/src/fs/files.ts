@@ -1,6 +1,7 @@
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { isAbsolute, join, relative, resolve } from "node:path";
 import type { FileNode, FileWriteResult, SearchHit, SearchHits } from "@thinkrail/contracts";
+import { CodedError } from "@thinkrail/shared/codedError";
 import { readFileAt, writeFileAt } from "@thinkrail/shared/textFile";
 import { loadWorkspaces } from "../persistence";
 
@@ -53,8 +54,18 @@ export function readDir(workspaceId: string, path: string): FileNode[] {
 	return nodes.map((node) => (ignored.has(node.path) ? { ...node, gitignored: true } : node));
 }
 
+/** A file that is gone reads as `FILE_NOT_FOUND`, so a client can tell it from a failed request. */
+export function readExistingFile(abs: string): { content: string; hash: string } {
+	try {
+		return readFileAt(abs);
+	} catch (err) {
+		if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
+		throw new CodedError("FILE_NOT_FOUND", `${abs} no longer exists`);
+	}
+}
+
 export function readFile(workspaceId: string, path: string): { content: string; hash: string } {
-	return readFileAt(resolveInWorktree(workspaceId, path).abs);
+	return readExistingFile(resolveInWorktree(workspaceId, path).abs);
 }
 
 export function writeFile(
