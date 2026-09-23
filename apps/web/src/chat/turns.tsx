@@ -16,7 +16,14 @@ import type {
 	ReviewFixDetails,
 	UserMessage,
 } from "@thinkrail/contracts";
-import { Button, Dialog, DialogContent, DialogHeader, DialogTitle } from "@thinkrail/plugin-ui";
+import {
+	Button,
+	Dialog,
+	DialogContent,
+	DialogHeader,
+	DialogTitle,
+	formatTokens,
+} from "@thinkrail/plugin-ui";
 import { type MouseEvent as ReactMouseEvent, type ReactNode, useEffect, useState } from "react";
 import { CustomIcon } from "@/components/CustomIcon";
 import {
@@ -36,7 +43,7 @@ import { Markdown } from "./Markdown";
 import { ReviewPackageComments } from "./ReviewPackageComments";
 import { parseReviewPackage, reviewFixCommentsToItems, reviewPackageLabel } from "./reviewPackage";
 import { type ChatRow, LARGE_USER_MESSAGE, type TurnDividerData } from "./rows";
-import { formatElapsed, formatTokens } from "./SessionStatsBar";
+import { formatElapsed } from "./SessionStatsBar";
 import { ToolCard } from "./ToolCard";
 import { ToolRendererBody } from "./ToolRendererBody";
 import { getToolChrome, getToolSummary, type ToolRenderProps } from "./toolRegistry";

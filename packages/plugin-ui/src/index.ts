@@ -74,6 +74,10 @@ export {
 	cwdLabel,
 	TerminalAttachButton,
 	TerminalFactChip,
+	TerminalIdeContextChip,
+	TerminalPlan,
+	type TerminalTodo,
+	TerminalUsageChip,
 } from "./TerminalFacts";
 export { ToggleSegment } from "./ToggleSegment";
 export { ToolFileLink } from "./ToolFileLink";
@@ -87,5 +91,6 @@ export {
 	ToastViewport,
 	toastVariants,
 } from "./toast";
+export { formatTokens, type TokenUsage, tokenUsageParts } from "./tokenUsage";
 export { IconTooltip, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./tooltip";
 export { useThemeSwap } from "./useThemeSwap";

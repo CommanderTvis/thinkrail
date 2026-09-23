@@ -461,6 +461,13 @@ export function writeTerminalFromHost(workspaceId: string, tabKey: string, data:
 	entryFor(workspaceId, tabKey)?.pty.write(data);
 }
 
+export function submitToAgent(terminal: TerminalRef, text: string): void {
+	const entry = entryFor(terminal.workspaceId, terminal.tabKey);
+	if (!entry || !agentRecordOf(terminal))
+		throw new Error("That terminal is no longer running an agent.");
+	entry.pty.write(`\x1b[200~${text.replaceAll("\x1b", "")}\x1b[201~\r`);
+}
+
 export function resizeTerminal(id: string, cols: number, rows: number, caller: string): void {
 	const entry = attachedEntry(id, caller);
 	if (!entry) {
