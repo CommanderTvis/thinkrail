@@ -9,6 +9,7 @@ import {
 	PLUGIN_ROSTER_PROTOCOL_VERSION,
 	PROJECT_TEMPLATE_PREVIEW_PROTOCOL_VERSION,
 	PROTOCOL_VERSION,
+	REVIEW_TERMINAL_PROTOCOL_VERSION,
 	SESSION_RENAME_PROTOCOL_VERSION,
 	SESSION_TITLE_MAX_LENGTH,
 	SUBAGENT_SETTINGS_PROTOCOL_VERSION,
@@ -79,7 +80,7 @@ test("session titles normalize to one bounded non-blank line", () => {
 });
 
 test("this fork's own additive methods sit above every version upstream has taken", () => {
-	expect(PROTOCOL_VERSION).toBe(67);
+	expect(PROTOCOL_VERSION).toBe(68);
 });
 
 test("AI access source switching advances the protocol and names its methods", () => {
@@ -126,4 +127,9 @@ test("the plugin method index signature coexists with the fixed literal methods"
 	};
 	expect(existingRequest.method).toBe("project.close");
 	expect(pluginRequest.method).toBe("plugin.spec-dialect.status");
+});
+
+test("a review can be sent to an agent terminal from the protocol that names it", () => {
+	expect(REVIEW_TERMINAL_PROTOCOL_VERSION).toBe(68);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(REVIEW_TERMINAL_PROTOCOL_VERSION);
 });

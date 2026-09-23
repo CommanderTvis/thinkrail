@@ -17,7 +17,7 @@ import { PlanStatusIcon, SectionLabel } from "../chat/planKit";
 import { sessionGlance } from "../chat/planView";
 import { glanceIcon } from "../chat/TodoList";
 import { LoadingRegion } from "../components/Skeleton";
-import { selectDiffScope, toast, useAppStore } from "../store";
+import { selectDiffScope, selectReviewDiscussionOpen, toast, useAppStore } from "../store";
 import { errorText, getTransport } from "../transport";
 import { ConfirmPopover } from "./ConfirmPopover";
 import { openChatInTab } from "./openChat";
@@ -51,7 +51,11 @@ export function ReviewPanel({ workspaceId, failed }: { workspaceId: string; fail
 			setExpanded(new Set(expanded).add(activeReviewedPath));
 	}
 
-	const openChat = (sessionId: string) => openChatInTab(workspaceId, sessionId);
+	const openDiscussion = (comment: ReviewComment) => {
+		if (comment.terminal !== undefined)
+			useAppStore.getState().setActiveTerminalTab(workspaceId, comment.terminal);
+		else if (comment.sessionId !== undefined) void openChatInTab(workspaceId, comment.sessionId);
+	};
 
 	const openSurface = (path: string, surface: ReviewSurface) => {
 		if (surface.kind === "file") {
@@ -214,7 +218,7 @@ export function ReviewPanel({ workspaceId, failed }: { workspaceId: string; fail
 											comments={snapshot.comments}
 											sending={sending}
 											onSend={sendOne}
-											onOpenChat={openChat}
+											onOpenDiscussion={openDiscussion}
 											onNavigate={navigateTo}
 										/>
 									)}
@@ -234,7 +238,7 @@ function FileSection({
 	comments,
 	sending,
 	onSend,
-	onOpenChat,
+	onOpenDiscussion,
 	onNavigate,
 }: {
 	workspaceId: string;
@@ -242,7 +246,7 @@ function FileSection({
 	comments: ReviewComment[];
 	sending: boolean;
 	onSend: (comment: ReviewComment) => Promise<void>;
-	onOpenChat: (sessionId: string) => void;
+	onOpenDiscussion: (comment: ReviewComment) => void;
 	onNavigate: (comment: ReviewComment) => void;
 }) {
 	const fileComments = comments.filter((c) => (c.anchor?.path ?? null) === path);
@@ -267,7 +271,7 @@ function FileSection({
 							ordinal={index + 1}
 							sending={sending}
 							onSend={() => void onSend(comment)}
-							onOpenChat={onOpenChat}
+							onOpenDiscussion={onOpenDiscussion}
 							onNavigate={() => onNavigate(comment)}
 						/>
 					))}
@@ -283,7 +287,7 @@ function FileSection({
 							comment={comment}
 							sending={sending}
 							onSend={() => void onSend(comment)}
-							onOpenChat={onOpenChat}
+							onOpenDiscussion={onOpenDiscussion}
 							onNavigate={() => onNavigate(comment)}
 						/>
 					))}
@@ -293,7 +297,12 @@ function FileSection({
 				<>
 					<SectionLabel label="Resolved" />
 					{resolved.map((comment) => (
-						<ResolvedRow key={comment.id} comment={comment} onOpenChat={onOpenChat} />
+						<ResolvedRow
+							key={comment.id}
+							workspaceId={workspaceId}
+							comment={comment}
+							onOpenDiscussion={onOpenDiscussion}
+						/>
 					))}
 				</>
 			)}
@@ -327,7 +336,7 @@ function CommentRow({
 	ordinal,
 	sending,
 	onSend,
-	onOpenChat,
+	onOpenDiscussion,
 	onNavigate,
 }: {
 	workspaceId: string;
@@ -335,7 +344,7 @@ function CommentRow({
 	ordinal?: number;
 	sending: boolean;
 	onSend: () => void;
-	onOpenChat: (sessionId: string) => void;
+	onOpenDiscussion: (comment: ReviewComment) => void;
 	onNavigate: () => void;
 }) {
 	const isDraft = comment.status === "draft";
@@ -344,6 +353,7 @@ function CommentRow({
 	const runtime = useAppStore((s) =>
 		comment.sessionId ? s.sessions[comment.sessionId] : undefined,
 	);
+	const discussion = useAppStore((s) => selectReviewDiscussionOpen(s, workspaceId, comment));
 	const glance = runtime ? sessionGlance(runtime) : "waiting";
 
 	const update = async (patch: { status?: ReviewComment["status"] }) => {
@@ -376,8 +386,8 @@ function CommentRow({
 			<button
 				type="button"
 				data-testid="review-comment-open"
-				onClick={() => (comment.sessionId ? onOpenChat(comment.sessionId) : onNavigate())}
-				title={comment.sessionId ? "Open the discussion" : "Show in file"}
+				onClick={() => (discussion ? onOpenDiscussion(comment) : onNavigate())}
+				title={discussion ? "Open the discussion" : "Show in file"}
 				className="flex w-full items-start gap-8 rounded-[var(--radius-sm)] px-4 py-4 text-left hover:bg-control-bg-hovered"
 			>
 				{ordinal !== undefined ? (
@@ -466,7 +476,7 @@ function CommentRow({
 						</ConfirmPopover>
 					</>
 				)}
-				{comment.sessionId && (
+				{discussion && (
 					<IconTooltip label="Show in file">
 						<button
 							type="button"
@@ -498,12 +508,17 @@ function CommentRow({
 }
 
 function ResolvedRow({
+	workspaceId,
 	comment,
-	onOpenChat,
+	onOpenDiscussion,
 }: {
+	workspaceId: string;
 	comment: ReviewComment;
-	onOpenChat: (sessionId: string) => void;
+	onOpenDiscussion: (comment: ReviewComment) => void;
 }) {
+	const discussion = useAppStore((s) => selectReviewDiscussionOpen(s, workspaceId, comment));
+	const label =
+		comment.terminal !== undefined ? "Open the linked terminal" : "Open the linked chat";
 	return (
 		<div
 			data-testid="review-comment-resolved"
@@ -517,13 +532,13 @@ function ResolvedRow({
 				{comment.body}
 			</span>
 			<span className="flex shrink-0 items-center gap-4 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
-				{comment.sessionId && (
-					<IconTooltip label="Open the linked chat">
+				{discussion && (
+					<IconTooltip label={label}>
 						<button
 							type="button"
 							data-testid="review-comment-chat"
-							aria-label="Open the linked chat"
-							onClick={() => comment.sessionId && onOpenChat(comment.sessionId)}
+							aria-label={label}
+							onClick={() => onOpenDiscussion(comment)}
 							className="text-text-subtle hover:text-text-default"
 						>
 							<MessageSquare className="size-14" />

@@ -11,10 +11,12 @@ import type {
 	LoginReply,
 	QueueLane,
 	ReviewAnchor,
+	ReviewChatSendResult,
 	ReviewComment,
 	ReviewCommentKind,
 	ReviewCommentStatus,
 	ReviewSendResult,
+	ReviewTerminalSendResult,
 	SubagentOverride,
 	TemplateReadLocation,
 	TemplateScope,
@@ -141,6 +143,7 @@ import {
 	fileReviewSession,
 	getReviewSnapshot,
 	markCommentsSent,
+	markCommentsSentToTerminal,
 	markFileDone,
 	REVIEW_LEVEL_KEY,
 	removeWorkspaceReviews,
@@ -166,6 +169,7 @@ import {
 	renameTerminal,
 	reserveTerminal,
 	resizeTerminal,
+	submitToAgent,
 	writeTerminal,
 } from "../terminal";
 import {
@@ -357,11 +361,36 @@ function fireTodoFixPrompt(
 		.finally(() => releaseItemFix(p.sessionId, p.id));
 }
 
+async function sendToTerminal(
+	workspaceId: string,
+	comments: ReviewComment[],
+	tabKey: string,
+): Promise<ReviewTerminalSendResult> {
+	if (comments.length === 0) throw new Error("No draft comments to send.");
+	const pkg = await buildSendPackage(workspaceId, comments);
+	submitToAgent({ workspaceId, tabKey }, pkg);
+	await markCommentsSentToTerminal(
+		workspaceId,
+		comments.map((comment) => comment.id),
+		tabKey,
+	);
+	return { terminal: tabKey };
+}
+
+type ReviewSendTarget = { sessionId?: string; terminal?: string };
+
+function terminalTarget(target: ReviewSendTarget): string | undefined {
+	if (target.terminal !== undefined && target.sessionId !== undefined) {
+		throw new Error("A review goes to a chat or a terminal, not both.");
+	}
+	return target.terminal;
+}
+
 async function sendToFileChat(
 	workspaceId: string,
 	comments: ReviewComment[],
 	opts: { model?: WireModel; thinkingLevel?: ThinkingLevel; sessionId?: string },
-): Promise<ReviewSendResult> {
+): Promise<ReviewChatSendResult> {
 	const ids = comments.map((c) => c.id);
 	const pkg = await buildSendPackage(workspaceId, comments);
 	const ws = getWorkspace(workspaceId);
@@ -1088,10 +1117,15 @@ const handlers: Record<string, Handler> = {
 			model?: WireModel;
 			thinkingLevel?: ThinkingLevel;
 			sessionId?: string;
+			terminal?: string;
 		};
-		return withReviewLock(p.workspaceId, async () =>
-			sendToFileChat(p.workspaceId, await sendableComments(p.workspaceId, [p.id]), p),
-		);
+		const terminal = terminalTarget(p);
+		return withReviewLock(p.workspaceId, async () => {
+			const comments = await sendableComments(p.workspaceId, [p.id]);
+			return terminal === undefined
+				? sendToFileChat(p.workspaceId, comments, p)
+				: sendToTerminal(p.workspaceId, comments, terminal);
+		});
 	},
 	"review.sendBatch": (params) => {
 		const p = params as {
@@ -1100,9 +1134,14 @@ const handlers: Record<string, Handler> = {
 			model?: WireModel;
 			thinkingLevel?: ThinkingLevel;
 			sessionId?: string;
+			terminal?: string;
 		};
+		const terminal = terminalTarget(p);
 		return withReviewLock(p.workspaceId, async () => {
 			const comments = await sendableComments(p.workspaceId, p.commentIds);
+			if (terminal !== undefined) {
+				return { sessions: [await sendToTerminal(p.workspaceId, comments, terminal)] };
+			}
 			const groups = new Map<string, typeof comments>();
 			for (const comment of comments) {
 				const key = reviewSessionKey(comment);

@@ -542,7 +542,12 @@ of the host.
   plus **`reused`**, the one fact only the host knows (was this chat followed up into, or created now?).
   A reused chat may be one the client has never seen — a second client, or this one after a reload,
   since review state and pi transcripts both outlive the host — so it must be HYDRATED, not opened as
-  new; opening it as new shows a blank conversation for comments already marked sent / **`fileDone`**
+  new; opening it as new shows a blank conversation for comments already marked sent. Either send may
+  instead name a **`terminal`** (a tab key carrying an agent record, exclusive with `sessionId`): the
+  selection goes there as one package and the result is **`{ terminal }`** — `ReviewSendResult` is the
+  union of the chat shape and that; a comment sent that way carries `terminal` instead of `sessionId`.
+  `REVIEW_TERMINAL_PROTOCOL_VERSION` (v69) pins the field, since an older host would ignore it and start
+  a chat / **`fileDone`**
   (mark a fully-resolved file's review finished; rejected while anything is unresolved — a new
   comment re-opens the file) / **`close`** (the atomic Clear: archive the current review's non-draft
   records, discard drafts, replace the active review, and publish the fresh open snapshot to every client)

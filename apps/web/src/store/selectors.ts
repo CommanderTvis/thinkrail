@@ -4,6 +4,7 @@ import {
 	type GitDiffScope,
 	type PluginRosterEntry,
 	type Project,
+	REVIEW_TERMINAL_PROTOCOL_VERSION,
 	SESSION_RENAME_PROTOCOL_VERSION,
 	type SpecGraphNode,
 	type WireModel,
@@ -411,7 +412,53 @@ export function selectChatTitle(
 ): string {
 	const tabs = state.tabsByWorkspace[workspaceId] ?? [];
 	const chatTab = tabs.find((t) => t.kind === "chat" && t.sessionId === sessionId);
-	return (chatTab?.name ?? "Chat").trim() || "Chat";
+	return chatTabTitle(chatTab?.name);
+}
+
+function chatTabTitle(name: string | undefined): string {
+	return name?.trim() || "Chat";
+}
+
+export type ReviewTarget =
+	| { kind: "chat"; sessionId: string; title: string }
+	| { kind: "terminal"; tabKey: string; title: string };
+
+export function selectCanSendReviewToTerminal(state: ProtocolState): boolean {
+	return (
+		state.protocolVersion !== null && state.protocolVersion >= REVIEW_TERMINAL_PROTOCOL_VERSION
+	);
+}
+
+export function reviewTargets(
+	tabs: readonly EditorTab[],
+	terminals: readonly TerminalTab[],
+	terminalsAllowed: boolean,
+): ReviewTarget[] {
+	const targets: ReviewTarget[] = [];
+	for (const tab of tabs) {
+		if (tab.kind === "chat") {
+			targets.push({ kind: "chat", sessionId: tab.sessionId, title: chatTabTitle(tab.name) });
+		}
+	}
+	if (!terminalsAllowed) return targets;
+	for (const terminal of terminals) {
+		if (terminal.agent)
+			targets.push({ kind: "terminal", tabKey: terminal.tabKey, title: terminal.title });
+	}
+	return targets;
+}
+
+export function selectReviewDiscussionOpen(
+	state: { terminalsByWorkspace: Record<string, TerminalTab[]> },
+	workspaceId: string,
+	comment: { sessionId?: string; terminal?: string },
+): boolean {
+	if (comment.sessionId !== undefined) return true;
+	return (
+		comment.terminal !== undefined &&
+		(state.terminalsByWorkspace[workspaceId]?.some((tab) => tab.tabKey === comment.terminal) ??
+			false)
+	);
 }
 
 export function selectCompactionTurnIds(

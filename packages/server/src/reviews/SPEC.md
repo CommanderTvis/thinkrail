@@ -71,7 +71,11 @@ re-anchoring, and package rendering. Design + user-confirmed decisions: [[task-r
   (resolved/dismissed, from draft or sent); `draft`↔`sent` moves are owned exclusively by the send
   path (`markCommentsSent`/`rollbackSend`) — a client that could un-send a comment could rewrite or
   delete a remark whose id an agent chat already quotes;
-  `sessionId` links the chat the comment was sent into — its file's review chat. **A comment is a
+  `sessionId` links the chat the comment was sent into — its file's review chat — and `terminal`, in
+  its place, the tab key of the agent terminal (Claude Code, Codex) it was pasted into instead; a sent
+  comment carries exactly one of the two (`markCommentsSent` vs `markCommentsSentToTerminal`). A terminal is never a key's pin:
+  `fileSessions` names chats only, because a terminal is chosen explicitly on every send and does not
+  outlive its tab the way a pi transcript outlives its chat. **A comment is a
   record once SENT**: a draft — the user's own unsent scratch — can still be deleted
   (`review.commentDelete`, draft-only, rejected otherwise), but a sent comment is never deleted — Clear
   moves that record into the closed archive before replacing the active review — and the review offers no
@@ -153,6 +157,12 @@ agent from filing a finding and immediately clearing it itself (see [[submodule-
 gate). Resolution
 searches the active snapshots first, then closed archives, so a tool call already in flight when Clear
 lands can still finish its record; archived updates persist without publishing an inactive snapshot.
+An agent terminal resolves through `resolveCommentFromTerminal({ workspaceId, tabKey }, …)`, the same
+search and checks with the terminal as the caller. That identity is the one ThinkRail's MCP route
+derives from the terminal's token, never from the payload, and it matches a comment whose `terminal`
+is that tab in that workspace's review. The two identities never cross: a chat cannot resolve what a terminal received,
+nor the reverse. A terminal send has no pre-turn rejection to roll back (the PTY write either happens
+or the send throws before `markCommentsSent`), so `rollbackSend` stays chat-only.
 
 ## Boundary
 
@@ -165,9 +175,9 @@ lands can still finish its record; archived updates persist without publishing a
   package rendering (pure `packageRender.ts`), and the `review.changed` publisher seam
   (`setReviewPublisher`, installed by `host` — full-snapshot pushes, idempotent under last-value replay).
 - **Public surface (barrel):** `getReviewSnapshot`, `addComment`, `updateComment`, `deleteComment`
-  (draft-only), `clearReview`, `markCommentsSent`, `rollbackSend` (undo `markCommentsSent` on a
+  (draft-only), `clearReview`, `markCommentsSent` + `markCommentsSentToTerminal`, `rollbackSend` (undo `markCommentsSent` on a
   pre-turn send rejection), `markFileDone`, `fileReviewSession` + `reviewSessionKey`/`REVIEW_LEVEL_KEY` (the
-  per-key chat pin), `resolveCommentFromAgent`, `reanchorWorkspace`, `sendableComments`,
+  per-key chat pin), `resolveCommentFromAgent` + `resolveCommentFromTerminal`, `reanchorWorkspace`, `sendableComments`,
   `buildSendPackage`, `removeWorkspaceReviews`, `setReviewPublisher` (+ the pure
   anchoring/render helpers: `reanchor`, `buildTextQuote`, `hashContent`, `lineRangeOf`, `textQuoteOf`,
   `renderPackage`).

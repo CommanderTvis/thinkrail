@@ -1121,7 +1121,8 @@ because the alternative is an attachment the user cannot see, which is worse tha
   pass still answers — with a list to render, not a verdict), and dropped by the next `model.list` install
   from *any* consumer. `model.list` answers from *before* the
   detached refresh it triggers, so it is never a basis for concluding a model is gone);
-  `@thinkrail/plugin-ui` (`Markdown`, `CodeBlock`, `highlightCode`, the eleven primitives) and
+  `@thinkrail/plugin-ui` (`Markdown`, `CodeBlock`, `highlightCode`, the eleven primitives, and
+  `formatTokens`/`tokenUsageParts`, the one token formatting the terminal agents' usage chips share) and
   `@thinkrail/plugin-ui/visualization` (the visualization card — `mermaid` itself is a kit-only
   dependency; chat never imports the package directly); `react-virtuoso`; `@remixicon/react`; `lib`.
 - **Forbidden:** value-importing any `pi` package; a **presentational** renderer importing

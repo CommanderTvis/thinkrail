@@ -452,10 +452,12 @@ export function reviewSessionKey(comment: Pick<ReviewComment, "anchor">): string
 	return comment.anchor?.path ?? REVIEW_LEVEL_KEY;
 }
 
-export async function markCommentsSent(
+type ReviewRecipient = { sessionId: string } | { terminal: string };
+
+function markSent(
 	workspaceId: string,
 	commentIds: string[],
-	sessionId: string,
+	recipient: ReviewRecipient,
 ): Promise<void> {
 	return mutateSnapshot(workspaceId, (snapshot) => {
 		const comments = commentIds.map((id) => mustFind(snapshot, id));
@@ -465,14 +467,34 @@ export async function markCommentsSent(
 		for (const comment of comments) {
 			comment.status = "sent";
 			comment.sentAt = Date.now();
-			comment.sessionId = sessionId;
+			if ("terminal" in recipient) {
+				comment.terminal = recipient.terminal;
+				continue;
+			}
+			comment.sessionId = recipient.sessionId;
 			snapshot.review.fileSessions = {
 				...snapshot.review.fileSessions,
-				[reviewSessionKey(comment)]: sessionId,
+				[reviewSessionKey(comment)]: recipient.sessionId,
 			};
 		}
 		persistAndPublish(workspaceId, snapshot);
 	});
+}
+
+export function markCommentsSent(
+	workspaceId: string,
+	commentIds: string[],
+	sessionId: string,
+): Promise<void> {
+	return markSent(workspaceId, commentIds, { sessionId });
+}
+
+export function markCommentsSentToTerminal(
+	workspaceId: string,
+	commentIds: string[],
+	tabKey: string,
+): Promise<void> {
+	return markSent(workspaceId, commentIds, { terminal: tabKey });
 }
 
 export function rollbackSend(workspaceId: string, commentIds: string[], sessionId: string): void {
@@ -506,9 +528,22 @@ export async function fileReviewSession(
 	return (await ensureSnapshot(workspaceId)).review.fileSessions?.[key];
 }
 
+type ReviewResolver = { sessionId: string } | { terminal: { workspaceId: string; tabKey: string } };
+
+function deliveredTo(
+	snapshot: ReviewSnapshot,
+	comment: ReviewComment,
+	by: ReviewResolver,
+): boolean {
+	return "terminal" in by
+		? snapshot.review.workspaceId === by.terminal.workspaceId &&
+				comment.terminal === by.terminal.tabKey
+		: comment.sessionId === by.sessionId;
+}
+
 function applyAgentResolution(
 	snapshot: ReviewSnapshot,
-	sessionId: string,
+	by: ReviewResolver,
 	commentId: string,
 	note?: string,
 ): ReviewComment | null {
@@ -517,8 +552,10 @@ function applyAgentResolution(
 	if (comment.status === "resolved") throw new Error(`Comment ${commentId} is already resolved.`);
 	if (comment.status !== "sent")
 		throw new Error(`Comment ${commentId} was not sent to a session (status: ${comment.status}).`);
-	if (comment.sessionId !== sessionId)
-		throw new Error(`Comment ${commentId} was not sent to this chat.`);
+	if (!deliveredTo(snapshot, comment, by))
+		throw new Error(
+			`Comment ${commentId} was not sent to this ${"terminal" in by ? "terminal" : "chat"}.`,
+		);
 	comment.status = "resolved";
 	comment.resolvedBy = "agent";
 	comment.resolvedAt = Date.now();
@@ -531,6 +568,18 @@ export function resolveCommentFromAgent(
 	commentId: string,
 	note?: string,
 ): ReviewComment {
+	return resolveComment({ sessionId }, commentId, note);
+}
+
+export function resolveCommentFromTerminal(
+	terminal: { workspaceId: string; tabKey: string },
+	commentId: string,
+	note?: string,
+): ReviewComment {
+	return resolveComment({ terminal }, commentId, note);
+}
+
+function resolveComment(by: ReviewResolver, commentId: string, note?: string): ReviewComment {
 	let files: string[] = [];
 	try {
 		files = readdirSync(reviewsDir()).filter((file) => file.endsWith(".json"));
@@ -546,7 +595,7 @@ export function resolveCommentFromAgent(
 			continue;
 		}
 		if (snapshot?.review.status !== "open") continue;
-		const comment = applyAgentResolution(snapshot, sessionId, commentId, note);
+		const comment = applyAgentResolution(snapshot, by, commentId, note);
 		if (!comment) continue;
 		persistAndPublish(workspaceId, snapshot);
 		return comment;
@@ -561,7 +610,7 @@ export function resolveCommentFromAgent(
 			continue;
 		}
 		if (snapshot?.review.status !== "closed") continue;
-		const comment = applyAgentResolution(snapshot, sessionId, commentId, note);
+		const comment = applyAgentResolution(snapshot, by, commentId, note);
 		if (!comment) continue;
 		saveFile(file, snapshot);
 		return comment;

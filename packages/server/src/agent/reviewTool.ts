@@ -16,7 +16,7 @@ export const ResolveCommentSchema = Type.Object({
 
 export type ResolveCommentParams = Static<typeof ResolveCommentSchema>;
 
-const DESCRIPTION = `Mark a review comment as resolved, after you have actually addressed it (by editing the file, or by answering when no change is needed). Only valid for comment ids you received in a review package in this conversation. If a comment is unclear or you disagree with it, reply in the conversation instead — do NOT resolve it.`;
+export const RESOLVE_COMMENT_DESCRIPTION = `Mark a review comment as resolved, after you have actually addressed it (by editing the file, or by answering when no change is needed). Only valid for comment ids you received in a review package in this conversation. If a comment is unclear or you disagree with it, reply in the conversation instead — do NOT resolve it.`;
 
 export interface ResolveCommentOutcome {
 	resolvedBody: string;
@@ -37,7 +37,7 @@ export function createResolveCommentTool(): ToolDefinition<typeof ResolveComment
 	return {
 		name: RESOLVE_COMMENT_TOOL_NAME,
 		label: "Resolve Review Comment",
-		description: DESCRIPTION,
+		description: RESOLVE_COMMENT_DESCRIPTION,
 		parameters: ResolveCommentSchema,
 		async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
 			const { commentId, note } = params as ResolveCommentParams;

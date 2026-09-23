@@ -935,6 +935,8 @@ export interface ReviewComment {
 	status: ReviewCommentStatus;
 	anchorState: ReviewAnchorState;
 	sessionId?: string;
+	/** The agent terminal's tab key the comment was pasted into, in place of a chat `sessionId`. */
+	terminal?: string;
 	/** Who authored the remark — the human (default, absent) or the plan's reviewer agent. */
 	author?: "user" | "agent";
 	/** Provenance of an agent finding: the plan step (in its session) and the newest reviewed commit sha. */

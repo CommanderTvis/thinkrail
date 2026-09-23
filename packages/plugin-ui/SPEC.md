@@ -43,7 +43,14 @@ It excludes tests and never traverses dependency trees: the former recursive pac
   `SettingsToolbar` is the filter-and-add bar above the rows; `TerminalFacts` — the fact chip (the
   agent's working directory, model, effort) and the attach-file button every terminal agent's accessory
   row shows, with `cwdLabel` (a home-abbreviated path whose middle is what truncation eats) and
-  `attachPath` (a picked path relativized against the agent's cwd).
+  `attachPath` (a picked path relativized against the agent's cwd), plus `TerminalPlan` (the agent's own
+  todo list behind a done/total toggle, named after the agent in its titles) and `TerminalUsageChip` (the
+  session's token spending, `↑in ↓out R cache-read W cache-write`, no cost — a subscription makes cost
+  meaningless), plus `TerminalIdeContextChip`, a controlled session-only `/ide` on/off control. The
+  caller owns issuing the agent command and the enabled state; the kit holds no terminal or plugin state.
+  `formatTokens`/`tokenUsageParts` are the one token formatting: pi's chat stats bar uses
+  them too, adding only its cost. The numbers are whatever the plugin read from its agent's own record;
+  the kit never estimates.
   Settings show `key = value` on one line when their content fits the row; otherwise the value
   moves below the key. Long keys wrap within the panel, and long values retain their line clamp.
   Setting documentation links show their help text in the shared themed tooltip on hover and focus;
@@ -72,7 +79,7 @@ It excludes tests and never traverses dependency trees: the former recursive pac
   `DropdownMenuSubContent`, `DropdownMenuSubTrigger`, `DropdownMenuTrigger`, `Outline`, `OutlineColumn`,
   `OutlineToggle`, `scrollToHeading`, `buildOutlineTree`, `HeadingEntry`, `OutlineNode`, `Popover`,
   `PopoverAnchor`, `PopoverContent`, `PopoverTrigger`, `abbreviateHomePath`, `RowAction`, `ScopeChip`,
-  `ScopedSettingRow`, `ScopedSettingSource`, `SettingsToolbar`, `SettingValue`, `attachPath`, `cwdLabel`, `TerminalAttachButton`, `TerminalFactChip`, `SettingValueDialog`, `shapeOf`,
+  `ScopedSettingRow`, `ScopedSettingSource`, `SettingsToolbar`, `SettingValue`, `attachPath`, `cwdLabel`, `TerminalAttachButton`, `TerminalFactChip`, `TerminalIdeContextChip`, `TerminalPlan`, `TerminalTodo`, `TerminalUsageChip`, `formatTokens`, `TokenUsage`, `tokenUsageParts`, `SettingValueDialog`, `shapeOf`,
   `SourcePath`, `SvgAsset`, `ValueShape`, `ImperativePanelGroupHandle`,
   `ImperativePanelHandle`, `ResizableHandle`, `ResizablePanel`, `ResizablePanelGroup`, `ToggleSegment`,
   `ToolFileLink`, `Textarea`, `Toast`, `ToastClose`, `ToastDescription`, `ToastProvider`, `ToastTitle`,

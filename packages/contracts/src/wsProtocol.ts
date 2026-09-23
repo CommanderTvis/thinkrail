@@ -109,7 +109,7 @@ export type TemplateReadLocation =
 
 export type PluginWireName = `plugin.${string}.${string}`;
 
-export const PROTOCOL_VERSION = 67;
+export const PROTOCOL_VERSION = 68;
 export const JBCENTRAL_ACCESS_PROTOCOL_VERSION = 67;
 export const ANALYTICS_CONSENT_PROTOCOL_VERSION = 65;
 export const SESSION_RENAME_PROTOCOL_VERSION = 66;
@@ -121,6 +121,7 @@ export function normalizeSessionTitle(value: unknown): string | null {
 	return title.length > 0 && title.length <= SESSION_TITLE_MAX_LENGTH ? title : null;
 }
 
+export const REVIEW_TERMINAL_PROTOCOL_VERSION = 68;
 export const PLUGIN_ROSTER_PROTOCOL_VERSION = 67;
 export const WINDOWS_SHELL_SETTINGS_PROTOCOL_VERSION = 62;
 export const PROJECT_TEMPLATE_PREVIEW_PROTOCOL_VERSION = 63;
@@ -375,12 +376,18 @@ export interface Ack {
 	ok: true;
 }
 
-export interface ReviewSendResult {
+export interface ReviewChatSendResult {
 	sessionId: string;
 	model: WireModel | null;
 	thinkingLevel: ThinkingLevel;
 	reused: boolean;
 }
+
+export interface ReviewTerminalSendResult {
+	terminal: string;
+}
+
+export type ReviewSendResult = ReviewChatSendResult | ReviewTerminalSendResult;
 
 export interface WorkspaceWatchReadyResult {
 	startupNudge: boolean;
@@ -682,6 +689,7 @@ export interface WsMethodMap {
 			workspaceId: string;
 			id: string;
 			sessionId?: string;
+			terminal?: string;
 			model?: WireModel;
 			thinkingLevel?: ThinkingLevel;
 		};
@@ -692,6 +700,7 @@ export interface WsMethodMap {
 			workspaceId: string;
 			commentIds?: string[];
 			sessionId?: string;
+			terminal?: string;
 			model?: WireModel;
 			thinkingLevel?: ThinkingLevel;
 		};

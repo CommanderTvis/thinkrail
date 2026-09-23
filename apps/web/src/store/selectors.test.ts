@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import type { ActivityStatus, Project, WireModel, Workspace } from "@thinkrail/contracts";
 import type { WorkspaceLayoutDocument } from "../shell/layout";
-import type { EditorTab } from "./appStore";
+import type { EditorTab, TerminalTab } from "./appStore";
 import {
 	isConnectedGeneration,
 	isDefaultWorkspace,
@@ -9,6 +9,7 @@ import {
 	isUserOwnedWorkspace,
 	matchesWorktreePath,
 	projectActivityRollup,
+	reviewTargets,
 	selectActiveEditorTab,
 	selectActiveWorkspace,
 	selectActiveWorkspaceProjectId,
@@ -18,6 +19,7 @@ import {
 	selectAttentionCenterResourceReady,
 	selectAttentionCenterTab,
 	selectCanRenameChat,
+	selectCanSendReviewToTerminal,
 	selectCatalogModel,
 	selectContextProject,
 	selectHistoryTarget,
@@ -25,6 +27,7 @@ import {
 	selectLayoutResourcePlacement,
 	selectLayoutTabPlaced,
 	selectLayoutTabPlacement,
+	selectReviewDiscussionOpen,
 	selectSkillsStale,
 	specPathMatcher,
 	workspaceActivityRollup,
@@ -626,4 +629,42 @@ test("the file the user is in is whatever the focused group shows, and nothing f
 			"ws",
 		),
 	).toBeNull();
+});
+
+test("review targets list open chats, then agent terminals only once the host can take them", () => {
+	const tabs = [
+		{ kind: "chat", id: "t1", workspaceId: "w", name: "  ", sessionId: "s1" },
+		{ kind: "chat", id: "t2", workspaceId: "w", name: "Fix login", sessionId: "s2" },
+	] as EditorTab[];
+	const terminals: TerminalTab[] = [
+		{ tabKey: "shell", workspaceId: "w", title: "zsh" },
+		{
+			tabKey: "cc",
+			workspaceId: "w",
+			title: "Claude Code",
+			agent: { kind: "claude", command: "claude" },
+		},
+	];
+	expect(reviewTargets(tabs, terminals, false)).toEqual([
+		{ kind: "chat", sessionId: "s1", title: "Chat" },
+		{ kind: "chat", sessionId: "s2", title: "Fix login" },
+	]);
+	expect(reviewTargets(tabs, terminals, true).at(-1)).toEqual({
+		kind: "terminal",
+		tabKey: "cc",
+		title: "Claude Code",
+	});
+	expect(selectCanSendReviewToTerminal({ protocolVersion: 67 })).toBe(false);
+	expect(selectCanSendReviewToTerminal({ protocolVersion: 68 })).toBe(true);
+	expect(selectCanSendReviewToTerminal({ protocolVersion: null })).toBe(false);
+});
+
+test("a terminal discussion opens only while its tab is still there", () => {
+	const state = {
+		terminalsByWorkspace: { w: [{ tabKey: "cc", workspaceId: "w", title: "Claude Code" }] },
+	};
+	expect(selectReviewDiscussionOpen(state, "w", { sessionId: "s1" })).toBe(true);
+	expect(selectReviewDiscussionOpen(state, "w", { terminal: "cc" })).toBe(true);
+	expect(selectReviewDiscussionOpen(state, "w", { terminal: "gone" })).toBe(false);
+	expect(selectReviewDiscussionOpen(state, "w", {})).toBe(false);
 });

@@ -1,12 +1,5 @@
 import type { ContextUsage, SessionStats } from "@thinkrail/contracts";
-
-export function formatTokens(count: number): string {
-	if (count < 1_000) return count.toString();
-	if (count < 10_000) return `${(count / 1_000).toFixed(1)}k`;
-	if (count < 1_000_000) return `${Math.round(count / 1_000)}k`;
-	if (count < 10_000_000) return `${(count / 1_000_000).toFixed(1)}M`;
-	return `${Math.round(count / 1_000_000)}M`;
-}
+import { formatTokens, tokenUsageParts } from "@thinkrail/plugin-ui";
 
 export function formatCost(cost: number): string {
 	return `$${cost.toFixed(3)}`;
@@ -20,11 +13,7 @@ export function formatElapsed(ms: number): string {
 }
 
 export function usageParts(stats: SessionStats): string[] {
-	const parts: string[] = [];
-	if (stats.tokens.input) parts.push(`↑${formatTokens(stats.tokens.input)}`);
-	if (stats.tokens.output) parts.push(`↓${formatTokens(stats.tokens.output)}`);
-	if (stats.tokens.cacheRead) parts.push(`R${formatTokens(stats.tokens.cacheRead)}`);
-	if (stats.tokens.cacheWrite) parts.push(`W${formatTokens(stats.tokens.cacheWrite)}`);
+	const parts = tokenUsageParts(stats.tokens);
 	if (stats.cost) parts.push(formatCost(stats.cost));
 	return parts;
 }

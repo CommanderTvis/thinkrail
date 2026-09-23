@@ -22,7 +22,7 @@ identities. A tab's shell outlives every client that looks at it; each frontend 
   (addressed) and `terminal.tabs` (broadcast), via injected publishers; the bounded per-terminal output
   recorder replayed on attach.
 - **Public surface (barrel):** `reserveTerminal`, `attachTerminal`, `listTerminals`, `terminalRefs`,
-  `writeTerminal`, `writeTerminalFromHost`, `resizeTerminal`, `renameTerminal`, `closeTerminalTab`,
+  `writeTerminal`, `writeTerminalFromHost`, `submitToAgent`, `resizeTerminal`, `renameTerminal`, `closeTerminalTab`,
   `resumeClientTerminals`, `closeWorkspaceTerminals`, `persistTerminalSessions`, `reviveTerminalSessions`,
   `closeAllTerminals`, `resetTerminalState` (test seam), `workspaceForProcess`, `agentRecordOf`,
   `setAgentRecord`, `setTerminalPublisher`, `setTerminalTabsPublisher`, `setTerminalObserver`,
@@ -61,7 +61,9 @@ identities. A tab's shell outlives every client that looks at it; each frontend 
   `resumeCommand`/`continueCommand` composition moved to the plugin's `revivePrefillFor`, keyed on
   `record.kind === "claude"`); `revivePrefillFor` simply returns whatever the installed hook offers, or
   `null` with none installed. `writeTerminalFromHost` bypasses the client-attachment gate (H10) for a
-  plugin delivering its own text. `agentRecordOf`/`setAgentRecord` (H7) are the typed, persisted, broadcast
+  plugin delivering its own text. `submitToAgent` is the same host write for a whole multi-line prompt
+  to the tab's agent: one bracketed paste plus Enter in a single write, refused (throws) when the tab no
+  longer carries an agent record. `agentRecordOf`/`setAgentRecord` (H7) are the typed, persisted, broadcast
   per-terminal agent record, and they are the *only* source of a tab's agent — no poll
   fallback lives here any more: `setAgentRecord` also carries the effects that used to be interleaved with
   detection (title adoption via `adoptedTitle`, which strips a leading status-glyph run from any title

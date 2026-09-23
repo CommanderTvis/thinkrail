@@ -1,6 +1,7 @@
 import type { DelegationRunDetails, DelegationRunStatus } from "@thinkrail/contracts";
 import { isDelegationRunDetails } from "@thinkrail/contracts";
-import { formatCost, formatElapsed, formatTokens } from "../../SessionStatsBar";
+import { formatTokens } from "@thinkrail/plugin-ui";
+import { formatCost, formatElapsed } from "../../SessionStatsBar";
 import type { ToolRenderProps } from "../../toolRegistry";
 import { strArg } from "../toolHelpers";
 

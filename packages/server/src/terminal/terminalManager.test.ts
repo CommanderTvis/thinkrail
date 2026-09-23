@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync } from "node:fs";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir, userInfo } from "node:os";
 import { join } from "node:path";
 import { type Workspace, WS_CHANNELS } from "@thinkrail/contracts";
@@ -19,6 +19,7 @@ import {
 	setRevivePrefillHook,
 	setTerminalPublisher,
 	setTerminalTabsPublisher,
+	submitToAgent,
 	writeTerminal,
 } from "./terminalManager";
 
@@ -609,6 +610,40 @@ describe("resuming an agent a surface promised to bring back", () => {
 			);
 			reviveTerminalSessions();
 			expect(attachTerminal(WS, "plain", "client-2").prefill).toBe("demo-cli --resume");
+		},
+		TERMINAL_TEST_TIMEOUT_MS,
+	);
+});
+
+describe("submitting a prompt to a terminal's agent", () => {
+	test("refuses a tab that carries no agent record", () => {
+		attachTerminal(WS, "plain", "client-1");
+		expect(() => submitToAgent({ workspaceId: WS, tabKey: "plain" }, "hello")).toThrow(
+			"no longer running an agent",
+		);
+	});
+
+	test(
+		"arrives as one bracketed paste the text cannot close early, then Enter",
+		async () => {
+			const probe = join(dataDir, "paste-probe.js");
+			writeFileSync(
+				probe,
+				`process.stdin.setRawMode(true);let got="";process.stdin.on("data",(b)=>{got+=b.toString();if(got.endsWith("\\r")){process.stdout.write("GOT:"+JSON.stringify(got)+"\\n");process.exit(0)}});process.stdout.write("PROBE_"+"READY\\n");`,
+			);
+			const attached = attachTerminal(WS, "plain", "client-1");
+			await waitForTerminalOutput(attached.id);
+			const invoke = process.platform === "win32" ? "& " : "";
+			writeTerminal(attached.id, `${invoke}"${process.execPath}" "${probe}"\r`, "client-1");
+			await waitForTerminalOutput(attached.id, "PROBE_READY");
+			setAgentRecord({ workspaceId: WS, tabKey: "plain" }, { kind: "demo", command: "demo-cli" });
+
+			submitToAgent({ workspaceId: WS, tabKey: "plain" }, "first\n\x1b[201~second");
+
+			await waitForTerminalOutput(attached.id, "GOT:");
+			expect(terminalOutput(attached.id)).toContain(
+				`GOT:${JSON.stringify("\x1b[200~first\n[201~second\x1b[201~\r")}`,
+			);
 		},
 		TERMINAL_TEST_TIMEOUT_MS,
 	);

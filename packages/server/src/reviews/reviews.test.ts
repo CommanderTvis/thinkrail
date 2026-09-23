@@ -23,11 +23,13 @@ import {
 	fileReviewSession,
 	getReviewSnapshot,
 	markCommentsSent,
+	markCommentsSentToTerminal,
 	markFileDone,
 	REVIEW_LEVEL_KEY,
 	reanchorWorkspace,
 	removeWorkspaceReviews,
 	resolveCommentFromAgent,
+	resolveCommentFromTerminal,
 	reviewReadFailure,
 	reviewSessionKey,
 	rollbackSend,
@@ -374,6 +376,38 @@ test("agent resolve is bound to the chat the comment was actually sent to — no
 	await markCommentsSent(WS_ID, [comment.id], "sess1");
 	expect(() => resolveCommentFromAgent("sess2", comment.id)).toThrow("not sent to this chat");
 	expect(resolveCommentFromAgent("sess1", comment.id).status).toBe("resolved");
+});
+
+test("a comment sent to an agent terminal is resolved by that terminal only, and pins no chat", async () => {
+	const comment = await addInline();
+	await markCommentsSentToTerminal(WS_ID, [comment.id], "tab-claude");
+	const sent = (await getReviewSnapshot(WS_ID)).comments.find((c) => c.id === comment.id);
+	expect(sent?.terminal).toBe("tab-claude");
+	expect(sent?.sessionId).toBeUndefined();
+	expect(await fileReviewSession(WS_ID, reviewSessionKey(comment))).toBeUndefined();
+
+	expect(() => resolveCommentFromAgent("tab-claude", comment.id)).toThrow("not sent to this chat");
+	expect(() =>
+		resolveCommentFromTerminal({ workspaceId: "other-ws", tabKey: "tab-claude" }, comment.id),
+	).toThrow("not sent to this terminal");
+	expect(() =>
+		resolveCommentFromTerminal({ workspaceId: WS_ID, tabKey: "tab-codex" }, comment.id),
+	).toThrow("not sent to this terminal");
+	const resolved = resolveCommentFromTerminal(
+		{ workspaceId: WS_ID, tabKey: "tab-claude" },
+		comment.id,
+		"fixed",
+	);
+	expect(resolved.status).toBe("resolved");
+	expect(resolved.resolveNote).toBe("fixed");
+});
+
+test("a chat cannot be resolved into by a terminal", async () => {
+	const comment = await addInline();
+	await markCommentsSent(WS_ID, [comment.id], "sess1");
+	expect(() =>
+		resolveCommentFromTerminal({ workspaceId: WS_ID, tabKey: "sess1" }, comment.id),
+	).toThrow("not sent to this terminal");
 });
 
 test("an open-snapshot mutation cannot overwrite an agent resolution across its async return", async () => {

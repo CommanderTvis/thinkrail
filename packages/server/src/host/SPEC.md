@@ -423,6 +423,18 @@ channel fan-out, and the process-boot wrapper both launchers share.
   `reviews.resolveCommentFromAgent` (the worker tool seam) and `reanchorWorkspace` (the fs-watch tee):
   both re-read the snapshot from disk before writing, and neither removes a comment nor closes the
   review, so landing in a send's gap can't invalidate the package's ids.
+- **A review send can name an agent terminal instead of a chat.** `review.sendComment`/`sendBatch`
+  take an optional `terminal` (a tab key in the send's workspace), exclusive with `sessionId`. The
+  target must still carry an agent record (`terminal.agentRecordOf`) when the send runs; otherwise the
+  send throws before anything is marked. The whole selection renders as ONE package, not one per key
+  (a key's grouping exists to pin chats, and a terminal is never a pin), is marked sent to
+  `{ terminal }`, and is written to the PTY by `terminal.submitToAgent` as one bracketed paste followed
+  by Enter. Claude Code 2.x and Codex 0.155 both submit that multi-line paste as a single prompt when
+  it arrives in one write, which was checked against both CLIs in a raw PTY, so there is no delay
+  between the paste and the Enter. The result is `{ terminal }` and the client focuses that tab. The
+  agent resolves what it received through ThinkRail's MCP server: the `/mcp/<token>` route puts core's
+  `resolve_comment` (`host/reviewMcp.ts`, the same description and schema as pi's tool) ahead of the
+  plugins' tools. Its caller identity is the token's terminal (see `reviews/SPEC.md`).
 - **A review send lands in the conversation already on screen, else the key's chat.** Both send
   handlers route through `sendToFileChat`: comments are grouped by `reviews.reviewSessionKey` (the
   anchor's path, or the review-level bucket for anchorless remarks — pinned like a file so a second

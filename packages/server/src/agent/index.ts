@@ -32,9 +32,11 @@ export {
 } from "./piRuntime";
 export {
 	type AddReviewCommentParams,
+	RESOLVE_COMMENT_DESCRIPTION,
 	RESOLVE_COMMENT_TOOL_NAME,
 	type ReflectFindingParams,
 	type ResolveCommentOutcome,
+	ResolveCommentSchema,
 	type ReviewVerdictParams,
 	setAddReviewCommentHandler,
 	setReflectFindingHandler,

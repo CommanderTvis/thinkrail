@@ -1578,6 +1578,17 @@ they must not receive chat's trimmed endpoint paired with an untrimmed column an
   → show the chat tab → toast on failure), and the panes integrate via the one **`useFileReview`**
   hook (threads + composer callbacks + card actions in a single `review` prop on
   `MonacoEditor`/`MonacoDiff`).
+  **The batch buttons (`Send review (N)`, `Send all (N)`) are split buttons.** The main half keeps the
+  default routing above. The ▾ half lists every explicit recipient in the workspace, derived once by
+  `reviewTargets`: each open chat tab, then each terminal whose tab carries an agent record
+  (Claude Code, Codex, identified by the tab's own title). Terminals are listed only when the host speaks
+  `REVIEW_TERMINAL_PROTOCOL_VERSION` (`selectCanSendReviewToTerminal`), since an older host would ignore the field and start a chat
+  instead. Picking a terminal sends the whole selection there as one package and focuses that tab
+  (`setActiveTerminalTab`: selected where it already lives, never moved into the centre the way a
+  plugin's `openTerminal` places one). A
+  comment sent to a terminal opens that terminal from the Review panel's "open the discussion", where
+  a chat comment would open its chat, and only while the tab still exists (`selectReviewDiscussionOpen`). Single-comment sends (thread cards, sidebar rows) keep the default
+  routing and have no picker.
   A batch answers with EVERY session it touched (one per group), so a multi-file batch opens every chat
   it started and focuses the first — a chat the user never saw would still be an agent working on their
   comments. **Showing each chat forks on the result's `reused` flag:** a chat this send CREATED opens straight
