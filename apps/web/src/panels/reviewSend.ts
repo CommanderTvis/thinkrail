@@ -9,12 +9,16 @@ import {
 import { errorText, getTransport } from "../transport";
 import { openChatInTab } from "./openChat";
 
-async function showReviewChat(
+async function showReviewRecipient(
 	workspaceId: string,
 	sent: ReviewSendResult,
 	navigation: CenterNavigationStamp | null,
 	background = false,
 ): Promise<void> {
+	if ("terminal" in sent) {
+		if (!background) useAppStore.getState().setActiveTerminalTab(workspaceId, sent.terminal);
+		return;
+	}
 	if (sent.reused) {
 		await openChatInTab(workspaceId, sent.sessionId, navigation, { background });
 		return;
@@ -44,23 +48,29 @@ export async function sendReviewComment(workspaceId: string, id: string): Promis
 			id,
 			...preferredChat(workspaceId),
 		});
-		await showReviewChat(workspaceId, sent, navigation);
+		await showReviewRecipient(workspaceId, sent, navigation);
 	} catch (err) {
 		toast.error(errorText(err), "Couldn't send the comment");
 		throw err;
 	}
 }
 
-export async function sendReviewBatch(workspaceId: string, commentIds?: string[]): Promise<void> {
+export type ReviewRecipient = { sessionId: string } | { terminal: string };
+
+export async function sendReviewBatch(
+	workspaceId: string,
+	commentIds?: string[],
+	recipient?: ReviewRecipient,
+): Promise<void> {
 	const navigation = useAppStore.getState().beginCenterNavigation(workspaceId);
 	try {
 		const { sessions } = await getTransport().request("review.sendBatch", {
 			workspaceId,
 			...(commentIds ? { commentIds } : {}),
-			...preferredChat(workspaceId),
+			...(recipient ?? preferredChat(workspaceId)),
 		});
 		for (const [index, sent] of sessions.entries()) {
-			await showReviewChat(workspaceId, sent, navigation, index > 0);
+			await showReviewRecipient(workspaceId, sent, navigation, index > 0);
 		}
 	} catch (err) {
 		toast.error(errorText(err), "Couldn't send the review");

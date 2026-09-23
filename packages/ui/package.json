@@ -28,6 +28,7 @@
 		"./chips": "./chips.ts",
 		"./outlineTree": "./outlineTree.ts",
 		"./pathUtils": "./pathUtils.ts",
+		"./tokenUsage": "./tokenUsage.ts",
 		"./useThemeSwap": "./useThemeSwap.ts",
 		"./zoomGesture": "./zoomGesture.ts",
 		"./editor": "./editor/index.ts",

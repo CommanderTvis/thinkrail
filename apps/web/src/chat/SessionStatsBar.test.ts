@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import type { SessionStats } from "@thinkrail/contracts";
 import { renderToStaticMarkup } from "react-dom/server";
-import { contextPart, formatTokens, SessionStatsBar, usageParts } from "./SessionStatsBar";
+import { contextPart, SessionStatsBar, usageParts } from "./SessionStatsBar";
 
 function stats(overrides: Partial<SessionStats> = {}): SessionStats {
 	return {
@@ -14,16 +14,6 @@ function stats(overrides: Partial<SessionStats> = {}): SessionStats {
 }
 
 describe("SessionStatsBar pi-style formatting", () => {
-	it("matches pi's compact token thresholds", () => {
-		expect([999, 1_200, 12_345, 1_200_000, 10_400_000].map(formatTokens)).toEqual([
-			"999",
-			"1.2k",
-			"12k",
-			"1.2M",
-			"10M",
-		]);
-	});
-
 	it("orders the available pi fields and omits zero values", () => {
 		expect(
 			usageParts(
