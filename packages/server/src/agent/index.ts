@@ -89,8 +89,10 @@ export {
 } from "./requestReviewTool";
 export { isHostResourceId, isPiSessionId } from "./resourceIdentity";
 export {
+	RESOLVE_COMMENT_DESCRIPTION,
 	RESOLVE_COMMENT_TOOL_NAME,
 	type ResolveCommentOutcome,
+	ResolveCommentSchema,
 	setReviewCommentHandler,
 } from "./reviewTool";
 export * from "./sessionRepair";

@@ -20,19 +20,74 @@ identities. A tab's shell outlives every client that looks at it; each frontend 
   `(workspaceId, tabKey)`; batched output on `terminal.data` plus `terminal.exit` / `terminal.detached`
   (addressed) and `terminal.tabs` (broadcast), via injected publishers; the bounded per-terminal output
   recorder replayed on attach.
-- **Public surface (barrel):** `reserveTerminal`, `attachTerminal`, `listTerminals`, `writeTerminal`,
-  `resizeTerminal`, `closeTerminalTab`, `resumeClientTerminals`, `closeWorkspaceTerminals`,
-  `persistTerminalSessions`, `reviveTerminalSessions`, `closeAllTerminals`, `clearTerminalClient`,
-  `resetTerminalState` (test seam), `setTerminalPublisher`,
-  `setTerminalTabsPublisher`; an accepted `writeTerminal` returns its owning workspace id (a displaced
-  caller returns `null`), so the host counts only input that actually reached a PTY as workspace activity;
-  the `TerminalDeliveryResult` type shared with the host publisher adapter.
-- **Allowed deps:** `persistence`, `contracts` (`WS_CHANNELS`, `TerminalWindowsShell`), `bun-pty`,
-  `Bun.which`, `Bun.spawnSync` (`id -un`), `process.env`.
-- **Forbidden:** `host`; sibling features. No WebSocket type crosses this boundary — clients are opaque keys.
+- **Public surface (barrel):** `reserveTerminal`, `attachTerminal`, `listTerminals`, `terminalRefs`,
+  `writeTerminal`, `writeTerminalFromHost`, `submitToAgent`, `resizeTerminal`, `renameTerminal`, `closeTerminalTab`,
+  `resumeClientTerminals`, `closeWorkspaceTerminals`, `persistTerminalSessions`, `reviveTerminalSessions`,
+  `closeAllTerminals`, `clearTerminalClient`, `resetTerminalState` (test seam), `workspaceForProcess`, `agentRecordOf`,
+  `setAgentRecord`, `setTerminalPublisher`, `setTerminalTabsPublisher`, `setTerminalObserver`,
+  `setTerminalEnvContributors`, `setRevivePrefillHook`; the token primitives (generic, H6): `terminalToken`,
+  `terminalForToken`, `forgetTerminalTokens`, `setTerminalTokenEndpoint`, `terminalMcpUrl`,
+  `resetTerminalTokens` (test seam) — every pre-plugin-API alias is retired
+  (`agentTokenOwner`/`forgetAgentStatusTokens`/`setAgentStatusEndpoint`/`agentMcpUrl`/
+  `resetAgentStatusTokens`) and the Claude-specific report reader (`agentStatusReport.ts`,
+  `rememberAgentSession`, `agentSessionOf`) along with them: the report route, its parsing, and the session
+  lookup it fed are now the Claude Code plugin's own (`packages/plugin-claude-code/host/statusReport.ts` +
+  `statusStore.ts`, `PluginHostContext`'s `agentRecord`/`setAgentRecord`), and `host/server.ts`'s
+  `setAgentSessionLookup` reads `agentRecordOf(ref)?.sessionId` directly instead of a dedicated function;
+  `resumeCommand`/`agentSessionExists` (agentResume.ts) stay, generic-shaped but still Claude's own text —
+  the plugin's `revivePrefillFor` composition is the only caller now, through `setRevivePrefillHook`;
+  the `TerminalDeliveryResult` type shared with the host publisher adapter; `captureProcessSnapshot`
+  (processTree.ts) for `workspaceForProcess`'s own ancestor walk — duplicated, not shared, with the Claude
+  Code plugin's identical copy that its `ps`-poll needs (see "Agent detection" below).
+- **Allowed deps:** `persistence`, `contracts` (`WS_CHANNELS`, `TerminalWindowsShell`, `TerminalAgentRecord`),
+  `@thinkrail/plugin-api` root types (`TerminalRef`) and `/host` types (`TerminalEvent`, `RevivePrefill`),
+  `bun-pty`, `Bun.which`, `Bun.spawnSync` (`id -un`), `process.env`.
+- **Forbidden:** `host`; sibling features; `packages/server/src/plugins`. No WebSocket type crosses this
+  boundary — clients are opaque keys.
 
 ## Decisions
 
+- **Plugin seams (H5–H10) are single composed slots, not subscriber lists**: `setTerminalEnvContributors`
+  installs one function the host builds by composing every active plugin's own per-terminal env
+  contributor — there is no resident default beneath it; a terminal's env is purely whatever
+  the active plugins contribute (the Claude Code plugin's own `ctx.terminalEnv` stamps
+  `THINKRAIL_AGENT_STATUS_URL`/`CLAUDE_CODE_SSE_PORT` only while it is active) — and `stop()` resets it;
+  `setTerminalObserver` installs one `(event: TerminalEvent) => void` the host fans out to
+  every plugin (`spawned`/`exited`/`closed`/`agentChanged`, fired from `spawnForTab`, `pty.onExit`,
+  `closeTerminalTab`/`closeWorkspaceTerminals`, and the agent-record accessors below); `setRevivePrefillHook`
+  installs one `(terminal, record) => RevivePrefill | null` the host builds from every plugin's own
+  composition — this module carries no default of its own either (the Claude-CLI
+  `resumeCommand`/`continueCommand` composition moved to the plugin's `revivePrefillFor`, keyed on
+  `record.kind === "claude"`); `revivePrefillFor` simply returns whatever the installed hook offers, or
+  `null` with none installed. `writeTerminalFromHost` bypasses the client-attachment gate (H10) for a
+  plugin delivering its own text. `submitToAgent` is the same host write for a whole multi-line prompt
+  to the tab's agent: one bracketed paste plus Enter in a single write, refused (throws) when the tab no
+  longer carries an agent record. `agentRecordOf`/`setAgentRecord` (H7) are the typed, persisted, broadcast
+  per-terminal agent record, and they are the *only* source of a tab's agent — no poll
+  fallback lives here any more: `setAgentRecord` also carries the effects that used to be interleaved with
+  detection (title adoption via `adoptedTitle`, which strips a leading status-glyph run from any title
+  regardless of which agent's record is involved; the mouse-mode guard's reset when a record is cleared),
+  so any plugin's detection gets both for free, not just Claude's.
+  `terminalRefs()` (H8's `terminals()`) is the live pid set a plugin needs to map a process back to a
+  workspace — named apart from `listTerminals`, which stays the `workspaceId`-scoped wire-facing catalog
+  `terminal.list` already used.
+- **The revive-prefill decision is made once, at boot, inside `reviveTerminalSessions()`, not consulted
+  again at attach-time.** A plugin that owns a tab's author (Blueprint's terminal-author case, the Claude
+  Code plugin's own resume/continue offer) names itself through `setRevivePrefillHook`'s own `submit` —
+  there is no separate seam for "run this tab's offer", only the one revive hook whichever plugin installs.
+  `pendingPrefill` stores `{ text, submit }`, and `attachTerminal` only reads it back.
+- **Token minting is fully generic; every Claude-shaped alias is gone.** `terminalTokens.ts`
+  mints/resolves/forgets tokens and mints MCP addresses (H6) under its own names only —
+  `agentTokenOwner`/`setAgentStatusEndpoint`/`forgetAgentStatusTokens`/`agentMcpUrl`/`resetAgentStatusTokens`
+  are gone, and `host/server.ts`/`host/handlers.ts` call `terminalForToken`/`setTerminalTokenEndpoint`/
+  `terminalMcpUrl` directly. The Claude-specific report route, its body parsing, and the per-tab status
+  cache it used to populate here are the Claude Code plugin's own now (`ctx.route`, `statusReport.ts`,
+  `statusStore.ts`) — this module knows nothing about what a token's owner posts back, only how to mint and
+  resolve the token itself. A token identifies its terminal generically to whatever addresses one from
+  outside the process it runs in (an agent status report, an MCP call): a caller is handed a token minted
+  for its own tab, so it never needs to know the tab's workspace or key, and a process that was never
+  given a token cannot pretend to own one. Tokens live only in this process's memory and in the
+  environment of the PTY they were minted for.
 - **Shell selection is terminal-local**, and Windows' choice is additionally user-configurable
   (`AppConfig.terminalWindowsShell`, `apps/web/src/panels/TerminalSettings.tsx`'s Windows-only picker;
   [[task-windows-default-terminal-shell]]). Precedence, highest first: an explicit `SHELL` env var always

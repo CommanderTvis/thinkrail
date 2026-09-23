@@ -1,10 +1,23 @@
-import { RiSendPlaneLine as Send } from "@remixicon/react";
+import {
+	RiMessage2Line as ChatIcon,
+	RiArrowDownSLine as ChevronDown,
+	RiSendPlaneLine as Send,
+	RiTerminalBoxLine as TerminalIcon,
+} from "@remixicon/react";
 import { useT } from "@thinkrail/locales/react";
-import { Button } from "@thinkrail/ui/button";
+import { Button, IconButton } from "@thinkrail/ui/button";
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuTrigger,
+} from "@thinkrail/ui/dropdown-menu";
 import { useMemo, useState } from "react";
-import { useAppStore } from "../store";
+import { reviewTargets, selectCanSendReviewToTerminal, useAppStore } from "../store";
 import { allDraftIds, fileDraftIds } from "./reviewModel";
-import { sendReviewBatch } from "./reviewSend";
+import { type ReviewRecipient, sendReviewBatch } from "./reviewSend";
+
+const NO_TABS: never[] = [];
 
 export function SendReviewButton({
 	workspaceId,
@@ -28,10 +41,17 @@ export function SendReviewButton({
 	);
 	return (
 		<SendButtonBase
+			workspaceId={workspaceId}
 			testid={testid}
 			label={t("panels.sendReview.file", { total: draftIds.length })}
 			count={draftIds.length}
-			send={() => sendReviewBatch(workspaceId, draftIds, chatSessionId)}
+			send={(recipient) =>
+				sendReviewBatch(
+					workspaceId,
+					draftIds,
+					recipient ?? (chatSessionId ? { sessionId: chatSessionId } : undefined),
+				)
+			}
 		/>
 	);
 }
@@ -50,47 +70,98 @@ export function SendAllReviewsButton({
 	const count = useMemo(() => allDraftIds(comments).length, [comments]);
 	return (
 		<SendButtonBase
+			workspaceId={workspaceId}
 			testid={testid}
 			label={t("panels.sendReview.withCount", {
 				verb: verb ?? t("panels.sendReview.sendAll"),
 				total: count,
 			})}
 			count={count}
-			send={() => sendReviewBatch(workspaceId)}
+			send={(recipient) => sendReviewBatch(workspaceId, undefined, recipient)}
 		/>
 	);
 }
 
 function SendButtonBase({
+	workspaceId,
 	testid,
 	label,
 	count,
 	send,
 }: {
+	workspaceId: string;
 	testid: string;
 	label: string;
 	count: number;
-	send: () => Promise<void>;
+	send: (recipient?: ReviewRecipient) => Promise<void>;
 }) {
+	const t = useT();
 	const [busy, setBusy] = useState(false);
+	const tabs = useAppStore((s) => s.tabsByWorkspace[workspaceId] ?? NO_TABS);
+	const terminals = useAppStore((s) => s.terminalsByWorkspace[workspaceId] ?? NO_TABS);
+	const terminalsAllowed = useAppStore(selectCanSendReviewToTerminal);
+	const targets = useMemo(
+		() => reviewTargets(t("panels.sendReview.untitledChat"), tabs, terminals, terminalsAllowed),
+		[t, tabs, terminals, terminalsAllowed],
+	);
 	if (count === 0) return null;
-	const run = async () => {
+	const run = async (recipient?: ReviewRecipient) => {
 		setBusy(true);
-		await send()
+		await send(recipient)
 			.catch(() => {})
 			.finally(() => setBusy(false));
 	};
 	return (
-		<Button
-			variant="primary"
-			size="m"
-			iconLeft={Send}
-			data-testid={testid}
-			loading={busy}
-			onClick={() => void run()}
-			className="shrink-0"
-		>
-			{label}
-		</Button>
+		<span className="flex shrink-0 items-stretch gap-2">
+			<Button
+				variant="primary"
+				size="m"
+				iconLeft={Send}
+				data-testid={testid}
+				loading={busy}
+				onClick={() => void run()}
+			>
+				{label}
+			</Button>
+			{targets.length > 0 ? (
+				<DropdownMenu>
+					<DropdownMenuTrigger asChild>
+						<IconButton
+							variant="primary"
+							size="m"
+							icon={ChevronDown}
+							label={t("panels.sendReview.sendTo")}
+							data-testid={`${testid}-target`}
+							disabled={busy}
+						/>
+					</DropdownMenuTrigger>
+					<DropdownMenuContent align="end" data-testid="review-send-targets">
+						{targets.map((target) =>
+							target.kind === "chat" ? (
+								<DropdownMenuItem
+									key={`chat-${target.sessionId}`}
+									data-testid="review-send-target"
+									data-kind="chat"
+									onSelect={() => void run({ sessionId: target.sessionId })}
+								>
+									<ChatIcon className="size-14" />
+									{target.title}
+								</DropdownMenuItem>
+							) : (
+								<DropdownMenuItem
+									key={`terminal-${target.tabKey}`}
+									data-testid="review-send-target"
+									data-kind="terminal"
+									onSelect={() => void run({ terminal: target.tabKey })}
+								>
+									<TerminalIcon className="size-14" />
+									{target.title}
+								</DropdownMenuItem>
+							),
+						)}
+					</DropdownMenuContent>
+				</DropdownMenu>
+			) : null}
+		</span>
 	);
 }

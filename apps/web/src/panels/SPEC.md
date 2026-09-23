@@ -1782,6 +1782,17 @@ menu. A compacted folder copies the deepest represented directory for the absolu
   the chat's scope — the host's explicit `sessionId` wins over the pinned chat, so feedback lands in the chat
   that showed the file. The shell's `AppResourceHost` exposes exactly these (bound per call) as the
   renderers' `FileReview` / `ReviewSend` host capabilities.
+  **The batch buttons (`Send review (N)`, `Send all (N)`) are split buttons.** The main half keeps the
+  default routing above. The ▾ half lists every explicit recipient in the workspace, derived once by
+  `reviewTargets`: each open chat tab, then each terminal whose tab carries an agent record
+  (Claude Code, Codex, identified by the tab's own title). Terminals are listed only when the host speaks
+  `REVIEW_TERMINAL_PROTOCOL_VERSION` (`selectCanSendReviewToTerminal`), since an older host would ignore the field and start a chat
+  instead. Picking a terminal sends the whole selection there as one package and focuses that tab
+  (`setActiveTerminalTab`: selected where it already lives, never moved into the centre the way a
+  plugin's `openTerminal` places one). A
+  comment sent to a terminal opens that terminal from the Review panel's "open the discussion", where
+  a chat comment would open its chat, and only while the tab still exists (`selectReviewDiscussionOpen`). Single-comment sends (thread cards, sidebar rows) keep the default
+  routing and have no picker.
   A batch answers with EVERY session it touched (one per group), so a multi-file batch opens every chat
   it started and focuses the first — a chat the user never saw would still be an agent working on their
   comments. **Showing each chat forks on the result's `reused` flag:** a chat this send CREATED opens straight
