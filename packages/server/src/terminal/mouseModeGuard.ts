@@ -5,6 +5,7 @@ const MOUSE_MODES: ReadonlySet<number> = new Set([
 	1002, // mouse: drag tracking
 	1003, // mouse: any-motion tracking
 	1006, // mouse: SGR coordinate encoding
+	1007, // alternate scroll
 ]);
 
 const ALT_BUFFER_MODES: ReadonlySet<number> = new Set([47, 1047, 1049]);
@@ -17,6 +18,7 @@ const PARTIAL_MODE_RE = new RegExp(`${ESC}(?:\\[\\??[0-9;]{0,16})?$`);
 
 export interface MouseModeGuard {
 	transform(chunk: string): string;
+	liveReplay(): string;
 	/**
 	 * Force a mouse-mode reset outside the byte stream (e.g. when process-tree polling detects the
 	 * TUI that enabled it has exited). Returns "" when tracking was already off, so callers can push
@@ -36,8 +38,8 @@ export interface MouseModeGuard {
  * SPEC.md.
  */
 export function createMouseModeGuard(): MouseModeGuard {
-	let mouseEnabled = false;
-	let inAltBuffer = false;
+	const enabledModes = new Set<number>();
+	let altMode: number | null = null;
 	let carry = "";
 
 	const applyModes = (params: string, enabled: boolean): string => {
@@ -46,14 +48,15 @@ export function createMouseModeGuard(): MouseModeGuard {
 			const mode = Number.parseInt(raw, 10);
 			if (Number.isNaN(mode)) continue;
 			if (ALT_BUFFER_MODES.has(mode)) {
-				const leavingAlt = inAltBuffer && !enabled;
-				inAltBuffer = enabled;
-				if (leavingAlt && mouseEnabled) {
+				const leavingAlt = altMode !== null && !enabled;
+				altMode = enabled ? mode : null;
+				if (leavingAlt && enabledModes.size > 0) {
 					inject += MOUSE_RESET;
-					mouseEnabled = false;
+					enabledModes.clear();
 				}
 			} else if (MOUSE_MODES.has(mode)) {
-				mouseEnabled = enabled;
+				if (enabled) enabledModes.add(mode);
+				else enabledModes.delete(mode);
 			}
 		}
 		return inject;
@@ -75,6 +78,10 @@ export function createMouseModeGuard(): MouseModeGuard {
 	};
 
 	return {
+		liveReplay() {
+			if (altMode === null) return "";
+			return `${ESC}[?${altMode}h${[...enabledModes].map((mode) => `${ESC}[?${mode}h`).join("")}`;
+		},
 		transform(chunk) {
 			if (chunk === "") return chunk;
 			const text = carry + chunk;
@@ -91,8 +98,8 @@ export function createMouseModeGuard(): MouseModeGuard {
 			return consume(text);
 		},
 		resetIfEnabled() {
-			if (!mouseEnabled) return "";
-			mouseEnabled = false;
+			if (enabledModes.size === 0 || altMode !== null) return "";
+			enabledModes.clear();
 			return MOUSE_RESET;
 		},
 	};
