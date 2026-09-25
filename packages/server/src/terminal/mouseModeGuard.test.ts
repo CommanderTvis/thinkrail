@@ -50,6 +50,23 @@ describe("createMouseModeGuard", () => {
 		expect(guard.resetIfEnabled()).toBe("");
 	});
 
+	test("keeps wheel reporting active during a transient agent miss in the alt screen", () => {
+		const guard = createMouseModeGuard();
+		guard.transform(`${ESC}[?1049h${ESC}[?1000;1006hTUI content`);
+		expect(guard.resetIfEnabled()).toBe("");
+		const exit = guard.transform(`${ESC}[?1049l$ `);
+		expect(exit).toContain(`${ESC}[?1000l`);
+		expect(exit).toContain(`${ESC}[?1006l`);
+	});
+
+	test("replays input modes only while the original full-screen program is live", () => {
+		const guard = createMouseModeGuard();
+		guard.transform(`${ESC}[?1049h${ESC}[?1000;1006;1007h`);
+		expect(guard.liveReplay()).toBe(`${ESC}[?1049h${ESC}[?1000h${ESC}[?1006h${ESC}[?1007h`);
+		guard.transform(`${ESC}[?1049l`);
+		expect(guard.liveReplay()).toBe("");
+	});
+
 	test("resetIfEnabled forces a reset for a TUI that enabled mouse tracking inline (no alt screen)", () => {
 		const guard = createMouseModeGuard();
 		guard.transform(`${ESC}[?1000;1006h inline TUI, no alt screen`);

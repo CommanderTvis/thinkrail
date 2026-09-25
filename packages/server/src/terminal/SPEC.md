@@ -330,6 +330,9 @@ decision stays the user's; the tab is otherwise an ordinary shell.
   instead of copying it** — the held string is a `snapshot()`, so a verbatim copy moves its mode preamble
   into the body, where it stops being a re-derivable summary and becomes literal bytes that every later
   snapshot replays and re-persists.
+- A fresh browser terminal attaching to a *live* PTY restores its current alternate-screen and mouse input
+  modes after the recorder's normal-screen snapshot. Those modes come from the live output guard and never
+  enter the persisted recorder: a later shell or revived PTY must not inherit an exited TUI's mouse tracking.
 - Attach hands back the recording and then **discards** held batcher output — the replay already contains it.
 - **`mouseModeGuard.ts` fixes the *live* half of the same class of bug the recorder rule above fixes for
   restore:** a TUI that leaves SGR mouse tracking (1000/1002/1003/1006) enabled without a matching `DECRST`
@@ -341,9 +344,12 @@ decision stays the user's; the tab is otherwise an ordinary shell.
     tracking was left on — covers a TUI that pairs mouse mode with the alt screen (vim, htop, …) but
     crashes or is killed before its own cleanup runs.
   - `resetIfEnabled()` is a fallback `setAgentRecord` calls itself, generically, whenever a tab's record is
-    cleared: **Claude Code's own CLI runs inline, never touching the alt screen**, so `transform()` has no
-    signal to key off for it — process-tree polling noticing the `claude` process is gone (now the Claude
-    Code plugin's own poll, calling `ctx.setAgentRecord(ref, null)`) is the only trigger available, and
+    cleared while the terminal is on its normal screen. A process poll can briefly miss a still-running
+    alt-screen TUI; resetting mouse tracking then would strand that TUI without wheel input. Its eventual
+    alt-screen exit remains the reset trigger. **Claude Code's own CLI runs inline, never touching the alt
+    screen**, so `transform()` has no signal to key off for it — process-tree polling noticing the
+    `claude` process is gone (now the Claude Code plugin's own poll, calling
+    `ctx.setAgentRecord(ref, null)`) is the only trigger available, and
     `setAgentRecord` pushes the reset through the same `recorder`/`output` pair `pty.onData` uses. Coarser
     (bounded by whatever interval the detecting plugin polls at) and reactive rather than synchronous, but
     the only option short of shell integration (OSC 133) telling us a foreground process just returned

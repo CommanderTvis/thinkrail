@@ -344,7 +344,7 @@ export function attachTerminal(
 				isStillLive: () => terminals.get(existingId) === existing,
 			});
 		}
-		const replay = existing.recorder.snapshot();
+		const replay = existing.recorder.snapshot() + existing.mouseModeGuard.liveReplay();
 		existing.output.reset();
 		return { id: existingId, created: false, ...(replay ? { replay } : {}) };
 	}
