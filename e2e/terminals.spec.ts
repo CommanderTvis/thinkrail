@@ -251,6 +251,51 @@ test("xterm uses the shared quiet rail and directional curtains", async ({ page 
 	await expect(cues).toHaveAttribute("data-scroll-bottom", "true");
 });
 
+test("terminal forwards pointer capture and Ctrl+T to a raw PTY", async ({ page }) => {
+	await openFixtureProject(page);
+	await createWorkspaceViaDialog(page);
+	await waitTerminalReady(page);
+	await runInTerminal(
+		page,
+		`node -e 'process.stdin.setRawMode(true); process.stdin.resume(); process.stdout.write("\\x1b[?1049h\\x1b[?1000h\\x1b[?1002h\\x1b[?1006h\\x1b[?1003h" + "RE" + "ADY\\r\\n"); process.stdin.on("data", b => process.stdout.write("KEY=" + b.toString("hex") + "\\r\\n"))'`,
+	);
+	await expect(visibleTerminalScreen(page)).toContainText("READY");
+	const terminal = visibleTerminal(page);
+	await expect(terminal.locator(".xterm.enable-mouse-events")).toBeVisible();
+	await terminal.locator(".xterm-screen").hover();
+	await page.mouse.wheel(0, -100);
+	await expect(visibleTerminalScreen(page)).toContainText("KEY=1b5b3c36343b");
+	await terminal.locator(".xterm-helper-textarea").focus();
+	await page.keyboard.press("Control+t");
+	await expect(visibleTerminalScreen(page)).toContainText("KEY=14");
+	await page.reload();
+	await waitTerminalReady(page);
+	const reattached = visibleTerminal(page);
+	await expect(reattached.locator(".xterm.enable-mouse-events")).toBeVisible();
+	await reattached.locator(".xterm-screen").hover();
+	await page.mouse.wheel(0, -100);
+	await expect(visibleTerminalScreen(page)).toContainText("KEY=1b5b3c36343b");
+});
+
+test("terminal sends alternate-scroll wheel gestures to the PTY", async ({ page }) => {
+	await openFixtureProject(page);
+	await createWorkspaceViaDialog(page);
+	await waitTerminalReady(page);
+	await runInTerminal(
+		page,
+		`node -e 'process.stdin.setRawMode(true); process.stdin.resume(); process.stdout.write("\\x1b[?1049h\\x1b[?1007h" + "RE" + "ADY\\r\\n"); process.stdin.on("data", b => process.stdout.write("KEY=" + b.toString("hex") + "\\r\\n"))'`,
+	);
+	await expect(visibleTerminalScreen(page)).toContainText("READY");
+	await visibleTerminal(page).locator(".xterm-screen").hover();
+	await page.mouse.wheel(0, -100);
+	await expect(visibleTerminalScreen(page)).toContainText("KEY=1b5b41");
+	await page.reload();
+	await waitTerminalReady(page);
+	await visibleTerminal(page).locator(".xterm-screen").hover();
+	await page.mouse.wheel(0, -100);
+	await expect(visibleTerminalScreen(page)).toContainText("KEY=1b5b41");
+});
+
 test("terminals are workspace-scoped and survive workspace switches", async ({ page }) => {
 	await openFixtureProject(page);
 	await createWorkspaceViaDialog(page);
