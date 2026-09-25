@@ -283,7 +283,67 @@ decision stays the user's; the tab is otherwise an ordinary shell.
   instead of copying it** — the held string is a `snapshot()`, so a verbatim copy moves its mode preamble
   into the body, where it stops being a re-derivable summary and becomes literal bytes that every later
   snapshot replays and re-persists.
+- A fresh browser terminal attaching to a *live* PTY restores its current alternate-screen and mouse input
+  modes after the recorder's normal-screen snapshot. Those modes come from the live output guard and never
+  enter the persisted recorder: a later shell or revived PTY must not inherit an exited TUI's mouse tracking.
 - Attach hands back the recording and then **discards** held batcher output — the replay already contains it.
+- **`mouseModeGuard.ts` fixes the *live* half of the same class of bug the recorder rule above fixes for
+  restore:** a TUI that leaves SGR mouse tracking (1000/1002/1003/1006) enabled without a matching `DECRST`
+  leaves xterm.js honoring it forever, so every mouse move over what's now a bare shell prompt gets encoded
+  as a report and echoed back as garbage. Two independent triggers, since neither alone covers every real
+  TUI observed in practice:
+  - `transform()` taps the live PTY byte stream (`terminalManager.ts`'s `pty.onData`, upstream of both the
+    recorder and the batcher) and injects a reset immediately after an alt-screen exit whenever mouse
+    tracking was left on — covers a TUI that pairs mouse mode with the alt screen (vim, htop, …) but
+    crashes or is killed before its own cleanup runs.
+  - `resetIfEnabled()` is a fallback `setAgentRecord` calls itself, generically, whenever a tab's record is
+    cleared while the terminal is on its normal screen. A process poll can briefly miss a still-running
+    alt-screen TUI; resetting mouse tracking then would strand that TUI without wheel input. Its eventual
+    alt-screen exit remains the reset trigger. **Claude Code's own CLI runs inline, never touching the alt
+    screen**, so `transform()` has no signal to key off for it — process-tree polling noticing the
+    `claude` process is gone (now the Claude Code plugin's own poll, calling
+    `ctx.setAgentRecord(ref, null)`) is the only trigger available, and
+    `setAgentRecord` pushes the reset through the same `recorder`/`output` pair `pty.onData` uses. Coarser
+    (bounded by whatever interval the detecting plugin polls at) and reactive rather than synchronous, but
+    the only option short of shell integration (OSC 133) telling us a foreground process just returned
+    control.
+  Either path is a one-shot reset per left-on episode, never a fresh timer or poll of its own.
+- **A spawned PTY carries `CLAUDE_CODE_SSE_PORT` when the IDE bridge is up.** A `claude` started in this
+  terminal then connects to ThinkRail's editor bridge from its own environment instead of scanning
+  `~/.claude/ide/*.lock` and matching cwds — the same handoff the official VS Code extension performs.
+  `ptyEnv` reads the live port per spawn (absent when the bridge is off, which is the default), so a
+  terminal opened before the setting was turned on simply lacks the variable rather than carrying a stale
+  one. See [[submodule-server-ide-bridge]].
+- **A spawned PTY is stamped `THINKRAIL_TERMINAL=1` and `THINKRAIL_AGENT_STATUS_URL`, and the URL is how
+  an agent in it reports what it is doing.** The address is loopback, carries a token minted for that tab
+  (`agentStatus.ts`), and is what the Claude Code plugin POSTs to; the host resolves the token to a
+  workspace and tab and pushes the report to clients. The token is the identity: a report never claims a
+  tab, and a process that was never handed one cannot report as any. A closed tab's token is forgotten
+  with it. **`THINKRAIL_MCP_URL` is stamped beside it, carrying the same token on the host's `/mcp/`
+  route** (`agentMcpUrl` / `agentTokenOwner`): one identity per terminal, two things it can say — what
+  it is doing, and a call into ThinkRail's own tools (see mcp/SPEC.md). The session id a report carries is
+  remembered per tab (`agentSessionOf`), which is what lets a resumed conversation reclaim the drawings it
+  made in another terminal (plugin-visualize/SPEC.md, over `ctx.agentRecord`). **One caller mints a token for something that is not a
+  tab:** the Claude Code pane's `claude mcp list` probe, under a reserved non-UUID tab key, so its health
+  check of ThinkRail's own MCP server answers as the workspace instead of failing on an unset variable
+  (claudeConfig/SPEC.md). `agentMcpUrl` is exported for it; `agentStatusUrl` stays internal.
+  **This replaced an escape sequence, and the reason is the whole point.** Status used to travel as OSC
+  777 written into the PTY, whose original meaning is "show a desktop notification". Every terminal that
+  implements it renders whatever arrives and none filter on a target string, so the plugin — installed
+  globally in `~/.claude` — turned every hook event in every other terminal into a toast carrying our raw
+  JSON. The guard was the emitter checking `THINKRAIL_TERMINAL`, a convention rather than a boundary,
+  and it silently failed for weeks. A POST cannot leak: no terminal is involved, and outside our PTYs
+  there is no address to send to.
+- **OSC 777 is never recorded, same reasoning as never recording a mode sequence: it is a one-shot event,
+  not terminal content.** ThinkRail's own agent reports no longer travel that way, but any other tool's
+  still can, and a stale `notify` sequence sitting in the recorded buffer would re-fire on every reattach
+  (tab remount, page reload, host revive) — asking for a notification about something that finished hours
+  or days earlier. `outputRecorder.consume()` strips a complete `ESC ] 777 ; … (BEL|ST)` sequence before it ever
+  reaches `append()`, covering a split across two `push()` reads at any byte offset in the escape prefix —
+  the same rigor `PARTIAL_MODE_RE` already gives CSI mode sequences. Because `restore()` runs through
+  `consume()` too, a snapshot persisted by a pre-fix host is scrubbed the same way the mouse-tracking one
+  is. Title (OSC 0/2) is untouched — it's genuinely persistent display state, and the existing
+  `reportedTitle` de-dup already makes a replayed title idempotent.
 
 ## Validation
 
