@@ -1431,16 +1431,14 @@ async function openDiskSession(
 	const settingsManager = buildSessionSettings(cwd);
 	const sessionManager = SessionManager.open(info.path);
 	const persistedModel = persistedSessionModelRef(sessionManager.buildSessionContext().model);
-	let exactModel: Model<string> | undefined;
-	if (persistedModel) {
-		try {
-			exactModel = resolveWireModel(generation.runtime, persistedModel);
-		} catch {
-			throw new Error("The chat's saved model is unavailable.");
-		}
-	}
+	const availableModels = settledAvailableModels(generation.runtime);
+	const exactModel = persistedModel
+		? (availableModels.find(
+				(model) => model.provider === persistedModel.provider && model.id === persistedModel.id,
+			) as Model<string> | undefined)
+		: undefined;
 	repairDanglingToolCalls(sessionManager);
-	await createParentSession(
+	const created = await createParentSession(
 		{
 			cwd,
 			sessionManager,
@@ -1451,6 +1449,17 @@ async function openDiskSession(
 		generation,
 		lifecycleToken,
 	);
+	const selectedModel = created.model;
+	if (
+		persistedModel &&
+		!exactModel &&
+		selectedModel &&
+		availableModels.some(
+			(model) => model.provider === selectedModel.provider && model.id === selectedModel.id,
+		)
+	) {
+		sessionManager.appendModelChange(selectedModel.provider, selectedModel.id);
+	}
 }
 
 async function ensureSessionAttachedInternal(
