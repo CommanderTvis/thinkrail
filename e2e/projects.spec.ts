@@ -1,4 +1,4 @@
-import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { expect, type Locator, type Page, test } from "@playwright/test";
 import {
@@ -133,6 +133,23 @@ test("the rail's add control names itself on hover and still opens its menu", as
 
 	await add.click();
 	await expect(page.getByTestId("menu-open-project")).toBeVisible();
+});
+
+test("project context menu copies its absolute path without changing the active workspace", async ({
+	page,
+	context,
+}) => {
+	await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+	await openFixtureProject(page);
+	await createWorkspaceViaDialog(page);
+	const row = page.getByTestId("project-item").filter({ hasText: "sample-project" });
+	await openProjectActions(page, row);
+	await page.getByTestId("project-menu-copy-absolute-path").click();
+	await expect
+		.poll(() => page.evaluate(() => navigator.clipboard.readText()))
+		.toBe(realpathSync(E2E_FIXTURE_REPO));
+	await expect(page.getByTestId("project-actions")).toBeHidden();
+	await expect(worktreeRows(page).first()).toHaveAttribute("data-active", "true");
 });
 
 test("opens a project from an explicit host path", async ({ page }) => {
@@ -338,11 +355,12 @@ test("project context actions stay compact and close/reopen is lossless across c
 	const openExistingFromMenu = page.getByTestId("project-menu-open-existing-worktree");
 	const closeFromMenu = page.getByTestId("project-menu-close");
 	const menuParts = projectActions.locator('[role="menuitem"], [role="separator"]');
-	await expect(menuParts).toHaveCount(4);
+	await expect(menuParts).toHaveCount(5);
 	await expect(menuParts.nth(0)).toHaveText("Create workspace");
 	await expect(menuParts.nth(1)).toHaveText("Open existing worktree…");
 	await expect(menuParts.nth(2)).toHaveAttribute("role", "separator");
-	await expect(menuParts.nth(3)).toHaveText("Close project");
+	await expect(menuParts.nth(3)).toHaveText("Copy absolute path");
+	await expect(menuParts.nth(4)).toHaveText("Close project");
 	await expect(createFromMenu.locator("svg.remixicon")).toHaveCount(1);
 	await expect(openExistingFromMenu.locator("svg.remixicon")).toHaveCount(1);
 	await expect(closeFromMenu.locator("svg.remixicon")).toHaveCount(1);
@@ -350,6 +368,8 @@ test("project context actions stay compact and close/reopen is lossless across c
 	await expect(createFromMenu).toBeFocused();
 	await page.keyboard.press("ArrowDown");
 	await expect(openExistingFromMenu).toBeFocused();
+	await page.keyboard.press("ArrowDown");
+	await expect(page.getByTestId("project-menu-copy-absolute-path")).toBeFocused();
 	await page.keyboard.press("ArrowDown");
 	await expect(closeFromMenu).toBeFocused();
 	await page.keyboard.press("Escape");

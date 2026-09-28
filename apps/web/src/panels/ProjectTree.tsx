@@ -315,6 +315,7 @@ export function ProjectTree({
 											onSelect={() => selectWorkspace(ws)}
 											onOpenIn={(editor) => openWorkspaceIn(ws, editor)}
 											onCopyPath={() => void copyText(ws.worktreePath)}
+											onCopyName={() => void copyText(ws.name)}
 											onReveal={() => revealWorkspace(ws)}
 											onRename={(name) => renameWorkspace(ws, name)}
 											onRemove={() => removeWorkspace(ws.id)}
@@ -554,6 +555,13 @@ function ProjectRow({
 						</>
 					)}
 					<ContextMenuItem
+						data-testid="project-menu-copy-absolute-path"
+						onSelect={() => void copyText(project.path)}
+					>
+						<Copy />
+						Copy absolute path
+					</ContextMenuItem>
+					<ContextMenuItem
 						data-testid="project-menu-close"
 						onSelect={(event) => {
 							event.preventDefault();
@@ -595,6 +603,7 @@ function WorkspaceRow({
 	onSelect,
 	onOpenIn,
 	onCopyPath,
+	onCopyName,
 	onReveal,
 	onRename,
 	onRemove,
@@ -610,6 +619,7 @@ function WorkspaceRow({
 	onSelect: () => void;
 	onOpenIn: (editor: EditorInfo) => void;
 	onCopyPath: () => void;
+	onCopyName: () => void;
 	onReveal: () => void;
 	onRename: (name: string) => void;
 	onRemove: () => void;
@@ -812,7 +822,11 @@ function WorkspaceRow({
 						) : null}
 						<DropdownMenuItem data-testid="workspace-copy-path" onSelect={onCopyPath}>
 							<Copy />
-							Copy path
+							Copy absolute path
+						</DropdownMenuItem>
+						<DropdownMenuItem data-testid="workspace-copy-name" onSelect={onCopyName}>
+							<Copy />
+							Copy name
 						</DropdownMenuItem>
 						<DropdownMenuItem data-testid="workspace-reveal" onSelect={onReveal}>
 							<FolderOpen />
