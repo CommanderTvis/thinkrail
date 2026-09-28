@@ -48,7 +48,9 @@ treatment.
   ~700ms long press is its touch equivalent. With a project-name button focused, the standard Context Menu
   key or Shift+F10 opens the same menu for keyboard-only use; arrow/activate/Escape keys work normally.
   The menu is neutral: **Plus Create workspace**, **FolderOpen Open existing worktree…**, separator,
-  **X Close project** — the first two only for a project with a real git repo (`project.hasGit === false`
+  **Copy Copy absolute path**, **X Close project**. Copy writes the project's absolute host path to the
+  clipboard without selecting the project or activating a workspace, and is available for plain folders too.
+  The first two actions only appear for a project with a real git repo (`project.hasGit === false`
   hides both plus the separator, since a plain folder has nothing for `git worktree add` to attach to;
   its Default workspace is the only workspace it will ever have). Create is exactly the direct `+` flow. Open existing worktree opens the
   `ExistingWorktreeDialog` chooser fed by `workspace.listExisting` (branch + absolute path per row;
