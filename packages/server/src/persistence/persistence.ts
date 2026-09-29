@@ -12,9 +12,11 @@ import {
 	normalizeThemePreference,
 	type Project,
 	type SessionCompletion,
+	type TerminalAgentRecord,
 	type WireModel,
 	type Workspace,
 } from "@thinkrail/contracts";
+import { pluginStateFile } from "@thinkrail/plugin-api";
 import {
 	claimBrowserAttributionAttemptIn,
 	readAcquisitionIn,
@@ -216,6 +218,7 @@ export interface PersistedTerminalTab {
 	tabKey: string;
 	title: string;
 	/** The agent invocation live in this tab at shutdown, so reopening can offer to resume it. */
+	agent?: TerminalAgentRecord;
 }
 
 export type PersistedTerminalSessions = Record<string, PersistedTerminalTab[]>;
@@ -238,6 +241,15 @@ function storedModels(value: unknown): WireModel[] {
 			typeof (entry as WireModel).provider === "string" &&
 			typeof (entry as WireModel).id === "string",
 	);
+}
+
+export function readPluginState<T>(id: string, name: string, fallback: T): T {
+	return readJson<T>(pluginStateFile(id, name), fallback);
+}
+
+export function writePluginState(id: string, name: string, value: unknown): void {
+	mkdirSync(join(dataDir(), "plugin-state", id), { recursive: true });
+	writeJson(pluginStateFile(id, name), value);
 }
 
 export function loadConfig(): AppConfig {
@@ -328,6 +340,16 @@ export function loadConfig(): AppConfig {
 					(id): id is string => typeof id === "string" && id.trim().length > 0,
 				)
 			: DEFAULT_CONFIG.hiddenModels,
+		plugins:
+			value.plugins &&
+			typeof value.plugins === "object" &&
+			!Array.isArray(value.plugins) &&
+			Object.values(value.plugins).every((ns) => typeof ns === "object" && ns !== null)
+				? (value.plugins as AppConfig["plugins"])
+				: DEFAULT_CONFIG.plugins,
+		pluginPaths: Array.isArray(value.pluginPaths)
+			? value.pluginPaths.filter((path): path is string => typeof path === "string")
+			: DEFAULT_CONFIG.pluginPaths,
 	};
 }
 

@@ -32,6 +32,10 @@ Every child is a directory module with `index.ts` as its public surface:
 - `railDefault.ts` (no barrel, one file) owns `resolvePluginRailDefaults` — the plugin half of "a rail that
   opens on something worth reading" below, pulled out of `WorkspaceWorkbench.tsx` so it is unit-testable
   without that file's panel imports.
+- `tabDecoration.ts` (no barrel, one file) owns the one rule for asking plugins about a tab — build its
+  `TabRef`, first decoration that answers wins — so the centre strip and the Projects previews of other
+  workspaces show the same icon and badge for the same tab (a Claude terminal keeps its mark when its
+  workspace is not the active one).
 - `ProjectsTool.tsx` (no barrel, one file) is what both shells mount as the Projects tool: `ProjectTree`,
   plus — while vertical tabs are at home in Projects (`layout/SPEC.md`, *Vertical center tabs*) — each
   workspace's centre tabs under its row through the panel's `renderWorkspaceTabs` render prop: the live
@@ -39,6 +43,8 @@ Every child is a directory module with `index.ts` as its public surface:
   Inactive previews preserve each tab pane as one shared hover bubble, including its accent and member
   dividers. Hovering either member highlights the whole pane; standalone tabs highlight individually.
   Clicking a member activates its workspace and selects that member with the pane intact.
+  File-backed preview rows also expose Copy path and Copy absolute path on right-click; copying leaves the
+  inactive workspace inactive.
   The tree stays a panel that knows nothing of layout; the shell decides what hangs under a workspace.
   It also remembers the pane's scroll position across workspace switches: `WorkspaceWorkbench` is keyed
   by workspace, so every switch rebuilds the Projects scroll area from the top, and with tabs living in

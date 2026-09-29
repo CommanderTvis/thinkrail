@@ -3,9 +3,8 @@ import {
 	RiLayoutRightLine as PanelRightOpen,
 } from "@remixicon/react";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
-import { cn } from "@thinkrail/ui/utils";
 import { forwardRef } from "react";
-import { platformShortcutLabel } from "../lib";
+import { cn, platformShortcutLabel } from "../lib";
 
 type CollapsedPanelRailProps = {
 	side: "left" | "right";

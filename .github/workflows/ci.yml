@@ -35,6 +35,9 @@ jobs:
       # dynamic import that registerBundledRuntime doesn't statically register (see the script header).
       - run: bun run check:seams
       - run: bun run check:spec-surface
+      - run: bun run build:web
+      - run: bun run check:web-bundle
+      - run: bun run api:check
       - run: bun run lint
       - run: bun run typecheck
 

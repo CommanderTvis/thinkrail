@@ -4,8 +4,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
 import { createFauxCore } from "@earendil-works/pi-ai/providers/faux";
+import type { ExtensionFactory } from "@earendil-works/pi-coding-agent";
 import { ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
 import type {
+	AppConfig,
+	PluginRosterEntry,
 	Template,
 	TemplateInfo,
 	WireModel,
@@ -22,13 +25,52 @@ import {
 } from "../agent";
 import { recordAcceptedMessage, resetFeedbackForTests, setFeedbackPublisher } from "../feedback";
 import { defaultSessionDirFor, writeFixtureSession } from "../history/testFixtures";
+import type { PluginRuntime } from "../plugins";
 import { addComment, getReviewSnapshot } from "../reviews";
 import { resetConfigCache } from "../settings";
 import { todoReviewRecord } from "../todos";
 import { stopAllWatches } from "../watch";
-import { handleRequest, requestMethodDiagnostic, shouldRefreshOpenReview } from "./handlers";
+import {
+	handleRequest,
+	requestMethodDiagnostic,
+	setPluginRuntime,
+	shouldRefreshOpenReview,
+} from "./handlers";
 
 const CTX = { clientKey: "test-client" };
+
+function stubPluginRuntime(overrides: Partial<PluginRuntime> = {}): PluginRuntime {
+	return {
+		roster: () => [],
+		allowsExternalFile: () => false,
+		handleRequest: async () => {
+			throw new Error("Unknown method");
+		},
+		serveRoute: async () => new Response("not found", { status: 404 }),
+		channelNames: () => [],
+		mcpTools: () => [],
+		terminalEnv: () => ({}),
+		onTerminalEvent: () => {},
+		revivePrefill: () => null,
+		workspaceEvent: () => {},
+		fsChanged: () => {},
+		settingsChanged: () => {},
+		validateSettings: (_update, current) => current,
+		reconcile: async () => {},
+		rescan: async () => [],
+		retry: async () => [],
+		piResources: () => ({
+			factories: [],
+			extensionPaths: [],
+			skillPaths: [],
+			childFactories: [],
+			toolsExtension: (() => {}) as ExtensionFactory,
+		}),
+		toolsExtension: (() => {}) as ExtensionFactory,
+		dispose: () => {},
+		...overrides,
+	};
+}
 
 let dataDir: string;
 let repo: string;
@@ -105,6 +147,7 @@ afterEach(() => {
 	stopAllWatches();
 	resetConfigCache();
 	resetFeedbackForTests();
+	setPluginRuntime(null);
 	rmSync(dataDir, { recursive: true, force: true });
 	if (savedDataDir === undefined) delete process.env.THINKRAIL_DATA_DIR;
 	else process.env.THINKRAIL_DATA_DIR = savedDataDir;
@@ -146,6 +189,121 @@ test("host.update invokes only the context-injected parameterless operation", as
 
 test("retired session activity returns the empty compatibility snapshot", async () => {
 	expect(await handleRequest("session.activityList", {}, CTX)).toEqual([]);
+});
+
+test("a plugin method with no runtime installed answers Unknown method", async () => {
+	expect(requestMethodDiagnostic("plugin.spec-dialect.specs")).toBe("plugin.spec-dialect.specs");
+	await expect(handleRequest("plugin.spec-dialect.specs", undefined, CTX)).rejects.toThrow(
+		"Unknown method",
+	);
+	expect(await handleRequest("plugins.list", undefined, CTX)).toEqual([]);
+});
+
+test("an unknown plugin method falls through to the installed runtime", async () => {
+	setPluginRuntime(stubPluginRuntime());
+	await expect(handleRequest("plugin.spec-dialect.specs", undefined, CTX)).rejects.toThrow(
+		"Unknown method",
+	);
+});
+
+test("plugins.list answers the installed runtime's roster", async () => {
+	const roster: PluginRosterEntry[] = [
+		{
+			id: "spec-dialect",
+			label: "Spec Dialect",
+			icon: "book-open",
+			version: "1.0.0",
+			wireVersion: 1,
+			origin: "builtin",
+			status: "active",
+			dependsOn: [],
+			modifiesSystemPrompt: false,
+			contributes: { sideTools: [], fileViewers: [] },
+			channels: {},
+		},
+	];
+	setPluginRuntime(stubPluginRuntime({ roster: () => roster }));
+	expect(await handleRequest("plugins.list", undefined, CTX)).toEqual(roster);
+});
+
+test("plugins.rescan and plugins.retry reach the installed runtime", async () => {
+	let rescanned = false;
+	let retriedId: string | undefined;
+	setPluginRuntime(
+		stubPluginRuntime({
+			rescan: async () => {
+				rescanned = true;
+				return [];
+			},
+			retry: async (id) => {
+				retriedId = id;
+				return [];
+			},
+		}),
+	);
+	await handleRequest("plugins.rescan", undefined, CTX);
+	expect(rescanned).toBe(true);
+	await handleRequest("plugins.retry", { id: "spec-dialect" }, CTX);
+	expect(retriedId).toBe("spec-dialect");
+});
+
+test("plugins.rescan and plugins.retry reject before any runtime is installed", async () => {
+	await expect(handleRequest("plugins.rescan", undefined, CTX)).rejects.toThrow(
+		"Plugins are not initialized",
+	);
+	await expect(handleRequest("plugins.retry", { id: "spec-dialect" }, CTX)).rejects.toThrow(
+		"Plugins are not initialized",
+	);
+});
+
+test("settings.update cascades a plugin disable to its dependents and notifies the runtime", async () => {
+	const roster: PluginRosterEntry[] = [
+		{
+			id: "base",
+			label: "Base",
+			icon: "puzzle",
+			version: "1.0.0",
+			wireVersion: 1,
+			origin: "builtin",
+			status: "active",
+			dependsOn: [],
+			modifiesSystemPrompt: false,
+			contributes: { sideTools: [], fileViewers: [] },
+			channels: {},
+		},
+		{
+			id: "dependent",
+			label: "Dependent",
+			icon: "puzzle",
+			version: "1.0.0",
+			wireVersion: 1,
+			origin: "builtin",
+			status: "active",
+			dependsOn: ["base"],
+			modifiesSystemPrompt: false,
+			contributes: { sideTools: [], fileViewers: [] },
+			channels: {},
+		},
+	];
+	let notified: AppConfig | undefined;
+	setPluginRuntime(
+		stubPluginRuntime({
+			roster: () => roster,
+			settingsChanged: (config) => {
+				notified = config;
+			},
+		}),
+	);
+
+	const updated = (await handleRequest(
+		"settings.update",
+		{ config: { plugins: { base: { enabled: false } } } },
+		CTX,
+	)) as AppConfig;
+
+	expect(updated.plugins.base?.enabled).toBe(false);
+	expect(updated.plugins.dependent?.enabled).toBe(false);
+	expect(notified).toBe(updated);
 });
 
 test("template reads resolve a project's current checkout and reject ambiguous locations", async () => {
@@ -500,4 +658,46 @@ test("resource handlers scope every read/control to a registered workspace and a
 		if (priorOffline === undefined) delete process.env.PI_OFFLINE;
 		else process.env.PI_OFFLINE = priorOffline;
 	}
+});
+
+test("external text files require plugin ownership and retain compare-and-swap saves", async () => {
+	const [workspace] = (await handleRequest(
+		"workspace.list",
+		{ projectId: "p1" },
+		CTX,
+	)) as Workspace[];
+	if (!workspace) throw new Error("expected workspace");
+	const path = join(dataDir, "config.toml");
+	writeFileSync(path, 'model = "fixture"\n');
+	const params = { workspaceId: workspace.id, path };
+	await expect(handleRequest("fs.readFile", params, CTX)).rejects.toThrow("escapes");
+	setPluginRuntime(
+		stubPluginRuntime({
+			allowsExternalFile: (id, candidate) => id === workspace.id && candidate === path,
+		}),
+	);
+	const read = (await handleRequest("fs.readFile", params, CTX)) as {
+		content: string;
+		hash: string;
+	};
+	expect(read.content).toBe('model = "fixture"\n');
+	const content = 'model = "updated"\n';
+	expect(
+		await handleRequest("fs.writeFile", { ...params, content, baseHash: read.hash }, CTX),
+	).toMatchObject({ written: true });
+	expect(readFileSync(path, "utf8")).toBe(content);
+	expect(
+		await handleRequest("fs.writeFile", { ...params, content: "stale", baseHash: read.hash }, CTX),
+	).toMatchObject({ written: false, disk: { content } });
+	await expect(
+		handleRequest("fs.readFile", { ...params, workspaceId: "missing" }, CTX),
+	).rejects.toThrow("Unknown workspace");
+	await expect(
+		handleRequest("fs.readFile", { ...params, path: join(dataDir, "auth.json") }, CTX),
+	).rejects.toThrow("escapes");
+	setPluginRuntime(null);
+	await expect(
+		handleRequest("fs.writeFile", { ...params, content: "disabled", baseHash: read.hash }, CTX),
+	).rejects.toThrow("escapes");
+	expect(readFileSync(path, "utf8")).toBe(content);
 });

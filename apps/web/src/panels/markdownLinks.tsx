@@ -1,6 +1,7 @@
+import { remarkHeadingIds } from "@thinkrail/ui/markdown";
 import type { ReactNode } from "react";
 import type { Components } from "react-markdown";
-import { remarkHeadingIds } from "@/panels/headingIds";
+import { selectSlot, usePluginRegistry } from "../plugins/registry";
 import { useAppStore } from "../store";
 import { DOCUMENT_ID_PREFIX } from "./markdownHtml";
 import { openFileInTab } from "./openTabs";
@@ -8,6 +9,14 @@ import { resourceBytesUrl } from "./resourcePane";
 import { specLinkTarget } from "./specDocument";
 
 export { remarkHeadingIds };
+
+function resolveDocumentLink(workspaceId: string, href: string): { path: string } | null {
+	for (const resolve of selectSlot(usePluginRegistry.getState(), "documentLink")) {
+		const result = resolve(workspaceId, href);
+		if (result) return result;
+	}
+	return null;
+}
 
 export type HrefKind = "empty" | "anchor" | "external" | "relative";
 
@@ -112,9 +121,11 @@ export function documentComponents(
 		}
 		const spec = specLinkTarget(href ?? "");
 		if (spec !== null) {
-			const path = useAppStore
-				.getState()
-				.specsByWorkspace[ctx.workspaceId]?.find((entry) => entry.id === spec)?.path;
+			const slotPath = resolveDocumentLink(ctx.workspaceId, href ?? "")?.path;
+			const path =
+				slotPath ??
+				useAppStore.getState().specsByWorkspace[ctx.workspaceId]?.find((entry) => entry.id === spec)
+					?.path;
 			return (
 				<button
 					type="button"

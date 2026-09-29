@@ -1,6 +1,6 @@
+import { ToggleSegment } from "@thinkrail/ui/ToggleSegment";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import type { AnchorDraft, SurfaceReview } from "@/resources";
-import { ToggleSegment } from "../ToggleSegment";
 import { RegionReviewSurface } from "./RegionReviewSurface";
 import { placedRegionThreadIds, type Region, type Size } from "./regionReview";
 

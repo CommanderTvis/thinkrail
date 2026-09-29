@@ -10,7 +10,8 @@ import {
 	DropdownMenuItem,
 	DropdownMenuTrigger,
 } from "@thinkrail/ui/dropdown-menu";
-import { type MouseEvent, type ReactNode, useState } from "react";
+import type { MouseEvent, ReactNode } from "react";
+import { useState } from "react";
 import { copyText } from "@/lib";
 
 export const ROW_MENU_SLOT = "mr-4 size-20 shrink-0";

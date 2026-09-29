@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
-import type { BackgroundCommandSummary, SubagentResourceSummary } from "@thinkrail/contracts";
+import type { BackgroundCommandSummary } from "@thinkrail/contracts";
 import { TooltipProvider } from "@thinkrail/ui/tooltip";
 import type { ComponentProps } from "react";
 import { renderToStaticMarkup } from "react-dom/server";

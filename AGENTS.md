@@ -4,17 +4,31 @@ The agentic IDE that gets better every time you use it, built around the `pi` co
 a thin host that runs `pi` and bridges it to a rich UI; `pi` owns models, skills, compaction, cost, and
 session state.
 
-## Read context proportionally
+Canonical specs (read these first):
+- `goal-and-requirements.md` — product goal + V1/V2 scope
+- `architecture.md` — top-level architecture, decisions, invariants
 
-- Use `goal-and-requirements.md` for the product's goal, principles, capabilities, and non-goals.
-- Use `architecture.md` for system topology, cross-module decisions, and repo-wide invariants.
-- Read the owning `SPEC.md` when work is governed by or may alter a module boundary, contract,
-  invariant, documented behavior, or architecture decision.
-- Localized work does not require unrelated specs or a full repository map.
+## Module structure & boundaries (top-priority requirement)
 
-## Module structure and boundaries
+The app is built as a set of **clearly bounded modules**. This is a primary design requirement, not a
+nice-to-have — treat it with the same weight as the non-negotiable invariants below.
+- **Modules are fractal.** The boundary rule applies at *every* level: each package is a module, and the
+  directories *inside* a package (`packages/server/src/agent/`, `apps/web/src/transport/`, …) are modules
+  too. A sub-module is a directory with an `index.ts` **barrel** as its only public surface; siblings
+  import it **through that barrel, never its internals**. (Exception: where a barrel would defeat
+  code-splitting or a library's per-file convention — e.g. `apps/web/src/panels` and `components/ui`,
+  which lazy-load Monaco/shiki/xterm — imports stay per-file and the boundary is held by spec + convention.)
+- **Every module has a `SPEC.md`** that states its boundary explicitly: what it owns, what it exposes
+  as its public surface, and what it must *not* reach into (allowed deps and forbidden deps). The
+  **dependency edges *between* sibling sub-modules live in the parent module's `SPEC.md`** (a dependency
+  graph), not in each leaf — leaves declare only their own external deps + forbidden reaches.
+- **Boundaries should be covered by tests** where practical — a module's public surface and its
+  boundary rules are worth exercising with tests, not just relying on convention. This is a goal, not a
+  hard gate: aim for coverage, but don't block on guaranteeing it everywhere.
+- **The spec leads the code.** A change that moves or blurs a boundary updates the module's `SPEC.md`
+  first, then the code and the tests that pin it.
 
-Clear, fractal module boundaries are a top-priority requirement:
+## Engine: `pi` only, in-process
 
 - Every package and meaningful directory-level sub-module has a `SPEC.md` stating its responsibility,
   public surface, allowed dependencies, and forbidden reaches.
@@ -25,17 +39,14 @@ Clear, fractal module boundaries are a top-priority requirement:
 - A change that moves or blurs a boundary updates the owning spec first. Cover public surfaces and
   boundary rules with tests where practical, but do not manufacture coverage for a localized change.
 
-## Engine and architecture
+Tradeoff: in-process means **no crash isolation** — a fatal agent/provider fault takes the whole host
+down. Sessions still run concurrently (cooperative on one event loop); the subprocess RPC mode is the
+only alternative if fault isolation ever becomes worth the complexity.
 
-- Run `pi` in-process through `@earendil-works/pi-coding-agent` (`createAgentSession`), never as a
-  subprocess and never through a second agent runtime. Fatal provider/agent faults can take down the
-  host; that lack of crash isolation is accepted.
-- The three rings are engine host (`packages/server` + `packages/shared`), typed wire
-  (`packages/contracts`), and independently shippable UI (`apps/web`). `apps/cli` and `apps/desktop`
-  are thin launchers over the same host.
-- Use only the `@earendil-works/*` package scope. `@mariozechner/*` is deprecated.
+> The package scope is `@earendil-works/*`. The `@mariozechner/*` scope is the **deprecated** old name —
+> do not use it.
 
-## Repo-wide invariants
+## Architecture (three rings)
 
 - `apps/web` depends on `contracts`, `ui`, `extension-api/web`, and `thinkrail-extensions/*/web` only,
   never `server` or `shared`.
@@ -53,7 +64,8 @@ Clear, fractal module boundaries are a top-priority requirement:
 - The transport host endpoint is a parameter, defaulting to same-origin; `server.welcome` carries the
   protocol version.
 
-### Web UI context
+- **The wire** — `packages/contracts`: the typed, versioned protocol. Types-only.
+- **UI client** — `apps/web`: mobile-first React, ships independently, dials a host over the wire.
 
 For web UI work, read `apps/web/SPEC.md` and the owning sub-module spec. Styling uses Tailwind v4
 utilities mapped to generated semantic CSS-var tokens: never inline style objects, raw hex, internal
@@ -62,21 +74,35 @@ palette names, or unknown token utilities. Read `apps/web/src/styles/COLOR.md` f
 when active) and owned shadcn/Radix primitives from `@thinkrail/ui/<primitive>`; `cn()` lives in
 `@thinkrail/ui/utils`. These rules also apply to `packages/ui` and extension web halves.
 
-For conversation rendering or tool presentation, read `apps/web/src/chat/SPEC.md`. Presentational
-renderers remain props-driven; only `ChatView` integrates store and transport. A server capability and
-its UI renderer are joined by tool name through `registerToolRenderer`; unregistered tools use the
-default renderer.
+**V1 shape (Worktree IDE):** left = projects (git repos) → workspaces (each a `git
+worktree`, own branch/cwd, under `~/.thinkrail/worktrees`); center = a tabbed area of Monaco file tabs
++ chat tabs; right = a Files tree + Changes (git diff) + terminals, all scoped to the active
+worktree. The shell is built **first**, `pi` connected **last**. Deferred to V2: spec-graph viewer,
+PR/Checks.
 
-## Specs and comments
+## Repo layout
 
-Specs are the durable home for intent, decisions, invariants, trade-offs, and post-mortems. Keep them
-concise and avoid restating code or another spec. Comments are near-zero: lint/type directives and a
-rare one-line hazard note are acceptable; rationale and narrative belong in the owning spec.
+```
+goal-and-requirements.md, architecture.md   top-level specs (repo root)
+central-integration.md                      cross-module spec: JetBrains AI via Central
+apps/
+  cli/        V1 entrypoint: boot host + open browser   (SPEC.md)
+  web/        mobile-first UI client                    (SPEC.md)
+  desktop/    Electrobun local-host launcher             (SPEC.md)
 
-## Verification
+  website/    public landing + blog + vibecoding (Cloudflare Pages) (SPEC.md)
+packages/
+  server/     createServer(): Bun.serve + AgentSessionManager  (SPEC.md)
+  contracts/  the wire (types-only)                     (SPEC.md)
+  shared/     shellEnv (server-side only)               (SPEC.md)
+  spec-graph/ portable pi extension: spec_* tools + skill (SPEC.md)
+  plugin-api/ the plugin contract: manifest, host/web contexts (SPEC.md)
+  plugin-ui/  shared plugin UI kit: primitives, markdown, editor (SPEC.md)
+  pi-delegation/ portable pure-pi delegation core: child sessions from sessions (SPEC.md)
+  pi-subagents/  portable pure-pi extension: Agent tools over pi-delegation (SPEC.md)
+```
 
-Local tests use disposable fixtures and have no production access. Run affected tests, fix failures
-caused by the requested change, and rerun them without asking for approval at each step.
+## Spec graph (how decisions are recorded)
 
 - Iterate with the smallest relevant unit or focused E2E target.
 - For shipped app behavior or integration changes, run the complete no-agent browser suite
@@ -93,12 +119,53 @@ caused by the requested change, and rerun them without asking for approval at ea
 - `bun run test:workflows` is on-demand: it uses real provider tokens and is not a commit/CI gate.
 - Binary and desktop artifact modes have separate gates; use them when changing those artifacts.
 
-All runner modes, isolation guarantees, credential handling, cancellation behavior, and debugging
-commands live in `e2e/SPEC.md`; workflow harness details live in `e2e/workflows/SPEC.md`.
+## Non-negotiable invariants
 
-## Handoff hygiene
+- **`apps/web` depends on `packages/contracts`, `packages/plugin-api` (the `/web` entry and root types),
+  and `packages/plugin-ui`, plus a builtin plugin package's `./manifest` and `./web` — never on
+  `server`/`shared`, and never a plugin's `host` half.** This is what makes the UI shippable without the
+  host. An external plugin's web half arrives over the wire instead of at build time.
+- **Never *value*-import `pi` in browser-bundled code; import types only, from the `pi-ai` /
+  `pi-agent-core` package roots** (`verbatimModuleSyntax` erases type-only imports, so no runtime reaches
+  the bundle). `@earendil-works/pi-coding-agent` is server-only and never reaches `contracts`/`web` (it
+  pulls `node:fs` + provider SDKs). `pi-agent-core` + `pi-ai` are type-only devDeps of `contracts`.
+- **One id model:** the UI tab id vs `session.sessionId` (the `AgentSession` id). No separate pi UUID.
+- **`pi` owns state**; the host is a thin bridge and does not recompute what `pi` reports (cost, stats).
+- **Streaming:** `text_delta` / `thinking_delta` **APPEND**; `tool_execution_update.partialResult`
+  **REPLACE**.
+- **`prompt()` throws while a session is streaming** → call `steer()` / `followUp()`. Errors arrive via
+  the event stream + thrown methods, not a crash signal — wrap each call and forward to the WS client.
+- **Automatic work ends at `agent_settled`, never `agent_end`.** `agent_end` is attempt-level and may be
+  followed by provider retry, compaction/recovery, or a queued continuation even when `willRetry` is false.
+- **UI panels are layout-agnostic**; the shell arranges them (desktop multi-pane / mobile single-view).
+- **Web styling = Tailwind v4 utilities mapped to the CSS-var tokens** (`@theme inline`). The `@theme`
+  token families are GENERATED from JSON sources into `styles/generated/`, each carrying its own
+  `@theme inline` block (Tailwind flattens imports before resolving the theme, so an imported block
+  registers like an inline one): colour (`styles/colors.json` → `styles/generated/colors.css`) and
+  spacing (`styles/spacing.json` → `styles/generated/spacing.css`, which **owns the Tailwind `--spacing`
+  base mapping**). `apps/web/src/index.css` is the integration point — it `@import`s the generated layers
+  and holds only the non-generated remainder (Preflight font defaults, chrome geometry such as
+  `--spacing-panel-header-row`, animations); it does **not** own the `--spacing` mapping. Themes swap the
+  token set via `[data-theme]`. Components use utilities,
+  **never inline `style` objects or raw hex** — that's what keeps the UI themeable and responsive.
+  **Colour has two layers and components may only name the second:** the per-theme *palette*
+  (`themes/bundled/*.theme.json` → `--elevated`, `--hint`) is internal; the *semantic* tokens
+  (`styles/colors.json` → `bg-container-elevated-bg`, `text-feedback-warning`) are the surface. Tints
+  come from a four-step alpha scale as tokens, never Tailwind's `/40` modifier. `styles/COLOR.md` is
+  the system, `styles/colorUsage.test.ts` the gate — Tailwind drops an unknown utility *silently*, so
+  a token that isn't published renders as nothing.
+- **Icons: `@remixicon/react` (Remix Icon; outline `Line` by default, solid `Fill` when the item is active/selected) for everything the UI *does*.** What a *file* **is** is the one exception: file-type
+  glyphs come from the builtin `packages/plugin-file-icons` plugin's **material-icon-theme** (MIT) set,
+  recoloured to `currentColor` at build time and served through the `fileIcon` core slot; core's
+  `components/FileTypeIcon` falls back to a plain Remix glyph when that plugin is off. Remix has no
+  vocabulary for `.kt` vs `.tsx` vs `Dockerfile`, and inventing one per language is not a UI kit's job.
+  **UI primitives: shadcn/ui** (Radix), copied into
+  `apps/web/src/components/ui/` (we own them) and themed with our token utilities — *not* shadcn's
+  default palette. `cn()` lives in `apps/web/src/lib/utils.ts`.
+- The transport's **host endpoint is a parameter** (default same-origin); `server.welcome` carries a
+  protocol version so an independently-shipped UI can detect host drift.
 
-Green gates are necessary but not sufficient:
+## Chat UI (the conversation renderers)
 
 - Before a local handoff, review the task-scoped working tree and commits. Before opening or updating a
   PR, review the full branch diff against its base plus the working tree.
@@ -126,9 +193,10 @@ Green gates are necessary but not sufficient:
 
 ## Stack
 
-Bun + Turbo monorepo · TypeScript strict · React 19 + Zustand + Tailwind v4 · in-process `pi`
-(Node >= 22.19). App state lives under `~/.thinkrail`.
+Bun + Turbo monorepo · TypeScript (strict) · React 19 + Zustand + Tailwind v4 (web) · in-process `pi`
+via `@earendil-works/pi-coding-agent` (Node ≥ 22.19). On-disk app state under `~/.thinkrail`.
 
-Dependencies pin exact versions. Cross-cutting dependencies are pinned once in the root
-`workspaces.catalog` and referenced through `catalog:`; peer dependencies and local protocols are the
-only exemptions. `architecture.md` Decision #10 owns the rationale.
+- **Dependencies pin exact versions — no ranges** (`^`/`~`/`.x`/`*`). Cross-cutting deps are pinned once in
+  the root `workspaces.catalog` and referenced via `catalog:`. Enforced by `bun run check:deps`
+  (`scripts/check-catalog.ts`, in pre-commit + CI); `peerDependencies` + local protocols are exempt. See
+  `architecture.md` Decision #10 for the why.

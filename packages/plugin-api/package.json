@@ -1,0 +1,25 @@
+{
+	"name": "@thinkrail/plugin-api",
+	"version": "0.0.0",
+	"private": true,
+	"type": "module",
+	"sideEffects": false,
+	"exports": {
+		".": "./src/index.ts",
+		"./host": "./src/host/index.ts",
+		"./web": "./src/web/index.ts"
+	},
+	"scripts": {
+		"test": "bun test",
+		"typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.web.json"
+	},
+	"dependencies": {
+		"@thinkrail/contracts": "workspace:*",
+		"typebox": "catalog:"
+	},
+	"devDependencies": {
+		"@types/react": "catalog:",
+		"react": "catalog:",
+		"typescript": "catalog:"
+	}
+}

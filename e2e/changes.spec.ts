@@ -198,7 +198,7 @@ test("Rendered markdown diff collapses unchanged blocks and list items around th
 	await expect(collapsed).toHaveCount(2);
 });
 
-test("Rendered markdown diff of a front-matter-only change says the preview is identical", async ({
+test("Rendered markdown diff of a front-matter-only change shows it in the properties block and folds the unchanged body", async ({
 	page,
 }) => {
 	await openFixtureProject(page);
@@ -213,7 +213,10 @@ test("Rendered markdown diff of a front-matter-only change says the preview is i
 	await page.getByTestId("changes-scope-uncommitted").click();
 	await page.getByTestId("change-item").filter({ hasText: "META.md" }).click();
 	const renderedDiff = page.getByTestId("rendered-diff");
-	await expect(page.getByTestId("rendered-diff-empty")).toContainText("Source");
+	const properties = renderedDiff.getByTestId("frontmatter-properties");
+	await expect(properties.locator("del")).toHaveText("draft");
+	await expect(properties.locator("ins")).toHaveText("active");
+	await expect(page.getByTestId("rendered-diff-empty")).toHaveCount(0);
 	const collapsed = renderedDiff.getByTestId("rendered-diff-collapsed");
 	await expect(collapsed).toHaveCount(1);
 	await expect(collapsed).toContainText("2 unchanged blocks");
@@ -221,7 +224,7 @@ test("Rendered markdown diff of a front-matter-only change says the preview is i
 
 	await collapsed.click();
 	await expect(renderedDiff).toContainText("Body paragraph.");
-	await expect(renderedDiff.locator("ins, del")).toHaveCount(0);
+	await expect(renderedDiff.locator("ins, del")).toHaveCount(2);
 
 	await page.getByTestId("view-toggle-code").click();
 	await expect(diffText(page, "active")).toBeVisible();
@@ -828,9 +831,7 @@ test("The diff header keeps its controls on a narrow pane, however long the file
 
 	await expect(page.getByTestId("diff-toggle-split")).toHaveAttribute("data-active", "true");
 
-	await page.setViewportSize({ width: 620, height: 800 });
-	await expect(page.getByTestId("diff-toggle-split")).toHaveCount(0);
-	await expect(page.getByTestId("diff-toggle-inline")).toHaveCount(0);
+	await page.setViewportSize({ width: 800, height: 800 });
 	await expect(page.getByTestId("diff-toggle-whitespace")).toBeVisible();
 	await expect(page.getByTestId("diff-copy")).toBeVisible();
 	const chipOverflow = await page
@@ -862,9 +863,6 @@ test("The rendered markdown diff carries the outline and the properties block", 
 
 	await page.getByTestId("tab-changes").click();
 	await page.getByTestId("change-item").filter({ hasText: "SPEC.md" }).click();
-	await expect(page.getByTestId("diff-toggle-outline")).toHaveCount(0);
-
-	await page.getByTestId("diff-toggle-rendered").click();
 	const rendered = page.getByTestId("rendered-diff");
 	await expect(rendered.getByTestId("frontmatter-properties")).toBeVisible();
 	await expect(rendered.getByTestId("frontmatter-property").first()).toContainText("id");
@@ -881,7 +879,7 @@ test("The rendered markdown diff carries the outline and the properties block", 
 	await outline.click();
 	await expect(page.getByRole("button", { name: "Goal", exact: true })).toBeVisible();
 
-	await page.getByTestId("diff-toggle-source").click();
+	await page.getByTestId("view-toggle-code").click();
 	await expect(page.getByTestId("diff-toggle-outline")).toHaveCount(0);
 });
 
@@ -896,16 +894,14 @@ test("A markdown diff drops to one column on a narrow pane like every other file
 
 	await page.getByTestId("tab-changes").click();
 	await page.getByTestId("change-item").filter({ hasText: "README.md" }).click();
-	await page.getByTestId("diff-toggle-source").click();
-	const diff = page.locator(".monaco-diff-editor");
-	await expect(diff).toHaveClass(/side-by-side/);
+	await page.getByTestId("view-toggle-code").click();
+	await expect(page.getByTestId("diff-toggle-split")).toHaveAttribute("data-active", "true");
 
-	await page.setViewportSize({ width: 620, height: 800 });
-	await expect(diff).not.toHaveClass(/side-by-side/);
-	await expect(page.getByTestId("diff-toggle-split")).toHaveCount(0);
+	await page.setViewportSize({ width: 800, height: 800 });
+	await expect(page.getByTestId("diff-toggle-inline")).toHaveAttribute("data-active", "true");
 
 	await page.setViewportSize({ width: 1280, height: 800 });
-	await expect(diff).toHaveClass(/side-by-side/);
+	await expect(page.getByTestId("diff-toggle-split")).toHaveAttribute("data-active", "true");
 });
 
 test("A commit scope keeps the header readable: short sha on the pill, subject in its tooltip", async ({

@@ -730,7 +730,7 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   which `WsMethodMap` carries as a template-literal index signature alongside the fixed method rows —
   their `params`/`result` are `unknown` on the wire, typed only by the owning plugin's own
   `PluginContract`; `WsChannel` is widened the same way. **`PLUGIN_ROSTER_PROTOCOL_VERSION`** pins the
-  roster + `plugins.*` methods/channel to their v66 introduction.
+  roster + `plugins.*` methods/channel to v74, above upstream’s v73 session-state protocol.
   The `WsMethodMap` typed request/result map +
   `WsParams`/`WsResult` helpers, and `PROTOCOL_VERSION`. A private type check ties `WS_METHODS` to `WsMethodMap`
   in both directions, so a method in one and not the other fails to compile. Request ids are also the reconnect idempotency key:

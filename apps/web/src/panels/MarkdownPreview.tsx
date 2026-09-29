@@ -1,7 +1,7 @@
+import { alertComponents, remarkGithubAlerts } from "@thinkrail/ui/markdown";
 import { type ComponentProps, memo, useEffect, useMemo, useRef, useState } from "react";
 import type { Components } from "react-markdown";
 import { stripFrontmatter } from "@/lib/utils";
-import { alertComponents, remarkGithubAlerts } from "@/panels/markdownAlerts";
 import type { ResourceViewProps, SurfaceReview } from "@/resources";
 import { Markdown, type MarkdownRehypePlugins } from "../chat/Markdown";
 import { useAppStore } from "../store";

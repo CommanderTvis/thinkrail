@@ -4,6 +4,7 @@ import {
 	RiLoader4Line as Loader2,
 	RiTerminalBoxLine as SquareTerminal,
 } from "@remixicon/react";
+import type { TabDecoration } from "@thinkrail/plugin-api/web";
 import { DropdownMenuItem } from "@thinkrail/ui/dropdown-menu";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
 import {
@@ -22,7 +23,7 @@ import { ErrorBoundary } from "../components/ErrorBoundary";
 import { PiGlyph } from "../components/PiGlyph";
 import { QuietScrollArea } from "../components/QuietScrollArea";
 import { LoadingRegion } from "../components/Skeleton";
-import { type LayoutAttention, layoutResourceIdentity, readLayoutSelection } from "../lib";
+import { type LayoutAttention, layoutResourceIdentity } from "../lib";
 import { ChangesPanel } from "../panels/ChangesPanel";
 import { ConfirmDialog } from "../panels/ConfirmDialog";
 import { DiffPane } from "../panels/DiffPane";
@@ -30,13 +31,18 @@ import { FilePane } from "../panels/FilePane";
 import { FileTree } from "../panels/FileTree";
 import { isFileTabDirty } from "../panels/fileSave";
 import { openFileInTab } from "../panels/openTabs";
+import { PluginToolBody } from "../panels/PluginToolBody";
 import "../panels/resources/register";
 import { ReviewPanel, selectActiveReviewedPath } from "../panels/ReviewPanel";
 import { reviewFlags } from "../panels/reviewModel";
-import { SpecsPanel } from "../panels/SpecsPanel";
 import { TerminalWorkbenchBody, useTerminalClose } from "../panels/TerminalWorkbench";
 import { useWorkspaceReview } from "../panels/useWorkspaceReview";
-import { useWorkspaceSpecs } from "../panels/useWorkspaceSpecs";
+import {
+	selectTabDecorators,
+	selectToolCatalog,
+	selectWorkspaceActions,
+	usePluginRegistry,
+} from "../plugins/registry";
 import {
 	type EditorTab,
 	isConnectedGeneration,
@@ -76,7 +82,7 @@ import {
 	type LayoutToolCatalog,
 	type LayoutToolId,
 	type PreparedLayoutClose,
-	selectTab,
+	resolveLayoutTool,
 	VERTICAL_TABS_WIDTH,
 	Workbench,
 	type WorkspaceLayoutDocument,
@@ -91,6 +97,8 @@ import {
 } from "./layoutState";
 import { syncLegacySelectionFromAttention, useLegacySelectionAdapter } from "./legacySelection";
 import { ProjectsTool } from "./ProjectsTool";
+import { resolvePluginRailDefaults } from "./railDefault";
+import { decorateTab } from "./tabDecoration";
 import { useTerminalPlacementReconciliation } from "./terminalReconciliation";
 import { useReportedActiveFile } from "./useReportedActiveFile";
 import { WorkspaceChatHistory } from "./WorkspaceChatHistory";
@@ -247,35 +255,25 @@ function useTerminalReservation(workspaceId: string): void {
 	}, [connectionGeneration, pendingIntent, status, workspaceId]);
 }
 
-/**
- * A project whose spec graph is empty opens its rail on the next tool instead of on Specs — the default
- * selection is seeded before the graph is read, so it is corrected once, when the answer arrives. The
- * same "seeded before the answer is known, corrected once it arrives" shape applies to a plugin tool
- * whose plugin is inactive or whose `SideToolRegistration.railDefault` refuses this workspace. See
- * shell/SPEC.md.
- */
 function useRailDefault(
 	workspaceId: string,
 	document: WorkspaceLayoutDocument | undefined,
 	attention: LayoutAttention | undefined,
 	changeAttention: (next: LayoutAttention) => void,
 ): void {
-	const specless = useAppStore((state) => state.specsByWorkspace[workspaceId]?.length === 0);
-	const specsAnswered = useRef<string | null>(null);
+	const pluginsAnswered = useRef<string | null>(null);
 	useEffect(() => {
-		if (!specless || !document || !attention || specsAnswered.current === workspaceId) return;
-		specsAnswered.current = workspaceId;
-		let next = attention;
-		for (const group of collectAllGroups(document)) {
-			if (group.location.area === "center") continue;
-			const selectedId = readLayoutSelection(next, group.location.groupId);
-			const selected = group.tabs.find((tab) => tab.id === selectedId);
-			if (selected?.kind !== "tool" || selected.tool !== "specs") continue;
-			const other = group.tabs.find((tab) => tab.id !== selected.id);
-			if (other) next = selectTab(next, group.location, other.id, false);
-		}
-		if (next !== attention) changeAttention(next);
-	}, [specless, workspaceId, document, attention, changeAttention]);
+		if (!document || !attention || pluginsAnswered.current === workspaceId) return;
+		let cancelled = false;
+		void resolvePluginRailDefaults(document, attention, workspaceId).then((next) => {
+			if (cancelled) return;
+			pluginsAnswered.current = workspaceId;
+			if (next !== attention) changeAttention(next);
+		});
+		return () => {
+			cancelled = true;
+		};
+	}, [workspaceId, document, attention, changeAttention]);
 }
 
 export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
@@ -289,7 +287,18 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 		(state) => state.layoutProjectionEpochByWorkspace[workspaceId] ?? 0,
 	);
 	const layoutPreferences = useAppStore((state) => state.localLayoutPreferences);
-	const catalog: LayoutToolCatalog = useMemo(() => buildLayoutToolCatalog(), []);
+	const pluginToolCatalog = usePluginRegistry(selectToolCatalog);
+	const catalog: LayoutToolCatalog = useMemo(
+		() =>
+			buildLayoutToolCatalog(
+				// A plugin's declared tool id is always `plugin:<id>:<name>` (`PluginToolId`) — the registry
+				// just doesn't narrow the string type of what it read off the wire. See plugins/SPEC.md.
+				pluginToolCatalog.map((entry) => ({ ...entry, id: entry.id as LayoutToolId })),
+			),
+		[pluginToolCatalog],
+	);
+	const tabDecorators = usePluginRegistry(selectTabDecorators);
+	const workspaceActions = usePluginRegistry(selectWorkspaceActions);
 	useReportedActiveFile(workspaceId);
 	const verticalWidthTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 	useEffect(
@@ -317,13 +326,18 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 	);
 	const workspace = useAppStore((state) => selectWorkspaceById(state, workspaceId));
 	const vcsGap = workspace?.vcs;
-	const unofferedTools = vcsGap ? GIT_TOOLS : NO_UNOFFERED_TOOLS;
+	const unofferedTools = useMemo(
+		() =>
+			vcsGap
+				? [...GIT_TOOLS, ...[...catalog.values()].filter((e) => e.requiresGit).map((e) => e.id)]
+				: NO_UNOFFERED_TOOLS,
+		[vcsGap, catalog],
+	);
 	const contextProject = useAppStore(selectContextProject);
 	const editorTabs = useAppStore((state) => state.tabsByWorkspace[workspaceId] ?? NO_EDITOR_TABS);
 	const chatStarting = useAppStore((state) => (state.chatStartsByWorkspace[workspaceId] ?? 0) > 0);
 	const deletedSessions = useAppStore((state) => state.deletedSessionsByWorkspace[workspaceId]);
 	const terminalClose = useTerminalClose();
-	const specs = useWorkspaceSpecs(workspaceId);
 	const review = useWorkspaceReview(workspaceId);
 	const reviewComments = useAppStore((state) => state.reviewsByWorkspace[workspaceId]?.comments);
 	const reviewDraftCount = useAppStore((state) => selectReviewDraftCount(state, workspaceId));
@@ -615,6 +629,11 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 		[renderResourceBody, workspaceId],
 	);
 
+	const resolveTabDecoration = useCallback(
+		(tab: LayoutTab): TabDecoration | null => decorateTab(tabDecorators, tab, workspaceId),
+		[tabDecorators, workspaceId],
+	);
+
 	const renderToolBody = useCallback(
 		(tool: LayoutToolId) => {
 			let body: ReactNode;
@@ -623,13 +642,6 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 					body = (
 						<QuietScrollArea data-testid="left-nav" className="h-full" viewportClassName="p-12">
 							<ProjectsTool activeWorkspaceId={workspaceId} />
-						</QuietScrollArea>
-					);
-					break;
-				case "specs":
-					body = (
-						<QuietScrollArea className="h-full" viewportClassName="p-12">
-							<SpecsPanel workspaceId={workspaceId} failed={specs.failed} onRetry={specs.reload} />
 						</QuietScrollArea>
 					);
 					break;
@@ -650,6 +662,21 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 						<ReviewPanel workspaceId={workspaceId} failed={review.failed} />
 					);
 					break;
+				default: {
+					const entry = resolveLayoutTool(catalog, tool);
+					body =
+						vcsGap && entry.requiresGit ? (
+							gitlessNotice(vcsGap)
+						) : (
+							<PluginToolBody
+								tool={tool}
+								workspaceId={workspaceId}
+								label={entry.label}
+								icon={entry.icon}
+								dormant={entry.dormant}
+							/>
+						);
+				}
 			}
 			return (
 				<ErrorBoundary label={`${tool} tool`} resetKeys={[workspaceId, tool]}>
@@ -657,7 +684,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 				</ErrorBoundary>
 			);
 		},
-		[review.failed, specs.failed, specs.reload, workspaceId, vcsGap, catalog],
+		[review.failed, workspaceId, vcsGap, catalog],
 	);
 
 	const isDefault = workspace != null && isDefaultWorkspace(workspace);
@@ -772,6 +799,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 		<div data-testid="workspace-workbench" data-layout-status="settled" className="contents">
 			<Workbench
 				document={rendered.document}
+				worktreePath={workspace?.worktreePath ?? ""}
 				catalog={catalog}
 				unofferedTools={unofferedTools}
 				attention={rendered.attention}
@@ -796,7 +824,8 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 						);
 					}
 					if (tab.kind === "chat") return <PiGlyph className="size-14 shrink-0" />;
-					return null;
+					const DecoratedIcon = resolveTabDecoration(tab)?.icon;
+					return DecoratedIcon ? <DecoratedIcon className="size-14 shrink-0" /> : null;
 				}}
 				renderTabAdornment={(tab) => {
 					const fileTab = tab.kind === "file" || tab.kind === "external-file";
@@ -851,7 +880,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 							);
 						}
 					}
-					return null;
+					return resolveTabDecoration(tab)?.adornment ?? null;
 				}}
 				renderToolBody={renderToolBody}
 				renderEmptyCenter={(groupId) => (
@@ -931,6 +960,13 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 								<SquareTerminal className="size-14" />
 							</button>
 						</IconTooltip>
+						{workspaceActions.map((action) => (
+							<action.value.component
+								key={action.pluginId}
+								workspaceId={workspaceId}
+								groupId={groupId}
+							/>
+						))}
 					</>
 				)}
 				renderSideMenuActions={(side, groupId) =>

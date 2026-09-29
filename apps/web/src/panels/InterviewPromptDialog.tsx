@@ -9,8 +9,8 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from "@thinkrail/ui/dialog";
-import { cn } from "@thinkrail/ui/utils";
 import { type MouseEvent, useRef, useState } from "react";
+import { cn } from "@/lib";
 import { toast, useAppStore } from "@/store";
 import { errorText, getTransport } from "@/transport";
 import { INTERVIEW_BOOKING_URL, INTERVIEW_INVITATION_COPY } from "./interview";

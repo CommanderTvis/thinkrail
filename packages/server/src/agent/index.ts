@@ -17,12 +17,16 @@ export {
 export {
 	type BundledExtensionFactory,
 	type BundledExtensions,
+	type BundledPluginRuntime,
+	bundledPluginRuntime,
 	listProjectAliasSkillNames,
 	listSkillCatalog,
 	listSkillCommands,
 	PI_EXTENSION_PACKAGES,
 	type PiExtensionPackage,
+	type PluginPiResources,
 	registerBundledRuntime,
+	setPluginResourcesProvider,
 } from "./extensions";
 export {
 	listModelContextSettings,
@@ -55,6 +59,7 @@ export { isHostResourceId, isPiSessionId } from "./resourceIdentity";
 export {
 	RESOLVE_COMMENT_TOOL_NAME,
 	type ResolveCommentOutcome,
+	ResolveCommentSchema,
 	setReviewCommentHandler,
 } from "./reviewTool";
 export * from "./sessionRepair";
