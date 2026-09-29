@@ -1,11 +1,11 @@
 export {
+	type EditorSelectionChange,
 	type MarkdownRehypePlugins,
 	type ResourceCodeHost,
 	type ResourceCodeLanguage,
+	type ResourceEditorEvents,
 	ResourceEnvironmentProvider,
 	type ResourceFileReviewProps,
-	type EditorSelectionChange,
-	type ResourceEditorEvents,
 	type ResourceHost,
 	ResourceHostProvider,
 	type ResourceMarkdown,
@@ -44,18 +44,24 @@ export {
 	type ReviewThreadActions,
 	registerResourceRenderer,
 	rendererImplementationKey,
+	rendererLabel,
 	rendererTestId,
 	resolveRenderers,
-	selectResourceRenderer,
 	resourceContent,
+	resourceRendererRevision,
 	type SurfaceReview,
+	selectResourceRenderer,
+	subscribeResourceRenderers,
 	threadLabel,
 } from "./registry";
 export { createAskAgentRequest } from "./renderers/code/changeBlocks";
 export { registerBundledResourceRenderers } from "./renderers/register";
 export { ReviewDraftContext, type ReviewDraftPersistence } from "./renderers/reviewDraftState";
+export { editorFontSize, editorGpuUsable } from "./support/editorFont";
+export { stripFrontmatter } from "./support/frontmatter";
 export { GuardedRendererDiff } from "./support/GuardedRendererDiff";
 export { surfaceLineCount, VIRTUALIZED_DIFF_LINES } from "./support/largeDiff";
+export { slugify } from "./support/markdownLinks";
 export { type RendererLayout, RendererToggles } from "./support/RendererToggles";
 export {
 	ResourcePreview,
@@ -69,6 +75,7 @@ export {
 	usePreloadResourceView,
 	useRendererSelection,
 } from "./support/rendererMount";
+export { frontmatterOffset } from "./support/sourceLines";
 export { UnplacedReviewStrip } from "./support/UnplacedReviewStrip";
 export { useScrollViewState, viewStateScrollTop } from "./support/useScrollViewState";
 export {

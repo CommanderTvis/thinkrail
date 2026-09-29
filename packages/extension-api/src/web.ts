@@ -48,6 +48,8 @@ export interface ToolRenderProps {
 	onOpenFile?: ((path: string) => void) | undefined;
 	streaming: boolean;
 	interaction?: ToolInteraction | undefined;
+	interactive?: boolean;
+	onRender?: ((error: string | null) => void) | undefined;
 }
 
 export type ToolChrome = "card" | "bare";

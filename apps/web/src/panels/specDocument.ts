@@ -1,6 +1,6 @@
 import type { MessageKey } from "@thinkrail/locales";
+import { parseFrontmatter } from "@thinkrail/ui/markdown";
 import { defaultUrlTransform } from "react-markdown";
-import { parseFrontmatter } from "@thinkrail/resource-renderers";
 
 interface SpecRole {
 	label: MessageKey;

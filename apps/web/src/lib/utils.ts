@@ -1,5 +1,8 @@
 import type { UserMessage } from "@thinkrail/contracts";
 import type { Translator } from "@thinkrail/locales/react";
+import { cn } from "@thinkrail/ui/utils";
+
+export { cn };
 
 export const DOUBLE_CLICK_SETTLE_MS = 250;
 
@@ -35,6 +38,7 @@ type LayoutResourceIdentityInput =
 	| { kind: "diff"; path: string; before?: undefined; scope: LayoutDiffScopeInput }
 	| { kind: "diff"; path: string; before: string }
 	| { kind: "changes"; scope: LayoutDiffScopeInput }
+	| { kind: "external-file"; path: string }
 	| { kind: "chat"; sessionId: string }
 	| { kind: "document"; documentKind: string; sourceId: string }
 	| { kind: "terminal"; tabKey: string }
@@ -61,6 +65,8 @@ export function layoutResourceIdentity<T extends LayoutResourceIdentityInput>(ta
 	switch (tab.kind) {
 		case "file":
 			return tupleKey("layout-resource", "file", tab.path);
+		case "external-file":
+			return tupleKey("layout-resource", "external-file", tab.path);
 		case "diff":
 			return tab.before === undefined
 				? tupleKey(
@@ -159,6 +165,20 @@ export function isAbsolutePath(path: string): boolean {
 	return normalized.startsWith("/") || hasWindowsDriveRoot(normalized);
 }
 
+export function absoluteWorkspacePath(worktreePath: string, path: string): string {
+	if (isAbsolutePath(path)) return path;
+	const separator = worktreePath.includes("\\") ? "\\" : "/";
+	return `${worktreePath}${/[\\/]$/.test(worktreePath) ? "" : separator}${normalizePath(path).replaceAll("/", separator)}`;
+}
+
+/**
+ * Turns a dropped path into something a shell terminal runs as one word. A path with a space in it has to
+ * arrive already quoted or it reads as a command plus an argument.
+ */
+export function shellQuotePath(path: string): string {
+	return /^[\w./~+=:@%-]+$/.test(path) ? path : `'${path.replaceAll("'", `'\\''`)}'`;
+}
+
 export function shallowEqualArrays(
 	a: readonly unknown[] | undefined,
 	b: readonly unknown[] | undefined,
@@ -195,6 +215,11 @@ function canonicalPosixPath(path: string): string {
 	}
 	const prefix = drive ?? (absolute ? "/" : "");
 	return `${prefix}${segments.join("/")}`;
+}
+
+/** `/Users/me/.claude/settings.json` → `~/.claude/settings.json`, for showing a path outside the worktree. */
+export function abbreviateHomePath(path: string): string {
+	return path.replace(/^\/Users\/[^/]+|^\/home\/[^/]+/, "~");
 }
 
 export function projectRelativePath(path: string, workspaceRoot?: string | undefined): string {
@@ -287,6 +312,14 @@ export function platformFamily(platform = browserPlatform()) {
 	return "other";
 }
 
+/**
+ * macOS specifically, not Apple generally: this gates following the system appearance, and iOS has no
+ * user-facing per-app light/dark contract worth mirroring.
+ */
+export function isMacOS(platform = browserPlatform()): boolean {
+	return /Mac/.test(platform);
+}
+
 export function hasPlatformModifier(
 	event: Pick<KeyboardEvent, "ctrlKey" | "metaKey">,
 	platform = browserPlatform(),
@@ -363,4 +396,17 @@ export function isTextEntryTarget(target: EventTarget | null): boolean {
 			/^(INPUT|TEXTAREA|SELECT)$/.test(element.tagName ?? "") ||
 			(typeof element.closest === "function" && element.closest(TEXT_ENTRY_ROOT_SELECTOR) !== null))
 	);
+}
+
+/**
+ * Whether a `ResizeObserver` here accepts `device-pixel-content-box`. Monaco's GPU renderer needs it and
+ * throws without it, and WebKit — which the desktop app runs on — does not have it. See panels/SPEC.md.
+ */
+export function supportsDevicePixelBox(observe: (options: ResizeObserverOptions) => void): boolean {
+	try {
+		observe({ box: "device-pixel-content-box" });
+		return true;
+	} catch {
+		return false;
+	}
 }

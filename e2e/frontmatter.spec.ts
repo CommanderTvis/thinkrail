@@ -39,7 +39,7 @@ test("frontmatter renders as editable properties, and an edit lands in the draft
 	await expect(title).toHaveValue("Amber talk");
 	// The edit is a draft like any typed one: the tab is dirty until saved, and Source shows the YAML.
 	await expect(page.getByTestId("file-unsaved-dot")).toBeVisible();
-	await page.getByTestId("md-toggle-source").click();
+	await page.getByTestId("view-toggle-code").click();
 	await expect(page.getByTestId("editor-pane")).toContainText("title: Amber talk");
 });
 
@@ -78,7 +78,7 @@ test("the type menu converts between text, sequence, and mapping", async ({ page
 	// A mapping edits per entry, and the write lands in the source like any other draft.
 	await rows.nth(0).getByTestId("frontmatter-map-value").fill("Amber talk");
 	await rows.nth(0).getByTestId("frontmatter-map-value").press("Enter");
-	await page.getByTestId("md-toggle-source").click();
+	await page.getByTestId("view-toggle-code").click();
 	await expect(page.getByTestId("editor-pane")).toContainText("1: Amber talk");
 });
 

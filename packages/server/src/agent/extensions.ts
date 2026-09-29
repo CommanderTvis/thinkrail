@@ -16,7 +16,6 @@ import {
 	type Skill,
 } from "@earendil-works/pi-coding-agent";
 import type { SkillCatalogEntry, SlashCommandInfo } from "@thinkrail/contracts";
-import specGraphExtension from "pi-spec-graph";
 import {
 	type ExtensionSessionServices,
 	extensionSkillRoots,
@@ -42,13 +41,59 @@ import { setTitleExtension } from "./titleTool";
 
 export type BundledExtensionFactory = ExtensionFactory;
 
+export interface BundledPluginRuntime {
+	factories: ExtensionFactory[];
+	skillsDir: string | null;
+	assetsDir: string | null;
+}
+
 export interface BundledExtensions {
 	factories: BundledExtensionFactory[];
 	skillsDir: string;
 	trashHelpers: BundledTrashHelpers;
+	plugins?: Record<string, BundledPluginRuntime>;
 }
 
 let bundled: BundledExtensions | undefined;
+
+const EMPTY_BUNDLED_PLUGIN_RUNTIME: BundledPluginRuntime = {
+	factories: [],
+	skillsDir: null,
+	assetsDir: null,
+};
+
+/** A builtin plugin's staged runtime in the compiled binary/desktop, or the empty runtime in dev. */
+export function bundledPluginRuntime(id: string): BundledPluginRuntime {
+	return bundled?.plugins?.[id] ?? EMPTY_BUNDLED_PLUGIN_RUNTIME;
+}
+
+/** What the plugin loader contributes to every session's resources. */
+export interface PluginPiResources {
+	factories: ExtensionFactory[];
+	extensionPaths: string[];
+	skillPaths: string[];
+	childFactories: ExtensionFactory[];
+	toolsExtension: ExtensionFactory;
+}
+
+const noopToolsExtension: ExtensionFactory = () => {};
+
+function defaultPluginResources(): PluginPiResources {
+	return {
+		factories: [],
+		extensionPaths: [],
+		skillPaths: [],
+		childFactories: [],
+		toolsExtension: noopToolsExtension,
+	};
+}
+
+let pluginResourcesProvider: () => PluginPiResources = defaultPluginResources;
+
+/** Installed by the plugin loader: what every session's resource loader should add for active plugins. */
+export function setPluginResourcesProvider(fn: (() => PluginPiResources) | null): void {
+	pluginResourcesProvider = fn ?? defaultPluginResources;
+}
 
 export async function registerBundledRuntime(extensions: BundledExtensions): Promise<void> {
 	bundled = extensions;
@@ -67,13 +112,11 @@ let devPaths: { extensionPaths: string[]; hostSkillPaths: string[] } | undefined
 function resolveDevPaths(): { extensionPaths: string[]; hostSkillPaths: string[] } {
 	if (devPaths) return devPaths;
 	const require = createRequire(import.meta.url);
-	const specGraphPath = require.resolve("pi-spec-graph/index.ts");
 	const workflowPath = require.resolve("pi-thinkrail-workflow/index.ts");
 	const todosPath = require.resolve("pi-todos/index.ts");
 	devPaths = {
-		extensionPaths: [specGraphPath, workflowPath, todosPath],
+		extensionPaths: [workflowPath, todosPath],
 		hostSkillPaths: [
-			join(dirname(specGraphPath), "skills"),
 			join(dirname(workflowPath), "skills"),
 			join(dirname(todosPath), "skills"),
 			fileURLToPath(new URL("../../skills", import.meta.url)),
@@ -196,6 +239,7 @@ function resolveSkillInputs(
 			0,
 			additionalSkillPaths.length,
 			...bundledSkillPaths(current),
+			...pluginResourcesProvider().skillPaths,
 			...compatibilityPaths,
 		);
 	};
@@ -238,8 +282,8 @@ export function childBaseExtensionFactories(): InlineExtension[] {
 export function childExtensionFactories(): InlineExtension[] {
 	return [
 		headlessSearchPolicy,
-		specGraphExtension,
 		...registryInlineExtensions("childExtensions", isExtensionDisabled),
+		...pluginResourcesProvider().childFactories,
 	];
 }
 
@@ -253,6 +297,7 @@ export async function buildResourceLoader(
 ): Promise<ResourceLoader> {
 	let disabledAtReload = disabledExtensions();
 	const isDisabledAtReload = (name: string): boolean => disabledAtReload.has(name);
+	const pluginResources = pluginResourcesProvider();
 	const sharedFactories: InlineExtension[] = [
 		...registryInlineExtensions("extensions", isDisabledAtReload, serverExtensions, session),
 		headlessSearchPolicy,
@@ -261,6 +306,8 @@ export async function buildResourceLoader(
 		setTitleExtension,
 		oversizedImageGuard,
 		skillCarryover,
+		pluginResources.toolsExtension,
+		...pluginResources.factories,
 		...extraFactories,
 	];
 	const extensionFactories = bundled ? [...bundled.factories, ...sharedFactories] : sharedFactories;
@@ -279,7 +326,10 @@ export async function buildResourceLoader(
 		extensionsOverride: (result: LoadExtensionsResult) =>
 			preferRegistryTools(omitDisabledRegistryExtensions(result, isDisabledAtReload)),
 	};
-	const devExtensionPaths = bundled ? [] : resolveDevPaths().extensionPaths;
+	const devExtensionPaths = [
+		...(bundled ? [] : resolveDevPaths().extensionPaths),
+		...pluginResources.extensionPaths,
+	];
 	const applyCurrentPolicy = (): void => {
 		settingsManager.setProjectTrusted(getAdmission().piResourceTrusted);
 		disabledAtReload = disabledExtensions();

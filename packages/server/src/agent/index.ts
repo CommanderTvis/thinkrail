@@ -11,17 +11,22 @@ export {
 	type ReviewSubagentRun,
 	readChildTranscript,
 	refreshSubagentConcurrency,
+	resetDelegationServices,
 	runReviewSubagent,
 	setSubagentConcurrencyResolver,
 } from "./delegation";
 export {
 	type BundledExtensionFactory,
 	type BundledExtensions,
+	type BundledPluginRuntime,
+	bundledPluginRuntime,
 	listProjectAliasSkillNames,
 	listSkillCatalog,
 	listSkillCommands,
+	type PluginPiResources,
 	registerBundledRuntime,
 	setDisabledExtensionsResolver,
+	setPluginResourcesProvider,
 } from "./extensions";
 export {
 	effectiveMcpServerConfig,

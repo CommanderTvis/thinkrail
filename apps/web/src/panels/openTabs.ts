@@ -1,15 +1,17 @@
-import type { GitDiffScope } from "@thinkrail/contracts";
+import type { GitDiffScope, ResourceMeta } from "@thinkrail/contracts";
+import { pluginMethodName } from "@thinkrail/plugin-api";
+import type { LayoutOpenOptions } from "@/store";
 import {
 	DOUBLE_CLICK_SETTLE_MS,
 	fileName,
+	isAbsolutePath,
 	layoutResourceIdentity,
 	projectRelativePath,
 	tupleKey,
 } from "../lib";
+import { selectFileViewer, usePluginRegistry } from "../plugins/registry";
 import {
 	type CenterNavigationStamp,
-	type ChangesTab,
-	createChangesTab,
 	type EditorTab,
 	type FileComparisonTab,
 	isCenterNavigationCurrent,
@@ -23,6 +25,27 @@ import {
 } from "../store";
 import { getTransport } from "../transport";
 import { changesTabId, diffTabId } from "./changesModel";
+import { emitEditorEvent, findEditorRef } from "./editorEvents";
+
+const CLAUDE_CODE_ID = "claude-code";
+const SOURCE_RENDERER_ID = "thinkrail/code";
+
+/** A file outside the worktree is read by the plugin that can name it; it is always text. */
+export function readTabFile(
+	workspaceId: string,
+	path: string,
+	external: boolean,
+): Promise<{ content: string; meta: ResourceMeta }> {
+	if (!external) return getTransport().request("fs.readFile", { workspaceId, path });
+	const read = getTransport().request(pluginMethodName(CLAUDE_CODE_ID, "readFile"), {
+		workspaceId,
+		path,
+	}) as Promise<{ content: string; hash: string }>;
+	return read.then(({ content, hash }) => ({
+		content,
+		meta: { hash, byteLength: new TextEncoder().encode(content).length, text: true },
+	}));
+}
 
 function baseName(path: string): string {
 	return path.split("/").pop() || path;
@@ -35,6 +58,7 @@ const inFlight = new Map<
 		claimPreview: boolean;
 		navigation: CenterNavigationStamp | null;
 		requestedAt: number;
+		startedAt: number;
 	}
 >();
 
@@ -46,12 +70,18 @@ async function openReadTab<T>(
 	workspaceId: string,
 	id: string,
 	resourceIdentity: string,
-	intent: TabIntent,
+	requestedIntent: TabIntent,
 	read: () => Promise<T>,
 	build: (payload: T, loadedTick: number) => EditorTab,
 	requestedNavigation?: CenterNavigationStamp | null,
+	extraOptions?: Partial<LayoutOpenOptions>,
 	claimPreview = false,
 ): Promise<void> {
+	// With the preview slot turned off every open keeps: nothing claims the slot, and no open waits out
+	// the double-click window to find out whether it was one. See panels/SPEC.md.
+	const intent: TabIntent = useAppStore.getState().localLayoutPreferences.previewTabs
+		? requestedIntent
+		: "keep";
 	const navigation =
 		requestedNavigation === undefined
 			? useAppStore.getState().beginCenterNavigation(workspaceId)
@@ -67,30 +97,58 @@ async function openReadTab<T>(
 		pending.requestedAt = navTick(workspaceId);
 		return;
 	}
+	const flight = {
+		intent,
+		claimPreview: intent === "preview" || claimPreview,
+		navigation,
+		requestedAt: navTick(workspaceId),
+		startedAt: Date.now(),
+	};
+	inFlight.set(id, flight);
 	const cached = (store.tabsByWorkspace[workspaceId] ?? []).find(
 		(tab) =>
 			(tab.kind === "file" || tab.kind === "diff") &&
 			layoutResourceIdentity(tab) === resourceIdentity,
 	);
 	if (cached) {
-		const claim =
-			intent === "keep" &&
-			claimPreview &&
-			(!navigation || isCenterNavigationCurrent(store, workspaceId, navigation));
-		const options = layoutOpenOptionsForNavigation(store, workspaceId, navigation);
-		store.openTab(cached, intent, true, claim ? { ...options, claimPreview: true } : options);
+		try {
+			if (flight.intent === "preview") {
+				await new Promise((resolve) => setTimeout(resolve, DOUBLE_CLICK_SETTLE_MS));
+			}
+			const currentState = useAppStore.getState();
+			const latestCached = (currentState.tabsByWorkspace[workspaceId] ?? []).find(
+				(tab) =>
+					(tab.kind === "file" || tab.kind === "diff") &&
+					layoutResourceIdentity(tab) === resourceIdentity,
+			);
+			if (!latestCached) return;
+			const overtaken = flight.navigation
+				? !isCenterNavigationCurrent(currentState, workspaceId, flight.navigation)
+				: navTick(workspaceId) !== flight.requestedAt;
+			if (flight.intent === "preview" && overtaken) return;
+			const options = layoutOpenOptionsForNavigation(currentState, workspaceId, flight.navigation);
+			useAppStore
+				.getState()
+				.openTab(
+					latestCached,
+					flight.intent,
+					true,
+					flight.intent === "keep" && flight.claimPreview && !overtaken
+						? { ...options, ...extraOptions, claimPreview: true }
+						: { ...options, ...extraOptions },
+				);
+		} finally {
+			inFlight.delete(id);
+		}
 		return;
 	}
-	const flight = {
-		intent,
-		claimPreview: intent === "preview" || claimPreview,
-		navigation,
-		requestedAt: navTick(workspaceId),
-	};
-	inFlight.set(id, flight);
 	const loadedTick = selectWorkspaceTick(useAppStore.getState(), workspaceId);
 	try {
 		const payload = await read();
+		if (flight.intent === "preview") {
+			const remaining = DOUBLE_CLICK_SETTLE_MS - (Date.now() - flight.startedAt);
+			if (remaining > 0) await new Promise((resolve) => setTimeout(resolve, remaining));
+		}
 		const currentState = useAppStore.getState();
 		const overtaken = flight.navigation
 			? !isCenterNavigationCurrent(currentState, workspaceId, flight.navigation)
@@ -110,8 +168,8 @@ async function openReadTab<T>(
 				flight.intent,
 				true,
 				flight.intent === "keep" && flight.claimPreview && !overtaken
-					? { ...options, claimPreview: true }
-					: options,
+					? { ...options, ...extraOptions, claimPreview: true }
+					: { ...options, ...extraOptions },
 			);
 	} catch {
 	} finally {
@@ -124,20 +182,28 @@ export function openFileInTab(
 	reported: string,
 	intent: TabIntent,
 	requestedNavigation?: CenterNavigationStamp | null,
+	extraOptions?: Partial<LayoutOpenOptions>,
+	viewerOptions?: { raw?: boolean },
 ): Promise<void> {
 	const path = projectRelativePath(
 		reported,
 		selectWorkspaceById(useAppStore.getState(), workspaceId)?.worktreePath,
 	);
-	const id = tupleKey("file", workspaceId, path);
+	const viewer = viewerOptions?.raw ? null : selectFileViewer(usePluginRegistry.getState(), path);
+	if (viewer?.open?.(workspaceId, path)) return Promise.resolve();
+	// An absolute path here is one that fell outside the worktree: the worktree-relative form cannot name
+	// it, so it becomes its own tab kind rather than an invalid file tab — see contracts' LayoutExternalFileTab.
+	const external = isAbsolutePath(path);
+	const kind = external ? ("external-file" as const) : ("file" as const);
+	const id = tupleKey(kind, workspaceId, path);
 	return openReadTab(
 		workspaceId,
 		id,
-		layoutResourceIdentity({ kind: "file", id, name: baseName(path), path }),
+		layoutResourceIdentity({ kind, id, name: baseName(path), path }),
 		intent,
-		() => getTransport().request("fs.readFile", { workspaceId, path }),
+		() => readTabFile(workspaceId, path, external),
 		({ content, meta }, loadedTick) => ({
-			kind: "file",
+			kind,
 			id,
 			workspaceId,
 			path,
@@ -145,9 +211,17 @@ export function openFileInTab(
 			content,
 			meta,
 			loadedTick,
+			...(viewerOptions?.raw && !external ? { rendererId: SOURCE_RENDERER_ID } : {}),
 		}),
 		requestedNavigation,
-	);
+		extraOptions,
+	).then(() => {
+		if (viewerOptions?.raw && !external) {
+			useAppStore.getState().setTabRenderer(workspaceId, id, SOURCE_RENDERER_ID);
+		}
+		const ref = findEditorRef(workspaceId, path);
+		if (ref) emitEditorEvent({ kind: "opened", editor: ref });
+	});
 }
 
 export function openDiffInTab(
@@ -191,6 +265,7 @@ export function openDiffInTab(
 			loadedTarget: target,
 		}),
 		requestedNavigation,
+		undefined,
 		options.claimPreview,
 	);
 }

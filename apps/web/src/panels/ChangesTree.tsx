@@ -9,6 +9,7 @@ import { ViewedMark } from "./ViewedMark";
 
 interface ChangeRowProps {
 	onOpen: (path: string, intent: TabIntent, claimPreview?: boolean) => void;
+	onJumpToSource: (path: string) => void;
 	isActive: (path: string) => boolean;
 	isViewed: (path: string) => boolean;
 	isCollapsed: (path: string) => boolean;
@@ -29,7 +30,7 @@ export function ChangesTree({
 }
 
 function ChangeNodeRow({ node, ...rowProps }: ChangeRowProps & { node: ChangeTreeNode }) {
-	const { onOpen, isActive, isViewed, isCollapsed, onSetCollapsed } = rowProps;
+	const { onOpen, onJumpToSource, isActive, isViewed, isCollapsed, onSetCollapsed } = rowProps;
 
 	if (node.kind === "file") {
 		return (
@@ -39,12 +40,14 @@ function ChangeNodeRow({ node, ...rowProps }: ChangeRowProps & { node: ChangeTre
 					active={isActive(node.path)}
 					onView={() => onOpen(node.path, "preview")}
 					onOpenTab={() => onOpen(node.path, "keep")}
+					onJumpToSource={() => onJumpToSource(node.path)}
 				>
 					{({ onContextMenu }) => (
 						<TreeRow
 							testid="change-item"
 							onContextMenu={onContextMenu}
 							kind="file"
+							path={node.path}
 							highlight="wrapper"
 							active={isActive(node.path)}
 							dataStatus={node.status}

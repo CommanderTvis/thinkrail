@@ -1,5 +1,11 @@
-import { useMemo } from "react";
-import { type ResourceHost, type ResourceMarkdown, useResourceHost } from "../host";
+import { FrontmatterProperties } from "@thinkrail/ui/markdown";
+import { type RefObject, useEffect, useMemo, useRef, useState } from "react";
+import {
+	type ResourceHost,
+	type ResourceMarkdown,
+	useOptionalResourceHost,
+	useResourceHost,
+} from "../host";
 import type { ResourceViewProps } from "../registry";
 import { stripFrontmatter } from "./frontmatter";
 import { alertComponents, remarkGithubAlerts } from "./markdownAlerts";
@@ -7,7 +13,13 @@ import { documentRehypePlugins } from "./markdownHtml";
 import { documentComponents, remarkHeadingIds } from "./markdownLinks";
 import { type ComposerInsert, PreviewCommenting } from "./PreviewCommenting";
 import { ReviewThreadCard } from "./ReviewThreadCard";
-import { frontmatterOffset, indivisibleSpans, snapSplitLine } from "./sourceLines";
+import {
+	blockAtLine,
+	frontmatterOffset,
+	indivisibleSpans,
+	snapSplitLine,
+	stampedSelectionLines,
+} from "./sourceLines";
 import { useScrollViewState } from "./useScrollViewState";
 
 const DOCUMENT_PROSE = [
@@ -51,9 +63,12 @@ export function MarkdownDocument({
 		() => documentComponents({ workspaceId, path }, links),
 		[path, workspaceId, links],
 	);
+	const header = useOptionalResourceHost()?.documentHeader;
+	const body = stripFrontmatter(content);
 	return (
 		<Markdown
-			text={stripFrontmatter(content)}
+			text={header?.linkify?.(content, body) ?? body}
+			{...(header?.urlTransform ? { urlTransform: header.urlTransform } : {})}
 			className={DOCUMENT_PROSE}
 			remarkPlugins={[remarkGithubAlerts, remarkHeadingIds]}
 			rehypePlugins={documentRehypePlugins()}
@@ -110,16 +125,113 @@ function splicedSegments(
 	return segments;
 }
 
+function useReportedPreviewSelection(
+	container: RefObject<HTMLElement | null>,
+	workspaceId: string,
+	path: string,
+): void {
+	const events = useResourceHost().editor;
+	useEffect(() => {
+		if (!events) return undefined;
+		const onSelectionChange = () => {
+			const root = container.current;
+			const selection = document.getSelection();
+			if (!root || !selection || selection.isCollapsed || selection.rangeCount === 0) return;
+			if (!root.contains(selection.getRangeAt(0).commonAncestorContainer)) return;
+			const text = selection.toString();
+			if (text.trim() === "") return;
+			const lines = stampedSelectionLines(root);
+			if (!lines) return;
+			const lastLine = text.slice(text.lastIndexOf("\n") + 1);
+			events.selectionChange({
+				workspaceId,
+				path,
+				text,
+				language: "markdown",
+				startLine: lines.startLine,
+				startColumn: 1,
+				endLine: lines.endLine,
+				endColumn: lastLine.length + 1,
+				empty: false,
+			});
+		};
+		document.addEventListener("selectionchange", onSelectionChange);
+		return () => {
+			document.removeEventListener("selectionchange", onSelectionChange);
+			events.selectionChange({
+				workspaceId,
+				path,
+				text: "",
+				language: "markdown",
+				startLine: 1,
+				startColumn: 1,
+				endLine: 1,
+				endColumn: 1,
+				empty: true,
+			});
+		};
+	}, [container, events, workspaceId, path]);
+}
+
+function useSourceLineLanding(
+	container: RefObject<HTMLElement | null>,
+	focusLine: number | undefined,
+	content: string,
+	onFocusHandled: (() => void) | undefined,
+): void {
+	const [landing, setLanding] = useState<number | null>(null);
+	useEffect(() => {
+		if (focusLine === undefined) return;
+		setLanding(focusLine);
+		onFocusHandled?.();
+	}, [focusLine, onFocusHandled]);
+
+	useEffect(() => {
+		const root = container.current;
+		if (!root || landing === null) return;
+		const target = blockAtLine(root, landing);
+		if (!target) return;
+		target.classList.add("source-landing");
+		target.scrollIntoView({ behavior: "smooth", block: "center" });
+		return () => target.classList.remove("source-landing");
+	}, [container, landing, content]);
+}
+
 export default function MarkdownPreview({
 	resource,
 	content,
 	review,
 	viewState,
 	onViewState,
+	edit,
+	focusLine,
+	onFocusHandled,
 }: ResourceViewProps) {
 	const { workspaceId, path } = resource;
 	const text = content.kind === "text" ? content.text : "";
-	const { markdown: Markdown, bytesUrl, openFile } = useResourceHost();
+	const articleRef = useRef<HTMLElement>(null);
+	useSourceLineLanding(articleRef, focusLine, text, onFocusHandled);
+	useReportedPreviewSelection(articleRef, workspaceId, path);
+	const { markdown: Markdown, bytesUrl, openFile, documentHeader } = useResourceHost();
+	const title = documentHeader?.title(workspaceId, path, text) ?? null;
+	const header = (
+		<>
+			{title ? (
+				<h1 data-testid="spec-title" className="pb-8 tr-title-entity text-text-default">
+					{title}
+				</h1>
+			) : null}
+			{edit ? (
+				<FrontmatterProperties
+					content={text}
+					onEdit={edit.onChange}
+					{...(documentHeader?.typeSuggestions
+						? { typeSuggestions: documentHeader.typeSuggestions }
+						: {})}
+				/>
+			) : null}
+		</>
+	);
 	const links = useMemo(() => ({ bytesUrl, openFile }), [bytesUrl, openFile]);
 	const components = useMemo(
 		() => documentComponents({ workspaceId, path }, links),
@@ -133,7 +245,8 @@ export default function MarkdownPreview({
 				data-testid="markdown-preview"
 				className="h-full overflow-auto bg-container-workspace-bg motion-safe:animate-reveal"
 			>
-				<article className="mx-auto max-w-[78ch] px-24 py-16">
+				<article ref={articleRef} className="mx-auto max-w-[78ch] px-24 py-16">
+					{header}
 					<MarkdownDocument
 						content={text}
 						workspaceId={workspaceId}
@@ -153,6 +266,7 @@ export default function MarkdownPreview({
 		remarkPlugins: [remarkGithubAlerts, remarkHeadingIds],
 		rehypePlugins: documentRehypePlugins(stampOffset),
 		components: { ...alertComponents, ...components },
+		...(documentHeader?.urlTransform ? { urlTransform: documentHeader.urlTransform } : {}),
 	});
 	const threadInserts: FlowInsert[] = review.threads.flatMap((thread) => {
 		const range = thread.anchor.selectors.find((selector) => selector.kind === "lineRange");
@@ -178,10 +292,16 @@ export default function MarkdownPreview({
 					: threadInserts;
 				const segments = splicedSegments(stripped, rawOffset, inserts);
 				return (
-					<article className="mx-auto max-w-[78ch] px-24 py-16">
+					<article ref={articleRef} className="mx-auto max-w-[78ch] px-24 py-16">
+						{header}
 						{segments.map((segment) => (
 							<div key={segment.key}>
-								{segment.text && <Markdown text={segment.text} {...mdProps(segment.stampOffset)} />}
+								{segment.text && (
+									<Markdown
+										text={documentHeader?.linkify?.(text, segment.text) ?? segment.text}
+										{...mdProps(segment.stampOffset)}
+									/>
+								)}
 								{segment.nodes}
 							</div>
 						))}

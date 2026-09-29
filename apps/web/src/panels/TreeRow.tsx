@@ -7,6 +7,7 @@ import {
 	RiFolderLine,
 } from "@remixicon/react";
 import type { DragEvent, MouseEvent, ReactNode, Ref } from "react";
+import { FileTypeIcon } from "@/components/FileTypeIcon";
 
 export function TreeRow({
 	ref,
@@ -18,6 +19,7 @@ export function TreeRow({
 	dataStatus,
 	dataViewed,
 	label,
+	path,
 	muted,
 	labelClassName,
 	trailing,
@@ -37,6 +39,8 @@ export function TreeRow({
 	dataStatus?: string | undefined;
 	dataViewed?: boolean;
 	label: string;
+	/** A file's workspace path, so a plugin's file-type icon can replace the generic one. */
+	path?: string;
 	muted?: string;
 	labelClassName?: string;
 	trailing?: ReactNode;
@@ -84,7 +88,11 @@ export function TreeRow({
 				{kind === "dir" ? (
 					<Folder className={`size-14 shrink-0 ${tone}`} />
 				) : (
-					<FileIcon className={`size-14 shrink-0 ${tone}`} />
+					<FileTypeIcon
+						path={path ?? label}
+						fallback={FileIcon}
+						className={`size-14 shrink-0 ${tone}`}
+					/>
 				)}
 				<span
 					className={`min-w-0 flex-1 truncate ${muted ? "text-text-subtle italic" : ""} ${labelClassName ?? ""}`}

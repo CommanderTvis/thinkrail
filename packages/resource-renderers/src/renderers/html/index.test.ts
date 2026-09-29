@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { currentTranslator } from "@thinkrail/locales/react";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { rendererLabel } from "../../registry";
 import { htmlRenderer } from ".";
 import { HtmlFrame } from "./HtmlFrame";
 import { HTML_PREVIEW_CSP, prepareHtmlPreviewDocument } from "./htmlDocument";
@@ -133,7 +134,7 @@ function hostileDocument(): FakeDocument {
 }
 
 test("HTML renderer registration has no review geometry and stays sandboxed", () => {
-	expect(currentTranslator()(htmlRenderer.labelKey)).toBe("Preview");
+	expect(rendererLabel(currentTranslator(), htmlRenderer)).toBe("Preview");
 	expect(htmlRenderer).toMatchObject({
 		id: "thinkrail/html",
 		labelKey: "viewer.renderer.preview",

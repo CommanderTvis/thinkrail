@@ -1,10 +1,8 @@
-import { stripFrontmatter } from "@/lib/utils";
-import type { HeadingEntry } from "@/panels/outlineHeadings";
-import { slugify } from "./markdownLinks";
-import { frontmatterOffset } from "./sourceLines";
+import { frontmatterOffset, slugify, stripFrontmatter } from "@thinkrail/resource-renderers";
+import type { HeadingEntry } from "@thinkrail/ui/outlineTree";
 import { readSpecDocument } from "./specDocument";
 
-export { buildOutlineTree, type HeadingEntry, type OutlineNode } from "./outlineHeadings";
+export { buildOutlineTree, type HeadingEntry, type OutlineNode } from "@thinkrail/ui/outlineTree";
 
 const FENCE = /^ {0,3}(`{3,}|~{3,})/;
 const ATX = /^(#{1,6})\s+(.*)$/;

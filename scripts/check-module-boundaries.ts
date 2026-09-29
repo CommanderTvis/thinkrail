@@ -17,6 +17,13 @@ interface ModuleRule {
 	allowed: readonly string[];
 }
 
+const PLUGIN_BASE = [
+	"packages/plugin-api",
+	"packages/contracts",
+	"packages/locales",
+	"packages/ui",
+] as const;
+
 const MODULE_RULES: readonly ModuleRule[] = [
 	{
 		root: "packages/artifact-tests",
@@ -58,6 +65,37 @@ const MODULE_RULES: readonly ModuleRule[] = [
 		root: "apps/desktop",
 		allowed: ["packages/server", "packages/shared", "packages/contracts", "packages/locales"],
 	},
+];
+
+const PLUGIN_RULES: readonly ModuleRule[] = [
+	{ root: "packages/plugin-api", allowed: ["packages/contracts"] },
+	{
+		root: "packages/plugin-spec-dialect",
+		allowed: [...PLUGIN_BASE, "packages/shared", "packages/spec-graph"],
+	},
+	{
+		root: "packages/plugin-blueprint",
+		allowed: [
+			...PLUGIN_BASE,
+			"packages/shared",
+			"packages/plugin-spec-dialect",
+			"thinkrail-extensions/visualize",
+		],
+	},
+	{ root: "packages/plugin-claude-code", allowed: [...PLUGIN_BASE, "packages/shared"] },
+	{ root: "packages/plugin-discord", allowed: [...PLUGIN_BASE, "packages/shared"] },
+	{ root: "packages/plugin-branch-graph", allowed: PLUGIN_BASE },
+	{
+		root: "packages/plugin-visualize",
+		allowed: [
+			...PLUGIN_BASE,
+			"packages/shared",
+			"pi-extensions/visualize",
+			"thinkrail-extensions/visualize",
+		],
+	},
+	{ root: "packages/plugin-file-icons", allowed: PLUGIN_BASE },
+	{ root: "packages/plugin-codex", allowed: PLUGIN_BASE },
 ];
 
 const DEPENDENCY_SECTIONS = [
@@ -102,12 +140,14 @@ function workspacePackages(root: string): Map<string, string> {
 function moduleRules(packages: ReadonlyMap<string, string>): ModuleRule[] {
 	const roots = [...packages.values()];
 	const extensions = roots.filter((root) => root.startsWith("thinkrail-extensions/"));
+	const plugins = roots.filter((root) => root.startsWith("packages/plugin-"));
 	return [
 		...MODULE_RULES.map((rule) =>
 			rule.root === "apps/web" || rule.root === "packages/server"
-				? { ...rule, allowed: [...rule.allowed, ...extensions] }
+				? { ...rule, allowed: [...rule.allowed, ...extensions, ...plugins] }
 				: rule,
 		),
+		...PLUGIN_RULES.filter((rule) => roots.includes(rule.root)),
 		...roots
 			.filter((root) => root === "packages/ui" || root === "packages/extension-api")
 			.map((root) => ({

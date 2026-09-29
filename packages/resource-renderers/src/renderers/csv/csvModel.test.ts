@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import type { ReviewAnchor } from "@thinkrail/contracts";
 import { currentTranslator } from "@thinkrail/locales/react";
+import { rendererLabel } from "../../registry";
 import { csvRenderer } from ".";
 import {
 	alignCsvRows,
@@ -79,7 +80,7 @@ test("a selected table cell round-trips and becomes unplaced after deletion", ()
 });
 
 test("CSV renderer registration declares table-cell and line anchors", () => {
-	expect(currentTranslator()(csvRenderer.labelKey)).toBe("Table");
+	expect(rendererLabel(currentTranslator(), csvRenderer)).toBe("Table");
 	expect(csvRenderer).toMatchObject({
 		id: "thinkrail/csv",
 		labelKey: "viewer.renderer.table",

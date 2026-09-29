@@ -1,7 +1,7 @@
 import { useT } from "@thinkrail/locales/react";
 import { ToggleSegment } from "@thinkrail/ui/toggle-segment";
 import { useResourceEnvironment } from "../host";
-import { type ResourceRenderer, rendererTestId } from "../registry";
+import { type ResourceRenderer, rendererLabel, rendererTestId } from "../registry";
 
 export type RendererLayout = "split" | "unified";
 
@@ -25,7 +25,7 @@ export function RendererToggles({
 						<ToggleSegment
 							key={candidate.id}
 							testid={rendererTestId(candidate.id)}
-							label={t(candidate.labelKey)}
+							label={rendererLabel(t, candidate)}
 							active={candidate.id === renderer.id}
 							onClick={() => onRendererId(candidate.id)}
 						/>

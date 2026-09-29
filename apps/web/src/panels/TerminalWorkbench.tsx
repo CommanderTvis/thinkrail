@@ -2,13 +2,26 @@ import { RiAddLine as Plus } from "@remixicon/react";
 import type { TerminalTabsPush } from "@thinkrail/contracts";
 import { WS_CHANNELS } from "@thinkrail/contracts";
 import { i18n, useT } from "@thinkrail/locales/react";
+import type { TerminalAccessoryApi } from "@thinkrail/plugin-api/web";
 import { IconButton } from "@thinkrail/ui/button";
-import { lazy, type ReactNode, Suspense, useCallback, useEffect, useRef, useState } from "react";
+import {
+	lazy,
+	type ReactNode,
+	Suspense,
+	useCallback,
+	useEffect,
+	useMemo,
+	useRef,
+	useState,
+} from "react";
 import { terminalName } from "../lib";
+import { selectTerminalAccessories, usePluginRegistry } from "../plugins/registry";
 import type { TerminalTab } from "../store";
 import { isConnectedGeneration, toast, useAppStore } from "../store";
 import { errorText, getTransport } from "../transport";
+import { Companions } from "./Companions";
 import { ConfirmDialog } from "./ConfirmDialog";
+import type { TerminalInstanceHandle } from "./TerminalInstance";
 
 const TerminalInstance = lazy(() => import("./TerminalInstance"));
 
@@ -78,32 +91,59 @@ function useDeferredUntilPainted(): boolean {
 export function TerminalWorkbenchBody({ tab, onAdd }: { tab: TerminalTab; onAdd: () => void }) {
 	const t = useT();
 	const painted = useDeferredUntilPainted();
+	const accessories = usePluginRegistry(selectTerminalAccessories);
+	const instanceRef = useRef<TerminalInstanceHandle>(null);
+	const accessoryApi: TerminalAccessoryApi = useMemo(
+		() => ({
+			workspaceId: tab.workspaceId,
+			tabKey: tab.tabKey,
+			write: (data) => instanceRef.current?.write(data),
+			bufferTail: (lines, options) => instanceRef.current?.bufferTail(lines, options) ?? [],
+			setKeyEncoding: (mode) => instanceRef.current?.setKeyEncoding(mode),
+		}),
+		[tab.workspaceId, tab.tabKey],
+	);
+	// The companion sits beside the whole terminal, chrome included: the New-terminal button covers this
+	// panel's top-right corner, which is exactly where the pane's own header lives. See panels/SPEC.md.
 	return (
-		<div
-			data-testid="terminal-panel"
-			className="relative flex h-full min-h-0 flex-col bg-container-terminal-bg"
-		>
-			<IconButton
-				variant="outline"
-				size="s"
-				icon={Plus}
-				label={t("panels.terminalWorkbench.newTerminal")}
-				data-testid="terminal-add"
-				onClick={onAdd}
-				className="absolute top-4 right-4 z-10"
-			/>
-			<div className="relative min-h-0 flex-1">
-				<Suspense fallback={null}>
-					{painted ? (
-						<TerminalInstance
-							tabKey={tab.tabKey}
-							workspaceId={tab.workspaceId}
-							{...(tab.initialCommand ? { initialCommand: tab.initialCommand } : {})}
-						/>
-					) : null}
-				</Suspense>
+		<Companions host={{ kind: "terminal", workspaceId: tab.workspaceId, key: tab.tabKey }}>
+			<div
+				data-testid="terminal-panel"
+				className="relative flex h-full min-h-0 flex-col bg-container-terminal-bg"
+			>
+				<IconButton
+					variant="outline"
+					size="s"
+					icon={Plus}
+					label={t("panels.terminalWorkbench.newTerminal")}
+					data-testid="terminal-add"
+					onClick={onAdd}
+					className="absolute top-4 right-4 z-10"
+				/>
+				<div className="relative min-h-0 flex-1">
+					<Suspense fallback={null}>
+						{painted ? (
+							<TerminalInstance
+								ref={instanceRef}
+								tabKey={tab.tabKey}
+								workspaceId={tab.workspaceId}
+								{...(tab.initialCommand ? { initialCommand: tab.initialCommand } : {})}
+							/>
+						) : null}
+					</Suspense>
+				</div>
+				{accessories.length > 0 ? (
+					<div
+						data-testid="terminal-accessories"
+						className="mx-12 mb-8 flex min-w-0 shrink-0 flex-wrap items-center gap-4"
+					>
+						{accessories.map((accessory) => (
+							<accessory.value.component key={accessory.pluginId} terminal={accessoryApi} />
+						))}
+					</div>
+				) : null}
 			</div>
-		</div>
+		</Companions>
 	);
 }
 

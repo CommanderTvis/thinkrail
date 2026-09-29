@@ -110,12 +110,15 @@ export type ResourceAnchorCapability = "line" | `structural:${string}` | "region
 
 export interface ResourceRenderer {
 	id: string;
-	labelKey: MessageKey;
+	/** A bundled renderer's label key; a plugin renderer names itself with `label` instead. */
+	labelKey?: MessageKey;
+	label?: string;
 	match: {
 		glob?: string[];
 		mime?: string[];
 		language?: string[];
 		text?: boolean;
+		test?(path: string): boolean;
 	};
 	rank: number;
 	capabilities: {

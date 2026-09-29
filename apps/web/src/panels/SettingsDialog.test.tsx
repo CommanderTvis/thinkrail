@@ -55,6 +55,7 @@ describe("settingsNavGroups", () => {
 					SettingsSection.Workspaces,
 					SettingsSection.Github,
 					SettingsSection.Extensions,
+					SettingsSection.Plugins,
 					SettingsSection.Notifications,
 					SettingsSection.Privacy,
 					SettingsSection.Updates,

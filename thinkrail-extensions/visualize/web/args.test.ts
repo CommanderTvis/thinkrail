@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { parseComparisonOptions } from "@/chat/tools/visualize/args";
+import { parseComparisonOptions } from "./args";
 
 describe("parseComparisonOptions", () => {
 	test("returns [] for non-array input", () => {

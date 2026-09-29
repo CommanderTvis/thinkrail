@@ -63,6 +63,7 @@ const adapter: ArtifactHostAdapter = {
 				existsSync(join(path, "macos-trash")),
 			);
 			if (!skillsDir || !runtimeDir) throw new Error("CLI staged resources were not found");
+			const pluginsRoot = globSync(join(cache, "thinkrail", "plugins", "*"))[0];
 			let stopPromise: Promise<void> | undefined;
 			return {
 				origin,
@@ -71,6 +72,14 @@ const adapter: ArtifactHostAdapter = {
 					trashHelpers: {
 						macos: join(runtimeDir, "macos-trash"),
 						windows: join(runtimeDir, "windows-trash.exe"),
+					},
+					pluginSkillsDir: (id) => {
+						const dir = pluginsRoot ? join(pluginsRoot, id, "skills") : undefined;
+						return dir && existsSync(dir) ? dir : null;
+					},
+					pluginAssetsDir: (id) => {
+						const dir = pluginsRoot ? join(pluginsRoot, id, "assets") : undefined;
+						return dir && existsSync(dir) ? dir : null;
 					},
 				},
 				stop() {

@@ -1,3 +1,4 @@
+import type { MessageKey } from "@thinkrail/locales";
 import type { ResourceRenderer } from "./types";
 
 export function selectResourceRenderer(
@@ -19,4 +20,11 @@ export function rendererTestId(rendererId: string): string {
 		? rendererId.slice("thinkrail/".length)
 		: rendererId.replaceAll("/", "-");
 	return `view-toggle-${suffix}`;
+}
+
+export function rendererLabel(
+	t: (key: MessageKey) => string,
+	renderer: { labelKey?: MessageKey | undefined; label?: string | undefined; id: string },
+): string {
+	return renderer.labelKey ? t(renderer.labelKey) : (renderer.label ?? renderer.id);
 }

@@ -2,7 +2,7 @@ import { RiBookOpenLine as BookOpen } from "@remixicon/react";
 import { useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
-import { cn } from "@thinkrail/ui/utils";
+import { cn } from "@/lib/utils";
 
 export function SkillsButton({
 	onOpen,

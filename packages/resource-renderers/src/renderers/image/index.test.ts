@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { currentTranslator } from "@thinkrail/locales/react";
 import type { ResourceRenderer, ReviewThread } from "../../registry";
-import { registerResourceRenderer, resolveRenderers } from "../../registry";
+import { registerResourceRenderer, rendererLabel, resolveRenderers } from "../../registry";
 import { placedRegionThreadIds } from "../regionReview";
 import { imageRenderer } from ".";
 import {
@@ -14,7 +14,7 @@ import {
 } from "./imageState";
 
 test("image renderer registration declares image matching and region anchors", () => {
-	expect(currentTranslator()(imageRenderer.labelKey)).toBe("Image");
+	expect(rendererLabel(currentTranslator(), imageRenderer)).toBe("Image");
 	expect(imageRenderer).toMatchObject({
 		id: "thinkrail/image",
 		labelKey: "viewer.renderer.image",

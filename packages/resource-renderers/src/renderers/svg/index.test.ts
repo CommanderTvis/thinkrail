@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { currentTranslator } from "@thinkrail/locales/react";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { registerResourceRenderer, resolveRenderers } from "../../registry";
+import { registerResourceRenderer, rendererLabel, resolveRenderers } from "../../registry";
 import { codeRenderer } from "../code";
 import { imageRenderer } from "../image";
 import { svgRenderer } from ".";
@@ -16,7 +16,7 @@ import {
 } from "./svgDocument";
 
 test("SVG renderer registration outranks raster images and stays sandboxed", () => {
-	expect(currentTranslator()(svgRenderer.labelKey)).toBe("Vector");
+	expect(rendererLabel(currentTranslator(), svgRenderer)).toBe("Vector");
 	expect(svgRenderer).toMatchObject({
 		id: "thinkrail/svg",
 		labelKey: "viewer.renderer.vector",
@@ -45,7 +45,7 @@ test("text SVG resolves to Vector and Source without the raster renderer", () =>
 				},
 				"view",
 				{ mobile: false },
-			).map((renderer) => currentTranslator()(renderer.labelKey)),
+			).map((renderer) => rendererLabel(currentTranslator(), renderer)),
 		).toEqual(["Vector", "Source"]);
 	} finally {
 		for (const dispose of disposers.reverse()) dispose();

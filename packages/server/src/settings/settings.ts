@@ -1,7 +1,9 @@
+import { isAbsolute } from "node:path";
 import {
 	type AppConfig,
 	type AppConfigUpdate,
 	COMPOSER_GROWTH_LIMITS,
+	isCodeFontFamily,
 	isComposerGrowthLimit,
 	isJbcentralQuotaRefreshSeconds,
 	isLineWidth,
@@ -12,6 +14,7 @@ import {
 	isTerminalWindowsShell,
 	isThemeMode,
 	LINE_WIDTH_COLUMNS,
+	type PluginSettingsNamespace,
 	RECENT_MODELS_LIMIT,
 	sameModel,
 	type WireModel,
@@ -59,9 +62,16 @@ const ACCEPTED_UPDATE_KEYS = {
 	chatMessageOrder: true,
 	layout: true,
 	recentModels: true,
+	restoreLatestChat: true,
+	editorGpuRendering: true,
+	codeFontFamily: true,
+	codeFontLigatures: true,
+	hiddenModels: true,
+	plugins: true,
+	pluginPaths: true,
 } satisfies Record<keyof RuntimeAppConfigUpdate, true>;
 
-function assertUpdateShape(update: unknown): void {
+function assertUpdateShape(update: unknown): asserts update is AppConfigUpdate {
 	if (typeof update !== "object" || update === null || Array.isArray(update)) {
 		throw new Error("settings update must be an object");
 	}
@@ -103,6 +113,30 @@ let publishSettings: SettingsPublisher | null = null;
 
 export function setSettingsPublisher(fn: SettingsPublisher | null): void {
 	publishSettings = fn;
+}
+
+type PluginNamespaceValidator = (
+	update: Record<string, PluginSettingsNamespace | null>,
+	current: AppConfig["plugins"],
+) => AppConfig["plugins"];
+
+/** Merge per namespace, touching only the ids present in the update; `null` resets one back to `{}`. */
+function defaultPluginNamespaceMerge(
+	update: Record<string, PluginSettingsNamespace | null>,
+	current: AppConfig["plugins"],
+): AppConfig["plugins"] {
+	const merged = { ...current };
+	for (const [id, patch] of Object.entries(update)) {
+		merged[id] = patch === null ? {} : { ...merged[id], ...patch };
+	}
+	return merged;
+}
+
+let pluginNamespaceValidator: PluginNamespaceValidator = defaultPluginNamespaceMerge;
+
+/** Installed by the plugin loader: validates each touched namespace against its plugin's schema. */
+export function setPluginNamespaceValidator(fn: PluginNamespaceValidator | null): void {
+	pluginNamespaceValidator = fn ?? defaultPluginNamespaceMerge;
 }
 
 let cached: AppConfig | null = null;
@@ -168,7 +202,9 @@ export function updateConfig(partial: AppConfigUpdate): AppConfig {
 		systemThemePair,
 		jbcentralQuotaEnabled,
 		jbcentralQuotaRefreshSeconds,
+		hiddenModels,
 		disabledExtensions,
+		plugins,
 		...rest
 	} = runtimeUpdate;
 	const nextDisabledExtensions =
@@ -194,6 +230,31 @@ export function updateConfig(partial: AppConfigUpdate): AppConfig {
 		throw new Error("jbcentralQuotaEnabled must be a boolean");
 	}
 	if (
+		runtimeUpdate.hiddenModels !== undefined &&
+		(!Array.isArray(runtimeUpdate.hiddenModels) ||
+			!runtimeUpdate.hiddenModels.every((item) => typeof item === "string"))
+	) {
+		throw new Error("hiddenModels must be an array of strings");
+	}
+	if (
+		runtimeUpdate.editorGpuRendering !== undefined &&
+		typeof runtimeUpdate.editorGpuRendering !== "boolean"
+	) {
+		throw new Error("editorGpuRendering must be a boolean");
+	}
+	if (
+		runtimeUpdate.codeFontFamily !== undefined &&
+		!isCodeFontFamily(runtimeUpdate.codeFontFamily)
+	) {
+		throw new Error("codeFontFamily must be a font family name, at most 120 characters");
+	}
+	if (
+		runtimeUpdate.codeFontLigatures !== undefined &&
+		typeof runtimeUpdate.codeFontLigatures !== "boolean"
+	) {
+		throw new Error("codeFontLigatures must be a boolean");
+	}
+	if (
 		runtimeUpdate.terminalWindowsShell !== undefined &&
 		!isTerminalWindowsShell(runtimeUpdate.terminalWindowsShell)
 	) {
@@ -217,6 +278,9 @@ export function updateConfig(partial: AppConfigUpdate): AppConfig {
 	) {
 		throw new Error("jbcentralQuotaRefreshSeconds must be a whole number from 1 to 3600");
 	}
+	if (themeMode !== undefined && !isThemeMode(themeMode)) {
+		throw new Error("themeMode must be fixed or system");
+	}
 	if (
 		runtimeUpdate.settleIdleDays !== undefined &&
 		!isSettleIdleDays(runtimeUpdate.settleIdleDays)
@@ -228,6 +292,13 @@ export function updateConfig(partial: AppConfigUpdate): AppConfig {
 	}
 	if (themeMode !== undefined && !isThemeMode(themeMode)) {
 		throw new Error("themeMode must be fixed or system");
+	}
+	if (
+		runtimeUpdate.pluginPaths !== undefined &&
+		(!Array.isArray(runtimeUpdate.pluginPaths) ||
+			!runtimeUpdate.pluginPaths.every((path) => typeof path === "string" && isAbsolute(path)))
+	) {
+		throw new Error("pluginPaths must be absolute paths");
 	}
 	if (systemThemePair !== undefined && !isSystemThemePair(systemThemePair)) {
 		throw new Error("systemThemePair must contain light and dark theme ids");
@@ -249,7 +320,7 @@ export function updateConfig(partial: AppConfigUpdate): AppConfig {
 	if (nextThemeMode === "system" && !nextSystemThemePair) {
 		throw new Error("system theme mode requires a complete pair");
 	}
-	const next: AppConfig = {
+	const merged: AppConfig = {
 		...current,
 		...rest,
 		...(theme === undefined ? {} : { theme }),
@@ -258,13 +329,21 @@ export function updateConfig(partial: AppConfigUpdate): AppConfig {
 		...(subagentsEnabled === undefined ? {} : { subagentsEnabled }),
 		...(jbcentralQuotaEnabled === undefined ? {} : { jbcentralQuotaEnabled }),
 		...(jbcentralQuotaRefreshSeconds === undefined ? {} : { jbcentralQuotaRefreshSeconds }),
+		...(nextDisabledExtensions === undefined ? {} : { disabledExtensions: nextDisabledExtensions }),
+		...(hiddenModels === undefined
+			? {}
+			: {
+					hiddenModels: [...new Set(hiddenModels.map((s) => s.trim()).filter((s) => s.length > 0))],
+				}),
+	};
+	const next: AppConfig = {
+		...merged,
 		...(customLayoutPresets === undefined
 			? {}
 			: { customLayoutPresets: validateCustomLayoutPresets(customLayoutPresets) }),
 		...(favoriteModels === undefined
 			? {}
 			: { favoriteModels: validateFavoriteModels(favoriteModels) }),
-		...(nextDisabledExtensions === undefined ? {} : { disabledExtensions: nextDisabledExtensions }),
 	};
 	if (defaultModel !== undefined) {
 		if (defaultModel === null) delete next.defaultModel;
@@ -281,6 +360,9 @@ export function updateConfig(partial: AppConfigUpdate): AppConfig {
 	if (reviewEffort !== undefined) {
 		if (reviewEffort === null) delete next.reviewEffort;
 		else next.reviewEffort = reviewEffort;
+	}
+	if (plugins !== undefined) {
+		next.plugins = pluginNamespaceValidator(plugins, next.plugins);
 	}
 	saveConfig(next);
 	cached = next;

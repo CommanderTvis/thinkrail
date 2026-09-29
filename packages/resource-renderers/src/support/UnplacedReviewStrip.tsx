@@ -6,6 +6,7 @@ import {
 	isPlaceable,
 	type ResourceIntent,
 	type ResourceRenderer,
+	rendererLabel,
 	type SurfaceReview,
 } from "../registry";
 import { ReviewThreadCard } from "./ReviewThreadCard";
@@ -77,7 +78,7 @@ export function UnplacedReviewStrip({
 			className="max-h-[40vh] shrink-0 overflow-auto border-border-default border-b bg-container-header-bg p-8"
 		>
 			<p className="px-4 tr-text-eyebrow text-text-muted">
-				{t("panels.unplacedReview.title", { renderer: t(renderer.labelKey) })}
+				{t("panels.unplacedReview.title", { renderer: rendererLabel(t, renderer) })}
 			</p>
 			{entries.map(({ review, thread }) => {
 				const target = candidates.find(
@@ -98,7 +99,7 @@ export function UnplacedReviewStrip({
 								className="ml-12"
 								onClick={() => onSelectRenderer(target.id)}
 							>
-								{t("panels.unplacedReview.showIn", { renderer: t(target.labelKey) })}
+								{t("panels.unplacedReview.showIn", { renderer: rendererLabel(t, target) })}
 							</Button>
 						) : null}
 					</div>

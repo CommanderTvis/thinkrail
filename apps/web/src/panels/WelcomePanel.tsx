@@ -7,12 +7,14 @@ import {
 import { useT } from "@thinkrail/locales/react";
 import { useEffect, useState } from "react";
 import { PRODUCT_NAME } from "../constants/branding";
+import { selectProjectActions, usePluginRegistry } from "../plugins/registry";
 import { selectOnboardingEligible, selectSupportsOnboarding, toast, useAppStore } from "../store";
 import { errorText, getTransport } from "../transport";
 import { AddProjectMenu } from "./AddProjectMenu";
 import { ConnectedLine, type ConnectedSummary } from "./ConnectedLine";
 import { connectedProviderName } from "./ConnectProviderOptions";
 import { enterDefaultWorkspace } from "./defaultWorkspace";
+import { NewProjectDialog } from "./NewProjectDialog";
 import { NewWorkspaceDialog } from "./NewWorkspaceDialog";
 import { OnboardingWizard } from "./OnboardingWizard";
 import { ProjectTrustNotice } from "./ProjectTrustNotice";
@@ -31,6 +33,7 @@ export function WelcomePanel() {
 	const projects = useAppStore((s) => s.projects);
 	const recentProjects = useAppStore((s) => s.recentProjects);
 	const selectedProjectId = useAppStore((s) => s.selectedProjectId);
+	const projectActions = usePluginRegistry(selectProjectActions);
 	const protocolVersion = useAppStore((s) => s.protocolVersion);
 	const supportsOnboarding = useAppStore(selectSupportsOnboarding);
 	const onboardingEligible = useAppStore(selectOnboardingEligible);
@@ -230,6 +233,9 @@ export function WelcomePanel() {
 									className="motion-safe:animate-reveal"
 								/>
 								{projectFolderCard(project.id)}
+								{projectActions.map((action) => (
+									<action.value.component key={action.pluginId} projectId={project.id} />
+								))}
 							</>
 						)}
 					</div>
@@ -248,6 +254,20 @@ export function WelcomePanel() {
 				/>
 			) : null}
 			{dialogs}
+			{newProjectOpen ? (
+				<NewProjectDialog
+					onOpenChange={setNewProjectOpen}
+					onCreated={(created) =>
+						useAppStore.getState().selectProject(created.id, { reveal: true })
+					}
+				/>
+			) : null}
+			{cloneProjectOpen ? (
+				<CloneProjectDialog
+					onOpenChange={setCloneProjectOpen}
+					onCloned={(cloned) => useAppStore.getState().selectProject(cloned.id, { reveal: true })}
+				/>
+			) : null}
 		</div>
 	);
 }

@@ -12,6 +12,9 @@ import { E2E_DATA_DIR, E2E_FIXTURE_REPO } from "./fixtures/paths";
 import { pierreCollapsedContext, pierreLines } from "./fixtures/pierre";
 import { largeRepetitiveMarkdownEdited } from "./fixtures/repo";
 
+// The side panels leave the centre narrower than a split diff needs below this width.
+test.use({ viewport: { width: 1440, height: 900 } });
+
 const diffText = (page: Page, text: string) =>
 	page.getByTestId("diff-view").getByText(text, { exact: false }).last();
 
@@ -249,35 +252,6 @@ test("Rendered markdown diff collapses unchanged blocks and list items around th
 	await collapsed.filter({ hasText: "3 unchanged items" }).click();
 	await expect(renderedDiff.locator("li", { hasText: "bullet 11" })).toBeVisible();
 	await expect(collapsed).toHaveCount(2);
-});
-
-test("Rendered markdown diff of a front-matter-only change says the preview is identical", async ({
-	page,
-}) => {
-	await openFixtureProject(page);
-	const workspace = await createWorkspaceViaDialog(page);
-	const doc = (status: string) =>
-		`---\nstatus: ${status}\n---\n\n# Front matter doc\n\nBody paragraph.\n`;
-	commitFile(workspace.worktreePath, "META.md", doc("draft"), "add front matter fixture");
-	writeFileSync(join(workspace.worktreePath, "META.md"), doc("active"));
-
-	await revealWorkbenchTool(page, "changes");
-	await page.getByTestId("changes-scope-trigger").click();
-	await page.getByTestId("changes-scope-uncommitted").click();
-	await page.getByTestId("change-item").filter({ hasText: "META.md" }).dblclick();
-	const renderedDiff = page.getByTestId("rendered-diff");
-	await expect(page.getByTestId("rendered-diff-empty")).toContainText("Source");
-	const collapsed = renderedDiff.getByTestId("rendered-diff-collapsed");
-	await expect(collapsed).toHaveCount(1);
-	await expect(collapsed).toContainText("2 unchanged blocks");
-	await expect(renderedDiff).not.toContainText("Body paragraph.");
-
-	await collapsed.click();
-	await expect(renderedDiff).toContainText("Body paragraph.");
-	await expect(renderedDiff.locator("ins, del")).toHaveCount(0);
-
-	await page.getByTestId("view-toggle-code").click();
-	await expect(diffText(page, "active")).toBeVisible();
 });
 
 test("Rendered markdown diff keeps attribute-only changes visible: a ticked task, an opened details, a list numbered by HTML's integer rules", async ({
@@ -1154,4 +1128,238 @@ test("a small edit in a large stacked file stays virtualized when context expand
 	await expect.poll(() => diffView.evaluate((node) => node.scrollHeight)).toBeGreaterThan(height);
 	expect(await diffView.evaluate((node) => node.clientHeight)).toBe(height);
 	expect(await pierreLines(diffView).count()).toBeLessThan(1_000);
+});
+
+test("Rendered markdown diff of a front-matter-only change shows it in the properties block and folds the unchanged body", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	const workspace = await createWorkspaceViaDialog(page);
+	const doc = (status: string) =>
+		`---\nstatus: ${status}\n---\n\n# Front matter doc\n\nBody paragraph.\n`;
+	commitFile(workspace.worktreePath, "META.md", doc("draft"), "add front matter fixture");
+	writeFileSync(join(workspace.worktreePath, "META.md"), doc("active"));
+
+	await revealWorkbenchTool(page, "changes");
+	await page.getByTestId("changes-scope-trigger").click();
+	await page.getByTestId("changes-scope-uncommitted").click();
+	await page.getByTestId("change-item").filter({ hasText: "META.md" }).click();
+	const renderedDiff = page.getByTestId("rendered-diff");
+	const properties = renderedDiff.getByTestId("frontmatter-properties");
+	await expect(properties.locator("del")).toHaveText("draft");
+	await expect(properties.locator("ins")).toHaveText("active");
+	await expect(page.getByTestId("rendered-diff-empty")).toHaveCount(0);
+	const collapsed = renderedDiff.getByTestId("rendered-diff-collapsed");
+	await expect(collapsed).toHaveCount(1);
+	await expect(collapsed).toContainText("2 unchanged blocks");
+	await expect(renderedDiff).not.toContainText("Body paragraph.");
+
+	await collapsed.click();
+	await expect(renderedDiff).toContainText("Body paragraph.");
+	await expect(renderedDiff.locator("ins, del")).toHaveCount(2);
+
+	await page.getByTestId("view-toggle-code").click();
+	await expect(diffText(page, "active")).toBeVisible();
+});
+
+test("Rendered markdown diff compares frontmatter as properties: a key added, a key removed, a list changed by item", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	const workspace = await createWorkspaceViaDialog(page);
+	const doc = (frontmatter: string) => `---\n${frontmatter}\n---\n\n# Properties doc\n`;
+	commitFile(
+		workspace.worktreePath,
+		"PROPS.md",
+		doc("owner: ann\ntags: [a, b]\nlegacy: yes"),
+		"add properties fixture",
+	);
+	writeFileSync(
+		join(workspace.worktreePath, "PROPS.md"),
+		doc("owner: ann\ntags: [a, c]\nreviewer: bo"),
+	);
+
+	await revealWorkbenchTool(page, "changes");
+	await page.getByTestId("changes-scope-trigger").click();
+	await page.getByTestId("changes-scope-uncommitted").click();
+	await page.getByTestId("change-item").filter({ hasText: "PROPS.md" }).click();
+	const properties = page.getByTestId("rendered-diff").getByTestId("frontmatter-properties");
+	const row = (state: string) =>
+		properties.locator(`[data-testid="frontmatter-property"][data-state="${state}"]`);
+
+	await expect(row("same")).toHaveText("ownerann");
+	await expect(row("removed").locator("del")).toHaveText(["legacy", "yes"]);
+	await expect(row("added").locator("ins")).toHaveText(["reviewer", "bo"]);
+	// The list changes by item: the brackets and the item that stayed carry no mark.
+	await expect(row("changed")).toHaveText("tags[a, b, c]");
+	await expect(row("changed").locator("del")).toHaveText("b");
+	await expect(row("changed").locator("ins")).toHaveText("c");
+});
+
+test("Changes has a List|Tree toggle; Tree groups files into folders with +/- counts", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	await createWorkspaceViaDialog(page);
+
+	const worktree = join(E2E_DATA_DIR, "worktrees", "sample-project", "workspace-1");
+	mkdirSync(join(worktree, "docs", "guides"), { recursive: true });
+	writeFileSync(join(worktree, "docs", "guides", "notes.md"), "one\ntwo\nthree\n");
+
+	await revealWorkbenchTool(page, "changes");
+	await expect(page.getByTestId("changes-toggle-tree")).toHaveAttribute("data-active", "true");
+	await page.getByTestId("changes-toggle-list").click();
+	await expect(page.getByTestId("changes-toggle-list")).toHaveAttribute("data-active", "true");
+	await expect(
+		page.getByTestId("change-item").filter({ hasText: "docs/guides/notes.md" }),
+	).toBeVisible();
+
+	await page.getByTestId("changes-toggle-tree").click();
+	await expect(page.getByTestId("changes-toggle-tree")).toHaveAttribute("data-active", "true");
+
+	const compactFolder = page.getByTestId("change-tree-folder");
+	await expect(compactFolder).toHaveCount(1);
+	await expect(compactFolder).toContainText("docs/guides");
+	const fileNode = page.getByTestId("change-item").filter({ hasText: "notes.md" });
+	await expect(fileNode).toBeVisible();
+	await compactFolder.click();
+	await expect(fileNode).toBeHidden();
+	await compactFolder.click();
+	await expect(fileNode).toBeVisible();
+	await expect(fileNode).toHaveAttribute("data-status", "untracked");
+	await expect(fileNode).toContainText("+3");
+
+	await fileNode.dblclick();
+	const diffTab = page.locator('[data-testid="editor-tab"][data-kind="diff"]');
+	await expect(diffTab).toHaveCount(1);
+	await expect(page.getByTestId("rendered-diff")).toContainText("three");
+
+	await revealWorkbenchTool(page, "files");
+	await revealWorkbenchTool(page, "changes");
+	await expect(page.getByTestId("changes-toggle-tree")).toHaveAttribute("data-active", "true");
+});
+
+function _seedCommitAndDirtyEdit(): string {
+	const worktree = worktreeDir();
+	writeFileSync(join(worktree, "committed.txt"), "committed by e2e\n");
+	gitQuiet(worktree, "add", "committed.txt");
+	gitQuiet(
+		worktree,
+		"-c",
+		"user.email=e2e@thinkrail.test",
+		"-c",
+		"user.name=ThinkRail E2E",
+		"commit",
+		"-m",
+		"e2e scope commit",
+	);
+	writeFileSync(join(worktree, "README.md"), "# sample-project\n\ndirty edit by e2e\n");
+	return worktree;
+}
+
+function _seedMutableHunks(): { path: string; base: string; modified: string } {
+	const path = join(worktreeDir(), "mutable.ts");
+	const base = [
+		"export const one = 1;",
+		"export const two = 2;",
+		"export const three = 3;",
+		"export const four = 4;",
+		"export const five = 5;",
+		"export const six = 6;",
+		"",
+	].join("\n");
+	writeFileSync(path, base);
+	gitQuiet(worktreeDir(), "add", "mutable.ts");
+	gitQuiet(
+		worktreeDir(),
+		"-c",
+		"user.email=e2e@thinkrail.test",
+		"-c",
+		"user.name=ThinkRail E2E",
+		"commit",
+		"-m",
+		"mutable hunk fixture",
+	);
+	const modified = base.replace("two = 2", "two = 200").replace("five = 5", "five = 500");
+	writeFileSync(path, modified);
+	return { path, base, modified };
+}
+
+test("The rendered markdown diff carries the outline and the properties block", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	await createWorkspaceViaDialog(page);
+
+	const worktree = join(E2E_DATA_DIR, "worktrees", "sample-project", "workspace-1");
+	writeFileSync(
+		join(worktree, "SPEC.md"),
+		["---", "id: sample-root", "status: active", "---", "", "## Goal", "", "shipped", ""].join(
+			"\n",
+		),
+	);
+
+	await revealWorkbenchTool(page, "changes");
+	await page.getByTestId("change-item").filter({ hasText: "SPEC.md" }).dblclick();
+	const rendered = page.getByTestId("rendered-diff");
+	await expect(rendered.getByTestId("frontmatter-properties")).toBeVisible();
+	await expect(rendered.getByTestId("frontmatter-property").first()).toContainText("id");
+	await expect(rendered).toContainText("sample-root");
+	// The properties are compared as data: the row that changed is marked, the rest are left alone.
+	const properties = rendered.getByTestId("frontmatter-properties");
+	await expect(properties.locator("ins").filter({ hasText: "active" })).toHaveCount(1);
+	await expect(
+		properties.locator('[data-testid="frontmatter-property"][data-state="same"]'),
+	).toContainText("sample-root");
+
+	const outline = page.getByTestId("diff-toggle-outline");
+	await expect(outline).toBeVisible();
+	await outline.click();
+	await expect(page.getByRole("button", { name: "Goal", exact: true })).toBeVisible();
+
+	await page.getByTestId("view-toggle-code").click();
+	await expect(page.getByTestId("diff-toggle-outline")).toHaveCount(0);
+});
+
+test("A markdown diff drops to one column on a narrow pane like every other file", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	await createWorkspaceViaDialog(page);
+
+	const worktree = join(E2E_DATA_DIR, "worktrees", "sample-project", "workspace-1");
+	writeFileSync(join(worktree, "README.md"), "# sample-project\n\nedited by e2e\n");
+
+	await revealWorkbenchTool(page, "changes");
+	await page.getByTestId("change-item").filter({ hasText: "README.md" }).dblclick();
+	await page.getByTestId("view-toggle-code").click();
+	await expect(page.getByTestId("diff-toggle-split")).toHaveAttribute("data-active", "true");
+
+	await page.setViewportSize({ width: 800, height: 800 });
+	await expect(page.getByTestId("diff-toggle-inline")).toHaveAttribute("data-active", "true");
+
+	await page.setViewportSize({ width: 1440, height: 900 });
+	await expect(page.getByTestId("diff-toggle-split")).toHaveAttribute("data-active", "true");
+});
+
+test("a change row can open the file itself, not the diff of it", async ({ page }) => {
+	await openFixtureProject(page);
+	await createWorkspaceViaDialog(page);
+	const worktree = join(E2E_DATA_DIR, "worktrees", "sample-project", "workspace-1");
+	writeFileSync(join(worktree, "README.md"), "# sample-project\n\nchanged for the jump\n");
+
+	await revealWorkbenchTool(page, "changes");
+	const row = page.getByTestId("change-item").filter({ hasText: "README.md" });
+	await expect(row).toBeVisible({ timeout: 10_000 });
+
+	// The row's own click is still the diff; the menu is what opens the file.
+	await row.dblclick();
+	await expect(page.getByTestId("diff-pane")).toBeVisible();
+	const fileTab = page
+		.locator('[data-testid="editor-tab"][data-kind="file"]')
+		.filter({ hasText: "README.md" });
+	await page.getByTestId("change-row-menu").first().click();
+	await page.getByTestId("change-action-jump-to-source").click();
+	await expect(fileTab).toBeVisible();
+	await expect(page.getByTestId("markdown-preview")).toContainText("changed for the jump");
 });

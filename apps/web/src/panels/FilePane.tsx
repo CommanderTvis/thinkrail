@@ -5,8 +5,8 @@ import {
 	PENDING_TEXT_META,
 	RendererView,
 	rendererImplementationKey,
+	rendererLabel,
 	rendererTestId,
-	resolveRenderers,
 	resourceContent,
 	selectResourceRenderer,
 	UnplacedReviewStrip,
@@ -16,7 +16,6 @@ import { OutlineColumn, OutlineToggle, scrollToHeading } from "@thinkrail/ui/Out
 import { LoadingRegion } from "@thinkrail/ui/skeleton";
 import { ToggleSegment } from "@thinkrail/ui/toggle-segment";
 import { Suspense, useCallback, useMemo, useState } from "react";
-import { OutlineColumn, OutlineToggle, scrollToHeading } from "@/panels/Outline";
 import { EmbeddedSplit } from "../components/EmbeddedSplit";
 import { abbreviateHomePath, isPhoneViewport, usePhoneViewport } from "../lib";
 import { type ExternalFileTab, type FileTab, useAppStore } from "../store";
@@ -24,7 +23,11 @@ import { getTransport, wsErrorCode } from "../transport";
 import { isFileTabDirty, mergeDiskIntoDraft, saveFileTab } from "./fileSave";
 import { jsonKeyLine } from "./jsonKeyLine";
 import { type HeadingEntry, sourceHeadings } from "./outlineTree";
-import { resourceBytesUrl, useResetViewStateOnImplementationChange } from "./resourcePane";
+import {
+	resourceBytesUrl,
+	useResetViewStateOnImplementationChange,
+	useResourceRenderers,
+} from "./resourcePane";
 import { reviewFlagFor } from "./reviewModel";
 import { SendReviewButton } from "./SendReviewButton";
 import { useLiveTabContent } from "./useLiveTabContent";
@@ -108,10 +111,7 @@ function FilePaneBody({ tab }: { tab: FileTab | ExternalFileTab }) {
 		() => describeResource(tab.workspaceId, tab.path, tab.meta ?? PENDING_TEXT_META),
 		[tab.workspaceId, tab.path, tab.meta],
 	);
-	const candidates = useMemo(
-		() => resolveRenderers(resource, "view", { mobile }),
-		[resource, mobile],
-	);
+	const candidates = useResourceRenderers(resource, "view", mobile);
 	const source = candidates.at(-1);
 	const preview = file
 		? candidates.find((candidate) => candidate.id === MARKDOWN_RENDERER_ID)
@@ -187,7 +187,7 @@ function FilePaneBody({ tab }: { tab: FileTab | ExternalFileTab }) {
 				// Editor chrome never takes the caret: the buffer keeps focus so Ctrl+S still reaches it.
 				onMouseDown={(event) => event.preventDefault()}
 				onClick={() => mergeDiskIntoDraft(tab.workspaceId, tab.id)}
-				className="rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg px-8 py-2 hover:bg-control-bg-hovered"
+				className="rounded-sm border border-border-default bg-container-elevated-bg px-8 py-2 hover:bg-control-bg-hovered"
 			>
 				{t("panels.filePane.mergeIntoEdits")}
 			</button>
@@ -196,7 +196,7 @@ function FilePaneBody({ tab }: { tab: FileTab | ExternalFileTab }) {
 				data-testid="file-disk-discard"
 				onMouseDown={(event) => event.preventDefault()}
 				onClick={() => useAppStore.getState().discardFileTabDraft(tab.workspaceId, tab.id)}
-				className="rounded-[var(--radius-sm)] border border-border-default px-8 py-2 text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
+				className="rounded-sm border border-border-default px-8 py-2 text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
 			>
 				{t("panels.filePane.discardEdits")}
 			</button>
@@ -262,7 +262,7 @@ function FilePaneBody({ tab }: { tab: FileTab | ExternalFileTab }) {
 						<ToggleSegment
 							key={candidate.id}
 							testid={rendererTestId(candidate.id)}
-							label={t(candidate.labelKey)}
+							label={rendererLabel(t, candidate)}
 							active={!split && candidate.id === renderer.id}
 							onClick={() => setTabRenderer(tab.workspaceId, tab.id, candidate.id)}
 						/>

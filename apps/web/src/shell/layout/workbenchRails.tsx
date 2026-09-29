@@ -102,7 +102,7 @@ export function AuxiliaryRailButton({
 	const active = entry.selected && entry.expanded;
 	const name =
 		entry.kind === "tool"
-			? layoutTabName(t, toolTab(entry.tool))
+			? layoutTabName(t, toolTab(entry.tool, shared.catalog), undefined, shared.catalog)
 			: entry.kind === "terminals"
 				? t("workbench.rail.terminalGroup", { position: ordinal, count: entry.tabs.length })
 				: entry.region === "bottom"
@@ -195,7 +195,7 @@ export function AuxiliaryRegionRail({
 	trailing?: ReactNode;
 }) {
 	const t = useT();
-	const entries = projectAuxiliaryRail(shared.document, attention, region);
+	const entries = projectAuxiliaryRail(shared.document, attention, region, shared.catalog);
 	const groups = shared.document[region].groups;
 	const draggedAuxiliary =
 		shared.draggingTab?.kind === "tool" || shared.draggingTab?.kind === "terminal"
@@ -210,6 +210,7 @@ export function AuxiliaryRegionRail({
 			entry,
 			shared.maxSideGroups,
 			shared.maxBottomGroups,
+			shared.catalog,
 		);
 		if (!isLayoutUnavailable(result)) shared.onApply(result);
 	};
@@ -330,6 +331,7 @@ export function AuxiliaryRegionRail({
 									onRenameChat={shared.onRenameChat}
 									canFocusAdjacentGroup={shared.canFocusAdjacentGroup}
 									renderTabAdornment={shared.renderTabAdornment}
+									renderTabIcon={shared.renderTabIcon}
 									draggingTab={shared.draggingTab}
 									panelId={groupPanelId(location)}
 									onKeyDown={(event) => {

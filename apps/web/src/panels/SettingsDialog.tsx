@@ -2,6 +2,7 @@ import { useT } from "@thinkrail/locales/react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@thinkrail/ui/dialog";
 import { cn } from "@thinkrail/ui/utils";
 import type { ReactNode } from "react";
+import { selectSettingsSections, usePluginRegistry } from "@/plugins/registry";
 import { SettingsSection, useAppStore } from "@/store";
 import { AppearanceSettings } from "./AppearanceSettings";
 import { ChatSettings } from "./ChatSettings";
@@ -13,12 +14,22 @@ import { LanguageSettings } from "./LanguageSettings";
 import { McpSettings } from "./McpSettings";
 import { ModelsSettings } from "./ModelsSettings";
 import { NotificationsSettings } from "./NotificationsSettings";
+import { PluginsSettings } from "./PluginsSettings";
 import { PrivacySettings } from "./PrivacySettings";
 import { ProvidersSettings } from "./ProvidersSettings";
 import { resolveSettingsSection, settingsNavGroups } from "./settingsNav";
 import { TemplatesSettings } from "./TemplatesSettings";
 import { TerminalSettings } from "./TerminalSettings";
 import { WorkspacesSettings } from "./WorkspacesSettings";
+
+function PluginSettingsSection({ id }: { id: string }) {
+	const registration = usePluginRegistry((s) =>
+		selectSettingsSections(s).find((candidate) => candidate.pluginId === id),
+	);
+	if (!registration) return null;
+	const Content = registration.value.component;
+	return <Content />;
+}
 
 export function SettingsDialog({
 	layoutSettings,
@@ -32,7 +43,11 @@ export function SettingsDialog({
 	const section = useAppStore((s) => s.settingsSection);
 	const protocolVersion = useAppStore((s) => s.protocolVersion);
 	const filteredGroups = settingsNavGroups(protocolVersion, updateSettings !== undefined);
-	const selectedSection = resolveSettingsSection(section, filteredGroups);
+	const pluginSections = usePluginRegistry(selectSettingsSections);
+	const pluginSelected = pluginSections.some((registration) => registration.pluginId === section);
+	const selectedSection = pluginSelected
+		? section
+		: resolveSettingsSection(section, filteredGroups);
 	const feedbackActive = selectedSection === SettingsSection.Feedback;
 
 	return (
@@ -71,7 +86,7 @@ export function SettingsDialog({
 								<div className="flex gap-4 md:flex-col md:gap-2">
 									{group.sections.map(({ id, label, icon: Icon }) => {
 										const active = selectedSection === id;
-										return (
+										const button = (
 											<button
 												key={id}
 												type="button"
@@ -88,6 +103,37 @@ export function SettingsDialog({
 												<Icon className="size-14 shrink-0" />
 												{t(label)}
 											</button>
+										);
+										if (id !== SettingsSection.Plugins || pluginSections.length === 0)
+											return button;
+										return (
+											<div key={id} className="flex shrink-0 gap-4 md:flex-col md:gap-2">
+												{button}
+												<div className="flex gap-4 md:ml-16 md:flex-col md:gap-2 md:border-border-default md:border-l md:pl-4">
+													{pluginSections.map(({ pluginId, value }) => {
+														const PluginIcon = value.icon;
+														const pluginActive = selectedSection === pluginId;
+														return (
+															<button
+																key={pluginId}
+																type="button"
+																data-testid={`settings-nav-${pluginId}`}
+																data-active={pluginActive}
+																onClick={() => useAppStore.getState().setSettingsSection(pluginId)}
+																className={cn(
+																	"flex shrink-0 items-center gap-4 rounded-sm px-4 py-4 text-left tr-text-ui outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary md:h-28 md:w-full md:px-8 md:py-0",
+																	pluginActive
+																		? "bg-primary-subtle text-primary"
+																		: "text-text-muted hover:bg-control-bg-hovered hover:text-text-default",
+																)}
+															>
+																<PluginIcon className="size-14 shrink-0" />
+																{value.label}
+															</button>
+														);
+													})}
+												</div>
+											</div>
 										);
 									})}
 								</div>
@@ -143,6 +189,10 @@ export function SettingsDialog({
 							updateSettings
 						) : selectedSection === SettingsSection.Feedback ? (
 							<FeedbackSettings />
+						) : selectedSection === SettingsSection.Plugins ? (
+							<PluginsSettings />
+						) : pluginSelected ? (
+							<PluginSettingsSection id={selectedSection} />
 						) : (
 							<AppearanceSettings />
 						)}

@@ -1,4 +1,12 @@
-import { useEffect, useRef } from "react";
+import {
+	type ResourceDescriptor,
+	type ResourceIntent,
+	type ResourceRenderer,
+	resolveRenderers,
+	resourceRendererRevision,
+	subscribeResourceRenderers,
+} from "@thinkrail/resource-renderers";
+import { useEffect, useMemo, useRef, useSyncExternalStore } from "react";
 import { useAppStore } from "../store";
 import { getTransport } from "../transport";
 
@@ -15,6 +23,19 @@ export function resourceBytesUrl(workspaceId: string, path: string, oid?: string
 	return oid
 		? `${base}${BLOB_ROUTE}/${workspace}/${encodeURIComponent(oid)}/${encodeResourcePath(path)}`
 		: `${base}${FILES_ROUTE}/${workspace}/${encodeResourcePath(path)}`;
+}
+
+/** The candidates for a resource, resolved again when a renderer joins or leaves (a plugin's viewer). */
+export function useResourceRenderers(
+	resource: ResourceDescriptor,
+	intent: ResourceIntent,
+	mobile: boolean,
+): ResourceRenderer[] {
+	const revision = useSyncExternalStore(subscribeResourceRenderers, resourceRendererRevision);
+	return useMemo(
+		() => ({ revision, candidates: resolveRenderers(resource, intent, { mobile }) }),
+		[resource, intent, mobile, revision],
+	).candidates;
 }
 
 export function useResetViewStateOnImplementationChange(

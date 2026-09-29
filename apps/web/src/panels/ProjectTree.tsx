@@ -75,8 +75,10 @@ import {
 } from "../store";
 import { errorText, getTransport } from "../transport";
 import { AddProjectMenu } from "./AddProjectMenu";
+import { CloneProjectDialog } from "./CloneProjectDialog";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { ExistingWorktreeDialog } from "./ExistingWorktreeDialog";
+import { NewProjectDialog } from "./NewProjectDialog";
 import { NewWorkspaceDialog } from "./NewWorkspaceDialog";
 import { RemoveWorkspaceDialog } from "./RemoveWorkspaceDialog";
 import {
@@ -106,7 +108,11 @@ import {
 const HOVER_CONTROL_CLASS =
 	"shrink-0 opacity-100 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100";
 
-export function ProjectTree() {
+export function ProjectTree({
+	renderWorkspaceTabs,
+}: {
+	renderWorkspaceTabs?: (workspace: Workspace) => ReactNode;
+} = {}) {
 	const t = useT();
 	const projects = useAppStore((s) => s.projects);
 	const recentProjects = useAppStore((s) => s.recentProjects);
@@ -129,6 +135,8 @@ export function ProjectTree() {
 	const expandedProjectIds = useAppStore((s) => s.expandedProjectIds);
 	const [dialogProjectId, setDialogProjectId] = useState<string | null>(null);
 	const [existingDialogProjectId, setExistingDialogProjectId] = useState<string | null>(null);
+	const [newProject, setNewProject] = useState(false);
+	const [cloneProject, setCloneProject] = useState(false);
 	const addProjectButtonRef = useRef<HTMLButtonElement>(null);
 	const projectNameButtonsRef = useRef(new Map<string, HTMLButtonElement>());
 	const pendingCloseFocusProjectIdRef = useRef<string | null>(null);
@@ -348,13 +356,17 @@ export function ProjectTree() {
 											onSelect={() => selectWorkspace(ws)}
 											onOpenIn={(editor) => openWorkspaceIn(ws, editor)}
 											onCopyPath={() => void copyText(ws.worktreePath)}
+											onCopyName={() => void copyText(ws.name)}
 											onReveal={() => revealWorkspace(ws)}
 											onRename={(name) => renameWorkspace(ws, name)}
 											onSettle={() => settleWorkspace(ws.id)}
 											onKeepActive={() => unsettleWorkspace(ws.id)}
 											onMarkRead={() => markWorkspaceRead(ws.id)}
 											onMarkUnread={() => markWorkspaceUnread(ws.id)}
-										/>
+											rack={renderWorkspaceTabs !== undefined}
+										>
+											{renderWorkspaceTabs?.(ws)}
+										</WorkspaceRow>
 									)}
 								/>
 							)}
@@ -402,6 +414,21 @@ export function ProjectTree() {
 			) : null}
 
 			{dialogs}
+			{newProject ? (
+				<NewProjectDialog
+					onOpenChange={setNewProject}
+					onCreated={(project) =>
+						useAppStore.getState().selectProject(project.id, { reveal: true })
+					}
+				/>
+			) : null}
+
+			{cloneProject ? (
+				<CloneProjectDialog
+					onOpenChange={setCloneProject}
+					onCloned={(project) => useAppStore.getState().selectProject(project.id, { reveal: true })}
+				/>
+			) : null}
 		</nav>
 	);
 }
@@ -656,27 +683,31 @@ function ProjectRow({
 						openingDialogRef.current = false;
 					}}
 				>
-					<ContextMenuItem
-						data-testid="project-menu-create-workspace"
-						onSelect={(event) => {
-							event.preventDefault();
-							openDialogAfterMenu(onAddWorkspaceFromMenu);
-						}}
-					>
-						<Plus />
-						{t("panels.projectTree.createWorkspace")}
-					</ContextMenuItem>
-					<ContextMenuItem
-						data-testid="project-menu-open-existing-worktree"
-						onSelect={(event) => {
-							event.preventDefault();
-							openDialogAfterMenu(onOpenExistingWorktree);
-						}}
-					>
-						<FolderOpen />
-						{t("panels.projectTree.openExistingWorktree")}
-					</ContextMenuItem>
-					<ContextMenuSeparator />
+					{project.hasGit === false ? null : (
+						<>
+							<ContextMenuItem
+								data-testid="project-menu-create-workspace"
+								onSelect={(event) => {
+									event.preventDefault();
+									openDialogAfterMenu(onAddWorkspaceFromMenu);
+								}}
+							>
+								<Plus />
+								{t("panels.projectTree.createWorkspace")}
+							</ContextMenuItem>
+							<ContextMenuItem
+								data-testid="project-menu-open-existing-worktree"
+								onSelect={(event) => {
+									event.preventDefault();
+									openDialogAfterMenu(onOpenExistingWorktree);
+								}}
+							>
+								<FolderOpen />
+								{t("panels.projectTree.openExistingWorktree")}
+							</ContextMenuItem>
+							<ContextMenuSeparator />
+						</>
+					)}
 					{canRename ? (
 						<ContextMenuItem
 							data-testid="project-menu-rename"
@@ -689,6 +720,13 @@ function ProjectRow({
 							{t("common.rename")}
 						</ContextMenuItem>
 					) : null}
+					<ContextMenuItem
+						data-testid="project-menu-copy-absolute-path"
+						onSelect={() => void copyText(project.path)}
+					>
+						<Copy />
+						{t("panels.projectTree.copyAbsolutePath")}
+					</ContextMenuItem>
 					<ContextMenuItem
 						data-testid="project-menu-close"
 						onSelect={(event) => {
@@ -735,12 +773,15 @@ function WorkspaceRow({
 	onSelect,
 	onOpenIn,
 	onCopyPath,
+	onCopyName,
 	onReveal,
 	onRename,
 	onSettle,
 	onKeepActive,
 	onMarkRead,
 	onMarkUnread,
+	rack = false,
+	children,
 }: {
 	workspace: Workspace;
 	settled: SettledReason | null;
@@ -755,12 +796,15 @@ function WorkspaceRow({
 	onSelect: () => void;
 	onOpenIn: (editor: EditorInfo) => void;
 	onCopyPath: () => void;
+	onCopyName: () => void;
 	onReveal: () => void;
 	onRename: (name: string) => void;
 	onSettle: () => void;
 	onKeepActive: () => void;
 	onMarkRead: () => void;
 	onMarkUnread: () => void;
+	rack?: boolean;
+	children?: ReactNode;
 }) {
 	const t = useT();
 	const isDefault = isDefaultWorkspace(workspace);
@@ -863,7 +907,7 @@ function WorkspaceRow({
 	) : null;
 
 	return (
-		<li>
+		<li className={rack ? "border-border-default border-b py-4 last:border-b-0" : undefined}>
 			<fieldset
 				aria-label={displayName}
 				data-testid="workspace-item"
@@ -970,6 +1014,10 @@ function WorkspaceRow({
 								<Copy />
 								{t("panels.projectTree.copyPath")}
 							</DropdownMenuItem>
+							<DropdownMenuItem data-testid="workspace-copy-name" onSelect={onCopyName}>
+								<Copy />
+								{t("panels.projectTree.copyName")}
+							</DropdownMenuItem>
 							<DropdownMenuItem data-testid="workspace-reveal" onSelect={onReveal}>
 								<FolderOpen />
 								{t("panels.projectTree.reveal")}
@@ -1028,6 +1076,11 @@ function WorkspaceRow({
 					</DropdownMenu>
 				</span>
 			</fieldset>
+			{children ? (
+				<div data-testid="workspace-tabs" className="mt-4 ml-24">
+					{children}
+				</div>
+			) : null}
 
 			{!isDefault && (
 				<RemoveWorkspaceDialog

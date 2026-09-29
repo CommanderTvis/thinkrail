@@ -133,6 +133,11 @@ export interface Workspace {
 	worktreePath: string;
 	baseBranch: string;
 	diffBase?: string;
+	/**
+	 * Why git can answer nothing here, when it can't: no repository at all, or one with no commits yet.
+	 * Absent for the ordinary case. Live, not stamped — a first commit clears it.
+	 */
+	vcs?: "none" | "unborn";
 	renamed?: boolean;
 	initialTerminalPending?: true;
 	diffStats?: DiffStats;
@@ -745,6 +750,7 @@ export interface BranchList {
 	remote: string[];
 	remoteGroups?: RemoteBranchGroup[];
 	defaultBranch: string;
+	current: string;
 }
 
 export type BranchDeleteResult =
@@ -965,7 +971,113 @@ export function isSystemThemePair(value: unknown): value is SystemThemePair {
 	);
 }
 
-export type LayoutToolId = "projects" | "specs" | "files" | "review" | "plan";
+export type BuiltinLayoutToolId = "projects" | "files" | "review" | "plan";
+export type LayoutToolId = BuiltinLayoutToolId | PluginToolId;
+
+export const LEGACY_LAYOUT_TOOL_IDS: Readonly<Record<string, PluginToolId>> = {
+	specs: "plugin:spec-dialect:specs",
+	claude: "plugin:claude-code:config",
+	graph: "plugin:branch-graph:graph",
+};
+
+/**
+ * The answer to one file write. A write is a compare-and-swap against the content the editor last read,
+ * so "not written" is an ordinary outcome carrying what is on disk now — the client merges from there.
+ */
+export type FileWriteResult =
+	| { written: true; hash: string }
+	| { written: false; disk: { content: string; hash: string } };
+
+export interface SearchHit {
+	path: string;
+	line: number;
+	text: string;
+}
+
+export interface SearchHits {
+	hits: SearchHit[];
+	truncated: boolean;
+}
+
+/** A local branch with whatever is checked out on it, for the branch list. */
+export interface BranchDetail {
+	branch: string;
+	/** The checkout occupying this branch, absent when nothing has it out. */
+	worktreePath?: string;
+	/** Set when that checkout is a ThinkRail workspace, which is what makes the branch undeletable. */
+	workspaceId?: string;
+	workspaceName?: string;
+	isCurrent: boolean;
+	isDefault: boolean;
+}
+
+/** Whether a plugin is builtin (shipped in this repository) or external (installed by the user). */
+export type PluginOrigin = "builtin" | "external";
+/** A plugin's runtime state in the roster. */
+export type PluginStatus = "active" | "disabled" | "failed" | "refused";
+export type PluginToolSide = "left" | "right";
+
+/** One side tool a plugin's manifest declares, rendered under a `plugin:<id>:<tool>` layout id. */
+export interface PluginSideToolContribution {
+	tool: string;
+	label: string;
+	icon: string;
+	defaultSide: PluginToolSide;
+	/** Withheld, like Changes and Review, in a workspace whose folder has no git history to read. */
+	requiresGit?: true;
+}
+
+/** One file viewer a plugin's manifest declares: the extensions and names it claims, and how the file is read. */
+export interface PluginFileViewerContribution {
+	extensions: string[];
+	names: string[];
+	read: "text" | "none";
+}
+
+/** The statically known parts of a plugin, declared in its manifest before any of its code runs. */
+export interface PluginContributions {
+	sideTools: PluginSideToolContribution[];
+	fileViewers: PluginFileViewerContribution[];
+}
+
+export type PluginRosterChannel =
+	| { kind: "state"; snapshot: string; key: string[] }
+	| { kind: "event" };
+
+/** One row of the plugin roster carried on `server.welcome` and `plugins.changed`; the web loader's desired state. */
+export interface PluginRosterEntry {
+	id: string;
+	label: string;
+	description?: string;
+	icon: string;
+	version: string;
+	wireVersion: number;
+	origin: PluginOrigin;
+	status: PluginStatus;
+	reason?: string;
+	dependsOn: string[];
+	modifiesSystemPrompt: boolean;
+	contributes: PluginContributions;
+	/** Wire-facing projection of the contract's channels, so a web half never loads the typebox contract. */
+	channels: Record<string, PluginRosterChannel>;
+	/** External plugins only: paths under `/plugin/<id>/`. */
+	web?: { module: string; styles?: string };
+	/** The manifest's `assets` subpath, when declared, for any origin — lets the web loader build asset URLs without the manifest. */
+	assets?: string;
+}
+
+export type PluginToolId = `plugin:${string}:${string}`;
+
+export type PluginSettingsNamespace = { enabled?: boolean } & Record<string, unknown>;
+
+/** The agent running in a terminal, as the host persists and broadcasts it; `kind` names the plugin's agent. */
+export interface TerminalAgentRecord {
+	kind: string;
+	command: string;
+	sessionId?: string;
+	cwd?: string;
+	model?: string;
+}
 
 export type LayoutBottomAlignment = "center" | "center-left" | "center-right" | "full";
 
@@ -1069,6 +1181,18 @@ export interface AppConfig extends ThemePreference {
 	subagentMaxConcurrent: number;
 	jbcentralQuotaEnabled: boolean;
 	jbcentralQuotaRefreshSeconds: number;
+	/** Monaco's experimental GPU renderer. Off unless asked for — see panels/SPEC.md. */
+	editorGpuRendering: boolean;
+	/** Font family for every code surface. Empty keeps the bundled one — see panels/SPEC.md. */
+	codeFontFamily: string;
+	/** Render the code font's ligatures where the surface can. */
+	codeFontLigatures: boolean;
+	/** Model patterns or IDs to filter out from pickers. */
+	hiddenModels: string[];
+	/** Per-plugin settings namespaces, keyed by plugin id. */
+	plugins: Record<string, PluginSettingsNamespace>;
+	/** Absolute directories scanned for external plugins, beyond the builtin ones. */
+	pluginPaths: string[];
 	/** Which shell new workspace terminals start on Windows; ignored on other platforms. */
 	terminalWindowsShell: TerminalWindowsShell;
 	/** Idle days after which a quiet workspace settles onto its project's shelf; `null` = never. */
@@ -1096,13 +1220,15 @@ export const RECENT_MODELS_LIMIT = 5;
 export type AppConfigUpdate = Partial<
 	Omit<
 		AppConfig,
-		"defaultModel" | "defaultEffort" | "reviewModel" | "reviewEffort" | "recentModels"
+		"defaultModel" | "defaultEffort" | "reviewModel" | "reviewEffort" | "recentModels" | "plugins"
 	>
 > & {
 	defaultModel?: WireModel | null;
 	defaultEffort?: ThinkingLevel | null;
 	reviewModel?: WireModel | null;
 	reviewEffort?: ThinkingLevel | null;
+	/** `null` for a namespace resets it back to `{}`. */
+	plugins?: Record<string, PluginSettingsNamespace | null>;
 };
 
 export type InterviewResponse = "book" | "postpone" | "never";
@@ -1247,6 +1373,12 @@ export const DEFAULT_CONFIG: AppConfig = {
 	disabledExtensions: [],
 	locale: SYSTEM_LOCALE_PREFERENCE,
 	onboardingDismissed: false,
+	editorGpuRendering: false,
+	codeFontFamily: "",
+	codeFontLigatures: false,
+	hiddenModels: [],
+	plugins: {},
+	pluginPaths: [],
 };
 
 export function normalizeThemePreference(value: unknown): ThemePreference {
@@ -1380,6 +1512,8 @@ export interface ReviewComment {
 	status: ReviewCommentStatus;
 	anchorState: ReviewAnchorState;
 	sessionId?: string;
+	/** The agent terminal's tab key the comment was pasted into, in place of a chat `sessionId`. */
+	terminal?: string;
 	/** Who authored the remark — the human (default, absent) or the plan's reviewer agent. */
 	author?: "user" | "agent";
 	/** Provenance of an agent finding: the plan step (in its session) and the newest reviewed commit sha. */
@@ -1543,4 +1677,65 @@ export function isPlanReviewResult(value: unknown): value is PlanReviewResult {
 	if (!r.findings.every(isReviewFinding)) return false;
 	if (r.verdict === "request_changes" && r.findings.length === 0) return false;
 	return true;
+}
+
+/**
+ * A font family the browser will accept in a CSS custom property: names and the usual separators only.
+ * Quotes, semicolons and braces are refused so the value cannot close the declaration it lands in.
+ */
+export function isCodeFontFamily(value: unknown): value is string {
+	return typeof value === "string" && value.length <= 120 && /^[\w ,.-]*$/.test(value);
+}
+
+/**
+ * Tests whether a model matches a filter pattern.
+ * Supports exact model IDs/names/qualified names, wildcard globs (* and ?),
+ * and regular expressions enclosed in /.../.
+ */
+export function matchesModelPattern(model: WireModel, pattern: string): boolean {
+	const trimmed = pattern.trim();
+	if (!trimmed) return false;
+
+	if (trimmed.startsWith("/") && trimmed.lastIndexOf("/") > 0) {
+		const lastSlash = trimmed.lastIndexOf("/");
+		const expr = trimmed.slice(1, lastSlash);
+		const flags = trimmed.slice(lastSlash + 1) || "i";
+		try {
+			const regex = new RegExp(expr, flags);
+			return (
+				regex.test(model.id) ||
+				regex.test(`${model.provider}/${model.id}`) ||
+				regex.test(`${model.provider}:${model.id}`) ||
+				regex.test(model.name)
+			);
+		} catch {
+			// invalid regex falls through
+		}
+	}
+
+	if (trimmed.includes("*") || trimmed.includes("?")) {
+		const escaped = trimmed
+			.replace(/[.+^${}()|[\]\\]/g, "\\$&")
+			.replace(/\*/g, ".*")
+			.replace(/\?/g, ".");
+		const regex = new RegExp(`^${escaped}$`, "i");
+		return (
+			regex.test(model.id) ||
+			regex.test(`${model.provider}/${model.id}`) ||
+			regex.test(`${model.provider}:${model.id}`) ||
+			regex.test(model.name)
+		);
+	}
+
+	const lower = trimmed.toLowerCase();
+	return (
+		model.id.toLowerCase() === lower ||
+		`${model.provider}/${model.id}`.toLowerCase() === lower ||
+		`${model.provider}:${model.id}`.toLowerCase() === lower ||
+		model.name.toLowerCase() === lower
+	);
+}
+
+export function isModelHidden(model: WireModel, hiddenPatterns: readonly string[]): boolean {
+	return hiddenPatterns.some((pattern) => matchesModelPattern(model, pattern));
 }

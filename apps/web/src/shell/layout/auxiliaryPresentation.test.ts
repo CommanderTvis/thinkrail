@@ -2,7 +2,6 @@ import { expect, test } from "bun:test";
 import {
 	activateAuxiliaryRailEntry,
 	clusterAuxiliaryRail,
-	isToolShowing,
 	isUnplacedRailEntry,
 	projectAuxiliaryRail,
 	projectWorkbenchRatio,
@@ -11,7 +10,7 @@ import {
 	showingAuxiliaryKey,
 	visibleAuxiliaryGroups,
 } from "./auxiliaryPresentation";
-import { closeLayoutTab, reconcileAttention, selectTab, toolTab } from "./model";
+import { closeLayoutTab, isToolShowing, reconcileAttention, selectTab, toolTab } from "./model";
 import type { LayoutTerminalTab, WorkspaceLayoutDocument } from "./types";
 
 const terminal = (id: string): LayoutTerminalTab => ({
@@ -112,7 +111,7 @@ test("rail clusters mirror the panes in order and park unplaced tools in a trail
 		["tools", ["files", "review"]],
 		["shells", ["terminals"]],
 		["other", ["terminals"]],
-		[null, ["specs", "plan"]],
+		[null, ["plan"]],
 	]);
 	const closed = closeLayoutTab(doc, "custom-files").document;
 	closed.toolRestoreTargets.files = { region: "right", index: 0 };
@@ -120,7 +119,7 @@ test("rail clusters mirror the panes in order and park unplaced tools in a trail
 	expect(clusters.map((cluster) => cluster.groupId)).toEqual(["tools", "shells", "other", null]);
 	const unplaced = clusters.at(-1)?.entries ?? [];
 	expect(unplaced.map((entry) => (entry.kind === "tool" ? entry.tool : entry.kind)).sort()).toEqual(
-		["files", "plan", "specs"],
+		["files", "plan"],
 	);
 	expect(unplaced.every(isUnplacedRailEntry)).toBe(true);
 	expect(

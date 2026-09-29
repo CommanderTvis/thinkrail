@@ -15,6 +15,7 @@ import {
 } from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
 import { type Translator, useT } from "@thinkrail/locales/react";
+import { editorGpuUsable } from "@thinkrail/resource-renderers";
 import { Button } from "@thinkrail/ui/button";
 import {
 	DropdownMenu,
@@ -24,7 +25,7 @@ import {
 	DropdownMenuTrigger,
 } from "@thinkrail/ui/dropdown-menu";
 import { cn } from "@thinkrail/ui/utils";
-import { type ReactNode, useState, useSyncExternalStore } from "react";
+import { type ReactNode, useEffect, useState, useSyncExternalStore } from "react";
 import { copyText } from "@/lib";
 import { toast, useAppStore } from "@/store";
 import {
@@ -250,6 +251,10 @@ export function AppearanceSettings() {
 	const appVersion = useAppStore((state) => state.hostAppVersion);
 
 	const editorGpu = useAppStore((state) => state.editorGpuRendering);
+	const [gpuUsable, setGpuUsable] = useState(false);
+	useEffect(() => {
+		void editorGpuUsable.then(setGpuUsable);
+	}, []);
 	const codeFont = useAppStore((state) => state.codeFontFamily);
 	const ligatures = useAppStore((state) => state.codeFontLigatures);
 	const systemSupported = (protocolVersion ?? 0) >= THEME_SYSTEM_PROTOCOL_VERSION;
@@ -321,24 +326,24 @@ export function AppearanceSettings() {
 
 	const setCodeFont = (family: string) => {
 		if (!isCodeFontFamily(family)) {
-			toast.error("A font family is letters, digits, spaces, commas, dots and dashes");
+			toast.error(t("settings.appearance.codeFontInvalid"));
 			return;
 		}
 		getTransport()
 			.request("settings.update", { config: { codeFontFamily: family } })
-			.catch(() => toast.error("Couldn’t change the code font"));
+			.catch(() => toast.error(t("settings.appearance.codeFontFailed")));
 	};
 
 	const setLigatures = (on: boolean) => {
 		getTransport()
 			.request("settings.update", { config: { codeFontLigatures: on } })
-			.catch(() => toast.error("Couldn’t change the ligature setting"));
+			.catch(() => toast.error(t("settings.appearance.ligaturesFailed")));
 	};
 
 	const setEditorGpu = (on: boolean) => {
 		getTransport()
 			.request("settings.update", { config: { editorGpuRendering: on } })
-			.catch(() => toast.error("Couldn’t change the editor renderer"));
+			.catch(() => toast.error(t("settings.appearance.editorGpuFailed")));
 	};
 
 	const update = (config: AppConfigUpdate) => {
@@ -539,22 +544,22 @@ export function AppearanceSettings() {
 			<SettingsGroup title={t("settings.appearance.editorGroup")}>
 				<LineWidthControl kind="file" />
 				<SettingsRow
-					label="Code font"
+					label={t("settings.appearance.codeFont")}
 					control={
 						<input
 							data-testid="code-font-family"
-							aria-label="Code font family"
+							aria-label={t("settings.appearance.codeFontFamily")}
 							defaultValue={codeFont}
-							placeholder="JetBrains Mono"
+							placeholder={t("settings.appearance.codeFontPlaceholder")}
 							onBlur={(event) => {
 								if (event.target.value !== codeFont) setCodeFont(event.target.value);
 							}}
-							className="w-full rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg px-8 py-4 tr-code-text text-text-default outline-none focus-visible:ring-2 focus-visible:ring-primary"
+							className="w-full rounded-sm border border-border-default bg-container-elevated-bg px-8 py-4 tr-code-text text-text-default outline-none focus-visible:ring-2 focus-visible:ring-primary"
 						/>
 					}
 				/>
 				<SettingsRow
-					label="Use code font ligatures"
+					label={t("settings.appearance.ligatures")}
 					control={
 						<input
 							type="checkbox"
@@ -566,12 +571,18 @@ export function AppearanceSettings() {
 					}
 				/>
 				<SettingsRow
-					label="Draw the editor on the GPU"
+					label={t("settings.appearance.editorGpu")}
+					description={
+						gpuUsable
+							? t("settings.appearance.editorGpuHint")
+							: t("settings.appearance.editorGpuUnavailable")
+					}
 					control={
 						<input
 							type="checkbox"
 							data-testid="editor-gpu"
 							checked={editorGpu}
+							disabled={!gpuUsable}
 							onChange={(event) => setEditorGpu(event.target.checked)}
 							className="size-16 shrink-0 accent-primary"
 						/>

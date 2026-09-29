@@ -42,7 +42,7 @@ test("Mod+F over a preview opens the find bar and highlights the matches", async
 test("Mod+F inside the editor is left to Monaco's own find widget", async ({ page }) => {
 	await openReadme(page);
 
-	await page.getByTestId("md-toggle-source").click();
+	await page.getByTestId("view-toggle-code").click();
 	const editor = page.locator(".monaco-editor").first();
 	await editor.locator(".view-lines").click();
 	// Headless Chromium here carries a Windows user agent, so Monaco binds Ctrl+F while the shell

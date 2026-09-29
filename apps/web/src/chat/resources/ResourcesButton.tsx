@@ -2,8 +2,8 @@ import { RiErrorWarningLine, RiStackFill, RiStackLine } from "@remixicon/react";
 import { useT } from "@thinkrail/locales/react";
 import { Button, IconButton, withIconClass } from "@thinkrail/ui/button";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
-import { cn } from "@thinkrail/ui/utils";
 import type { ComponentProps } from "react";
+import { cn } from "@/lib";
 
 const StackFillLive = withIconClass(RiStackFill, "motion-safe:animate-working");
 const StackLineLive = withIconClass(RiStackLine, "motion-safe:animate-working");

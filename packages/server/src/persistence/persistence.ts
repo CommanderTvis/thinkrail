@@ -16,10 +16,12 @@ import {
 	normalizeThemePreference,
 	type Project,
 	type SessionCompletion,
+	type TerminalAgentRecord,
 	type TurnChangeSet,
 	type WireModel,
 	type Workspace,
 } from "@thinkrail/contracts";
+import { pluginStateFile } from "@thinkrail/plugin-api";
 import {
 	claimBrowserAttributionAttemptIn,
 	readAcquisitionIn,
@@ -206,6 +208,66 @@ export function saveSessionLifecycle(lifecycle: SessionLifecycle): void {
 	writeJsonAtomic("session-lifecycle.json", lifecycle);
 }
 
+export function loadProjects(): Project[] {
+	return readJson<Project[]>("projects.json", []).map((project) => ({
+		...project,
+		path: storedDirectory(project.path),
+	}));
+}
+
+export function saveProjects(projects: Project[]): void {
+	writeJson("projects.json", projects);
+}
+
+export function loadWorkspaces(): Workspace[] {
+	return readJson<Workspace[]>("workspaces.json", []).map((workspace) => ({
+		...workspace,
+		worktreePath: storedDirectory(workspace.worktreePath),
+	}));
+}
+
+export function saveWorkspaces(workspaces: Workspace[]): void {
+	writeJson("workspaces.json", workspaces);
+}
+
+export interface PersistedTerminalTab {
+	tabKey: string;
+	title: string;
+	/** The agent invocation live in this tab at shutdown, so reopening can offer to resume it. */
+	agent?: TerminalAgentRecord;
+}
+
+export type PersistedTerminalSessions = Record<string, PersistedTerminalTab[]>;
+
+export function loadTerminalSessions(): PersistedTerminalSessions {
+	return readJson<PersistedTerminalSessions>("terminals.json", {});
+}
+
+export function saveTerminalSessions(sessions: PersistedTerminalSessions): void {
+	writeJson("terminals.json", sessions);
+}
+
+/** A persisted model list keeps only entries that still identify a model; anything else is dropped, not repaired. */
+function storedModels(value: unknown): WireModel[] {
+	if (!Array.isArray(value)) return [];
+	return value.filter(
+		(entry): entry is WireModel =>
+			typeof entry === "object" &&
+			entry !== null &&
+			typeof (entry as WireModel).provider === "string" &&
+			typeof (entry as WireModel).id === "string",
+	);
+}
+
+export function readPluginState<T>(id: string, name: string, fallback: T): T {
+	return readJson<T>(pluginStateFile(id, name), fallback);
+}
+
+export function writePluginState(id: string, name: string, value: unknown): void {
+	mkdirSync(join(dataDir(), "plugin-state", id), { recursive: true });
+	writeJson(pluginStateFile(id, name), value);
+}
+
 export const TURNS_VERSION = 1;
 
 export interface PersistedTurns {
@@ -226,9 +288,8 @@ function turnChangeSet(value: unknown): TurnChangeSet | null {
 		typeof settledAt !== "number" ||
 		typeof baseTree !== "string" ||
 		typeof headTree !== "string"
-	) {
+	)
 		return null;
-	}
 	const changes: TurnChangeSet["changes"] = [];
 	for (const change of value.changes) {
 		if (
@@ -236,9 +297,8 @@ function turnChangeSet(value: unknown): TurnChangeSet | null {
 			typeof change.path !== "string" ||
 			typeof change.status !== "string" ||
 			!TURN_STATUSES.has(change.status)
-		) {
+		)
 			return null;
-		}
 		changes.push({
 			path: change.path,
 			status: change.status as TurnChangeSet["changes"][number]["status"],
@@ -272,57 +332,6 @@ export function loadTurns(): PersistedTurns {
 
 export function saveTurns(turns: PersistedTurns): void {
 	writeJsonAtomic("turns.json", turns);
-}
-
-export function loadProjects(): Project[] {
-	return readJson<Project[]>("projects.json", []).map((project) => ({
-		...project,
-		path: storedDirectory(project.path),
-	}));
-}
-
-export function saveProjects(projects: Project[]): void {
-	writeJson("projects.json", projects);
-}
-
-export function loadWorkspaces(): Workspace[] {
-	return readJson<Workspace[]>("workspaces.json", []).map((workspace) => ({
-		...workspace,
-		worktreePath: storedDirectory(workspace.worktreePath),
-	}));
-}
-
-export function saveWorkspaces(workspaces: Workspace[]): void {
-	writeJson("workspaces.json", workspaces);
-}
-
-export interface PersistedTerminalTab {
-	tabKey: string;
-	title: string;
-	/** The agent invocation live in this tab at shutdown, so reopening can offer to resume it. */
-	recorded?: string;
-}
-
-export type PersistedTerminalSessions = Record<string, PersistedTerminalTab[]>;
-
-export function loadTerminalSessions(): PersistedTerminalSessions {
-	return readJson<PersistedTerminalSessions>("terminals.json", {});
-}
-
-export function saveTerminalSessions(sessions: PersistedTerminalSessions): void {
-	writeJson("terminals.json", sessions);
-}
-
-/** A persisted model list keeps only entries that still identify a model; anything else is dropped, not repaired. */
-function storedModels(value: unknown): WireModel[] {
-	if (!Array.isArray(value)) return [];
-	return value.filter(
-		(entry): entry is WireModel =>
-			typeof entry === "object" &&
-			entry !== null &&
-			typeof (entry as WireModel).provider === "string" &&
-			typeof (entry as WireModel).id === "string",
-	);
 }
 
 function storedExtensionNames(value: unknown): string[] {
@@ -393,6 +402,18 @@ export function loadConfig(): AppConfig {
 		subagentMaxConcurrent: isSubagentMaxConcurrent(value.subagentMaxConcurrent)
 			? value.subagentMaxConcurrent
 			: DEFAULT_CONFIG.subagentMaxConcurrent,
+		editorGpuRendering:
+			typeof value.editorGpuRendering === "boolean"
+				? value.editorGpuRendering
+				: DEFAULT_CONFIG.editorGpuRendering,
+		codeFontFamily:
+			typeof value.codeFontFamily === "string"
+				? value.codeFontFamily
+				: DEFAULT_CONFIG.codeFontFamily,
+		codeFontLigatures:
+			typeof value.codeFontLigatures === "boolean"
+				? value.codeFontLigatures
+				: DEFAULT_CONFIG.codeFontLigatures,
 		jbcentralQuotaEnabled:
 			typeof value.jbcentralQuotaEnabled === "boolean"
 				? value.jbcentralQuotaEnabled
@@ -414,6 +435,21 @@ export function loadConfig(): AppConfig {
 		disabledExtensions: storedExtensionNames(value.disabledExtensions),
 		locale: isLocalePreference(value.locale) ? value.locale : DEFAULT_CONFIG.locale,
 		onboardingDismissed: value.onboardingDismissed === true,
+		hiddenModels: Array.isArray(value.hiddenModels)
+			? value.hiddenModels.filter(
+					(id): id is string => typeof id === "string" && id.trim().length > 0,
+				)
+			: DEFAULT_CONFIG.hiddenModels,
+		plugins:
+			value.plugins &&
+			typeof value.plugins === "object" &&
+			!Array.isArray(value.plugins) &&
+			Object.values(value.plugins).every((ns) => typeof ns === "object" && ns !== null)
+				? (value.plugins as AppConfig["plugins"])
+				: DEFAULT_CONFIG.plugins,
+		pluginPaths: Array.isArray(value.pluginPaths)
+			? value.pluginPaths.filter((path): path is string => typeof path === "string")
+			: DEFAULT_CONFIG.pluginPaths,
 	};
 }
 

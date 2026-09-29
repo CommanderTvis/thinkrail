@@ -499,13 +499,12 @@ describe("registry extensions", () => {
 
 	it("keeps the curated child set and appends registry children", () => {
 		const children = childExtensionFactories();
-		expect(children).toHaveLength(2 + registryInlineExtensions("childExtensions").length);
+		expect(children).toHaveLength(1 + registryInlineExtensions("childExtensions").length);
 		expect(children[0]).toBe(headlessSearchPolicy);
-		expect(typeof children[1]).toBe("function");
 		const names = (inlines: typeof children) =>
 			inlines.map((inline) => (typeof inline === "function" ? "fn" : inline.name));
-		expect(names(children.slice(2))).toEqual(names(registryInlineExtensions("childExtensions")));
-		expect(names(children.slice(2))).toEqual(["web-access"]);
+		expect(names(children.slice(1))).toEqual(names(registryInlineExtensions("childExtensions")));
+		expect(names(children.slice(1))).toEqual(["web-access"]);
 	});
 
 	it("loads web access with its skill and drops both while the extension is off", async () => {
@@ -531,7 +530,6 @@ describe("registry extensions", () => {
 				expect.arrayContaining(["web_search", "fetch_content", "get_search_content"]),
 			);
 			expect(skills()).toContain("librarian");
-			expect(skills()).toContain("spec-graph");
 			const commands = async () =>
 				(await listSkillCommands(project, ctx(true))).map((command) => command.name);
 			const catalog = async () =>
@@ -544,7 +542,6 @@ describe("registry extensions", () => {
 			expect(paths().some((path) => path.startsWith("<inline:web-access"))).toBe(false);
 			expect(tools()).not.toContain("web_search");
 			expect(skills()).not.toContain("librarian");
-			expect(skills()).toContain("spec-graph");
 			expect(await commands()).not.toContain("skill:librarian");
 			expect(await catalog()).not.toContain("librarian");
 

@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { currentTranslator } from "@thinkrail/locales/react";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { rendererLabel } from "../../registry";
 import { HTML_PREVIEW_CSP } from "../html/htmlDocument";
 import { notebookRenderer } from ".";
 import { NotebookFrame } from "./NotebookOutputView";
@@ -12,7 +13,7 @@ import {
 } from "./outputDocument";
 
 test("notebook renderer registration declares cell anchors and copy support", () => {
-	expect(currentTranslator()(notebookRenderer.labelKey)).toBe("Notebook");
+	expect(rendererLabel(currentTranslator(), notebookRenderer)).toBe("Notebook");
 	expect(notebookRenderer).toMatchObject({
 		id: "thinkrail/notebook",
 		labelKey: "viewer.renderer.notebook",

@@ -6,6 +6,7 @@ import {
 	type ResourceRenderer,
 	type ReviewThread,
 	registerResourceRenderer,
+	rendererLabel,
 	resolveRenderers,
 } from "../../registry";
 import { denormalizeRegion, normalizeRegion } from "../regionReview";
@@ -28,7 +29,7 @@ import {
 import { releasePdfCanvas } from "./pdfRender";
 
 test("PDF renderer registration declares MIME matching and paged region anchors", () => {
-	expect(currentTranslator()(pdfRenderer.labelKey)).toBe("PDF");
+	expect(rendererLabel(currentTranslator(), pdfRenderer)).toBe("PDF");
 	expect(pdfRenderer).toMatchObject({
 		id: "thinkrail/pdf",
 		labelKey: "viewer.renderer.pdf",

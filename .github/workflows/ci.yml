@@ -67,6 +67,9 @@ jobs:
       - run: bun run check:spec-surface
       - run: bun run check:i18n
       - run: bun run check:compiler
+      - run: bun run build:web
+      - run: bun run check:web-bundle
+      - run: bun run api:check
       - run: bun run lint
       - run: bun run typecheck
 

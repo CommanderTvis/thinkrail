@@ -26,6 +26,15 @@ export interface StagedSkillRoot {
 	readonly route: string;
 }
 
+export interface BuildRuntimePlugin {
+	readonly id: string;
+	readonly assets: string | null;
+	readonly pi: {
+		readonly extensions: readonly BundledExtensionSource[];
+		readonly skills: readonly string[];
+	};
+}
+
 export interface BuildRuntimeSources {
 	readonly extensions: readonly BundledExtensionSource[];
 	readonly skillRoots: readonly StagedSkillRoot[];
@@ -34,7 +43,10 @@ export interface BuildRuntimeSources {
 		readonly macos: string;
 		readonly windows: string;
 	};
+	readonly plugins: readonly BuildRuntimePlugin[];
 }
+
+const BUILTIN_PLUGIN_BUILD_SUPPORT: readonly BuildRuntimePlugin[] = [];
 
 const require = createRequire(import.meta.url);
 
@@ -67,6 +79,14 @@ export function resolveBuildRuntimeSources(): BuildRuntimeSources {
 		"release",
 	);
 	const trashLib = join(dirname(require.resolve("trash")), "lib");
+	const plugins = BUILTIN_PLUGIN_BUILD_SUPPORT.map((plugin) => ({
+		id: plugin.id,
+		assets: plugin.assets,
+		pi: {
+			extensions: plugin.pi.extensions.map(({ specifier, entry }) => ({ specifier, entry })),
+			skills: [...plugin.pi.skills],
+		},
+	}));
 	return {
 		extensions,
 		skillRoots,
@@ -81,5 +101,6 @@ export function resolveBuildRuntimeSources(): BuildRuntimeSources {
 			macos: requiredPath(join(trashLib, "macos-trash")),
 			windows: requiredPath(join(trashLib, "windows-trash.exe")),
 		},
+		plugins,
 	};
 }

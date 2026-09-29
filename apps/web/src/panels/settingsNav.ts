@@ -98,6 +98,7 @@ const NAV_GROUPS: SettingsNavGroup[] = [
 				icon: RiPuzzle2Line,
 				requiresProtocolVersion: EXTENSION_CATALOG_PROTOCOL_VERSION,
 			},
+			{ id: SettingsSection.Plugins, label: "settings.nav.plugins", icon: RiPuzzle2Line },
 			{
 				id: SettingsSection.Notifications,
 				label: "settings.nav.notifications",

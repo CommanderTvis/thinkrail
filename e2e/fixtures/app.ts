@@ -218,9 +218,10 @@ export async function enterDefaultWorkspace(page: Page): Promise<void> {
 // Use this helper when a pane must be visible; rail controls toggle on each click. "files" means Files in All mode, "changes" Files in Changed mode.
 export async function revealWorkbenchTool(
 	page: Page,
-	tool: "projects" | "specs" | "files" | "changes" | "review" | "plan",
+	tool: "projects" | "specs" | "files" | "changes" | "review" | "plan" | `plugin:${string}`,
 ): Promise<void> {
-	const railTool = tool === "changes" ? "files" : tool;
+	const railTool =
+		tool === "changes" ? "files" : tool === "specs" ? "plugin:spec-dialect:specs" : tool;
 	const control = page.getByTestId(`tool-rail-${railTool}`);
 	await expect(control).toBeVisible();
 	if ((await control.getAttribute("aria-pressed")) !== "true") await control.click();
@@ -472,4 +473,24 @@ export async function requestOverWire<T>(
 		},
 		{ requestMethod: method, requestParams: params },
 	) as Promise<T>;
+}
+
+export async function setPluginEnabled(page: Page, id: string, enabled: boolean): Promise<void> {
+	// A tooltip opened by focus returning to a closed menu's trigger can sit over Settings; Escape closes it.
+	await page.keyboard.press("Escape");
+	await page.getByTestId("open-settings").click();
+	await page.getByTestId("settings-nav-plugins").click();
+	const toggle = page
+		.locator(`[data-testid="settings-plugins-row"][data-plugin-id="${id}"]`)
+		.getByTestId("settings-plugin-toggle");
+	if ((await toggle.getAttribute("data-active")) !== String(enabled)) await toggle.click();
+	await expect(toggle).toHaveAttribute("data-active", String(enabled), { timeout: 20_000 });
+	if (enabled) {
+		await page
+			.getByTestId(`settings-nav-${id}`)
+			.waitFor({ state: "visible", timeout: 20_000 })
+			.catch(() => {});
+	}
+	await page.keyboard.press("Escape");
+	await expect(page.getByTestId("settings-dialog")).toBeHidden();
 }

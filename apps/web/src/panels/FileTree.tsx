@@ -228,6 +228,7 @@ function FileNodeRow({
 							ref={revealRow}
 							testid="file-node"
 							kind={isDir ? "dir" : "file"}
+							path={node.path}
 							active={!isDir && focus.activePath === node.path}
 							subtle={ignored}
 							dataStatus={ignored ? "ignored" : undefined}

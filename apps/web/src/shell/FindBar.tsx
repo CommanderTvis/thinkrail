@@ -1,5 +1,10 @@
-import { RiArrowDownSLine as ChevronDown, RiArrowUpSLine as ChevronUp, RiCloseLine as X } from "@remixicon/react";
-import { Button } from "@thinkrail/ui/button";
+import {
+	RiArrowDownSLine as ChevronDown,
+	RiArrowUpSLine as ChevronUp,
+	RiCloseLine as X,
+} from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { IconButton } from "@thinkrail/ui/button";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
@@ -105,7 +110,7 @@ export function FindBar({
 				data-testid="find-input"
 				data-missed={missed}
 				value={query}
-				placeholder="Find in page"
+				placeholder={t("shell.find.placeholder")}
 				spellCheck={false}
 				onChange={(event) => retype(event.target.value)}
 				onKeyDown={(event) => {
@@ -117,7 +122,7 @@ export function FindBar({
 						onClose();
 					}
 				}}
-				className={`w-[220px] rounded-[var(--radius-sm)] border bg-control-bg px-8 py-4 tr-text-ui outline-none focus:border-control-border-active ${
+				className={`w-[220px] rounded-sm border bg-control-bg px-8 py-4 tr-text-ui outline-none focus:border-control-border-active ${
 					missed ? "border-feedback-error" : "border-control-border-default"
 				}`}
 			/>
@@ -127,33 +132,30 @@ export function FindBar({
 			>
 				{query ? `${matches.length === 0 ? 0 : current + 1}/${matches.length}` : ""}
 			</span>
-			<Button
+			<IconButton
 				variant="ghost"
-				size="icon"
-				aria-label="Previous match"
+				size="m"
+				icon={ChevronUp}
+				label={t("shell.find.previous")}
 				data-testid="find-previous"
 				onClick={() => step(true)}
-			>
-				<ChevronUp className="size-14" />
-			</Button>
-			<Button
+			/>
+			<IconButton
 				variant="ghost"
-				size="icon"
-				aria-label="Next match"
+				size="m"
+				icon={ChevronDown}
+				label={t("shell.find.next")}
 				data-testid="find-next"
 				onClick={() => step(false)}
-			>
-				<ChevronDown className="size-14" />
-			</Button>
-			<Button
+			/>
+			<IconButton
 				variant="ghost"
-				size="icon"
-				aria-label="Close find"
+				size="m"
+				icon={X}
+				label={t("shell.find.close")}
 				data-testid="find-close"
 				onClick={onClose}
-			>
-				<X className="size-14" />
-			</Button>
+			/>
 		</search>
 	);
 	return anchor ? createPortal(bar, anchor) : bar;

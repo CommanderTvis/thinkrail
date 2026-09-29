@@ -1,10 +1,14 @@
 import { mkdirSync } from "node:fs";
+import { isAbsolute } from "node:path";
 import type {
 	Ack,
+	FileKind,
 	OpenBranchReview,
+	ReviewChatSendResult,
 	ReviewComment,
 	ReviewFixDetails,
 	ReviewSendResult,
+	ReviewTerminalSendResult,
 	TemplateReadLocation,
 	ThinkingLevel,
 	WireModel,
@@ -88,6 +92,7 @@ import {
 	connectJbcentral,
 	detectAccounts,
 	disconnectJbcentral,
+	getJbcentralAccessSources,
 	getJbcentralQuota,
 	getProviderStatus,
 	jbcentralLogin,
@@ -95,20 +100,39 @@ import {
 	resolveLogin,
 	startLogin,
 	startProxyJbcentral,
+	switchJbcentralAccess,
 	updateJbcentral,
 } from "../auth";
 import { findBranchReviewOutcome, providerFromRemoteUrl } from "../branch-review";
 import { forgetWorkspaceChanges, revertChange, undoChange } from "../changes";
-import { selectDirectory } from "../dialog";
-import { listAvailableEditors, openEditor, revealInFileManager } from "../editors";
+import { selectDirectory, selectFile } from "../dialog";
+import {
+	listAvailableEditors,
+	openEditor,
+	revealInFileManager,
+	revealPathInFileManager,
+} from "../editors";
 import { hostEnvironmentStatus, updateHostEnvironment } from "../environment";
 import { listExtensionCatalog } from "../extensions";
 import { recordAcceptedMessage, respondToInterview } from "../feedback";
-import { readDir, readFile } from "../fs";
 import {
+	createPath,
+	readDir,
+	readExistingFile,
+	readFile,
+	renamePath,
+	resolveWorktreeFile,
+	searchWorktree,
+	writeFile,
+	writeFileAt,
+} from "../fs";
+import {
+	branchDetails,
 	commitsAheadOf,
 	countPushDivergence,
 	countPushTargetDivergence,
+	deleteBranch,
+	fetchRemotes,
 	gitDiffFile,
 	gitStatus,
 	ignoredPaths,
@@ -123,6 +147,7 @@ import { githubAuthStatus, githubRefresh } from "../github";
 import { clampLimit, getHistoryIndex } from "../history";
 import { localesDir, readLocalLocales } from "../locales";
 import { logger } from "../log";
+import { cascadeDisable, type PluginRuntime, parsePluginMethod } from "../plugins";
 import {
 	deleteRemoteBranch,
 	mergePr,
@@ -159,6 +184,7 @@ import {
 	fileReviewSession,
 	getReviewSnapshot,
 	markCommentsSent,
+	markCommentsSentToTerminal,
 	markFileDone,
 	REVIEW_LEVEL_KEY,
 	removeWorkspaceReviews,
@@ -168,7 +194,7 @@ import {
 	updateComment,
 } from "../reviews";
 import { getConfig, noteRecentModel, updateConfig } from "../settings";
-import { evictSpecIndex, projectHasSpecs, specGraph } from "../spec";
+import { projectHasSpecs } from "../spec";
 import {
 	deleteTemplate,
 	getTemplate,
@@ -181,8 +207,11 @@ import {
 	closeTerminalTab,
 	closeWorkspaceTerminals,
 	listTerminals,
+	renameTerminal,
 	reserveTerminal,
 	resizeTerminal,
+	saveTerminalImage,
+	submitToAgent,
 	writeTerminal,
 } from "../terminal";
 import { readUserThemes, themesDir } from "../themes";
@@ -200,6 +229,7 @@ import {
 	type TodoReviewRecord,
 	updateTodo,
 } from "../todos";
+import { trashFile } from "../trash";
 import { forgetWorkspaceTurns, listTurns } from "../turns";
 import { ensureWatch, stopWatch } from "../watch";
 import {
@@ -222,6 +252,7 @@ import {
 	setWorkspaceSkillOverride,
 	setWorkspaceSubagentMaxConcurrent,
 	setWorkspaceSubagentsOverride,
+	suggestWorkspaceName,
 	unsettleWorkspace,
 	workspaceDiffStats,
 } from "../workspaces";
@@ -292,6 +323,13 @@ type WsHandler<M extends WsMethodName> = (
 ) => WsResult<M> | Promise<WsResult<M>>;
 
 type WsHandlers = { [M in WsMethodName]: WsHandler<M> };
+
+let pluginRuntime: PluginRuntime | null = null;
+
+/** Installed by `server.ts` once `installPlugins()` resolves; cleared again on `stop()`. */
+export function setPluginRuntime(runtime: PluginRuntime | null): void {
+	pluginRuntime = runtime;
+}
 
 async function archiveTeardown(ws: Workspace): Promise<void> {
 	try {
@@ -414,12 +452,37 @@ function reviewSendGroups(
 	return [...groups.values()];
 }
 
+async function sendToTerminal(
+	workspaceId: string,
+	comments: ReviewComment[],
+	tabKey: string,
+): Promise<ReviewTerminalSendResult> {
+	if (comments.length === 0) throw new Error("No draft comments to send.");
+	const pkg = await buildSendPackage(workspaceId, comments);
+	submitToAgent({ workspaceId, tabKey }, pkg);
+	await markCommentsSentToTerminal(
+		workspaceId,
+		comments.map((comment) => comment.id),
+		tabKey,
+	);
+	return { terminal: tabKey };
+}
+
+type ReviewSendTarget = { sessionId?: string; terminal?: string };
+
+function terminalTarget(target: ReviewSendTarget): string | undefined {
+	if (target.terminal !== undefined && target.sessionId !== undefined) {
+		throw new Error("A review goes to a chat or a terminal, not both.");
+	}
+	return target.terminal;
+}
+
 async function sendToFileChat(
 	workspaceId: string,
 	comments: ReviewComment[],
 	opts: { model?: WireModel; thinkingLevel?: ThinkingLevel; sessionId?: string },
 	capture: AdditionalAnalyticsCapture | null,
-): Promise<ReviewSendResult> {
+): Promise<ReviewChatSendResult> {
 	const ids = comments.map((c) => c.id);
 	const pkg = await buildSendPackage(workspaceId, comments);
 	const ws = getWorkspace(workspaceId);
@@ -555,6 +618,9 @@ const handlers: WsHandlers = {
 			),
 		);
 	},
+	"workspace.suggestName": (params) => ({
+		name: suggestWorkspaceName((params as { projectId: string }).projectId),
+	}),
 	"workspace.listExisting": (params) => listExistingWorktrees(params.projectId),
 	"workspace.openExisting": async (p) => {
 		return provisionInitialTerminal(
@@ -646,7 +712,6 @@ const handlers: WsHandlers = {
 		const id = params.id;
 		const ws = forgetWorkspace(id);
 		if (ws) {
-			evictSpecIndex(ws.id);
 			removeWorkspaceReviews(ws.id);
 			forgetWorkspaceChanges(ws.id);
 			forgetWorkspaceTurns(ws.id);
@@ -716,6 +781,7 @@ const handlers: WsHandlers = {
 	},
 	"dialog.selectDirectory": () =>
 		observeSetupAction("directory_pick", selectDirectory, directoryPickOutcome),
+	"dialog.selectFile": () => selectFile(),
 	"fs.readDir": async (p) => {
 		void ensureWatch(p.workspaceId);
 		const nodes = readDir(p.workspaceId, p.path);
@@ -727,13 +793,48 @@ const handlers: WsHandlers = {
 			? nodes
 			: nodes.map((node) => (ignored.has(node.path) ? { ...node, gitignored: true } : node));
 	},
+	"fs.search": (params) => {
+		const p = params as { workspaceId: string; query: string };
+		return searchWorktree(p.workspaceId, p.query);
+	},
+	"fs.revealPath": (params) => {
+		const p = params as { workspaceId: string; path: string };
+		// Resolved through the worktree gate, so a path cannot walk out of the workspace it claims.
+		revealPathInFileManager(resolveWorktreeFile(p.workspaceId, p.path));
+		return { ok: true } as const;
+	},
+	"fs.trashPath": async (params) => {
+		const p = params as { workspaceId: string; path: string };
+		const abs = resolveWorktreeFile(p.workspaceId, p.path);
+		if (abs === resolveWorktreeFile(p.workspaceId, ".")) {
+			throw new Error("The workspace folder itself cannot be deleted from here");
+		}
+		await trashFile(abs);
+		return { ok: true } as const;
+	},
+	"fs.createPath": (params) => {
+		const p = params as { workspaceId: string; path: string; kind: FileKind };
+		createPath(p.workspaceId, p.path, p.kind);
+		return { ok: true } as const;
+	},
+	"fs.renamePath": (params) => {
+		const p = params as { workspaceId: string; path: string; to: string };
+		renamePath(p.workspaceId, p.path, p.to);
+		return { ok: true } as const;
+	},
 	"fs.readFile": (p) => {
 		void ensureWatch(p.workspaceId);
-		return readFile(p.workspaceId, p.path);
+		resolveWorktreeFile(p.workspaceId, ".");
+		return isAbsolute(p.path) && pluginRuntime?.allowsExternalFile(p.workspaceId, p.path)
+			? readExistingFile(p.path)
+			: readFile(p.workspaceId, p.path);
 	},
-	"spec.graph": (p) => {
+	"fs.writeFile": (p) => {
 		void ensureWatch(p.workspaceId);
-		return specGraph(p.workspaceId);
+		resolveWorktreeFile(p.workspaceId, ".");
+		return isAbsolute(p.path) && pluginRuntime?.allowsExternalFile(p.workspaceId, p.path)
+			? writeFileAt(p.path, p.content, p.baseHash)
+			: writeFile(p.workspaceId, p.path, p.content, p.baseHash);
 	},
 	"todo.list": (p) => {
 		if (p.opened)
@@ -869,6 +970,15 @@ const handlers: WsHandlers = {
 		void ensureWatch(p.workspaceId);
 		return gitDiffFile(p.workspaceId, p.path, p.scope);
 	},
+	"git.branchDetails": (params) => branchDetails((params as { projectId: string }).projectId),
+	"git.deleteBranch": (params) => {
+		const p = params as { projectId: string; branch: string; force?: boolean };
+		return deleteBranch(p.projectId, p.branch, p.force === true);
+	},
+	"git.fetchRemotes": async (params) => {
+		await fetchRemotes((params as { projectId: string }).projectId);
+		return {};
+	},
 	"git.listCommits": (params) => listCommits(params.workspaceId),
 	"workspace.turns": (p) => {
 		getWorkspace(p.workspaceId);
@@ -889,9 +999,18 @@ const handlers: WsHandlers = {
 	"terminal.attach": (p, ctx) => {
 		return attachTerminal(p.workspaceId, p.tabKey, ctx.clientKey, p);
 	},
+	"terminal.rename": (params) => {
+		const p = params as { workspaceId: string; tabKey: string; title: string };
+		renameTerminal(p.workspaceId, p.tabKey, p.title);
+		return {};
+	},
 	"terminal.list": (params) => ({
 		tabs: listTerminals(params.workspaceId),
 	}),
+	"terminal.saveImage": (params, ctx) => {
+		const p = params as { id: string; data: string; mimeType: string };
+		return { path: saveTerminalImage(p.id, p.data, p.mimeType, ctx.clientKey) };
+	},
 	"terminal.write": (p, ctx) => {
 		const workspaceId = writeTerminal(p.id, p.data, ctx.clientKey);
 		if (workspaceId) recordWorkspaceActivity(workspaceId);
@@ -1250,9 +1369,27 @@ const handlers: WsHandlers = {
 		ctx.runHostUpdate();
 		return { ok: true } as const;
 	},
+	"provider.jbcentralAccessList": () => getJbcentralAccessSources(),
+	"provider.jbcentralAccessSwitch": (params) =>
+		switchJbcentralAccess((params as { selectionId: string }).selectionId),
 	"settings.update": (params) => {
-		const config = params.config;
-		return updateConfig(config);
+		const requested = params.config;
+		const config =
+			requested.plugins !== undefined && pluginRuntime
+				? { ...requested, plugins: cascadeDisable(requested.plugins, pluginRuntime.roster()) }
+				: requested;
+		const updated = updateConfig(config);
+		pluginRuntime?.settingsChanged(updated);
+		return updated;
+	},
+	"plugins.list": () => pluginRuntime?.roster() ?? [],
+	"plugins.rescan": () => {
+		if (!pluginRuntime) throw new Error("Plugins are not initialized");
+		return pluginRuntime.rescan();
+	},
+	"plugins.retry": (params) => {
+		if (!pluginRuntime) throw new Error("Plugins are not initialized");
+		return pluginRuntime.retry((params as { id: string }).id);
 	},
 	"environment.get": () => hostEnvironmentStatus(),
 	"environment.update": (params) => updateHostEnvironment(params.environment),
@@ -1340,14 +1477,22 @@ const handlers: WsHandlers = {
 	},
 	"review.sendComment": (p) => {
 		const capture = additionalCapture();
-		return withReviewLock(p.workspaceId, async () =>
-			sendToFileChat(p.workspaceId, await sendableComments(p.workspaceId, [p.id]), p, capture),
-		);
+		const terminal = terminalTarget(p);
+		return withReviewLock(p.workspaceId, async () => {
+			const comments = await sendableComments(p.workspaceId, [p.id]);
+			return terminal === undefined
+				? sendToFileChat(p.workspaceId, comments, p, capture)
+				: sendToTerminal(p.workspaceId, comments, terminal);
+		});
 	},
 	"review.sendBatch": (p) => {
 		const capture = additionalCapture();
+		const terminal = terminalTarget(p);
 		return withReviewLock(p.workspaceId, async () => {
 			const comments = await sendableComments(p.workspaceId, p.commentIds);
+			if (terminal !== undefined) {
+				return { sessions: [await sendToTerminal(p.workspaceId, comments, terminal)] };
+			}
 			const sessions: ReviewSendResult[] = [];
 			for (const group of reviewSendGroups(comments, p.sessionId)) {
 				sessions.push(await sendToFileChat(p.workspaceId, group, p, capture));
@@ -1382,7 +1527,8 @@ function dispatch<M extends WsMethodName>(method: M, params: WsParams<M>, ctx: R
 }
 
 export function requestMethodDiagnostic(method: string): string {
-	return isWsMethod(method) ? method : "unknown method";
+	if (isWsMethod(method)) return method;
+	return parsePluginMethod(method) ? method : "unknown method";
 }
 
 function supportsBranchStatus(protocolVersion: number | undefined): boolean {
@@ -1411,6 +1557,8 @@ export async function handleRequest(
 	params: unknown,
 	ctx: RequestContext,
 ): Promise<unknown> {
-	if (!isWsMethod(method)) throw new Error(`Unknown method: ${method}`);
-	return dispatch(method, params as WsParams<typeof method>, ctx);
+	if (isWsMethod(method)) return dispatch(method, params as WsParams<typeof method>, ctx);
+	if (pluginRuntime && parsePluginMethod(method))
+		return pluginRuntime.handleRequest(method, params, ctx);
+	throw new Error(`Unknown method: ${method}`);
 }

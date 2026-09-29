@@ -1,4 +1,4 @@
-import { FrontmatterProperties as KitFrontmatterProperties } from "@thinkrail/resource-renderers";
+import { FrontmatterProperties as KitFrontmatterProperties } from "@thinkrail/ui/markdown";
 import { SPEC_TYPES } from "./specDocument";
 
 export function FrontmatterProperties({
