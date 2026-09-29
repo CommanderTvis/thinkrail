@@ -7,6 +7,24 @@ import type {
 } from "./types";
 
 const registry = new Map<string, ResourceRenderer>();
+const listeners = new Set<() => void>();
+let revision = 0;
+
+function changed(): void {
+	revision += 1;
+	for (const listener of listeners) listener();
+}
+
+export function subscribeResourceRenderers(listener: () => void): () => void {
+	listeners.add(listener);
+	return () => {
+		listeners.delete(listener);
+	};
+}
+
+export function resourceRendererRevision(): number {
+	return revision;
+}
 
 function globRegex(pattern: string): RegExp {
 	let source = "";
@@ -47,6 +65,7 @@ function matchesDescriptor(renderer: ResourceRenderer, descriptor: ResourceDescr
 	if (match.mime && !matchesPattern(descriptor.mime ?? inferredMime(descriptor.path), match.mime))
 		return false;
 	if (match.language && !matchesPattern(descriptor.language, match.language)) return false;
+	if (match.test && !match.test(descriptor.path)) return false;
 	return true;
 }
 
@@ -62,10 +81,12 @@ function supports(
 export function registerResourceRenderer(renderer: ResourceRenderer): () => void {
 	const previous = registry.get(renderer.id);
 	registry.set(renderer.id, renderer);
+	changed();
 	return () => {
 		if (registry.get(renderer.id) !== renderer) return;
 		if (previous) registry.set(renderer.id, previous);
 		else registry.delete(renderer.id);
+		changed();
 	};
 }
 

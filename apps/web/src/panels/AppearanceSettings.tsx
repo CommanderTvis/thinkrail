@@ -21,8 +21,9 @@ import {
 	DropdownMenuRadioItem,
 	DropdownMenuTrigger,
 } from "@thinkrail/ui/dropdown-menu";
-import { cn } from "@thinkrail/ui/utils";
-import { type ReactNode, useState, useSyncExternalStore } from "react";
+import { editorGpuUsable } from "@thinkrail/ui/editor";
+import { type ReactNode, useEffect, useState, useSyncExternalStore } from "react";
+import { cn } from "@/lib";
 import { toast, useAppStore } from "@/store";
 import {
 	deriveSystemThemePair,
@@ -219,6 +220,10 @@ export function AppearanceSettings() {
 
 	const themes = getThemes();
 	const editorGpu = useAppStore((state) => state.editorGpuRendering);
+	const [gpuUsable, setGpuUsable] = useState(false);
+	useEffect(() => {
+		void editorGpuUsable.then(setGpuUsable);
+	}, []);
 	const codeFont = useAppStore((state) => state.codeFontFamily);
 	const ligatures = useAppStore((state) => state.codeFontLigatures);
 	const systemSupported = (protocolVersion ?? 0) >= THEME_SYSTEM_PROTOCOL_VERSION;
@@ -487,11 +492,13 @@ export function AppearanceSettings() {
 				/>
 				<SettingsRow
 					label="Draw the editor on the GPU"
+					description={gpuUsable ? "Experimental graphics-card rendering for large files." : "This machine cannot run the editor's graphics-card rendering."}
 					control={
 						<input
 							type="checkbox"
 							data-testid="editor-gpu"
 							checked={editorGpu}
+							disabled={!gpuUsable}
 							onChange={(event) => setEditorGpu(event.target.checked)}
 							className="size-16 shrink-0 accent-primary"
 						/>

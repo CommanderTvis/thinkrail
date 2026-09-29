@@ -368,11 +368,10 @@ test("observational sink and projection failures cannot change a successful feat
 
 test("project opening names its typed failures; the folder picker reports selection, cancellation and failure without paths", async () => {
 	const ctx = { clientKey: "private-client" };
-	const plain = join(dataDir, "plain-folder");
-	mkdirSync(plain);
-	await expect(handleRequest("project.open", { path: plain }, ctx)).rejects.toMatchObject({
-		code: "NOT_GIT",
-	});
+	const missing = join(dataDir, "plain-folder");
+	await expect(handleRequest("project.open", { path: missing }, ctx)).rejects.toThrow(
+		"No such folder",
+	);
 	expect(failureReason(new CodedError("ALREADY_OPEN", "/private/worktree"))).toBe("already_open");
 	const savedPick = process.env.THINKRAIL_PICK_DIR;
 	try {
@@ -399,7 +398,7 @@ test("project opening names its typed failures; the folder picker reports select
 			event.properties.reason,
 		]),
 	).toEqual([
-		["project_open", "failed", "not_git"],
+		["project_open", "failed", "unknown"],
 		["directory_pick", "succeeded", "none"],
 		["directory_pick", "failed", "unknown"],
 		["directory_pick", "cancelled", "none"],

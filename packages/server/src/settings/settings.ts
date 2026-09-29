@@ -1,16 +1,15 @@
+import { isAbsolute } from "node:path";
 import {
 	type AppConfig,
 	type AppConfigUpdate,
-	COMPOSER_GROWTH_LIMITS,
-	isComposerGrowthLimit,
+	isCodeFontFamily,
 	isJbcentralQuotaRefreshSeconds,
 	isLineWidth,
-	isSettleIdleDays,
-	isSubagentMaxConcurrent,
 	isSystemThemePair,
 	isTerminalWindowsShell,
 	isThemeMode,
 	LINE_WIDTH_COLUMNS,
+	type PluginSettingsNamespace,
 	RECENT_MODELS_LIMIT,
 	sameModel,
 	type WireModel,
@@ -24,47 +23,6 @@ type RuntimeAppConfigUpdate = AppConfigUpdate & {
 	layout?: unknown;
 	recentModels?: unknown;
 };
-
-const ACCEPTED_UPDATE_KEYS = {
-	theme: true,
-	themeMode: true,
-	systemThemePair: true,
-	analyticsEnabled: true,
-	analyticsConsentConfirmed: true,
-	notificationsEnabled: true,
-	terminalReplayKb: true,
-	terminalWindowsShell: true,
-	composerGrowthLimit: true,
-	chatLineWidth: true,
-	fileLineWidth: true,
-	chatLineWidthBounded: true,
-	fileLineWidthBounded: true,
-	customLayoutPresets: true,
-	favoriteModels: true,
-	defaultModel: true,
-	defaultEffort: true,
-	reviewModel: true,
-	reviewEffort: true,
-	reviewAutoFix: true,
-	agentReviewEnabled: true,
-	subagentsEnabled: true,
-	subagentMaxConcurrent: true,
-	jbcentralQuotaEnabled: true,
-	jbcentralQuotaRefreshSeconds: true,
-	settleIdleDays: true,
-	disabledExtensions: true,
-	chatMessageOrder: true,
-	layout: true,
-	recentModels: true,
-} satisfies Record<keyof RuntimeAppConfigUpdate, true>;
-
-function assertUpdateShape(update: unknown): void {
-	if (typeof update !== "object" || update === null || Array.isArray(update)) {
-		throw new Error("settings update must be an object");
-	}
-	const unknownKey = Object.keys(update).find((key) => !Object.hasOwn(ACCEPTED_UPDATE_KEYS, key));
-	if (unknownKey !== undefined) throw new Error(`Unknown setting: ${unknownKey}`);
-}
 
 function isWireModelRef(value: unknown): value is WireModel {
 	if (!value || typeof value !== "object" || Array.isArray(value)) return false;
@@ -86,20 +44,34 @@ function validateFavoriteModels(value: unknown): WireModel[] {
 	return value.filter((model, index) => value.findIndex((m) => sameModel(m, model)) === index);
 }
 
-function validateDisabledExtensions(value: unknown): string[] {
-	if (
-		!Array.isArray(value) ||
-		!value.every((name) => typeof name === "string" && name.trim().length > 0)
-	) {
-		throw new Error("disabledExtensions must be a list of extension names");
-	}
-	return [...new Set(value as string[])];
-}
-
 let publishSettings: SettingsPublisher | null = null;
 
 export function setSettingsPublisher(fn: SettingsPublisher | null): void {
 	publishSettings = fn;
+}
+
+type PluginNamespaceValidator = (
+	update: Record<string, PluginSettingsNamespace | null>,
+	current: AppConfig["plugins"],
+) => AppConfig["plugins"];
+
+/** Merge per namespace, touching only the ids present in the update; `null` resets one back to `{}`. */
+function defaultPluginNamespaceMerge(
+	update: Record<string, PluginSettingsNamespace | null>,
+	current: AppConfig["plugins"],
+): AppConfig["plugins"] {
+	const merged = { ...current };
+	for (const [id, patch] of Object.entries(update)) {
+		merged[id] = patch === null ? {} : { ...merged[id], ...patch };
+	}
+	return merged;
+}
+
+let pluginNamespaceValidator: PluginNamespaceValidator = defaultPluginNamespaceMerge;
+
+/** Installed by the plugin loader: validates each touched namespace against its plugin's schema. */
+export function setPluginNamespaceValidator(fn: PluginNamespaceValidator | null): void {
+	pluginNamespaceValidator = fn ?? defaultPluginNamespaceMerge;
 }
 
 let cached: AppConfig | null = null;
@@ -116,7 +88,6 @@ export function getConfig(): AppConfig {
 }
 
 export function updateConfig(partial: AppConfigUpdate): AppConfig {
-	assertUpdateShape(partial);
 	const runtimeUpdate: RuntimeAppConfigUpdate = { ...partial };
 	delete runtimeUpdate.chatMessageOrder;
 	delete runtimeUpdate.layout;
@@ -164,30 +135,40 @@ export function updateConfig(partial: AppConfigUpdate): AppConfig {
 		systemThemePair,
 		jbcentralQuotaEnabled,
 		jbcentralQuotaRefreshSeconds,
-		disabledExtensions,
+		hiddenModels,
+		plugins,
 		...rest
 	} = runtimeUpdate;
-	const nextDisabledExtensions =
-		disabledExtensions === undefined ? undefined : validateDisabledExtensions(disabledExtensions);
-	for (const [name, value] of [
-		["defaultModel", defaultModel],
-		["reviewModel", reviewModel],
-	] as const) {
-		if (value !== undefined && value !== null && !isWireModelRef(value)) {
-			throw new Error(`${name} must be a model or null`);
-		}
-	}
 	if (subagentsEnabled !== undefined && typeof subagentsEnabled !== "boolean") {
 		throw new Error("subagentsEnabled must be a boolean");
 	}
-	if (
-		runtimeUpdate.subagentMaxConcurrent !== undefined &&
-		!isSubagentMaxConcurrent(runtimeUpdate.subagentMaxConcurrent)
-	) {
-		throw new Error("subagentMaxConcurrent must be a whole number from 1 to 16");
-	}
 	if (jbcentralQuotaEnabled !== undefined && typeof jbcentralQuotaEnabled !== "boolean") {
 		throw new Error("jbcentralQuotaEnabled must be a boolean");
+	}
+	if (
+		runtimeUpdate.hiddenModels !== undefined &&
+		(!Array.isArray(runtimeUpdate.hiddenModels) ||
+			!runtimeUpdate.hiddenModels.every((item) => typeof item === "string"))
+	) {
+		throw new Error("hiddenModels must be an array of strings");
+	}
+	if (
+		runtimeUpdate.editorGpuRendering !== undefined &&
+		typeof runtimeUpdate.editorGpuRendering !== "boolean"
+	) {
+		throw new Error("editorGpuRendering must be a boolean");
+	}
+	if (
+		runtimeUpdate.codeFontFamily !== undefined &&
+		!isCodeFontFamily(runtimeUpdate.codeFontFamily)
+	) {
+		throw new Error("codeFontFamily must be a font family name, at most 120 characters");
+	}
+	if (
+		runtimeUpdate.codeFontLigatures !== undefined &&
+		typeof runtimeUpdate.codeFontLigatures !== "boolean"
+	) {
+		throw new Error("codeFontLigatures must be a boolean");
 	}
 	if (
 		runtimeUpdate.terminalWindowsShell !== undefined &&
@@ -196,31 +177,19 @@ export function updateConfig(partial: AppConfigUpdate): AppConfig {
 		throw new Error("terminalWindowsShell must be auto, pwsh, powershell, or cmd");
 	}
 	if (
-		runtimeUpdate.terminalReplayKb !== undefined &&
-		!Number.isFinite(runtimeUpdate.terminalReplayKb)
-	) {
-		throw new Error("terminalReplayKb must be a finite number");
-	}
-	if (
-		runtimeUpdate.composerGrowthLimit !== undefined &&
-		!isComposerGrowthLimit(runtimeUpdate.composerGrowthLimit)
-	) {
-		throw new Error(`composerGrowthLimit must be one of ${COMPOSER_GROWTH_LIMITS.join(", ")}`);
-	}
-	if (
 		jbcentralQuotaRefreshSeconds !== undefined &&
 		!isJbcentralQuotaRefreshSeconds(jbcentralQuotaRefreshSeconds)
 	) {
 		throw new Error("jbcentralQuotaRefreshSeconds must be a whole number from 1 to 3600");
 	}
-	if (
-		runtimeUpdate.settleIdleDays !== undefined &&
-		!isSettleIdleDays(runtimeUpdate.settleIdleDays)
-	) {
-		throw new Error("settleIdleDays must be a whole number of days from 1 to 365, or null");
-	}
 	if (themeMode !== undefined && !isThemeMode(themeMode)) {
 		throw new Error("themeMode must be fixed or system");
+	}
+	if (
+		runtimeUpdate.pluginPaths !== undefined &&
+		!runtimeUpdate.pluginPaths.every((path) => isAbsolute(path))
+	) {
+		throw new Error("pluginPaths must be absolute paths");
 	}
 	if (systemThemePair !== undefined && !isSystemThemePair(systemThemePair)) {
 		throw new Error("systemThemePair must contain light and dark theme ids");
@@ -242,7 +211,7 @@ export function updateConfig(partial: AppConfigUpdate): AppConfig {
 	if (nextThemeMode === "system" && !nextSystemThemePair) {
 		throw new Error("system theme mode requires a complete pair");
 	}
-	const next: AppConfig = {
+	const merged: AppConfig = {
 		...current,
 		...rest,
 		...(theme === undefined ? {} : { theme }),
@@ -251,13 +220,20 @@ export function updateConfig(partial: AppConfigUpdate): AppConfig {
 		...(subagentsEnabled === undefined ? {} : { subagentsEnabled }),
 		...(jbcentralQuotaEnabled === undefined ? {} : { jbcentralQuotaEnabled }),
 		...(jbcentralQuotaRefreshSeconds === undefined ? {} : { jbcentralQuotaRefreshSeconds }),
+		...(hiddenModels === undefined
+			? {}
+			: {
+					hiddenModels: [...new Set(hiddenModels.map((s) => s.trim()).filter((s) => s.length > 0))],
+				}),
+	};
+	const next: AppConfig = {
+		...merged,
 		...(customLayoutPresets === undefined
 			? {}
 			: { customLayoutPresets: validateCustomLayoutPresets(customLayoutPresets) }),
 		...(favoriteModels === undefined
 			? {}
 			: { favoriteModels: validateFavoriteModels(favoriteModels) }),
-		...(nextDisabledExtensions === undefined ? {} : { disabledExtensions: nextDisabledExtensions }),
 	};
 	if (defaultModel !== undefined) {
 		if (defaultModel === null) delete next.defaultModel;
@@ -274,6 +250,9 @@ export function updateConfig(partial: AppConfigUpdate): AppConfig {
 	if (reviewEffort !== undefined) {
 		if (reviewEffort === null) delete next.reviewEffort;
 		else next.reviewEffort = reviewEffort;
+	}
+	if (plugins !== undefined) {
+		next.plugins = pluginNamespaceValidator(plugins, next.plugins);
 	}
 	saveConfig(next);
 	cached = next;

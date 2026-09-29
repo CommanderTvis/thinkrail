@@ -6,8 +6,9 @@ import {
 	RiSparkling2Line as Sparkles,
 } from "@remixicon/react";
 import { cn } from "@thinkrail/ui/utils";
-import { type ComponentPropsWithoutRef, forwardRef, useEffect, useState } from "react";
+import { type ComponentPropsWithoutRef, forwardRef, useState } from "react";
 import { PRODUCT_NAME } from "../constants/branding";
+import { selectProjectActions, usePluginRegistry } from "../plugins/registry";
 import { useAppStore } from "../store";
 import { getTransport } from "../transport";
 import { AddProjectMenu } from "./AddProjectMenu";
@@ -26,6 +27,7 @@ export function WelcomePanel() {
 	const projects = useAppStore((s) => s.projects);
 	const recentProjects = useAppStore((s) => s.recentProjects);
 	const selectedProjectId = useAppStore((s) => s.selectedProjectId);
+	const projectActions = usePluginRegistry(selectProjectActions);
 	const [dialog, setDialog] = useState<{
 		projectId: string;
 		prompt: string;
@@ -151,6 +153,9 @@ export function WelcomePanel() {
 							className="motion-safe:animate-reveal"
 						/>
 						{projectFolderCard(project.id)}
+						{projectActions.map((action) => (
+							<action.value.component key={action.pluginId} projectId={project.id} />
+						))}
 					</>
 				)}
 			</div>

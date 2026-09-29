@@ -1,11 +1,11 @@
 import type { GitStatus } from "@thinkrail/contracts";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ToggleSegment } from "@thinkrail/ui/ToggleSegment";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { QuietScrollArea } from "@/components/QuietScrollArea";
+import { FileTypeIcon } from "../components/FileTypeIcon";
 import { LoadingRegion } from "../components/Skeleton";
 import {
 	type CenterNavigationStamp,
-	type ChangesTab,
-	type EditorTab,
 	isCenterNavigationCurrent,
 	matchesWorktreePath,
 	selectActiveEditorTab,
@@ -23,22 +23,10 @@ import { useBranchList } from "./branches";
 import { ChangeRowActions } from "./ChangeRowActions";
 import { ChangesScopeMenu } from "./ChangesScopeMenu";
 import { ChangesTree } from "./ChangesTree";
-import { changesTabId, scopeKey, splitPath, statusNameClass } from "./changesModel";
+import { scopeKey, splitPath, statusNameClass } from "./changesModel";
 import { DiffStatBadge } from "./DiffStatBadge";
-import { openChangesTab, openDiffInTab } from "./openTabs";
-import { ToggleSegment } from "./ToggleSegment";
+import { openDiffInTab, openFileInTab } from "./openTabs";
 import { useWorkspaceRead } from "./useWorkspaceRead";
-import { ViewedMark } from "./ViewedMark";
-
-function selectReviewTab(
-	state: { tabsByWorkspace: Record<string, EditorTab[]> },
-	workspaceId: string,
-	id: string,
-): ChangesTab | undefined {
-	return (state.tabsByWorkspace[workspaceId] ?? []).find(
-		(tab): tab is ChangesTab => tab.id === id && tab.kind === "changes",
-	);
-}
 
 export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 	const [status, setStatus] = useState<GitStatus | null>(null);
@@ -56,17 +44,6 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 		const tab = selectActiveEditorTab(state, workspaceId);
 		return tab?.kind === "diff" ? tab : null;
 	});
-	const reviewTabId = changesTabId(workspaceId, scope);
-	const reviewActivePath = useAppStore(
-		(state) => selectReviewTab(state, workspaceId, reviewTabId)?.activePath,
-	);
-	const reviewViewed = useAppStore(
-		(state) => selectReviewTab(state, workspaceId, reviewTabId)?.viewed,
-	);
-	const reviewTabActive = useAppStore(
-		(state) => state.activeTabByWorkspace[workspaceId] === reviewTabId,
-	);
-	const viewed = useMemo(() => new Set(reviewViewed ?? []), [reviewViewed]);
 
 	const { reload } = useWorkspaceRead(
 		workspaceId,
@@ -80,11 +57,7 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 			onFailure: (_id, failure) => {
 				if (wsErrorCode(failure) === "UNKNOWN_COMMIT") {
 					setDiffScope(workspaceId, { kind: "branch" });
-					toast.info(
-						scope.kind === "turn"
-							? "That agent turn's snapshot is no longer in this repository — showing all changes."
-							: "That commit is no longer in this branch — showing all changes.",
-					);
+					toast.info("That commit is no longer in this branch — showing all changes.");
 					return;
 				}
 				if (status && !warnedRef.current) {
@@ -118,54 +91,45 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 	};
 
 	const openDiff = useCallback(
-		(
-			path: string,
-			intent: TabIntent,
-			navigation?: CenterNavigationStamp | null,
-			claimPreview = false,
-		) => {
+		(path: string, intent: TabIntent, navigation?: CenterNavigationStamp | null) => {
 			setHighlighted(path);
-			if (intent === "keep") {
-				void openDiffInTab(workspaceId, scope, path, intent, navigation, { claimPreview });
-				return;
-			}
-			void openChangesTab(workspaceId, scope, { revealPath: path }, intent, navigation);
+			void openDiffInTab(workspaceId, scope, path, intent, navigation);
 		},
 		[workspaceId, scope],
 	);
 
+	// The file itself, not the diff of it — IntelliJ's Jump to Source, kept rather than previewed because
+	// leaving the changes list to edit is not browsing. See SPEC.md.
+	const jumpToSource = useCallback(
+		(path: string) => {
+			setHighlighted(path);
+			void openFileInTab(workspaceId, path, "keep");
+		},
+		[workspaceId],
+	);
+
 	useEffect(() => {
-		if (changesRequest?.workspaceId !== workspaceId) return;
+		if (!status || changesRequest?.workspaceId !== workspaceId) return;
 		if (useAppStore.getState().changesRequest !== changesRequest) return;
 		const want = changesRequest.path;
+		const match = status.changes.find((c) => matchesWorktreePath(want, c.path));
 		const currentState = useAppStore.getState();
 		const overtaken = changesRequest.navigation
 			? !isCenterNavigationCurrent(currentState, workspaceId, changesRequest.navigation)
 			: selectWorkspaceNavTick(currentState, workspaceId) !== changesRequest.navTick;
-		if (want === null) {
-			if (!overtaken) {
-				void openChangesTab(workspaceId, scope, {}, "preview", changesRequest.navigation);
-			}
-		} else {
-			if (!status) return;
-			const match = status.changes.find((c) => matchesWorktreePath(want, c.path));
-			if (match && !overtaken) openDiff(match.path, "preview", changesRequest.navigation);
-			else setHighlighted(match ? match.path : want);
-		}
+		if (match && !overtaken) openDiff(match.path, "preview", changesRequest.navigation);
+		else setHighlighted(match ? match.path : want);
 		useAppStore.getState().clearChangesRequest();
-	}, [changesRequest, status, workspaceId, openDiff, scope]);
+	}, [changesRequest, status, workspaceId, openDiff]);
 
 	useEffect(() => {
-		if (activeDiffTab || reviewTabActive) setHighlighted(null);
-	}, [activeDiffTab, reviewTabActive]);
+		if (activeDiffTab) setHighlighted(null);
+	}, [activeDiffTab]);
 
 	const isActive = (path: string) =>
-		reviewTabActive && reviewActivePath !== undefined
-			? reviewActivePath === path
-			: activeDiffTab
-				? activeDiffTab.path === path && scopeKey(activeDiffTab.scope) === scopeKey(scope)
-				: highlighted === path;
-	const isViewed = (path: string) => viewed.has(path);
+		activeDiffTab
+			? activeDiffTab.path === path && scopeKey(activeDiffTab.scope) === scopeKey(scope)
+			: highlighted === path;
 
 	return (
 		<div className="flex h-full min-h-0 flex-col">
@@ -173,9 +137,9 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 				data-testid="changes-view-toggle"
 				role="toolbar"
 				aria-label="Changes scope and view"
-				className="flex h-panel-header-row shrink-0 items-center gap-4 overflow-clip border-border-default border-b px-12"
+				className="@container flex h-panel-header-row shrink-0 items-center gap-4 overflow-clip border-border-default border-b px-12"
 			>
-				<div className="mr-auto flex min-w-0 items-center gap-4">
+				<div className="mr-auto flex min-w-0 items-center gap-4 overflow-hidden">
 					<ChangesScopeMenu
 						key={`${workspaceId}:${baseRef}`}
 						workspaceId={workspaceId}
@@ -189,7 +153,7 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 							refreshing={branchesRefreshing}
 							label="vs"
 							testid="changes-target-picker"
-							triggerClassName="flex h-24 min-w-0 max-w-[200px] items-center gap-4 rounded-sm px-4 outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary data-[open=true]:bg-control-bg-selected"
+							triggerClassName="hidden h-24 min-w-0 max-w-[200px] items-center @min-[16rem]:flex gap-4 rounded-[var(--radius-sm)] px-4 outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary data-[open=true]:bg-control-bg-selected"
 							onSelect={(ref) => void pointAt(ref)}
 							onRefresh={refreshBranches}
 						/>
@@ -208,7 +172,7 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 					onClick={() => setChangesView("tree")}
 				/>
 			</div>
-			<QuietScrollArea className="min-h-0 flex-1" viewportClassName="p-panel-inset">
+			<QuietScrollArea className="min-h-0 flex-1" viewportClassName="p-12">
 				{status === null && error !== null ? (
 					<div data-testid="changes-error" className="flex flex-col items-start gap-4 px-8 py-4">
 						<p className="tr-text-metadata text-feedback-error">
@@ -218,7 +182,7 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 							type="button"
 							data-testid="changes-retry"
 							onClick={reload}
-							className="rounded-sm px-4 py-2 tr-text-metadata text-text-muted transition-colors hover:bg-control-bg-hovered hover:text-text-default"
+							className="rounded-[var(--radius-sm)] px-4 py-2 tr-text-metadata text-text-muted transition-colors hover:bg-control-bg-hovered hover:text-text-default"
 						>
 							Retry
 						</button>
@@ -232,9 +196,9 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 				) : changesView === "tree" ? (
 					<ChangesTree
 						changes={status.changes}
-						onOpen={(path, intent, claimPreview) => openDiff(path, intent, undefined, claimPreview)}
+						onOpen={openDiff}
+						onJumpToSource={jumpToSource}
 						isActive={isActive}
-						isViewed={isViewed}
 					/>
 				) : (
 					<ul className="motion-safe:animate-reveal">
@@ -246,7 +210,7 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 										path={change.path}
 										active={isActive(change.path)}
 										onView={() => openDiff(change.path, "preview")}
-										onOpenTab={() => openDiff(change.path, "keep")}
+										onJumpToSource={() => jumpToSource(change.path)}
 									>
 										{({ onContextMenu }) => (
 											<button
@@ -255,15 +219,13 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 												data-testid="change-item"
 												data-status={change.status}
 												data-active={isActive(change.path) ? true : undefined}
-												data-viewed={isViewed(change.path) ? true : undefined}
 												onClick={() => openDiff(change.path, "preview")}
-												onDoubleClick={() => openDiff(change.path, "keep", undefined, true)}
+												onDoubleClick={() => openDiff(change.path, "keep")}
 												title={change.path}
-												className="flex h-panel-row min-w-0 flex-1 items-center gap-8 px-4 text-left tr-text-ui"
+												className="flex min-w-0 flex-1 items-center gap-4 px-4 py-4 text-left tr-text-ui"
 											>
-												<span
-													className={`flex min-w-0 flex-1 items-baseline ${isViewed(change.path) ? "opacity-60" : ""}`}
-												>
+												<FileTypeIcon path={base} className="size-14 text-text-muted" />
+												<span className="flex min-w-0 flex-1 items-baseline">
 													{dir ? (
 														<span
 															data-testid="change-path-dir"
@@ -279,7 +241,6 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 														{base}
 													</span>
 												</span>
-												{isViewed(change.path) ? <ViewedMark /> : null}
 												<DiffStatBadge added={change.added ?? 0} removed={change.removed ?? 0} />
 											</button>
 										)}

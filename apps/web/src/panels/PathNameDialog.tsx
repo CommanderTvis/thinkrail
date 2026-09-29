@@ -1,5 +1,3 @@
-import { useRef, useState } from "react";
-import { FileTypeIcon } from "@/components/FileTypeIcon";
 import { Button } from "@thinkrail/ui/button";
 import {
 	Dialog,
@@ -8,6 +6,8 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from "@thinkrail/ui/dialog";
+import { useRef, useState } from "react";
+import { FileTypeIcon } from "@/components/FileTypeIcon";
 import { errorText } from "../transport";
 
 /** A name the host can take as a path under the folder it is typed for: no empty or `..` segment. */

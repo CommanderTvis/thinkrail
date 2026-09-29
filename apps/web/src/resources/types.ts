@@ -113,6 +113,7 @@ export interface ResourceRenderer {
 		mime?: string[];
 		language?: string[];
 		text?: boolean;
+		test?(path: string): boolean;
 	};
 	rank: number;
 	capabilities: {

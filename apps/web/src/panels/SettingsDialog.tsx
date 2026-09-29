@@ -1,21 +1,103 @@
+import {
+	RiBrainLine as Brain,
+	RiDownloadCloud2Line as DownloadCloud,
+	RiFeedbackLine as Feedback,
+	RiGitBranchLine as GitBranch,
+	RiKeyLine as KeyRound,
+	RiLayoutTop2Line as LayoutPanelTop,
+	RiLayoutGridLine as LayoutTemplate,
+	type RemixiconComponentType as LucideIcon,
+	RiChat2Line as MessageSquareText,
+	RiNotification3Line as NotificationBell,
+	RiPaletteLine as Palette,
+	RiPuzzle2Line as Puzzle,
+	RiSearchEyeLine as ScanEye,
+	RiShieldCheckLine as ShieldCheck,
+	RiEqualizerLine as SlidersHorizontal,
+	RiTerminalBoxLine as SquareTerminal,
+	RiTextWrap as TextWrap,
+} from "@remixicon/react";
+import { DEFAULT_MODEL_PROTOCOL_VERSION } from "@thinkrail/contracts";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@thinkrail/ui/dialog";
-import { cn } from "@thinkrail/ui/utils";
-import type { ReactNode } from "react";
+import type { ComponentType, ReactNode } from "react";
+import { cn } from "@/lib";
+import { selectSettingsSections, usePluginRegistry } from "@/plugins/registry";
 import { SettingsSection, useAppStore } from "@/store";
 import { AppearanceSettings } from "./AppearanceSettings";
 import { ChatSettings } from "./ChatSettings";
-import { ExtensionsSettings } from "./ExtensionsSettings";
 import { FeedbackSettings } from "./FeedbackSettings";
 import { GithubSettings } from "./GithubSettings";
-import { McpSettings } from "./McpSettings";
+import { LineWidthSettings } from "./LineWidthSettings";
 import { ModelsSettings } from "./ModelsSettings";
 import { NotificationsSettings } from "./NotificationsSettings";
+import { PluginsSettings } from "./PluginsSettings";
 import { PrivacySettings } from "./PrivacySettings";
 import { ProvidersSettings } from "./ProvidersSettings";
-import { resolveSettingsSection, settingsNavGroups } from "./settingsNav";
+import { ReviewSettings } from "./ReviewSettings";
 import { TemplatesSettings } from "./TemplatesSettings";
 import { TerminalSettings } from "./TerminalSettings";
-import { WorkspacesSettings } from "./WorkspacesSettings";
+
+type SectionIcon = LucideIcon | ComponentType<{ className?: string }>;
+
+const CORE_SECTIONS: {
+	id: SettingsSection;
+	label: string;
+	icon: SectionIcon;
+	requiresInjectedContent?: true;
+	requiresProtocolVersion?: number;
+}[] = [
+	{ id: SettingsSection.Providers, label: "Providers", icon: KeyRound },
+	{
+		id: SettingsSection.Models,
+		label: "Models",
+		icon: Brain,
+		requiresProtocolVersion: DEFAULT_MODEL_PROTOCOL_VERSION,
+	},
+	{ id: SettingsSection.Github, label: "GitHub", icon: GitBranch },
+	{ id: SettingsSection.Appearance, label: "Appearance", icon: Palette },
+	{ id: SettingsSection.LineWidth, label: "Line width", icon: TextWrap },
+	{ id: SettingsSection.Chat, label: "Chat", icon: MessageSquareText },
+	{ id: SettingsSection.Layout, label: "Layout", icon: LayoutPanelTop },
+	{
+		id: SettingsSection.Updates,
+		label: "Updates",
+		icon: DownloadCloud,
+		requiresInjectedContent: true,
+	},
+	{ id: SettingsSection.Terminal, label: "Terminal", icon: SquareTerminal },
+	{ id: SettingsSection.Templates, label: "Templates", icon: LayoutTemplate },
+	{ id: SettingsSection.Review, label: "Review", icon: ScanEye },
+	{ id: SettingsSection.Notifications, label: "Notifications", icon: NotificationBell },
+	{ id: SettingsSection.Privacy, label: "Privacy", icon: ShieldCheck },
+	{ id: SettingsSection.Plugins, label: "Plugins", icon: Puzzle },
+	{ id: SettingsSection.Feedback, label: "Feedback", icon: Feedback },
+];
+const SOON: { label: string; icon: LucideIcon }[] = [{ label: "General", icon: SlidersHorizontal }];
+
+const CORE_CONTENT: Partial<Record<SettingsSection, () => ReactNode>> = {
+	[SettingsSection.Providers]: () => <ProvidersSettings />,
+	[SettingsSection.Models]: () => <ModelsSettings />,
+	[SettingsSection.Github]: () => <GithubSettings />,
+	[SettingsSection.LineWidth]: () => <LineWidthSettings />,
+	[SettingsSection.Chat]: () => <ChatSettings />,
+	[SettingsSection.Terminal]: () => <TerminalSettings />,
+	[SettingsSection.Templates]: () => <TemplatesSettings />,
+	[SettingsSection.Review]: () => <ReviewSettings />,
+	[SettingsSection.Notifications]: () => <NotificationsSettings />,
+	[SettingsSection.Privacy]: () => <PrivacySettings />,
+	[SettingsSection.Plugins]: () => <PluginsSettings />,
+	[SettingsSection.Feedback]: () => <FeedbackSettings />,
+	[SettingsSection.Appearance]: () => <AppearanceSettings />,
+};
+
+function PluginSettingsSection({ id }: { id: string }) {
+	const registration = usePluginRegistry((s) =>
+		selectSettingsSections(s).find((candidate) => candidate.pluginId === id),
+	);
+	if (!registration) return null;
+	const Content = registration.value.component;
+	return <Content />;
+}
 
 export function SettingsDialog({
 	layoutSettings,
@@ -27,9 +109,40 @@ export function SettingsDialog({
 	const open = useAppStore((s) => s.settingsOpen);
 	const section = useAppStore((s) => s.settingsSection);
 	const protocolVersion = useAppStore((s) => s.protocolVersion);
-	const filteredGroups = settingsNavGroups(protocolVersion, updateSettings !== undefined);
-	const selectedSection = resolveSettingsSection(section, filteredGroups);
-	const feedbackActive = selectedSection === SettingsSection.Feedback;
+	const pluginSections = usePluginRegistry(selectSettingsSections);
+	const sections = CORE_SECTIONS.filter(
+		(candidate) =>
+			(!candidate.requiresInjectedContent || updateSettings !== undefined) &&
+			(candidate.requiresProtocolVersion === undefined ||
+				(protocolVersion !== null && protocolVersion >= candidate.requiresProtocolVersion)),
+	);
+	const selectedSection =
+		sections.some((candidate) => candidate.id === section) ||
+		pluginSections.some((registration) => registration.pluginId === section)
+			? section
+			: SettingsSection.Appearance;
+
+	function sectionButton(id: string, label: string, Icon: SectionIcon) {
+		const active = selectedSection === id;
+		return (
+			<button
+				key={id}
+				type="button"
+				data-testid={`settings-nav-${id}`}
+				data-active={active}
+				onClick={() => useAppStore.getState().setSettingsSection(id)}
+				className={cn(
+					"flex shrink-0 items-center gap-8 rounded-[var(--radius-sm)] px-12 py-8 text-left tr-text-ui outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary",
+					active
+						? "bg-primary-subtle text-primary"
+						: "text-text-muted hover:bg-control-bg-hovered hover:text-text-default",
+				)}
+			>
+				<Icon className="size-16 shrink-0" />
+				{label}
+			</button>
+		);
+	}
 
 	return (
 		<Dialog
@@ -43,7 +156,7 @@ export function SettingsDialog({
 				onEscapeKeyDown={(event) => {
 					if (
 						document.activeElement instanceof HTMLElement &&
-						document.activeElement.hasAttribute("data-settings-draft-input")
+						document.activeElement.hasAttribute("data-line-width-input")
 					) {
 						event.preventDefault();
 					}
@@ -57,87 +170,52 @@ export function SettingsDialog({
 				<div className="flex min-h-0 flex-1 flex-col md:flex-row">
 					<nav
 						aria-label="Settings sections"
-						className="flex shrink-0 gap-4 overflow-x-auto border-border-default border-b p-8 md:w-192 md:flex-col md:gap-12 md:overflow-x-visible md:overflow-y-auto md:border-r md:border-b-0 md:bg-container-elevated-bg md:p-12"
+						className="flex shrink-0 gap-4 overflow-x-auto border-border-default border-b p-8 md:w-[192px] md:flex-col md:gap-2 md:overflow-x-visible md:overflow-y-auto md:border-r md:border-b-0 md:bg-container-elevated-bg md:p-12"
 					>
-						{filteredGroups.map((group) => (
-							<div key={group.label} className="flex shrink-0 md:flex-col">
-								<span className="hidden h-28 py-4 tr-text-label-pill text-text-subtle uppercase md:block">
-									{group.label}
+						{sections.map(({ id, label, icon }) =>
+							id === SettingsSection.Plugins ? (
+								<fieldset
+									key={id}
+									aria-label="Plugins"
+									className="flex min-w-0 shrink-0 gap-4 md:flex-col md:gap-2"
+								>
+									{sectionButton(id, label, icon)}
+									<div className="flex gap-4 md:ml-16 md:flex-col md:gap-2 md:border-border-default md:border-l md:pl-4">
+										{pluginSections.map((registration) =>
+											sectionButton(
+												registration.pluginId,
+												registration.value.label,
+												registration.value.icon,
+											),
+										)}
+									</div>
+								</fieldset>
+							) : (
+								sectionButton(id, label, icon)
+							),
+						)}
+						{SOON.map(({ label, icon: Icon }) => (
+							<span
+								key={label}
+								className="flex shrink-0 cursor-default items-center gap-8 rounded-[var(--radius-sm)] px-12 py-8 text-text-disabled tr-text-ui"
+							>
+								<Icon className="size-16 shrink-0" />
+								{label}
+								<span className="ml-auto rounded-full border border-border-default px-4 py-2 tr-text-label-pill text-text-disabled">
+									Soon
 								</span>
-								<div className="flex gap-4 md:flex-col md:gap-2">
-									{group.sections.map(({ id, label, icon: Icon }) => {
-										const active = selectedSection === id;
-										return (
-											<button
-												key={id}
-												type="button"
-												data-testid={`settings-nav-${id}`}
-												data-active={active}
-												onClick={() => useAppStore.getState().setSettingsSection(id)}
-												className={cn(
-													"flex shrink-0 items-center gap-4 rounded-sm px-4 py-4 text-left tr-text-ui outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary md:h-28 md:w-full md:px-8 md:py-0",
-													active
-														? "bg-primary-subtle text-primary"
-														: "text-text-muted hover:bg-control-bg-hovered hover:text-text-default",
-												)}
-											>
-												<Icon className="size-14 shrink-0" />
-												{label}
-											</button>
-										);
-									})}
-								</div>
-							</div>
+							</span>
 						))}
-
-						<button
-							type="button"
-							data-testid="settings-nav-feedback"
-							data-active={feedbackActive}
-							onClick={() => useAppStore.getState().setSettingsSection(SettingsSection.Feedback)}
-							className={cn(
-								"shrink-0 rounded-sm border border-primary-soft px-8 py-4 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary md:mt-auto md:px-12 md:py-8",
-								feedbackActive ? "bg-primary-subtle" : "bg-control-bg hover:bg-control-bg-hovered",
-							)}
-						>
-							<span className="tr-text-ui text-primary">Get 100 credits for a user interview</span>
-						</button>
 					</nav>
 
 					<div className="min-h-0 flex-1 overflow-y-auto p-16">
-						{selectedSection === SettingsSection.Models ? (
-							<ModelsSettings />
-						) : selectedSection === SettingsSection.Providers ? (
-							<ProvidersSettings />
-						) : selectedSection === SettingsSection.Mcp ? (
-							<McpSettings />
-						) : selectedSection === SettingsSection.Templates ? (
-							<TemplatesSettings />
-						) : selectedSection === SettingsSection.Extensions ? (
-							<ExtensionsSettings />
-						) : selectedSection === SettingsSection.Chat ? (
-							<ChatSettings />
-						) : selectedSection === SettingsSection.Appearance ? (
-							<AppearanceSettings />
-						) : selectedSection === SettingsSection.Layout ? (
-							layoutSettings
-						) : selectedSection === SettingsSection.Terminal ? (
-							<TerminalSettings />
-						) : selectedSection === SettingsSection.Workspaces ? (
-							<WorkspacesSettings />
-						) : selectedSection === SettingsSection.Github ? (
-							<GithubSettings />
-						) : selectedSection === SettingsSection.Notifications ? (
-							<NotificationsSettings />
-						) : selectedSection === SettingsSection.Privacy ? (
-							<PrivacySettings />
-						) : selectedSection === SettingsSection.Updates && updateSettings !== undefined ? (
-							updateSettings
-						) : selectedSection === SettingsSection.Feedback ? (
-							<FeedbackSettings />
-						) : (
-							<AppearanceSettings />
-						)}
+						{selectedSection === SettingsSection.Layout
+							? layoutSettings
+							: selectedSection === SettingsSection.Updates && updateSettings !== undefined
+								? updateSettings
+								: (CORE_CONTENT[selectedSection]?.() ?? (
+										<PluginSettingsSection id={selectedSection} />
+									))}
 					</div>
 				</div>
 			</DialogContent>

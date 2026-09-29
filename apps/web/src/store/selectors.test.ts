@@ -24,7 +24,6 @@ import {
 	selectAttentionCenterTab,
 	selectCanRenameChat,
 	selectCatalogModel,
-	selectChatAttended,
 	selectContextProject,
 	selectHistoryTarget,
 	selectKnownChatLocation,
@@ -33,7 +32,8 @@ import {
 	selectLayoutTabPlacement,
 	selectProjectIsRunning,
 	selectProjectNeedsAttention,
-	selectReadyCompletionAck,
+	selectReadyCompletionActivation,
+	selectShownTerminalKeys,
 	selectSkillsStale,
 	selectSupportsModelPicker,
 	selectWorkspaceIsRunning,
@@ -82,10 +82,8 @@ test("normalized rail flags keep attention binary and working orthogonal", () =>
 		completion: null,
 		completionUnread: false,
 		queuedCount: 0,
-		backgroundWork: false,
 	};
 	const working = { ...quiet, execution: "running" as const, runId: "run-working" };
-	const delegating = { ...quiet, runId: "run-delegating", backgroundWork: true };
 	const finished = {
 		...quiet,
 		runId: "run-finished",
@@ -104,7 +102,6 @@ test("normalized rail flags keep attention binary and working orthogonal", () =>
 			},
 			w2: { c: record("c", "p1", "w2", needsInput) },
 			w3: { d: record("d", "p2", "w3", quiet) },
-			w4: { e: record("e", "p3", "w4", delegating) },
 		},
 	};
 	expect(selectWorkspaceNeedsAttention(state, "w1")).toBe(true);
@@ -115,11 +112,9 @@ test("normalized rail flags keep attention binary and working orthogonal", () =>
 	expect(selectProjectIsRunning(state, "p1")).toBe(true);
 	expect(selectProjectNeedsAttention(state, "p2")).toBe(false);
 	expect(selectProjectIsRunning(state, "p2")).toBe(false);
-	expect(selectWorkspaceIsRunning(state, "w4")).toBe(true);
-	expect(selectProjectIsRunning(state, "p3")).toBe(true);
 });
 
-test("completion acknowledgement requires the exact current result to have rendered", () => {
+test("completion acknowledgement requires exact render and a direct activation after state arrival", () => {
 	const completion = { completionId: "completion:a1", outcome: "succeeded" as const };
 	const hostState = {
 		execution: "idle" as const,
@@ -128,7 +123,6 @@ test("completion acknowledgement requires the exact current result to have rende
 		completion,
 		completionUnread: true,
 		queuedCount: 0,
-		backgroundWork: false,
 	};
 	const state = {
 		status: "connected",
@@ -139,86 +133,33 @@ test("completion acknowledgement requires the exact current result to have rende
 		sessions: {
 			s1: { ...EMPTY_RUNTIME, hostState, syncedConnectionGeneration: 4 },
 		},
+		sessionStateTickBySession: { s1: 10 },
+		directChatActivationTickBySession: { s1: 9 },
+		directActivatedCompletionBySession: { s1: completion.completionId },
 		renderedCompletionBySession: { s1: completion.completionId },
 	};
-	expect(selectReadyCompletionAck(state, "w1", "s1")).toBe(completion.completionId);
+	expect(selectReadyCompletionActivation(state, "w1", "s1")).toBe(completion.completionId);
 	expect(
-		selectReadyCompletionAck(
+		selectReadyCompletionActivation(
+			{
+				...state,
+				directChatActivationTickBySession: { s1: 8 },
+				directActivatedCompletionBySession: {},
+			},
+			"w1",
+			"s1",
+		),
+	).toBeNull();
+	expect(
+		selectReadyCompletionActivation(
 			{ ...state, renderedCompletionBySession: { s1: "older" } },
 			"w1",
 			"s1",
 		),
 	).toBeNull();
-	expect(selectReadyCompletionAck({ ...state, status: "disconnected" }, "w1", "s1")).toBeNull();
 	expect(
-		selectReadyCompletionAck(
-			{ ...state, sessions: { s1: { ...state.sessions.s1, syncedConnectionGeneration: 3 } } },
-			"w1",
-			"s1",
-		),
+		selectReadyCompletionActivation({ ...state, status: "disconnected" }, "w1", "s1"),
 	).toBeNull();
-	const read = { ...hostState, completionUnread: false };
-	expect(
-		selectReadyCompletionAck(
-			{
-				...state,
-				sessionStateByWorkspace: {
-					w1: { s1: { sessionId: "s1", workspaceId: "w1", projectId: "p1", state: read } },
-				},
-			},
-			"w1",
-			"s1",
-		),
-	).toBeNull();
-});
-
-test("a chat is attended only as the selected tab of the last-focused center group in the active workspace", () => {
-	const chat = (id: string, sessionId: string) => ({
-		kind: "chat" as const,
-		id,
-		name: id,
-		sessionId,
-	});
-	const state = {
-		activeWorkspaceId: "w1",
-		obscuredChatSessions: {},
-		historyOpenRequest: null,
-		layoutDocumentsByWorkspace: {
-			w1: {
-				center: {
-					kind: "split" as const,
-					id: "split",
-					orientation: "horizontal" as const,
-					ratio: 0.5,
-					children: [
-						{ kind: "group" as const, id: "left", tabs: [chat("t-a", "a")] },
-						{ kind: "group" as const, id: "right", tabs: [chat("t-b", "b"), chat("t-c", "c")] },
-					],
-				},
-			},
-		},
-		layoutAttentionByWorkspace: {
-			w1: {
-				selectedByGroup: { left: "t-a", right: "t-b" },
-				lastFocusedCenterGroupId: "right",
-				lastFocusedSideGroupId: {},
-				navigationClockByGroup: {},
-			},
-		},
-	} as unknown as Parameters<typeof selectChatAttended>[0];
-	expect(selectChatAttended(state, "w1", "b")).toBe(true);
-	expect(selectChatAttended(state, "w1", "a")).toBe(false);
-	expect(selectChatAttended(state, "w1", "c")).toBe(false);
-	expect(selectChatAttended({ ...state, activeWorkspaceId: "w2" }, "w1", "b")).toBe(false);
-	expect(selectChatAttended({ ...state, obscuredChatSessions: { b: true } }, "w1", "b")).toBe(
-		false,
-	);
-	expect(selectChatAttended({ ...state, historyOpenRequest: { sessionId: "b" } }, "w1", "b")).toBe(
-		false,
-	);
-	expect(selectChatAttended({ ...state, historyOpenRequest: { sessionId: "a" } }, "w1", "b")).toBe(
-		true,
-	);
 });
 
 test("workspace kind predicates distinguish managed and user-owned checkouts", () => {
@@ -348,6 +289,104 @@ test("layout placement lookup traverses recursive center and every auxiliary reg
 	expect(selectAttentionCenterResourceCacheKey(state, "ws")).toBe("file:a");
 	state.tabsByWorkspace.ws[0] = { ...cachedResource, id: "legacy-file-placement" };
 	expect(selectAttentionCenterResourceCacheKey(state, "ws")).toBe("legacy-file-placement");
+});
+
+test("the terminals shown are listed focused centre group first, then the bottom dock, then the rest", () => {
+	const terminal = (id: string, tabKey: string) => ({
+		kind: "terminal" as const,
+		id,
+		name: tabKey,
+		tabKey,
+	});
+	const layout: WorkspaceLayoutDocument = {
+		version: 2,
+		center: {
+			kind: "group",
+			id: "center",
+			tabs: [
+				{ kind: "file", id: "file", name: "a", path: "a" },
+				terminal("center-terminal", "centre"),
+			],
+		},
+		left: { visible: false, width: 0, groups: [] },
+		right: { visible: false, width: 0, groups: [] },
+		bottom: {
+			visible: true,
+			height: 0,
+			groups: [
+				{ id: "bottom", weight: 1, folded: false, tabs: [terminal("bottom-terminal", "dock")] },
+			],
+		},
+		toolRestoreTargets: {},
+	};
+	const attention = (selected: string) => ({
+		selectedByGroup: { center: selected },
+		lastFocusedCenterGroupId: "center",
+		lastFocusedSideGroupId: {},
+		navigationClockByGroup: { center: 0 },
+	});
+	const state = (selected: string, known: string[]) => ({
+		layoutDocumentsByWorkspace: { ws: layout },
+		layoutAttentionByWorkspace: { ws: attention(selected) },
+		tabsByWorkspace: {},
+		terminalsByWorkspace: {
+			ws: known.map((tabKey) => ({ tabKey, workspaceId: "ws", title: tabKey })),
+		},
+	});
+	expect(selectShownTerminalKeys(state("center-terminal", ["centre", "dock"]), "ws")).toEqual([
+		"centre",
+		"dock",
+	]);
+	expect(selectShownTerminalKeys(state("file", ["centre", "dock"]), "ws")).toEqual(["dock"]);
+	expect(selectShownTerminalKeys(state("file", []), "ws")).toEqual([]);
+	expect(selectShownTerminalKeys(state("file", ["centre", "dock"]), "elsewhere")).toEqual([]);
+});
+
+test("a group holding one terminal is shown even when focus is in another group", () => {
+	const layout: WorkspaceLayoutDocument = {
+		version: 2,
+		center: {
+			kind: "split",
+			id: "split",
+			direction: "row",
+			ratio: 0.5,
+			children: [
+				{
+					kind: "group",
+					id: "shell-group",
+					tabs: [{ kind: "terminal", id: "shell-tab", name: "zsh", tabKey: "shell" }],
+				},
+				{
+					kind: "group",
+					id: "claude-group",
+					tabs: [{ kind: "terminal", id: "claude-tab", name: "Claude", tabKey: "claude" }],
+				},
+			],
+		},
+		left: { visible: false, width: 0, groups: [] },
+		right: { visible: false, width: 0, groups: [] },
+		bottom: { visible: false, height: 0, groups: [] },
+		toolRestoreTargets: {},
+	};
+	const state = {
+		layoutDocumentsByWorkspace: { ws: layout },
+		layoutAttentionByWorkspace: {
+			ws: {
+				selectedByGroup: {},
+				lastFocusedCenterGroupId: "shell-group",
+				lastFocusedSideGroupId: {},
+				navigationClockByGroup: {},
+			},
+		},
+		tabsByWorkspace: {},
+		terminalsByWorkspace: {
+			ws: [
+				{ tabKey: "shell", workspaceId: "ws", title: "zsh" },
+				{ tabKey: "claude", workspaceId: "ws", title: "Claude" },
+			],
+		},
+	};
+	expect(selectShownTerminalKeys(state, "ws")).toEqual(["shell", "claude"]);
 });
 
 test("registered documents participate in legacy selection readiness", () => {

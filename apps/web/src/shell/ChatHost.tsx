@@ -1,4 +1,5 @@
 import { lazy } from "react";
+import { Companions } from "../panels/Companions";
 
 const ChatView = lazy(() => import("../chat/ChatView"));
 
@@ -12,8 +13,8 @@ export function ChatHost({
 	onOpenFile?: ((path: string) => void) | undefined;
 }) {
 	return (
-		<div className="relative h-full min-h-0">
+		<Companions host={{ kind: "chat", workspaceId, key: sessionId }}>
 			<ChatView sessionId={sessionId} workspaceId={workspaceId} onOpenFile={onOpenFile} />
-		</div>
+		</Companions>
 	);
 }

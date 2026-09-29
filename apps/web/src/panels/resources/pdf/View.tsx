@@ -1,5 +1,5 @@
+import { isZoomGesture, zoomScaleForWheel } from "@thinkrail/ui/zoomGesture";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { isZoomGesture, zoomScaleForWheel } from "@/lib";
 import type { ResourceViewProps } from "@/resources";
 import type { Size } from "../regionReview";
 import { PdfPageCanvas } from "./PdfPageCanvas";

@@ -1,12 +1,17 @@
-import { mkdirSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { execFileSync } from "node:child_process";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
 import { expect, test } from "@playwright/test";
 import {
 	createWorkspaceViaDialog,
+	enterDefaultWorkspace,
 	openFixtureProject,
-	revealWorkbenchTool,
+	openTerminal,
+	visibleTerminal,
+	visibleTerminalScreen,
 	worktreeRows,
 } from "./fixtures/app";
+import { E2E_FIXTURE_REPO } from "./fixtures/paths";
 
 test("shows files and compacts single-directory runs in the Files tree", async ({ page }) => {
 	await openFixtureProject(page);
@@ -16,7 +21,7 @@ test("shows files and compacts single-directory runs in the Files tree", async (
 	writeFileSync(join(workspace.worktreePath, "compact", "only", "here", "leaf.txt"), "leaf\n");
 	await expect(worktreeRows(page).first()).toBeVisible();
 
-	await revealWorkbenchTool(page, "files");
+	await page.getByTestId("tab-files").click();
 	await expect(page.getByTestId("file-node").filter({ hasText: "README.md" })).toBeVisible();
 
 	const folderRows = page.locator('[data-testid="file-node"][data-kind="dir"]');
@@ -61,4 +66,215 @@ test("file and compacted folder menus copy their host absolute paths", async ({
 	await expect
 		.poll(() => page.evaluate(() => navigator.clipboard.readText()))
 		.toBe(join(workspace.worktreePath, "compact", "only", "here"));
+});
+
+test("an entry git ignores is dimmed, whichever rule ignores it", async ({ page }) => {
+	await openFixtureProject(page);
+	const workspace = await createWorkspaceViaDialog(page);
+	writeFileSync(join(workspace.worktreePath, ".gitignore"), "listed.log\n");
+	const exclude = execFileSync("git", ["rev-parse", "--git-path", "info/exclude"], {
+		cwd: workspace.worktreePath,
+		encoding: "utf8",
+	}).trim();
+	mkdirSync(dirname(resolve(workspace.worktreePath, exclude)), { recursive: true });
+	writeFileSync(resolve(workspace.worktreePath, exclude), "excluded.log\n");
+	writeFileSync(join(workspace.worktreePath, "listed.log"), "");
+	writeFileSync(join(workspace.worktreePath, "excluded.log"), "");
+	writeFileSync(join(workspace.worktreePath, "kept.log"), "");
+
+	await page.getByTestId("tab-files").click();
+	const rows = page.locator('[data-testid="file-node"][data-kind="file"]');
+	await expect(rows.filter({ hasText: /^listed\.log$/ })).toHaveAttribute("data-muted", "true");
+	await expect(rows.filter({ hasText: /^excluded\.log$/ })).toHaveAttribute("data-muted", "true");
+	await expect(rows.filter({ hasText: /^kept\.log$/ })).not.toHaveAttribute("data-muted", "true");
+});
+
+test("a file row drags into the composer as a mention and into a terminal as a path", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	const workspace = await createWorkspaceViaDialog(page);
+	await page.getByTestId("tab-files").click();
+	const readme = page
+		.locator('[data-testid="file-node"][data-kind="file"]')
+		.filter({ hasText: /^README\.md$/ });
+	await expect(readme).toBeVisible();
+
+	await readme.dragTo(page.getByTestId("chat-input"));
+	await expect(page.getByTestId("chat-input")).toHaveValue("@README.md ");
+
+	await openTerminal(page);
+	await readme.dragTo(visibleTerminal(page));
+	await expect(visibleTerminalScreen(page)).toContainText(
+		join(workspace.worktreePath, "README.md"),
+	);
+});
+
+test("a file row has our own context menu, not the webview's", async ({ page }) => {
+	await openFixtureProject(page);
+	await enterDefaultWorkspace(page);
+	await page.getByTestId("tab-files").click();
+
+	const notes = page.getByTestId("file-node").filter({ hasText: "notes.txt" });
+	await expect(notes).toBeVisible();
+	await notes.click({ button: "right" });
+
+	const menu = page.getByTestId("file-node-actions");
+	await expect(menu).toBeVisible();
+	await expect(menu.getByTestId("file-node-reveal")).toBeVisible();
+	await expect(menu.getByTestId("file-node-copy-path")).toBeVisible();
+	await expect(menu.getByTestId("file-node-delete")).toHaveText("Delete file");
+
+	await page.keyboard.press("Escape");
+	await expect(menu).toHaveCount(0);
+});
+
+test("deleting a previewed file leaves the workbench interactive", async ({ page }) => {
+	await openFixtureProject(page);
+	await enterDefaultWorkspace(page);
+	await page.getByTestId("tab-files").click();
+
+	const disposable = join(E2E_FIXTURE_REPO, "AGENTS.md.override");
+	writeFileSync(disposable, "gone soon\n");
+	const row = page.getByTestId("file-node").filter({ hasText: "AGENTS.md.override" });
+	await expect(row).toBeVisible();
+	await row.click();
+	await expect(page.getByTestId("editor-pane")).toContainText("gone soon");
+	await expect(
+		page.getByTestId("editor-tab").filter({ hasText: "AGENTS.md.override" }),
+	).toHaveAttribute("data-preview", "true");
+
+	await row.click({ button: "right" });
+	await page.getByTestId("file-node-delete").click();
+	await expect(page.getByTestId("confirm-dialog")).toContainText("Delete AGENTS.md.override?");
+	await page.getByTestId("file-node-delete-confirm").click();
+
+	await expect(row).toHaveCount(0);
+	expect(existsSync(disposable)).toBe(false);
+	await expect(page.getByTestId("confirm-dialog")).toHaveCount(0);
+	await expect(page.locator("body")).not.toHaveCSS("pointer-events", "none");
+	await page
+		.getByTestId("file-node")
+		.filter({ hasText: /^README\.md$/ })
+		.click();
+	await expect(page.getByTestId("resource-view-toggle")).toBeVisible();
+});
+
+test("a folder row creates a file inside it, whose icon follows the name as it is typed", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	const workspace = await createWorkspaceViaDialog(page);
+	mkdirSync(join(workspace.worktreePath, "docs"), { recursive: true });
+	writeFileSync(join(workspace.worktreePath, "docs", "keep.txt"), "");
+	await page.getByTestId("tab-files").click();
+
+	const folder = page
+		.locator('[data-testid="file-node"][data-kind="dir"]')
+		.filter({ hasText: /^docs$/ });
+	await folder.click({ button: "right" });
+	await page.getByTestId("file-node-new-file").click();
+
+	const dialog = page.getByTestId("path-name-dialog");
+	const input = dialog.getByTestId("path-name-input");
+	await expect(dialog.getByTestId("path-name-confirm")).toBeDisabled();
+	await input.fill("keep.txt");
+	await expect(dialog.getByTestId("path-name-error")).toContainText("keep.txt already exists");
+	await expect(dialog.getByTestId("path-name-confirm")).toBeDisabled();
+	await input.fill("notes");
+	await expect(dialog.getByTestId("path-name-error")).toHaveCount(0);
+	await expect(dialog.getByTestId("file-type-icon")).toHaveAttribute("data-icon", "file");
+	await input.fill("notes.md");
+	await expect(dialog.getByTestId("file-type-icon")).toHaveAttribute("data-icon", "markdown");
+	await input.press("Enter");
+
+	await expect(dialog).toHaveCount(0);
+	await expect.poll(() => existsSync(join(workspace.worktreePath, "docs", "notes.md"))).toBe(true);
+	await expect(page.getByTestId("editor-tab").filter({ hasText: "notes.md" })).toBeVisible();
+	await expect(page.getByTestId("file-node").filter({ hasText: /^notes\.md$/ })).toBeVisible();
+});
+
+test("a new file warns as soon as its name already exists", async ({ page }) => {
+	await openFixtureProject(page);
+	const workspace = await createWorkspaceViaDialog(page);
+	const existing = join(workspace.worktreePath, "draft.txt");
+	writeFileSync(existing, "keep this content\n");
+	await page.getByTestId("tab-files").click();
+
+	const draft = page.getByTestId("file-node").filter({ hasText: /^draft\.txt$/ });
+	await draft.click({ button: "right" });
+	await page.getByTestId("file-node-new-file").click();
+	const dialog = page.getByTestId("path-name-dialog");
+	const input = dialog.getByTestId("path-name-input");
+	await input.fill("draft.txt");
+
+	await expect(dialog.getByTestId("path-name-error")).toContainText("draft.txt already exists");
+	await expect(input).toHaveValue("draft.txt");
+	await expect(input).toHaveAttribute("aria-invalid", "true");
+	await expect(dialog.getByTestId("path-name-confirm")).toBeDisabled();
+	await input.fill("second.txt");
+	await expect(dialog.getByTestId("path-name-error")).toHaveCount(0);
+	await expect(dialog.getByTestId("path-name-confirm")).toBeEnabled();
+	await dialog.getByTestId("path-name-confirm").click();
+
+	await expect(dialog).toHaveCount(0);
+	await expect.poll(() => existsSync(join(workspace.worktreePath, "second.txt"))).toBe(true);
+	await expect(page.getByTestId("editor-tab").filter({ hasText: "second.txt" })).toBeVisible();
+	await expect.poll(() => readFileSync(existing, "utf8")).toBe("keep this content\n");
+});
+
+test("a file row creates a folder beside it, and renames itself", async ({ page }) => {
+	await openFixtureProject(page);
+	const workspace = await createWorkspaceViaDialog(page);
+	writeFileSync(join(workspace.worktreePath, "draft.txt"), "draft\n");
+	await page.getByTestId("tab-files").click();
+
+	const draft = page.getByTestId("file-node").filter({ hasText: /^draft\.txt$/ });
+	await draft.click({ button: "right" });
+	await page.getByTestId("file-node-new-folder").click();
+	await page.getByTestId("path-name-input").fill("assets");
+	await page.getByTestId("path-name-confirm").click();
+	await expect.poll(() => existsSync(join(workspace.worktreePath, "assets"))).toBe(true);
+	await expect(
+		page.locator('[data-testid="file-node"][data-kind="dir"]').filter({ hasText: /^assets$/ }),
+	).toBeVisible();
+
+	await draft.click({ button: "right" });
+	await page.getByTestId("file-node-rename").click();
+	const input = page.getByTestId("path-name-input");
+	await expect(input).toHaveValue("draft.txt");
+	// The stem is selected, so typing replaces the name and keeps the extension.
+	await page.keyboard.type("final");
+	await expect(input).toHaveValue("final.txt");
+	await page.keyboard.press("Enter");
+	await expect.poll(() => existsSync(join(workspace.worktreePath, "final.txt"))).toBe(true);
+	expect(existsSync(join(workspace.worktreePath, "draft.txt"))).toBe(false);
+	await expect(page.getByTestId("file-node").filter({ hasText: /^final\.txt$/ })).toBeVisible();
+});
+
+test("an open tab says when its file is deleted on disk, and recovers when it returns", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	const workspace = await createWorkspaceViaDialog(page);
+	const file = join(workspace.worktreePath, "fleeting.txt");
+	writeFileSync(file, "here for now\n");
+	await page.getByTestId("tab-files").click();
+	await page
+		.getByTestId("file-node")
+		.filter({ hasText: /^fleeting\.txt$/ })
+		.dblclick();
+	await expect(page.getByTestId("editor-pane")).toContainText("here for now");
+
+	const tab = page.getByTestId("editor-tab").filter({ hasText: "fleeting.txt" });
+	rmSync(file);
+	await expect(tab.getByTestId("file-deleted-mark")).toBeVisible();
+	await expect(page.getByTestId("file-deleted-on-disk")).toBeVisible();
+	await expect(page.getByTestId("editor-pane")).toContainText("here for now");
+	await expect(page.getByTestId("file-node").filter({ hasText: /^fleeting\.txt$/ })).toHaveCount(0);
+
+	writeFileSync(file, "back again\n");
+	await expect(tab.getByTestId("file-deleted-mark")).toHaveCount(0);
+	await expect(page.getByTestId("file-deleted-on-disk")).toHaveCount(0);
+	await expect(page.getByTestId("editor-pane")).toContainText("back again");
 });

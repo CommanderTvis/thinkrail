@@ -4,16 +4,18 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
 import { createFauxCore } from "@earendil-works/pi-ai/providers/faux";
+import type { ExtensionFactory } from "@earendil-works/pi-coding-agent";
 import { ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
 import type {
-	Project,
+	AppConfig,
+	PluginRosterEntry,
 	Template,
 	TemplateInfo,
 	WireModel,
 	Workspace,
 	WorkspaceWatchReadyResult,
 } from "@thinkrail/contracts";
-import { WORKSPACE_SETTLE_PROTOCOL_VERSION, WS_METHODS } from "@thinkrail/contracts";
+import { WS_METHODS } from "@thinkrail/contracts";
 import { TodoStore } from "pi-todos/core";
 import {
 	type CreateSessionResult,
@@ -23,18 +25,52 @@ import {
 } from "../agent";
 import { recordAcceptedMessage, resetFeedbackForTests, setFeedbackPublisher } from "../feedback";
 import { defaultSessionDirFor, writeFixtureSession } from "../history/testFixtures";
+import type { PluginRuntime } from "../plugins";
 import { addComment, getReviewSnapshot } from "../reviews";
 import { resetConfigCache } from "../settings";
 import { todoReviewRecord } from "../todos";
 import { stopAllWatches } from "../watch";
 import {
 	handleRequest,
-	openReviewForClient,
 	requestMethodDiagnostic,
+	setPluginRuntime,
 	shouldRefreshOpenReview,
 } from "./handlers";
 
 const CTX = { clientKey: "test-client" };
+
+function stubPluginRuntime(overrides: Partial<PluginRuntime> = {}): PluginRuntime {
+	return {
+		roster: () => [],
+		allowsExternalFile: () => false,
+		handleRequest: async () => {
+			throw new Error("Unknown method");
+		},
+		serveRoute: async () => new Response("not found", { status: 404 }),
+		channelNames: () => [],
+		mcpTools: () => [],
+		terminalEnv: () => ({}),
+		onTerminalEvent: () => {},
+		revivePrefill: () => null,
+		workspaceEvent: () => {},
+		fsChanged: () => {},
+		settingsChanged: () => {},
+		validateSettings: (_update, current) => current,
+		reconcile: async () => {},
+		rescan: async () => [],
+		retry: async () => [],
+		piResources: () => ({
+			factories: [],
+			extensionPaths: [],
+			skillPaths: [],
+			childFactories: [],
+			toolsExtension: (() => {}) as ExtensionFactory,
+		}),
+		toolsExtension: (() => {}) as ExtensionFactory,
+		dispose: () => {},
+		...overrides,
+	};
+}
 
 let dataDir: string;
 let repo: string;
@@ -111,6 +147,7 @@ afterEach(() => {
 	stopAllWatches();
 	resetConfigCache();
 	resetFeedbackForTests();
+	setPluginRuntime(null);
 	rmSync(dataDir, { recursive: true, force: true });
 	if (savedDataDir === undefined) delete process.env.THINKRAIL_DATA_DIR;
 	else process.env.THINKRAIL_DATA_DIR = savedDataDir;
@@ -125,35 +162,6 @@ test("open-review cache reuse is opt-in so older clients remain fresh", () => {
 	expect(shouldRefreshOpenReview(undefined)).toBe(true);
 	expect(shouldRefreshOpenReview(false)).toBe(true);
 	expect(shouldRefreshOpenReview(true)).toBe(false);
-});
-
-test("a client older than the settled protocol never hears about a merged or closed review", () => {
-	const merged = { kind: "pull-request", number: 9, state: "merged" } as const;
-	const open = { kind: "pull-request", number: 10, state: "open" } as const;
-	const stateless = { kind: "pull-request", number: 11 } as const;
-	expect(openReviewForClient(merged, WORKSPACE_SETTLE_PROTOCOL_VERSION - 1)).toBeNull();
-	expect(openReviewForClient(open, WORKSPACE_SETTLE_PROTOCOL_VERSION - 1)).toBe(open);
-	expect(openReviewForClient(stateless, WORKSPACE_SETTLE_PROTOCOL_VERSION - 1)).toBe(stateless);
-	expect(openReviewForClient(merged, WORKSPACE_SETTLE_PROTOCOL_VERSION)).toBe(merged);
-	expect(openReviewForClient(merged, undefined)).toBe(merged);
-	expect(openReviewForClient(null, WORKSPACE_SETTLE_PROTOCOL_VERSION - 1)).toBeNull();
-});
-
-test("starting a PR mutation reactivates a parked workspace before any network await", async () => {
-	const workspace = (await handleRequest(
-		"workspace.create",
-		{ projectId: "p1", name: "PR work" },
-		CTX,
-	)) as Workspace;
-	await handleRequest("workspace.settle", { id: workspace.id }, CTX);
-
-	await expect(
-		handleRequest("pr.open", { workspaceId: workspace.id, sessionId: "missing" }, CTX),
-	).rejects.toThrow("no 'origin' remote");
-	const rows = (await handleRequest("workspace.list", { projectId: "p1" }, CTX)) as Workspace[];
-	const after = rows.find((row) => row.id === workspace.id);
-	expect(after?.settledOverride).toBeUndefined();
-	expect(after?.lastActiveAt ?? 0).toBeGreaterThanOrEqual(workspace.lastActiveAt ?? 0);
 });
 
 test("request diagnostics expose only registered method names", async () => {
@@ -181,6 +189,121 @@ test("host.update invokes only the context-injected parameterless operation", as
 
 test("retired session activity returns the empty compatibility snapshot", async () => {
 	expect(await handleRequest("session.activityList", {}, CTX)).toEqual([]);
+});
+
+test("a plugin method with no runtime installed answers Unknown method", async () => {
+	expect(requestMethodDiagnostic("plugin.spec-dialect.specs")).toBe("plugin.spec-dialect.specs");
+	await expect(handleRequest("plugin.spec-dialect.specs", undefined, CTX)).rejects.toThrow(
+		"Unknown method",
+	);
+	expect(await handleRequest("plugins.list", undefined, CTX)).toEqual([]);
+});
+
+test("an unknown plugin method falls through to the installed runtime", async () => {
+	setPluginRuntime(stubPluginRuntime());
+	await expect(handleRequest("plugin.spec-dialect.specs", undefined, CTX)).rejects.toThrow(
+		"Unknown method",
+	);
+});
+
+test("plugins.list answers the installed runtime's roster", async () => {
+	const roster: PluginRosterEntry[] = [
+		{
+			id: "spec-dialect",
+			label: "Spec Dialect",
+			icon: "book-open",
+			version: "1.0.0",
+			wireVersion: 1,
+			origin: "builtin",
+			status: "active",
+			dependsOn: [],
+			modifiesSystemPrompt: false,
+			contributes: { sideTools: [], fileViewers: [] },
+			channels: {},
+		},
+	];
+	setPluginRuntime(stubPluginRuntime({ roster: () => roster }));
+	expect(await handleRequest("plugins.list", undefined, CTX)).toEqual(roster);
+});
+
+test("plugins.rescan and plugins.retry reach the installed runtime", async () => {
+	let rescanned = false;
+	let retriedId: string | undefined;
+	setPluginRuntime(
+		stubPluginRuntime({
+			rescan: async () => {
+				rescanned = true;
+				return [];
+			},
+			retry: async (id) => {
+				retriedId = id;
+				return [];
+			},
+		}),
+	);
+	await handleRequest("plugins.rescan", undefined, CTX);
+	expect(rescanned).toBe(true);
+	await handleRequest("plugins.retry", { id: "spec-dialect" }, CTX);
+	expect(retriedId).toBe("spec-dialect");
+});
+
+test("plugins.rescan and plugins.retry reject before any runtime is installed", async () => {
+	await expect(handleRequest("plugins.rescan", undefined, CTX)).rejects.toThrow(
+		"Plugins are not initialized",
+	);
+	await expect(handleRequest("plugins.retry", { id: "spec-dialect" }, CTX)).rejects.toThrow(
+		"Plugins are not initialized",
+	);
+});
+
+test("settings.update cascades a plugin disable to its dependents and notifies the runtime", async () => {
+	const roster: PluginRosterEntry[] = [
+		{
+			id: "base",
+			label: "Base",
+			icon: "puzzle",
+			version: "1.0.0",
+			wireVersion: 1,
+			origin: "builtin",
+			status: "active",
+			dependsOn: [],
+			modifiesSystemPrompt: false,
+			contributes: { sideTools: [], fileViewers: [] },
+			channels: {},
+		},
+		{
+			id: "dependent",
+			label: "Dependent",
+			icon: "puzzle",
+			version: "1.0.0",
+			wireVersion: 1,
+			origin: "builtin",
+			status: "active",
+			dependsOn: ["base"],
+			modifiesSystemPrompt: false,
+			contributes: { sideTools: [], fileViewers: [] },
+			channels: {},
+		},
+	];
+	let notified: AppConfig | undefined;
+	setPluginRuntime(
+		stubPluginRuntime({
+			roster: () => roster,
+			settingsChanged: (config) => {
+				notified = config;
+			},
+		}),
+	);
+
+	const updated = (await handleRequest(
+		"settings.update",
+		{ config: { plugins: { base: { enabled: false } } } },
+		CTX,
+	)) as AppConfig;
+
+	expect(updated.plugins.base?.enabled).toBe(false);
+	expect(updated.plugins.dependent?.enabled).toBe(false);
+	expect(notified).toBe(updated);
 });
 
 test("template reads resolve a project's current checkout and reject ambiguous locations", async () => {
@@ -255,31 +378,6 @@ test("model.default and new session creation share the AppConfig default resolut
 	}
 });
 
-test("extension.list reflects disabledExtensions written through settings.update", async () => {
-	expect(await handleRequest("extension.list", {}, CTX)).toEqual([
-		{
-			name: "visualize",
-			title: "Visualize",
-			description: expect.any(String),
-			enabled: true,
-			tools: ["visualize"],
-			hasChildExtensions: false,
-		},
-	]);
-	await handleRequest(
-		"settings.update",
-		{ config: { disabledExtensions: ["visualize", "retired"] } },
-		CTX,
-	);
-	expect(await handleRequest("extension.list", {}, CTX)).toMatchObject([
-		{ name: "visualize", enabled: false },
-	]);
-	await handleRequest("settings.update", { config: { disabledExtensions: [] } }, CTX);
-	expect(await handleRequest("extension.list", {}, CTX)).toMatchObject([
-		{ name: "visualize", enabled: true },
-	]);
-});
-
 test("disabled JetBrains quota returns hidden through its handler", async () => {
 	await handleRequest("settings.update", { config: { jbcentralQuotaEnabled: false } }, CTX);
 	expect(await handleRequest("provider.jbcentralQuota", { force: true }, CTX)).toEqual({
@@ -305,64 +403,6 @@ test("feedback.respond rejects an action outside the wire union", async () => {
 	await expect(handleRequest("feedback.respond", { action: "later" }, CTX)).rejects.toThrow(
 		"Invalid interview response",
 	);
-});
-
-test("project.setTrust grants pi-level resource trust only when the request asks for resources", async () => {
-	writeFileSync(
-		join(dataDir, "projects.json"),
-		JSON.stringify([
-			{
-				id: "p1",
-				name: "repo",
-				path: repo,
-				slug: "repo",
-				lastOpened: 1,
-				piResourceTrust: "untrusted",
-			},
-		]),
-	);
-	const setTrust = async (params: { trusted: boolean; resources?: boolean }) =>
-		(await handleRequest("project.setTrust", { id: "p1", ...params }, CTX)) as Project;
-
-	expect(await setTrust({ trusted: true })).toMatchObject({
-		trusted: true,
-		piResourceTrust: "untrusted",
-	});
-	expect(await setTrust({ trusted: true, resources: true })).toMatchObject({
-		trusted: true,
-		piResourceTrust: "granted",
-	});
-	expect(await setTrust({ trusted: false })).toMatchObject({
-		trusted: false,
-		piResourceTrust: "untrusted",
-	});
-});
-
-test("project.setTrust acknowledges the present aliases only when it grants alias trust", async () => {
-	const writeAlias = (name: string) => {
-		const directory = join(repo, ".claude", "skills", name);
-		mkdirSync(directory, { recursive: true });
-		writeFileSync(
-			join(directory, "SKILL.md"),
-			`---\nname: ${name}\ndescription: ${name} alias\n---\n\n# ${name}\n`,
-		);
-	};
-	const setTrust = async (params: { trusted: boolean; resources?: boolean }) =>
-		(await handleRequest("project.setTrust", { id: "p1", ...params }, CTX)) as Project;
-	writeAlias("first-alias");
-	expect((await setTrust({ trusted: true })).acknowledgedSkills).toEqual(["first-alias"]);
-
-	writeAlias("late-alias");
-	expect(await setTrust({ trusted: true, resources: true })).toMatchObject({
-		piResourceTrust: "granted",
-		acknowledgedSkills: ["first-alias"],
-	});
-
-	await setTrust({ trusted: false });
-	expect((await setTrust({ trusted: true })).acknowledgedSkills?.sort()).toEqual([
-		"first-alias",
-		"late-alias",
-	]);
 });
 
 test("workspace.rename locks the display name without changing Git or the worktree path", async () => {
@@ -451,25 +491,6 @@ test("workspace.setSubagentsOverride persists on/off and null restores the globa
 		CTX,
 	)) as Workspace;
 	expect(inherited.subagentsOverride).toBeUndefined();
-});
-
-test("workspace.setSubagentMaxConcurrent persists a limit and null restores the global one", async () => {
-	const created = (await handleRequest("workspace.create", { projectId: "p1" }, CTX)) as Workspace;
-	const limited = (await handleRequest(
-		"workspace.setSubagentMaxConcurrent",
-		{ id: created.id, value: 2 },
-		CTX,
-	)) as Workspace;
-	expect(limited.subagentMaxConcurrentOverride).toBe(2);
-	const inherited = (await handleRequest(
-		"workspace.setSubagentMaxConcurrent",
-		{ id: created.id, value: null },
-		CTX,
-	)) as Workspace;
-	expect(inherited.subagentMaxConcurrentOverride).toBeUndefined();
-	await expect(
-		handleRequest("workspace.setSubagentMaxConcurrent", { id: created.id, value: 0 }, CTX),
-	).rejects.toThrow("Subagent limit must be a whole number from 1 to 16");
 });
 
 test("workspace.watchReady waits for startup once, then reports an already-ready watcher", async () => {
@@ -576,7 +597,6 @@ test("resource handlers scope every read/control to a registered workspace and a
 			...scope,
 			commands: [],
 			subagents: [],
-			mcpServers: [],
 		});
 		expect(
 			await handleRequest("backgroundCommand.output", { ...scope, commandId: "missing" }, CTX),
@@ -638,4 +658,46 @@ test("resource handlers scope every read/control to a registered workspace and a
 		if (priorOffline === undefined) delete process.env.PI_OFFLINE;
 		else process.env.PI_OFFLINE = priorOffline;
 	}
+});
+
+test("external text files require plugin ownership and retain compare-and-swap saves", async () => {
+	const [workspace] = (await handleRequest(
+		"workspace.list",
+		{ projectId: "p1" },
+		CTX,
+	)) as Workspace[];
+	if (!workspace) throw new Error("expected workspace");
+	const path = join(dataDir, "config.toml");
+	writeFileSync(path, 'model = "fixture"\n');
+	const params = { workspaceId: workspace.id, path };
+	await expect(handleRequest("fs.readFile", params, CTX)).rejects.toThrow("escapes");
+	setPluginRuntime(
+		stubPluginRuntime({
+			allowsExternalFile: (id, candidate) => id === workspace.id && candidate === path,
+		}),
+	);
+	const read = (await handleRequest("fs.readFile", params, CTX)) as {
+		content: string;
+		hash: string;
+	};
+	expect(read.content).toBe('model = "fixture"\n');
+	const content = 'model = "updated"\n';
+	expect(
+		await handleRequest("fs.writeFile", { ...params, content, baseHash: read.hash }, CTX),
+	).toMatchObject({ written: true });
+	expect(readFileSync(path, "utf8")).toBe(content);
+	expect(
+		await handleRequest("fs.writeFile", { ...params, content: "stale", baseHash: read.hash }, CTX),
+	).toMatchObject({ written: false, disk: { content } });
+	await expect(
+		handleRequest("fs.readFile", { ...params, workspaceId: "missing" }, CTX),
+	).rejects.toThrow("Unknown workspace");
+	await expect(
+		handleRequest("fs.readFile", { ...params, path: join(dataDir, "auth.json") }, CTX),
+	).rejects.toThrow("escapes");
+	setPluginRuntime(null);
+	await expect(
+		handleRequest("fs.writeFile", { ...params, content: "disabled", baseHash: read.hash }, CTX),
+	).rejects.toThrow("escapes");
+	expect(readFileSync(path, "utf8")).toBe(content);
 });

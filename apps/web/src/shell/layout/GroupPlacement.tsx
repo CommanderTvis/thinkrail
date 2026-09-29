@@ -1,6 +1,6 @@
 import { RiAddLine as Plus } from "@remixicon/react";
-import { Fragment } from "react";
 import { ContextMenuItem } from "@thinkrail/ui/context-menu";
+import { Fragment } from "react";
 import type { LayoutAuxiliaryRegion } from "./types";
 
 export interface PlacementGroup {

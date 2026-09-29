@@ -25,7 +25,7 @@ export function AnalyticsConsentDialog() {
 	return (
 		<Dialog
 			open
-			onOpenChange={(open) => {
+			onOpenChange={(open: boolean) => {
 				if (!open) save(draft);
 			}}
 		>

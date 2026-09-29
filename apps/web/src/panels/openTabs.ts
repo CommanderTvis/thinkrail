@@ -1,14 +1,16 @@
-import type { GitDiffScope } from "@thinkrail/contracts";
+import type { GitDiffScope, ResourceMeta } from "@thinkrail/contracts";
+import { pluginMethodName } from "@thinkrail/plugin-api";
+import type { LayoutOpenOptions } from "@/store";
 import {
 	DOUBLE_CLICK_SETTLE_MS,
+	isAbsolutePath,
 	layoutResourceIdentity,
 	projectRelativePath,
 	tupleKey,
 } from "../lib";
+import { selectFileViewer, usePluginRegistry } from "../plugins/registry";
 import {
 	type CenterNavigationStamp,
-	type ChangesTab,
-	createChangesTab,
 	type EditorTab,
 	isCenterNavigationCurrent,
 	layoutOpenOptionsForNavigation,
@@ -20,7 +22,28 @@ import {
 	useAppStore,
 } from "../store";
 import { getTransport } from "../transport";
-import { changesTabId, changesTabName, diffTabId, diffTabName } from "./changesModel";
+import { diffTabId, diffTabName } from "./changesModel";
+import { emitEditorEvent, findEditorRef } from "./editorEvents";
+
+const CLAUDE_CODE_ID = "claude-code";
+const SOURCE_RENDERER_ID = "thinkrail/code";
+
+/** A file outside the worktree is read by the plugin that can name it; it is always text. */
+export function readTabFile(
+	workspaceId: string,
+	path: string,
+	external: boolean,
+): Promise<{ content: string; meta: ResourceMeta }> {
+	if (!external) return getTransport().request("fs.readFile", { workspaceId, path });
+	const read = getTransport().request(pluginMethodName(CLAUDE_CODE_ID, "readFile"), {
+		workspaceId,
+		path,
+	}) as Promise<{ content: string; hash: string }>;
+	return read.then(({ content, hash }) => ({
+		content,
+		meta: { hash, byteLength: new TextEncoder().encode(content).length, text: true },
+	}));
+}
 
 function baseName(path: string): string {
 	return path.split("/").pop() || path;
@@ -45,12 +68,17 @@ async function openReadTab<T>(
 	workspaceId: string,
 	id: string,
 	resourceIdentity: string,
-	intent: TabIntent,
+	requestedIntent: TabIntent,
 	read: () => Promise<T>,
 	build: (payload: T, loadedTick: number) => EditorTab,
 	requestedNavigation?: CenterNavigationStamp | null,
-	claimPreview = false,
+	extraOptions?: Partial<LayoutOpenOptions>,
 ): Promise<void> {
+	// With the preview slot turned off every open keeps: nothing claims the slot, and no open waits out
+	// the double-click window to find out whether it was one. See panels/SPEC.md.
+	const intent: TabIntent = useAppStore.getState().localLayoutPreferences.previewTabs
+		? requestedIntent
+		: "keep";
 	const navigation =
 		requestedNavigation === undefined
 			? useAppStore.getState().beginCenterNavigation(workspaceId)
@@ -60,7 +88,7 @@ async function openReadTab<T>(
 	if (intent === "preview" && !isCenterNavigationCurrent(store, workspaceId, navigation)) return;
 	const pending = inFlight.get(id);
 	if (pending) {
-		if (intent === "preview" || claimPreview) pending.claimPreview = true;
+		if (intent === "preview") pending.claimPreview = true;
 		if (intent === "keep") pending.intent = "keep";
 		pending.navigation = navigation;
 		pending.requestedAt = navTick(workspaceId);
@@ -68,7 +96,7 @@ async function openReadTab<T>(
 	}
 	const flight = {
 		intent,
-		claimPreview: intent === "preview" || claimPreview,
+		claimPreview: intent === "preview",
 		navigation,
 		requestedAt: navTick(workspaceId),
 		startedAt: Date.now(),
@@ -103,8 +131,8 @@ async function openReadTab<T>(
 					flight.intent,
 					true,
 					flight.intent === "keep" && flight.claimPreview && !overtaken
-						? { ...options, claimPreview: true }
-						: options,
+						? { ...options, ...extraOptions, claimPreview: true }
+						: { ...options, ...extraOptions },
 				);
 		} finally {
 			inFlight.delete(id);
@@ -137,8 +165,8 @@ async function openReadTab<T>(
 				flight.intent,
 				true,
 				flight.intent === "keep" && flight.claimPreview && !overtaken
-					? { ...options, claimPreview: true }
-					: options,
+					? { ...options, ...extraOptions, claimPreview: true }
+					: { ...options, ...extraOptions },
 			);
 	} catch {
 	} finally {
@@ -151,20 +179,28 @@ export function openFileInTab(
 	reported: string,
 	intent: TabIntent,
 	requestedNavigation?: CenterNavigationStamp | null,
+	extraOptions?: Partial<LayoutOpenOptions>,
+	viewerOptions?: { raw?: boolean },
 ): Promise<void> {
 	const path = projectRelativePath(
 		reported,
 		selectWorkspaceById(useAppStore.getState(), workspaceId)?.worktreePath,
 	);
-	const id = tupleKey("file", workspaceId, path);
+	const viewer = viewerOptions?.raw ? null : selectFileViewer(usePluginRegistry.getState(), path);
+	if (viewer?.open?.(workspaceId, path)) return Promise.resolve();
+	// An absolute path here is one that fell outside the worktree: the worktree-relative form cannot name
+	// it, so it becomes its own tab kind rather than an invalid file tab — see contracts' LayoutExternalFileTab.
+	const external = isAbsolutePath(path);
+	const kind = external ? ("external-file" as const) : ("file" as const);
+	const id = tupleKey(kind, workspaceId, path);
 	return openReadTab(
 		workspaceId,
 		id,
-		layoutResourceIdentity({ kind: "file", id, name: baseName(path), path }),
+		layoutResourceIdentity({ kind, id, name: baseName(path), path }),
 		intent,
-		() => getTransport().request("fs.readFile", { workspaceId, path }),
+		() => readTabFile(workspaceId, path, external),
 		({ content, meta }, loadedTick) => ({
-			kind: "file",
+			kind,
 			id,
 			workspaceId,
 			path,
@@ -172,9 +208,17 @@ export function openFileInTab(
 			content,
 			meta,
 			loadedTick,
+			...(viewerOptions?.raw && !external ? { rendererId: SOURCE_RENDERER_ID } : {}),
 		}),
 		requestedNavigation,
-	);
+		extraOptions,
+	).then(() => {
+		if (viewerOptions?.raw && !external) {
+			useAppStore.getState().setTabRenderer(workspaceId, id, SOURCE_RENDERER_ID);
+		}
+		const ref = findEditorRef(workspaceId, path);
+		if (ref) emitEditorEvent({ kind: "opened", editor: ref });
+	});
 }
 
 export function openDiffInTab(
@@ -183,7 +227,6 @@ export function openDiffInTab(
 	path: string,
 	intent: TabIntent,
 	requestedNavigation?: CenterNavigationStamp | null,
-	options: { claimPreview?: boolean } = {},
 ): Promise<void> {
 	const canonicalPath = projectRelativePath(
 		path,
@@ -218,41 +261,5 @@ export function openDiffInTab(
 			loadedTarget: target,
 		}),
 		requestedNavigation,
-		options.claimPreview,
 	);
-}
-
-export async function openChangesTab(
-	workspaceId: string,
-	scope: GitDiffScope,
-	options: { revealPath?: string | null } = {},
-	intent: TabIntent = "preview",
-	requestedNavigation?: CenterNavigationStamp | null,
-): Promise<void> {
-	const navigation =
-		requestedNavigation === undefined
-			? useAppStore.getState().beginCenterNavigation(workspaceId)
-			: requestedNavigation;
-	const requestedAt = navTick(workspaceId);
-	if (intent === "preview") {
-		await new Promise((resolve) => setTimeout(resolve, DOUBLE_CLICK_SETTLE_MS));
-	}
-	const state = useAppStore.getState();
-	if (state.removedWorkspaceIds[workspaceId]) return;
-	const overtaken = navigation
-		? !isCenterNavigationCurrent(state, workspaceId, navigation)
-		: navTick(workspaceId) !== requestedAt;
-	if (intent === "preview" && overtaken) return;
-	const id = changesTabId(workspaceId, scope);
-	const revealPath = options.revealPath
-		? projectRelativePath(options.revealPath, selectWorkspaceById(state, workspaceId)?.worktreePath)
-		: null;
-	const existing = (state.tabsByWorkspace[workspaceId] ?? []).find(
-		(tab): tab is ChangesTab => tab.id === id && tab.kind === "changes",
-	);
-	const base = existing ?? createChangesTab(workspaceId, id, changesTabName(scope), scope);
-	const tab: ChangesTab = revealPath
-		? { ...base, reveal: { path: revealPath, tick: (base.reveal?.tick ?? 0) + 1 } }
-		: base;
-	state.openTab(tab, intent, true, layoutOpenOptionsForNavigation(state, workspaceId, navigation));
 }
