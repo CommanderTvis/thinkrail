@@ -573,25 +573,14 @@ export function isSystemThemePair(value: unknown): value is SystemThemePair {
 	);
 }
 
-export interface SpecGraphNode {
-	id: string;
-	type: string;
-	title: string;
-	status?: string;
-	path: string;
-	parent?: string;
-	dependsOn: string[];
-	references: string[];
-	implements: string[];
-	tags: string[];
-}
+export type BuiltinLayoutToolId = "projects" | "files" | "changes" | "review";
+export type LayoutToolId = BuiltinLayoutToolId | PluginToolId;
 
-export interface SpecGraphSnapshot {
-	nodes: SpecGraphNode[];
-}
-
-export type BuiltinLayoutToolId = "projects" | "specs" | "files" | "changes" | "review";
-export type LayoutToolId = BuiltinLayoutToolId;
+export const LEGACY_LAYOUT_TOOL_IDS: Readonly<Record<string, PluginToolId>> = {
+	specs: "plugin:spec-dialect:specs",
+	claude: "plugin:claude-code:config",
+	graph: "plugin:branch-graph:graph",
+};
 
 export type LayoutBottomAlignment = "center" | "center-left" | "center-right" | "full";
 
@@ -661,6 +650,74 @@ export function isLineWidth(value: unknown): value is number {
 	);
 }
 
+/** Whether a plugin is builtin (shipped in this repository) or external (installed by the user). */
+export type PluginOrigin = "builtin" | "external";
+/** A plugin's runtime state in the roster. */
+export type PluginStatus = "active" | "disabled" | "failed" | "refused";
+export type PluginToolSide = "left" | "right";
+
+/** One side tool a plugin's manifest declares, rendered under a `plugin:<id>:<tool>` layout id. */
+export interface PluginSideToolContribution {
+	tool: string;
+	label: string;
+	icon: string;
+	defaultSide: PluginToolSide;
+	/** Withheld, like Changes and Review, in a workspace whose folder has no git history to read. */
+	requiresGit?: true;
+}
+
+/** One file viewer a plugin's manifest declares: the extensions and names it claims, and how the file is read. */
+export interface PluginFileViewerContribution {
+	extensions: string[];
+	names: string[];
+	read: "text" | "none";
+}
+
+/** The statically known parts of a plugin, declared in its manifest before any of its code runs. */
+export interface PluginContributions {
+	sideTools: PluginSideToolContribution[];
+	fileViewers: PluginFileViewerContribution[];
+}
+
+export type PluginRosterChannel =
+	| { kind: "state"; snapshot: string; key: string[] }
+	| { kind: "event" };
+
+/** One row of the plugin roster carried on `server.welcome` and `plugins.changed`; the web loader's desired state. */
+export interface PluginRosterEntry {
+	id: string;
+	label: string;
+	description?: string;
+	icon: string;
+	version: string;
+	wireVersion: number;
+	origin: PluginOrigin;
+	status: PluginStatus;
+	reason?: string;
+	dependsOn: string[];
+	modifiesSystemPrompt: boolean;
+	contributes: PluginContributions;
+	/** Wire-facing projection of the contract's channels, so a web half never loads the typebox contract. */
+	channels: Record<string, PluginRosterChannel>;
+	/** External plugins only: paths under `/plugin/<id>/`. */
+	web?: { module: string; styles?: string };
+	/** The manifest's `assets` subpath, when declared, for any origin — lets the web loader build asset URLs without the manifest. */
+	assets?: string;
+}
+
+export type PluginToolId = `plugin:${string}:${string}`;
+
+export type PluginSettingsNamespace = { enabled?: boolean } & Record<string, unknown>;
+
+/** The agent running in a terminal, as the host persists and broadcasts it; `kind` names the plugin's agent. */
+export interface TerminalAgentRecord {
+	kind: string;
+	command: string;
+	sessionId?: string;
+	cwd?: string;
+	model?: string;
+}
+
 export interface AppConfig extends ThemePreference {
 	analyticsEnabled: boolean;
 	analyticsConsentConfirmed: boolean;
@@ -703,6 +760,10 @@ export interface AppConfig extends ThemePreference {
 	codeFontLigatures: boolean;
 	/** Model patterns or IDs to filter out from pickers. */
 	hiddenModels: string[];
+	/** Per-plugin settings namespaces, keyed by plugin id. */
+	plugins: Record<string, PluginSettingsNamespace>;
+	/** Absolute directories scanned for external plugins, beyond the builtin ones. */
+	pluginPaths: string[];
 }
 
 /** How many recently chosen models the host remembers. */
@@ -712,7 +773,7 @@ export const RECENT_MODELS_LIMIT = 5;
 export type AppConfigUpdate = Partial<
 	Omit<
 		AppConfig,
-		"defaultModel" | "defaultEffort" | "reviewModel" | "reviewEffort" | "recentModels"
+		"defaultModel" | "defaultEffort" | "reviewModel" | "reviewEffort" | "recentModels" | "plugins"
 	>
 > & {
 	defaultModel?: WireModel | null;
@@ -720,6 +781,7 @@ export type AppConfigUpdate = Partial<
 	reviewModel?: WireModel | null;
 	reviewEffort?: ThinkingLevel | null;
 	/** `null` for a namespace resets it back to `{}`. */
+	plugins?: Record<string, PluginSettingsNamespace | null>;
 };
 
 export type InterviewResponse = "book" | "postpone" | "never";
@@ -831,6 +893,8 @@ export const DEFAULT_CONFIG: AppConfig = {
 	jbcentralQuotaEnabled: true,
 	jbcentralQuotaRefreshSeconds: JBCENTRAL_QUOTA_REFRESH_SECONDS.default,
 	hiddenModels: [],
+	plugins: {},
+	pluginPaths: [],
 };
 
 export function normalizeThemePreference(value: unknown): ThemePreference {
@@ -964,6 +1028,8 @@ export interface ReviewComment {
 	status: ReviewCommentStatus;
 	anchorState: ReviewAnchorState;
 	sessionId?: string;
+	/** The agent terminal's tab key the comment was pasted into, in place of a chat `sessionId`. */
+	terminal?: string;
 	/** Who authored the remark — the human (default, absent) or the plan's reviewer agent. */
 	author?: "user" | "agent";
 	/** Provenance of an agent finding: the plan step (in its session) and the newest reviewed commit sha. */

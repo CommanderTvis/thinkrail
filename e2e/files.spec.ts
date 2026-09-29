@@ -157,7 +157,7 @@ test("deleting a previewed file leaves the workbench interactive", async ({ page
 		.getByTestId("file-node")
 		.filter({ hasText: /^README\.md$/ })
 		.click();
-	await expect(page.getByTestId("markdown-view-toggle")).toBeVisible();
+	await expect(page.getByTestId("resource-view-toggle")).toBeVisible();
 });
 
 test("a folder row creates a file inside it, whose icon follows the name as it is typed", async ({

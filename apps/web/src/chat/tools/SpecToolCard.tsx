@@ -1,6 +1,6 @@
+import { ToolFileLink } from "@thinkrail/ui/ToolFileLink";
 import { resultText, strArg, type ToolRenderProps } from "@thinkrail/extension-api/web";
 import type { ReactNode } from "react";
-import { ToolFileLink } from "@/chat/tools/ToolFileLink";
 import type { ToolRenderProps } from "../toolRegistry";
 import { Collapsible, countLines } from "./Collapsible";
 import { resultText, strArg } from "./toolHelpers";

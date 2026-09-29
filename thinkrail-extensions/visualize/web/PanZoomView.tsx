@@ -3,14 +3,14 @@ import {
 	RiAddLine as Plus,
 	RiArrowGoBackLine as RotateCcw,
 } from "@remixicon/react";
-import type * as React from "react";
-import { useCallback, useEffect, useRef, useState } from "react";
 import {
 	clampZoomScale,
 	isZoomGesture,
 	ZOOM_SCALE_STEP,
 	zoomScaleForWheel,
-} from "@/lib/zoomGesture";
+} from "@thinkrail/ui/zoomGesture";
+import type * as React from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 export function installPanZoomGestures(
 	target: EventTarget,
@@ -134,10 +134,7 @@ export function PanZoomView({
 				onPointerUp={endDrag}
 				onPointerCancel={endDrag}
 			>
-				<div
-					className="contents"
-					dangerouslySetInnerHTML={{ __html: svg }}
-				/>
+				<div className="contents" dangerouslySetInnerHTML={{ __html: svg }} />
 			</div>
 			<div className="absolute right-8 bottom-8 flex items-center gap-4 rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg p-4 tr-text-metadata shadow-[var(--shadow-lg)]">
 				<button

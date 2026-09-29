@@ -5,7 +5,9 @@
 @import "./styles/generated/spacing.css";
 @import "./styles/tokens.css";
 @import "./styles/global.css";
-@import "./styles/tooltip.css";
+@import "@thinkrail/ui/tokens.css";
+
+@source "../../../packages/plugin-*/web/**";
 
 @source "../../../packages/ui";
 @source "../../../thinkrail-extensions/*/web/**/*.{ts,tsx}";

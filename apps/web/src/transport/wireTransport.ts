@@ -1,4 +1,30 @@
-import { type Ack, type AppConfig, CHANGE_MUTATIONS_PROTOCOL_VERSION, type ExtUiRequest, HOST_UPDATE_RUN_PROTOCOL_VERSION, type HostUpdateNotice, type LoginPush, PLAN_REVIEW_SUBAGENT_PROTOCOL_VERSION, PLAN_SUMMARY_GENERATION_PROTOCOL_VERSION, type Project, REVIEW_RICH_ANCHORS_PROTOCOL_VERSION, type ReviewChangedPayload, type ServerWelcome, SESSION_STATE_PROTOCOL_VERSION, type SessionCreatedPayload, type SessionDeletedPayload, type SessionEventPayload, type SessionStateRecord, type Workspace, type WorkspaceFsChangedPayload, type WorkspaceRemoved, WS_CHANNELS } from "@thinkrail/contracts";
+import type {
+	Ack,
+	AppConfig,
+	ExtUiRequest,
+	HostUpdateNotice,
+	LoginPush,
+	PluginRosterEntry,
+	Project,
+	ReviewChangedPayload,
+	ServerWelcome,
+	SessionCreatedPayload,
+	SessionDeletedPayload,
+	SessionEventPayload,
+	SessionStateRecord,
+	Workspace,
+	WorkspaceFsChangedPayload,
+	WorkspaceRemoved,
+} from "@thinkrail/contracts";
+import {
+	CHANGE_MUTATIONS_PROTOCOL_VERSION,
+	HOST_UPDATE_RUN_PROTOCOL_VERSION,
+	PLAN_REVIEW_SUBAGENT_PROTOCOL_VERSION,
+	PLAN_SUMMARY_GENERATION_PROTOCOL_VERSION,
+	REVIEW_RICH_ANCHORS_PROTOCOL_VERSION,
+	SESSION_STATE_PROTOCOL_VERSION,
+	WS_CHANNELS,
+} from "@thinkrail/contracts";
 import { isConnectedGeneration, useAppStore } from "../store";
 import { createPiEventBatcher, shouldFlushPiEventsBefore } from "./piEventBatcher";
 import { WsTransport } from "./transport";
@@ -158,6 +184,7 @@ export function initTransport(): WsTransport {
 					: undefined,
 				welcome.hostUpdate,
 			);
+		if (Array.isArray(welcome.plugins)) useAppStore.getState().applyPluginRoster(welcome.plugins);
 		const connectionGeneration = useAppStore.getState().connectionGeneration;
 		refreshLoadedWorkspaceLists(connectionGeneration);
 		if (welcome.protocolVersion >= SESSION_STATE_PROTOCOL_VERSION) {
@@ -264,6 +291,10 @@ export function initTransport(): WsTransport {
 
 	transport.subscribe(WS_CHANNELS.settingsChanged, (data) => {
 		useAppStore.getState().applyConfig(data as AppConfig);
+	});
+
+	transport.subscribe(WS_CHANNELS.pluginsChanged, (data) => {
+		useAppStore.getState().applyPluginRoster(data as PluginRosterEntry[]);
 	});
 
 	transport.connect();

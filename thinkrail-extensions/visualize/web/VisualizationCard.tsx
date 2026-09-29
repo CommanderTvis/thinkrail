@@ -1,7 +1,3 @@
-import type { ToolRenderProps } from "@/chat/toolRegistry";
-import { resultText, strArg } from "@/chat/tools/toolHelpers";
-import { ComparisonCard } from "@/chat/tools/visualize/ComparisonCard";
-import { DiagramCard } from "@/chat/tools/visualize/DiagramCard";
 import { resultText, strArg, type ToolRenderProps } from "@thinkrail/extension-api/web";
 import { ComparisonCard } from "./ComparisonCard";
 import { DiagramCard } from "./DiagramCard";

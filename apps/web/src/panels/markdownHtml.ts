@@ -9,6 +9,10 @@ export const DOCUMENT_HTML_SCHEMA: typeof defaultSchema = {
 	...defaultSchema,
 	clobberPrefix: DOCUMENT_ID_PREFIX,
 	tagNames: [...(defaultSchema.tagNames ?? []), "mdalert"],
+	protocols: {
+		...defaultSchema.protocols,
+		href: [...(defaultSchema.protocols?.href ?? []), "spec"],
+	},
 	attributes: {
 		...defaultSchema.attributes,
 		mdalert: ["variant"],

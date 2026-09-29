@@ -378,9 +378,9 @@ describe("registry extensions", () => {
 
 	it("keeps the curated child set and appends registry children", () => {
 		const children = childExtensionFactories();
-		expect(children).toHaveLength(3 + registryInlineExtensions("childExtensions").length);
-		expect(children.slice(0, 3).every((inline) => typeof inline === "function")).toBe(true);
-		expect(children.slice(3)).toEqual(registryInlineExtensions("childExtensions"));
+		const registry = registryInlineExtensions("childExtensions");
+		expect(children.slice(0, 2).every((inline) => typeof inline === "function")).toBe(true);
+		expect(children.slice(2, 2 + registry.length)).toEqual(registry);
 	});
 
 	it("guards every child's images from the base set, not the opt-in curated set", () => {

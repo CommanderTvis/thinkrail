@@ -1,6 +1,6 @@
 import type { ReviewAnchor } from "@thinkrail/contracts";
+import { shikiLanguageId } from "@thinkrail/ui/markdown";
 import { diffArrays } from "diff";
-import { shikiLanguageId } from "@/lib/highlighter";
 import type { AnchorDraft, ReviewThread } from "@/resources";
 import { scanJson } from "../json/jsonScanner";
 

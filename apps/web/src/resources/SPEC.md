@@ -37,13 +37,22 @@ CAS-protected actions. The pane owns wire calls, scope and expectation hashes, u
 refresh, and error UI. An immutable scope omits `hunkActions`; renderers must then omit every mutation
 control rather than emulate one.
 
+The registry is not fixed at load: a plugin's file viewer registers when the plugin activates and leaves
+with it, so every registration and removal advances `resourceRendererRevision` and notifies
+`subscribeResourceRenderers`, and the panes resolve their candidates again. Besides glob, MIME, language
+and text, a renderer may match by a `test(path)` predicate — what a plugin's finer `matches` becomes.
+
+`ResourceViewProps.edit` is present when the pane lets the file be changed: the view's text is then the
+unsaved buffer, `onChange` replaces it and `onSave` asks the pane to write it. `focusLine` /
+`onFocusHandled` hand a view a source line to land on. A view may ignore all three.
+
 ## Boundary
 
 - **Public surface:** `index.ts` exports `ResourceDescriptor`, `ResourceContent`, `AnchorDraft`,
   `ReviewThread`, `ReviewThreadActions`, `SurfaceReview`, `ResourceViewProps`, `ResourceDiffProps`
   (both including an optional actual-placement callback), `HunkActions`, `ResourceRenderer` and its support
-  types, plus `registerResourceRenderer`,
-  `resolveRenderers`, `describeResource`, `anchorLabel`, and `isPlaceable`.
+  types, `ResourceEdit`, plus `registerResourceRenderer`, `subscribeResourceRenderers`,
+  `resourceRendererRevision`, `resolveRenderers`, `describeResource`, `anchorLabel`, and `isPlaceable`.
 - **Allowed deps:** `@thinkrail/contracts` types, the `lib` barrel, and React types.
 - **Forbidden:** store, transport, shell, panels, and renderer implementations. Bundled implementations
   live under `panels/resources` and register metadata plus lazy loaders from the workbench composition edge.

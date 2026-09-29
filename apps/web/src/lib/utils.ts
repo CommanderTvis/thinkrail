@@ -1,6 +1,7 @@
 import type { UserMessage } from "@thinkrail/contracts";
+import { cn } from "@thinkrail/ui/utils";
 
-export { cn } from "@thinkrail/ui/utils";
+export { cn };
 
 export const DOUBLE_CLICK_SETTLE_MS = 250;
 

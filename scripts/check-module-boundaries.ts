@@ -2,7 +2,23 @@
 
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, join, relative, resolve, sep } from "node:path";
-import ts from "typescript";
+import {
+	isCallExpression,
+	isExportDeclaration,
+	isExternalModuleReference,
+	isIdentifier,
+	isImportDeclaration,
+	isImportEqualsDeclaration,
+	isImportTypeNode,
+	isLiteralTypeNode,
+	isNamedExports,
+	isNamedImports,
+	isStringLiteralLikeNode,
+	type Node,
+	type SourceFile,
+	SyntaxKind,
+} from "typescript/unstable/ast";
+import { parseFiles } from "./tsProjects";
 
 interface Manifest {
 	name?: string;
@@ -16,6 +32,8 @@ interface ModuleRule {
 	root: string;
 	allowed: readonly string[];
 }
+
+const PLUGIN_BASE = ["packages/plugin-api", "packages/contracts", "packages/ui"] as const;
 
 const MODULE_RULES: readonly ModuleRule[] = [
 	{
@@ -51,6 +69,37 @@ const MODULE_RULES: readonly ModuleRule[] = [
 		root: "apps/desktop",
 		allowed: ["packages/server", "packages/shared", "packages/contracts"],
 	},
+];
+
+const PLUGIN_RULES: readonly ModuleRule[] = [
+	{ root: "packages/plugin-api", allowed: ["packages/contracts"] },
+	{
+		root: "packages/plugin-spec-dialect",
+		allowed: [...PLUGIN_BASE, "packages/shared", "packages/spec-graph"],
+	},
+	{
+		root: "packages/plugin-blueprint",
+		allowed: [
+			...PLUGIN_BASE,
+			"packages/shared",
+			"packages/plugin-spec-dialect",
+			"thinkrail-extensions/visualize",
+		],
+	},
+	{ root: "packages/plugin-claude-code", allowed: [...PLUGIN_BASE, "packages/shared"] },
+	{ root: "packages/plugin-discord", allowed: [...PLUGIN_BASE, "packages/shared"] },
+	{ root: "packages/plugin-branch-graph", allowed: PLUGIN_BASE },
+	{
+		root: "packages/plugin-visualize",
+		allowed: [
+			...PLUGIN_BASE,
+			"packages/shared",
+			"pi-extensions/visualize",
+			"thinkrail-extensions/visualize",
+		],
+	},
+	{ root: "packages/plugin-file-icons", allowed: PLUGIN_BASE },
+	{ root: "packages/plugin-codex", allowed: PLUGIN_BASE },
 ];
 
 const DEPENDENCY_SECTIONS = [
@@ -95,12 +144,14 @@ function workspacePackages(root: string): Map<string, string> {
 function moduleRules(packages: ReadonlyMap<string, string>): ModuleRule[] {
 	const roots = [...packages.values()];
 	const extensions = roots.filter((root) => root.startsWith("thinkrail-extensions/"));
+	const plugins = roots.filter((root) => root.startsWith("packages/plugin-"));
 	return [
 		...MODULE_RULES.map((rule) =>
 			rule.root === "apps/web" || rule.root === "packages/server"
-				? { ...rule, allowed: [...rule.allowed, ...extensions] }
+				? { ...rule, allowed: [...rule.allowed, ...extensions, ...plugins] }
 				: rule,
 		),
+		...PLUGIN_RULES.filter((rule) => roots.includes(rule.root)),
 		...roots
 			.filter((root) => root === "packages/ui" || root === "packages/extension-api")
 			.map((root) => ({ root, allowed: ["packages/contracts"] })),
@@ -143,55 +194,47 @@ interface SourceImport {
 	typeOnly: boolean;
 }
 
-function importSpecifiers(path: string): SourceImport[] {
-	const source = ts.createSourceFile(
-		path,
-		readFileSync(path, "utf8"),
-		ts.ScriptTarget.Latest,
-		false,
-		path.endsWith("x") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
-	);
+function importSpecifiers(source: SourceFile): SourceImport[] {
 	const specifiers: SourceImport[] = [];
-	const add = (node: ts.Expression | undefined, typeOnly = false): void => {
-		if (node && ts.isStringLiteralLike(node)) specifiers.push({ specifier: node.text, typeOnly });
+	const add = (node: Node | undefined, typeOnly: boolean): void => {
+		if (node !== undefined && isStringLiteralLikeNode(node))
+			specifiers.push({ specifier: node.text, typeOnly });
 	};
-	const visit = (node: ts.Node): void => {
-		if (ts.isImportDeclaration(node)) {
-			const clause = node.importClause;
-			const bindings = clause?.namedBindings;
-			const typeOnly =
-				clause?.isTypeOnly ||
-				(!clause?.name &&
-					bindings &&
-					ts.isNamedImports(bindings) &&
-					bindings.elements.length > 0 &&
-					bindings.elements.every((element) => element.isTypeOnly));
-			add(node.moduleSpecifier, !!typeOnly);
-		} else if (ts.isExportDeclaration(node)) {
-			const clause = node.exportClause;
-			const typeOnly =
+	const visit = (node: Node): void => {
+		if (isImportDeclaration(node)) {
+			const namedBindings = node.importClause?.namedBindings;
+			add(
+				node.moduleSpecifier,
+				node.importClause?.phaseModifier === SyntaxKind.TypeKeyword ||
+					(node.importClause?.name === undefined &&
+						namedBindings !== undefined &&
+						isNamedImports(namedBindings) &&
+						namedBindings.elements.length > 0 &&
+						namedBindings.elements.every((e) => e.isTypeOnly)),
+			);
+		} else if (isExportDeclaration(node)) {
+			const exportClause = node.exportClause;
+			add(
+				node.moduleSpecifier,
 				node.isTypeOnly ||
-				(clause &&
-					ts.isNamedExports(clause) &&
-					clause.elements.length > 0 &&
-					clause.elements.every((element) => element.isTypeOnly));
-			add(node.moduleSpecifier, !!typeOnly);
-		} else if (
-			ts.isImportEqualsDeclaration(node) &&
-			ts.isExternalModuleReference(node.moduleReference)
-		) {
+					(exportClause !== undefined &&
+						isNamedExports(exportClause) &&
+						exportClause.elements.length > 0 &&
+						exportClause.elements.every((e) => e.isTypeOnly)),
+			);
+		} else if (isImportEqualsDeclaration(node) && isExternalModuleReference(node.moduleReference)) {
 			add(node.moduleReference.expression, node.isTypeOnly);
-		} else if (ts.isCallExpression(node)) {
+		} else if (isCallExpression(node)) {
 			if (
-				node.expression.kind === ts.SyntaxKind.ImportKeyword ||
-				(ts.isIdentifier(node.expression) && node.expression.text === "require")
+				node.expression.kind === SyntaxKind.ImportKeyword ||
+				(isIdentifier(node.expression) && node.expression.text === "require")
 			) {
-				add(node.arguments[0]);
+				add(node.arguments[0], false);
 			}
-		} else if (ts.isImportTypeNode(node) && ts.isLiteralTypeNode(node.argument)) {
+		} else if (isImportTypeNode(node) && isLiteralTypeNode(node.argument)) {
 			add(node.argument.literal, true);
 		}
-		ts.forEachChild(node, visit);
+		node.forEachChild(visit);
 	};
 	visit(source);
 	return specifiers;
@@ -303,10 +346,11 @@ function sourceViolation(
 	return undefined;
 }
 
-export function moduleBoundaryViolations(root: string): string[] {
+export async function moduleBoundaryViolations(root: string): Promise<string[]> {
 	const absoluteRoot = resolve(root);
 	const packages = workspacePackages(absoluteRoot);
 	const violations: string[] = [];
+	const scans: { rule: ModuleRule; files: string[] }[] = [];
 	for (const rule of moduleRules(packages)) {
 		const modulePath = join(absoluteRoot, rule.root);
 		const manifestPath = join(modulePath, "package.json");
@@ -325,29 +369,39 @@ export function moduleBoundaryViolations(root: string): string[] {
 				}
 			}
 		}
-		for (const path of sourceFiles(modulePath)) {
-			for (const sourceImport of importSpecifiers(path)) {
-				const target = workspaceTarget(sourceImport.specifier, path, absoluteRoot, packages);
-				const violation = sourceViolation(
-					rule,
-					normalized(relative(modulePath, path)),
-					sourceImport,
-					target,
-				);
-				if (violation) {
-					violations.push(
-						`${normalized(relative(absoluteRoot, path))}: import ${JSON.stringify(sourceImport.specifier)} ${violation}`,
-					);
+		scans.push({ rule, files: sourceFiles(modulePath) });
+	}
+	await parseFiles(
+		absoluteRoot,
+		scans.flatMap((scan) => scan.files),
+		async (parsed) => {
+			for (const { rule, files } of scans) {
+				const modulePath = join(absoluteRoot, rule.root);
+				for (const path of files) {
+					for (const sourceImport of importSpecifiers(await parsed(path))) {
+						const target = workspaceTarget(sourceImport.specifier, path, absoluteRoot, packages);
+						const violation = sourceViolation(
+							rule,
+							normalized(relative(modulePath, path)),
+							sourceImport,
+							target,
+						);
+						if (violation) {
+							violations.push(
+								`${normalized(relative(absoluteRoot, path))}: import ${JSON.stringify(sourceImport.specifier)} ${violation}`,
+							);
+						}
+					}
 				}
 			}
-		}
-	}
+		},
+	);
 	return violations.sort();
 }
 
 if (import.meta.main) {
 	const root = join(import.meta.dir, "..");
-	const violations = moduleBoundaryViolations(root);
+	const violations = await moduleBoundaryViolations(root);
 	if (violations.length > 0) {
 		console.error("Module boundary violations:");
 		for (const violation of violations) console.error(`  - ${violation}`);

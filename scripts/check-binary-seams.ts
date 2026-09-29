@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative, resolve, sep } from "node:path";
 import {
 	isCallExpression,
@@ -42,9 +42,28 @@ const SKIPPED_DIST_DIRS: Record<string, string> = {
 		"(content-hashed chunk duplicates of the allowlisted modular seams) never run in the compiled binary",
 };
 
-const SOURCE_ALLOWLIST: Record<string, { reason: string; imports: string[] }> = {};
+const SOURCE_ALLOWLIST: Record<string, { reason: string; imports: string[] }> = {
+	"packages/server/src/plugins/external.ts": {
+		reason:
+			"deliberate — importExternalHost() loads an external plugin's host module from an " +
+			"absolute, content-hashed file:// URL known only at runtime, so it can never be a static " +
+			"import; see plugin-adoption.md S11 and smoke:binary",
+		imports: ["moduleUrl"],
+	},
+};
 
 const SOURCE_EXCLUDED_DIRS = new Set(["node_modules", "dist", "build", ".git"]);
+
+function pluginHostDirs(repoRoot: string): string[] {
+	const packagesDir = join(repoRoot, "packages");
+	const dirs: string[] = [];
+	for (const entry of readdirSync(packagesDir, { withFileTypes: true })) {
+		if (!entry.isDirectory() || !entry.name.startsWith("plugin-")) continue;
+		const hostDir = join(packagesDir, entry.name, "host");
+		if (existsSync(hostDir) && statSync(hostDir).isDirectory()) dirs.push(hostDir);
+	}
+	return dirs;
+}
 
 function listSourceFiles(dir: string): string[] {
 	const out: string[] = [];
@@ -173,7 +192,11 @@ for (const [dir, reason] of Object.entries(SKIPPED_DIST_DIRS)) {
 }
 
 const sourceCandidates: { id: string; file: string }[] = [];
-for (const dir of []) {
+for (const dir of [
+	join(repoRoot, "packages", "plugin-api", "src"),
+	...pluginHostDirs(repoRoot),
+	join(repoRoot, "packages", "server", "src", "plugins"),
+]) {
 	for (const file of listSourceFiles(dir)) {
 		if (!/\bimport\s*\(/.test(readFileSync(file, "utf8"))) continue;
 		sourceCandidates.push({ id: relative(repoRoot, file).split(sep).join("/"), file });
@@ -208,7 +231,7 @@ if (unexpected.length > 0) {
 		"\nFor a pi import: register a static seam in registerBundledRuntime (packages/server/src/agent/extensions.ts),",
 	);
 	console.error(
-		"or confirm it only receives node: builtins. For a source import: it almost certainly reaches outside the",
+		"or confirm it only receives node: builtins. For a plugin-host import: it almost certainly reaches outside the",
 	);
 	console.error(
 		"static builtin-plugin array — see plugin-adoption.md S11. Either way, allowlist a deliberate occurrence in",
@@ -230,5 +253,5 @@ const occurrences = [...found.values()].reduce((n, imports) => n + imports.lengt
 const sourceOccurrences = [...sourceFound.values()].reduce((n, imports) => n + imports.length, 0);
 console.log(
 	`check-binary-seams: OK (${occurrences} known opaque import occurrences in ${found.size} files across ${roots.size} pi packages; ` +
-		`${sourceOccurrences} in ${sourceFound.size} source file(s), all handled or safe)`,
+		`${sourceOccurrences} in ${sourceFound.size} plugin-host source file(s), all handled or safe)`,
 );

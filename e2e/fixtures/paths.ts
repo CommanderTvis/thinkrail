@@ -77,6 +77,8 @@ export const E2E_CENTRAL_ARTIFACT_SEED = join(E2E_DATA_DIR, "real-central-extens
 
 export const E2E_FIXTURE_REPO = join(E2E_DATA_DIR, "sample-project");
 
+export const E2E_PLUGIN_DIR = join(E2E_DATA_DIR, "plugins");
+
 export const E2E_BINARY_CACHE = join(tmpdir(), `thinkrail-e2e-binary-cache-${E2E_STATE_KEY}`);
 
 export const E2E_DESKTOP_CACHE = join(tmpdir(), `thinkrail-e2e-desktop-cache-${E2E_STATE_KEY}`);

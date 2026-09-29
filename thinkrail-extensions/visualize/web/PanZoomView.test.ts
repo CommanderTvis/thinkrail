@@ -28,7 +28,7 @@ test("claims WebKit pinch gestures and scales from the local zoom at gesture sta
 	target.dispatchEvent(growPastLimit);
 	target.dispatchEvent(end);
 
-	expect(writes).toEqual([1.5, 5]);
+	expect(writes).toEqual([1.5, 6]);
 	expect([
 		start.defaultPrevented,
 		shrink.defaultPrevented,

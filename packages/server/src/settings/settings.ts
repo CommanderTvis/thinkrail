@@ -1,3 +1,4 @@
+import { isAbsolute } from "node:path";
 import {
 	type AppConfig,
 	type AppConfigUpdate,
@@ -8,6 +9,7 @@ import {
 	isTerminalWindowsShell,
 	isThemeMode,
 	LINE_WIDTH_COLUMNS,
+	type PluginSettingsNamespace,
 	RECENT_MODELS_LIMIT,
 	sameModel,
 	type WireModel,
@@ -46,6 +48,30 @@ let publishSettings: SettingsPublisher | null = null;
 
 export function setSettingsPublisher(fn: SettingsPublisher | null): void {
 	publishSettings = fn;
+}
+
+type PluginNamespaceValidator = (
+	update: Record<string, PluginSettingsNamespace | null>,
+	current: AppConfig["plugins"],
+) => AppConfig["plugins"];
+
+/** Merge per namespace, touching only the ids present in the update; `null` resets one back to `{}`. */
+function defaultPluginNamespaceMerge(
+	update: Record<string, PluginSettingsNamespace | null>,
+	current: AppConfig["plugins"],
+): AppConfig["plugins"] {
+	const merged = { ...current };
+	for (const [id, patch] of Object.entries(update)) {
+		merged[id] = patch === null ? {} : { ...merged[id], ...patch };
+	}
+	return merged;
+}
+
+let pluginNamespaceValidator: PluginNamespaceValidator = defaultPluginNamespaceMerge;
+
+/** Installed by the plugin loader: validates each touched namespace against its plugin's schema. */
+export function setPluginNamespaceValidator(fn: PluginNamespaceValidator | null): void {
+	pluginNamespaceValidator = fn ?? defaultPluginNamespaceMerge;
 }
 
 let cached: AppConfig | null = null;
@@ -110,6 +136,7 @@ export function updateConfig(partial: AppConfigUpdate): AppConfig {
 		jbcentralQuotaEnabled,
 		jbcentralQuotaRefreshSeconds,
 		hiddenModels,
+		plugins,
 		...rest
 	} = runtimeUpdate;
 	if (subagentsEnabled !== undefined && typeof subagentsEnabled !== "boolean") {
@@ -157,6 +184,12 @@ export function updateConfig(partial: AppConfigUpdate): AppConfig {
 	}
 	if (themeMode !== undefined && !isThemeMode(themeMode)) {
 		throw new Error("themeMode must be fixed or system");
+	}
+	if (
+		runtimeUpdate.pluginPaths !== undefined &&
+		!runtimeUpdate.pluginPaths.every((path) => isAbsolute(path))
+	) {
+		throw new Error("pluginPaths must be absolute paths");
 	}
 	if (systemThemePair !== undefined && !isSystemThemePair(systemThemePair)) {
 		throw new Error("systemThemePair must contain light and dark theme ids");
@@ -217,6 +250,9 @@ export function updateConfig(partial: AppConfigUpdate): AppConfig {
 	if (reviewEffort !== undefined) {
 		if (reviewEffort === null) delete next.reviewEffort;
 		else next.reviewEffort = reviewEffort;
+	}
+	if (plugins !== undefined) {
+		next.plugins = pluginNamespaceValidator(plugins, next.plugins);
 	}
 	saveConfig(next);
 	cached = next;

@@ -8,7 +8,7 @@ test("a selection in the editor lands in the chat's composer, file and lines nam
 	await createWorkspaceViaDialog(page);
 	await page.getByTestId("tab-files").click();
 	await page.getByTestId("file-node").filter({ hasText: "README.md" }).dblclick();
-	await page.getByTestId("md-toggle-source").click();
+	await page.getByTestId("view-toggle-code").click();
 	await expect(page.getByTestId("editor-pane")).toContainText("# sample-project");
 
 	await page.getByTestId("editor-pane").getByText("# sample-project").last().click();
@@ -43,7 +43,7 @@ test("the keyboard reaches the same action, and a second selection stacks under 
 	await createWorkspaceViaDialog(page);
 	await page.getByTestId("tab-files").click();
 	await page.getByTestId("file-node").filter({ hasText: "README.md" }).dblclick();
-	await page.getByTestId("md-toggle-source").click();
+	await page.getByTestId("view-toggle-code").click();
 	await expect(page.getByTestId("editor-pane")).toContainText("# sample-project");
 
 	await page.getByTestId("editor-pane").getByText("# sample-project").last().click();
@@ -68,7 +68,7 @@ test("a highlight in the editor shows in the composer as what the next message c
 	await createWorkspaceViaDialog(page);
 	await page.getByTestId("tab-files").click();
 	await page.getByTestId("file-node").filter({ hasText: "README.md" }).dblclick();
-	await page.getByTestId("md-toggle-source").click();
+	await page.getByTestId("view-toggle-code").click();
 	await expect(page.getByTestId("editor-pane")).toContainText("# sample-project");
 
 	// The file beside the chat, which is the shape this is for: highlight there, ask here.
@@ -94,8 +94,15 @@ test("a highlight in the editor shows in the composer as what the next message c
 	await page.keyboard.press("Shift+End");
 	await expect(chip).toBeVisible();
 
-	// Clicking into the editor without selecting anything drops it again.
-	await page.getByTestId("editor-pane").getByText("# sample-project").last().click();
+	// Clicking into the editor without selecting anything drops it again. Past the end of the line, so
+	// the click lands outside the highlight rather than starting a drag of it.
+	const heading = await page
+		.getByTestId("editor-pane")
+		.getByText("# sample-project")
+		.last()
+		.boundingBox();
+	if (!heading) throw new Error("the heading line is not on screen");
+	await page.mouse.click(heading.x + heading.width + 60, heading.y + heading.height / 2);
 	await expect(chip).toHaveCount(0);
 
 	// And what the chip promised is what the message carries.

@@ -1,5 +1,10 @@
 export { describeResource } from "./describe";
-export { registerResourceRenderer, resolveRenderers } from "./registry";
+export {
+	registerResourceRenderer,
+	resolveRenderers,
+	resourceRendererRevision,
+	subscribeResourceRenderers,
+} from "./registry";
 export { anchorLabel, isPlaceable } from "./review";
 export type {
 	AnchorDraft,

@@ -1,8 +1,8 @@
 import { expect, test } from "bun:test";
+import { alertComponents, remarkGithubAlerts } from "@thinkrail/ui/markdown";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { Markdown } from "../chat/Markdown";
-import { alertComponents, remarkGithubAlerts } from "./markdownAlerts";
 import { documentRehypePlugins } from "./markdownHtml";
 import { documentComponents, remarkHeadingIds } from "./markdownLinks";
 

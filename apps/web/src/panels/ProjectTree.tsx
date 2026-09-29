@@ -38,7 +38,6 @@ import {
 	DropdownMenuTrigger,
 } from "@thinkrail/ui/dropdown-menu";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
-import { cn } from "@thinkrail/ui/utils";
 import {
 	type KeyboardEvent,
 	type MouseEvent,
@@ -50,7 +49,7 @@ import {
 } from "react";
 import { AttentionDot } from "@/components/AttentionDot";
 import { RunningIcon } from "@/components/RunningIcon";
-import { copyText, platformShortcutLabel } from "@/lib";
+import { cn, copyText, platformShortcutLabel } from "@/lib";
 import { LoadingRegion } from "../components/Skeleton";
 import {
 	isDefaultWorkspace,

@@ -8,10 +8,9 @@ import {
 import { menuItemClass } from "@thinkrail/ui/menu-styles";
 import { Popover, PopoverContent, PopoverTrigger } from "@thinkrail/ui/popover";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
-import { cn } from "@thinkrail/ui/utils";
 import { type KeyboardEvent, useEffect, useId, useRef, useState } from "react";
-import { useNow } from "../components/useNow";
-import { relativeTime } from "../lib";
+import { useNow } from "@/components/useNow";
+import { cn, relativeTime } from "../lib";
 import { openChatInTab } from "../panels/openChat";
 import { type ClosedChat, toast, useAppStore } from "../store";
 import { errorText, getTransport } from "../transport";

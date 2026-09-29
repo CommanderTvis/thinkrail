@@ -1,4 +1,5 @@
-import type { LayoutPreset, LayoutToolId } from "@thinkrail/contracts";
+import { type LayoutPreset, type LayoutToolId, LEGACY_LAYOUT_TOOL_IDS } from "@thinkrail/contracts";
+import { parsePluginToolId } from "@thinkrail/plugin-api";
 
 const MAX_PRESETS = 32;
 const MAX_LAYOUT_BYTES = 512 * 1024;
@@ -10,7 +11,39 @@ const MAX_BOTTOM_HEIGHT = 0.7;
 const TOOL_IDS = new Set<LayoutToolId>(["projects", "specs", "files", "changes", "review"]);
 
 function isKnownToolId(tool: string): boolean {
-	return TOOL_IDS.has(tool as LayoutToolId);
+	return TOOL_IDS.has(tool as LayoutToolId) || parsePluginToolId(tool) !== null;
+}
+
+function migrateLegacyToolId(tool: string): string {
+	return LEGACY_LAYOUT_TOOL_IDS[tool] ?? tool;
+}
+
+function migrateLegacyPresetToolIds(value: unknown): unknown {
+	const preset = record(value);
+	if (!preset) return value;
+	const migrateRegion = (region: unknown): unknown => {
+		const node = record(region);
+		if (!node || !Array.isArray(node.groups)) return region;
+		return {
+			...node,
+			groups: node.groups.map((group) => {
+				const groupRecord = record(group);
+				if (!groupRecord || !Array.isArray(groupRecord.tools)) return group;
+				return {
+					...groupRecord,
+					tools: groupRecord.tools.map((tool) =>
+						typeof tool === "string" ? migrateLegacyToolId(tool) : tool,
+					),
+				};
+			}),
+		};
+	};
+	return {
+		...preset,
+		left: migrateRegion(preset.left),
+		right: migrateRegion(preset.right),
+		bottom: migrateRegion(preset.bottom),
+	};
 }
 
 function record(value: unknown): Record<string, unknown> | null {
@@ -188,7 +221,7 @@ export function normalizeStoredCustomLayoutPresets(value: unknown): LayoutPreset
 	const ids = new Set<string>();
 	for (const candidate of value.slice(0, MAX_PRESETS)) {
 		try {
-			const preset = validateLayoutPreset(candidate);
+			const preset = validateLayoutPreset(migrateLegacyPresetToolIds(candidate));
 			if (ids.has(preset.id)) continue;
 			ids.add(preset.id);
 			presets.push(preset);

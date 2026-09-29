@@ -1,6 +1,3 @@
-import type { ToolRenderProps } from "@/chat/toolRegistry";
-import { strArg } from "@/chat/tools/toolHelpers";
-import { MermaidView } from "@/chat/tools/visualize/MermaidView";
 import { strArg, type ToolRenderProps } from "@thinkrail/extension-api/web";
 import { MermaidView } from "./MermaidView";
 

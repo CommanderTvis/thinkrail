@@ -1,0 +1,1 @@
+export { initPluginLoader } from "./loader";

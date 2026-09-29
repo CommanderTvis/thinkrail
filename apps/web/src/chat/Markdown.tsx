@@ -25,19 +25,6 @@ interface MarkdownBlockProps extends Omit<MarkdownProps, "text" | "className"> {
 	separated: boolean;
 }
 
-type MarkdownRemarkPlugins = ComponentProps<typeof ReactMarkdown>["remarkPlugins"];
-
-const GFM_ONLY = [remarkGfm];
-const withGfmCache = new WeakMap<object, MarkdownRemarkPlugins>();
-function withGfm(plugins: MarkdownRemarkPlugins): MarkdownRemarkPlugins {
-	if (!plugins) return GFM_ONLY;
-	const known = withGfmCache.get(plugins);
-	if (known) return known;
-	const merged = [remarkGfm, ...plugins];
-	withGfmCache.set(plugins, merged);
-	return merged;
-}
-
 export const Markdown = memo(function Markdown({
 	text,
 	className = CHAT_PROSE,

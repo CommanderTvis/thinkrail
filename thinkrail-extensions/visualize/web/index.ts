@@ -2,6 +2,7 @@ import { defineWebExtension, strArg } from "@thinkrail/extension-api/web";
 import { VisualizationCard } from "./VisualizationCard";
 
 export { MermaidView } from "./MermaidView";
+export { VisualizationCard };
 
 export default defineWebExtension({
 	name: "visualize",

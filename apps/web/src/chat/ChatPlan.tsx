@@ -3,7 +3,7 @@ import {
 	RiArrowRightSLine as ChevronRight,
 } from "@remixicon/react";
 import { PopoverContent } from "@thinkrail/ui/popover";
-import { cn } from "@thinkrail/ui/utils";
+import { cn } from "../lib";
 import { type PlanGlance, planSummary, stripStatus } from "./planView";
 import { glanceIcon, TodoAddRow, TodoRows } from "./TodoList";
 import type { ChatTodos } from "./useChatTodos";
