@@ -1,5 +1,5 @@
 import { RiPencilLine as Pencil } from "@remixicon/react";
-import { ToolFileLink } from "@/chat/tools/ToolFileLink";
+import { ToolFileLink } from "@thinkrail/plugin-ui";
 import type { ToolRenderProps } from "../toolRegistry";
 import { Collapsible } from "./Collapsible";
 import { resultText, strArg } from "./toolHelpers";

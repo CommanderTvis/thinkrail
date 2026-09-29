@@ -4,15 +4,20 @@ import {
 	RiCircleFill,
 	RiSettings3Line as Settings,
 } from "@remixicon/react";
+import {
+	IconTooltip,
+	ResizableHandle,
+	ResizablePanel,
+	ResizablePanelGroup,
+} from "@thinkrail/plugin-ui";
+import { applyCodeFont } from "@thinkrail/plugin-ui/editor";
 import { useEffect, useRef, useState } from "react";
-import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
-import { IconTooltip } from "@/components/ui/tooltip";
-import { applyCodeFont } from "@/panels/editorFont";
 import { QuietScrollArea } from "../components/QuietScrollArea";
 import { AnalyticsConsentDialog } from "../panels/AnalyticsConsentDialog";
 import { BranchList } from "../panels/BranchList";
 import { InterviewPromptDialog } from "../panels/InterviewPromptDialog";
 import { NewWorkspaceDialog } from "../panels/NewWorkspaceDialog";
+
 import { SearchOverlay } from "../panels/SearchOverlay";
 import { SettingsDialog } from "../panels/SettingsDialog";
 import { Toaster } from "../panels/Toaster";

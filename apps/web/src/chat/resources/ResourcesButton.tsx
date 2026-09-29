@@ -1,7 +1,6 @@
 import { RiStackFill, RiStackLine } from "@remixicon/react";
+import { Button, IconTooltip } from "@thinkrail/plugin-ui";
 import type { ComponentProps } from "react";
-import { Button } from "@/components/ui/button";
-import { IconTooltip } from "@/components/ui/tooltip";
 import { cn } from "@/lib";
 
 export function ResourcesButton({

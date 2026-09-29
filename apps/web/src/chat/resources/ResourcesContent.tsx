@@ -5,8 +5,8 @@ import {
 	RiTerminalBoxLine,
 } from "@remixicon/react";
 import type { BackgroundCommandSummary, SubagentResourceSummary } from "@thinkrail/contracts";
+import { Button } from "@thinkrail/plugin-ui";
 import { useState } from "react";
-import { Button } from "@/components/ui/button";
 
 type Action = { pending: boolean; error: string | null };
 

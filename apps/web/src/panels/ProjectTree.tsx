@@ -20,6 +20,23 @@ import {
 } from "@remixicon/react";
 import type { EditorInfo, Project, Workspace } from "@thinkrail/contracts";
 import {
+	Button,
+	ContextMenu,
+	ContextMenuContent,
+	ContextMenuItem,
+	ContextMenuSeparator,
+	ContextMenuTrigger,
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuSeparator,
+	DropdownMenuSub,
+	DropdownMenuSubContent,
+	DropdownMenuSubTrigger,
+	DropdownMenuTrigger,
+	IconTooltip,
+} from "@thinkrail/plugin-ui";
+import {
 	type KeyboardEvent,
 	type MouseEvent,
 	type ReactNode,
@@ -30,25 +47,6 @@ import {
 } from "react";
 import { AttentionDot } from "@/components/AttentionDot";
 import { RunningIcon } from "@/components/RunningIcon";
-import { Button } from "@/components/ui/button";
-import {
-	ContextMenu,
-	ContextMenuContent,
-	ContextMenuItem,
-	ContextMenuSeparator,
-	ContextMenuTrigger,
-} from "@/components/ui/context-menu";
-import {
-	DropdownMenu,
-	DropdownMenuContent,
-	DropdownMenuItem,
-	DropdownMenuSeparator,
-	DropdownMenuSub,
-	DropdownMenuSubContent,
-	DropdownMenuSubTrigger,
-	DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { IconTooltip } from "@/components/ui/tooltip";
 import { cn, copyText, platformShortcutLabel } from "@/lib";
 import { LoadingRegion } from "../components/Skeleton";
 import {

@@ -1,15 +1,16 @@
 import { RiExternalLinkLine as ExternalLink } from "@remixicon/react";
 import type { InterviewResponse } from "@thinkrail/contracts";
-import { type MouseEvent, useRef, useState } from "react";
-import { Button, buttonVariants } from "@/components/ui/button";
 import {
+	Button,
+	buttonVariants,
 	Dialog,
 	DialogContent,
 	DialogDescription,
 	DialogFooter,
 	DialogHeader,
 	DialogTitle,
-} from "@/components/ui/dialog";
+} from "@thinkrail/plugin-ui";
+import { type MouseEvent, useRef, useState } from "react";
 import { cn } from "@/lib";
 import { toast, useAppStore } from "@/store";
 import { errorText, getTransport } from "@/transport";

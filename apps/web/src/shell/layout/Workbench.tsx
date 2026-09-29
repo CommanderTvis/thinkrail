@@ -32,6 +32,33 @@ import {
 	RiCloseLine as X,
 } from "@remixicon/react";
 import {
+	Command,
+	CommandEmpty,
+	CommandInput,
+	CommandItem,
+	CommandList,
+	ContextMenu,
+	ContextMenuContent,
+	ContextMenuItem,
+	ContextMenuSeparator,
+	ContextMenuTrigger,
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuRadioGroup,
+	DropdownMenuRadioItem,
+	DropdownMenuSeparator,
+	DropdownMenuTrigger,
+	IconTooltip,
+	type ImperativePanelGroupHandle,
+	Popover,
+	PopoverContent,
+	PopoverTrigger,
+	ResizableHandle,
+	ResizablePanel,
+	ResizablePanelGroup,
+} from "@thinkrail/plugin-ui";
+import {
 	createContext,
 	Fragment,
 	type ReactNode,
@@ -44,37 +71,6 @@ import {
 	useRef,
 	useState,
 } from "react";
-import {
-	Command,
-	CommandEmpty,
-	CommandInput,
-	CommandItem,
-	CommandList,
-} from "@/components/ui/command";
-import {
-	ContextMenu,
-	ContextMenuContent,
-	ContextMenuItem,
-	ContextMenuSeparator,
-	ContextMenuTrigger,
-} from "@/components/ui/context-menu";
-import {
-	DropdownMenu,
-	DropdownMenuContent,
-	DropdownMenuItem,
-	DropdownMenuRadioGroup,
-	DropdownMenuRadioItem,
-	DropdownMenuSeparator,
-	DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import {
-	type ImperativePanelGroupHandle,
-	ResizableHandle,
-	ResizablePanel,
-	ResizablePanelGroup,
-} from "@/components/ui/resizable";
-import { IconTooltip } from "@/components/ui/tooltip";
 import { FileTypeIcon } from "../../components/FileTypeIcon";
 import { PiGlyph } from "../../components/PiGlyph";
 import {
@@ -141,6 +137,7 @@ import {
 	unplacedTools,
 	unplacedToolsForSide,
 } from "./model";
+import { TabPathContextMenu, TabPathMenuItems } from "./TabPathMenu";
 import type {
 	LayoutAuxiliaryRegion,
 	LayoutBottomAlignment,
@@ -179,6 +176,9 @@ const UnofferedToolsContext = createContext<readonly LayoutToolId[]>(NO_TOOLS);
 
 /** The active tool catalog (builtins + plugin side tools), read wherever a tool label/icon is resolved. */
 const LayoutToolCatalogContext = createContext<LayoutToolCatalog>(BUILTIN_LAYOUT_TOOL_CATALOG);
+const WorktreePathContext = createContext("");
+
+const WRAPPING_ACTIONS = "flex shrink-0 flex-wrap items-stretch [&>*]:h-panel-header-row";
 
 function revealable(tools: readonly LayoutToolId[], unoffered: readonly LayoutToolId[]) {
 	return unoffered.length === 0 ? tools : tools.filter((tool) => !unoffered.includes(tool));
@@ -186,6 +186,7 @@ function revealable(tools: readonly LayoutToolId[], unoffered: readonly LayoutTo
 
 export interface WorkbenchProps {
 	document: WorkspaceLayoutDocument;
+	worktreePath: string;
 	/** Builtins + plugin side tools; defaults to the builtin-only catalog. */
 	catalog?: LayoutToolCatalog;
 	/** Tools that stay out of the reveal menus while this workspace cannot serve them. */
@@ -711,6 +712,7 @@ function TabStrip({
 	defaultPaneDirection,
 }: TabStripProps) {
 	const catalog = useContext(LayoutToolCatalogContext);
+	const worktreePath = useContext(WorktreePathContext);
 	const vertical = orientation === "vertical";
 	const subtitles = vertical ? ambiguousTabSubtitles(tabs) : null;
 	const scroller = useRef<HTMLDivElement>(null);
@@ -962,9 +964,9 @@ function TabStrip({
 			<div
 				className={
 					nested
-						? "mt-4 flex h-panel-header-row shrink-0 items-stretch [&_button]:border-l-0"
+						? `mt-4 ${WRAPPING_ACTIONS} [&_button]:border-l-0`
 						: vertical
-							? "flex h-panel-header-row shrink-0 items-stretch border-border-default border-t"
+							? `${WRAPPING_ACTIONS} [&_button]:border-l-0`
 							: "contents"
 				}
 			>
@@ -995,19 +997,20 @@ function TabStrip({
 								<CommandList>
 									<CommandEmpty>No matching tabs.</CommandEmpty>
 									{tabs.map((tab) => (
-										<CommandItem
-											key={tab.id}
-											value={tab.id}
-											keywords={tabSearchKeywords(tab, catalog)}
-											onSelect={() => {
-												overflowFocusTarget.current = tab.id;
-												selectTab(tab.id);
-												setOverflowOpen(false);
-											}}
-										>
-											{layoutTabIcon(tab, renderTabIcon, false, catalog)}
-											<span className="truncate">{layoutTabName(tab, catalog)}</span>
-										</CommandItem>
+										<TabPathContextMenu key={tab.id} tab={tab} worktreePath={worktreePath}>
+											<CommandItem
+												value={tab.id}
+												keywords={tabSearchKeywords(tab, catalog)}
+												onSelect={() => {
+													overflowFocusTarget.current = tab.id;
+													selectTab(tab.id);
+													setOverflowOpen(false);
+												}}
+											>
+												{layoutTabIcon(tab, renderTabIcon, false, catalog)}
+												<span className="truncate">{layoutTabName(tab, catalog)}</span>
+											</CommandItem>
+										</TabPathContextMenu>
 									))}
 								</CommandList>
 							</Command>
@@ -1085,6 +1088,7 @@ function WorkbenchTab({
 	defaultPaneDirection,
 }: WorkbenchTabProps) {
 	const catalog = useContext(LayoutToolCatalogContext);
+	const worktreePath = useContext(WorktreePathContext);
 	const vertical = orientation === "vertical";
 	const {
 		setNodeRef: setDragRef,
@@ -1496,6 +1500,7 @@ function WorkbenchTab({
 				}}
 			>
 				<ContextMenuItem onSelect={() => focusTab()}>Focus tab</ContextMenuItem>
+				<TabPathMenuItems tab={tab} worktreePath={worktreePath} />
 				{tab.kind === "chat" && onRenameChat ? (
 					<ContextMenuItem
 						onSelect={() => {
@@ -3082,6 +3087,7 @@ function HiddenSideRail({
 
 export function Workbench({
 	document,
+	worktreePath,
 	catalog = BUILTIN_LAYOUT_TOOL_CATALOG,
 	unofferedTools = NO_TOOLS,
 	attention,
@@ -3697,8 +3703,9 @@ export function Workbench({
 		canFocusAdjacentGroup,
 	};
 	const centerTabsInProjects =
-		verticalTabs?.home === "projects"
-			? collectCenterGroups(document.center).map((group) => (
+		verticalTabs?.home === "projects" ? (
+			<WorktreePathContext.Provider value={worktreePath}>
+				{collectCenterGroups(document.center).map((group) => (
 					<CenterGroupStrip
 						key={tupleKey("projects-strip", group.id)}
 						group={group}
@@ -3707,8 +3714,9 @@ export function Workbench({
 						onNewChat={onNewChat}
 						renderCenterActions={renderCenterActions}
 					/>
-				))
-			: null;
+				))}
+			</WorktreePathContext.Provider>
+		) : null;
 	const alignedWidth = Math.max(Number.EPSILON, projectedAlignedWidth);
 	const alignedSideMinimum = Math.min(100, (8 / alignedWidth) * 100);
 	const alignedCenterMinimum = Math.min(100, (centerMinimumPercent / alignedWidth) * 100);
@@ -3969,7 +3977,9 @@ export function Workbench({
 									targetIndex={document.left.groups.length}
 								/>
 							) : null}
-							{workbenchColumns}
+							<WorktreePathContext.Provider value={worktreePath}>
+								{workbenchColumns}
+							</WorktreePathContext.Provider>
 							{!rightVisible ? (
 								<HiddenSideRail
 									side="right"

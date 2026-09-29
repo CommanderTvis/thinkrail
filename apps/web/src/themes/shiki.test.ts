@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
+import { THINKRAIL_SHIKI_THEME, THINKRAIL_SHIKI_THEME_NAME } from "@thinkrail/plugin-ui/markdown";
 import { createHighlighterCore } from "shiki/core";
 import { createJavaScriptRegexEngine } from "shiki/engine/javascript";
-import { THINKRAIL_SHIKI_THEME, THINKRAIL_SHIKI_THEME_NAME } from "@/chat/shikiTheme";
 import { SYNTAX_VARIABLES } from "./runtime";
 
 test("the TextMate map references exactly the semantic syntax variables", () => {

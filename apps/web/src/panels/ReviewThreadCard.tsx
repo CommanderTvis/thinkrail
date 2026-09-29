@@ -1,11 +1,11 @@
 import { RiSendPlaneLine as Send, RiDeleteBin6Line as Trash2 } from "@remixicon/react";
-import { useEffect, useRef, useState } from "react";
-import { IconTooltip } from "@/components/ui/tooltip";
+import { IconTooltip } from "@thinkrail/plugin-ui";
 import {
 	type ReviewThreadActions,
 	type ReviewThreadData,
 	threadLabel,
-} from "@/panels/reviewWidgets";
+} from "@thinkrail/plugin-ui/editor";
+import { useEffect, useRef, useState } from "react";
 
 function grow(el: HTMLTextAreaElement): void {
 	el.style.height = "auto";

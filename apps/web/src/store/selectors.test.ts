@@ -27,6 +27,7 @@ import {
 	selectProjectIsRunning,
 	selectProjectNeedsAttention,
 	selectReadyCompletionActivation,
+	selectShownTerminalKeys,
 	selectSkillsStale,
 	selectWorkspaceIsRunning,
 	selectWorkspaceNeedsAttention,
@@ -281,6 +282,104 @@ test("layout placement lookup traverses recursive center and every auxiliary reg
 	expect(selectAttentionCenterResourceCacheKey(state, "ws")).toBe("file:a");
 	state.tabsByWorkspace.ws[0] = { ...cachedResource, id: "legacy-file-placement" };
 	expect(selectAttentionCenterResourceCacheKey(state, "ws")).toBe("legacy-file-placement");
+});
+
+test("the terminals shown are listed focused centre group first, then the bottom dock, then the rest", () => {
+	const terminal = (id: string, tabKey: string) => ({
+		kind: "terminal" as const,
+		id,
+		name: tabKey,
+		tabKey,
+	});
+	const layout: WorkspaceLayoutDocument = {
+		version: 2,
+		center: {
+			kind: "group",
+			id: "center",
+			tabs: [
+				{ kind: "file", id: "file", name: "a", path: "a" },
+				terminal("center-terminal", "centre"),
+			],
+		},
+		left: { visible: false, width: 0, groups: [] },
+		right: { visible: false, width: 0, groups: [] },
+		bottom: {
+			visible: true,
+			height: 0,
+			groups: [
+				{ id: "bottom", weight: 1, folded: false, tabs: [terminal("bottom-terminal", "dock")] },
+			],
+		},
+		toolRestoreTargets: {},
+	};
+	const attention = (selected: string) => ({
+		selectedByGroup: { center: selected },
+		lastFocusedCenterGroupId: "center",
+		lastFocusedSideGroupId: {},
+		navigationClockByGroup: { center: 0 },
+	});
+	const state = (selected: string, known: string[]) => ({
+		layoutDocumentsByWorkspace: { ws: layout },
+		layoutAttentionByWorkspace: { ws: attention(selected) },
+		tabsByWorkspace: {},
+		terminalsByWorkspace: {
+			ws: known.map((tabKey) => ({ tabKey, workspaceId: "ws", title: tabKey })),
+		},
+	});
+	expect(selectShownTerminalKeys(state("center-terminal", ["centre", "dock"]), "ws")).toEqual([
+		"centre",
+		"dock",
+	]);
+	expect(selectShownTerminalKeys(state("file", ["centre", "dock"]), "ws")).toEqual(["dock"]);
+	expect(selectShownTerminalKeys(state("file", []), "ws")).toEqual([]);
+	expect(selectShownTerminalKeys(state("file", ["centre", "dock"]), "elsewhere")).toEqual([]);
+});
+
+test("a group holding one terminal is shown even when focus is in another group", () => {
+	const layout: WorkspaceLayoutDocument = {
+		version: 2,
+		center: {
+			kind: "split",
+			id: "split",
+			direction: "row",
+			ratio: 0.5,
+			children: [
+				{
+					kind: "group",
+					id: "shell-group",
+					tabs: [{ kind: "terminal", id: "shell-tab", name: "zsh", tabKey: "shell" }],
+				},
+				{
+					kind: "group",
+					id: "claude-group",
+					tabs: [{ kind: "terminal", id: "claude-tab", name: "Claude", tabKey: "claude" }],
+				},
+			],
+		},
+		left: { visible: false, width: 0, groups: [] },
+		right: { visible: false, width: 0, groups: [] },
+		bottom: { visible: false, height: 0, groups: [] },
+		toolRestoreTargets: {},
+	};
+	const state = {
+		layoutDocumentsByWorkspace: { ws: layout },
+		layoutAttentionByWorkspace: {
+			ws: {
+				selectedByGroup: {},
+				lastFocusedCenterGroupId: "shell-group",
+				lastFocusedSideGroupId: {},
+				navigationClockByGroup: {},
+			},
+		},
+		tabsByWorkspace: {},
+		terminalsByWorkspace: {
+			ws: [
+				{ tabKey: "shell", workspaceId: "ws", title: "zsh" },
+				{ tabKey: "claude", workspaceId: "ws", title: "Claude" },
+			],
+		},
+	};
+	expect(selectShownTerminalKeys(state, "ws")).toEqual(["shell", "claude"]);
 });
 
 test("registered documents participate in legacy selection readiness", () => {

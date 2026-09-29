@@ -1,15 +1,15 @@
 import type { TemplateInfo, TemplateScope } from "@thinkrail/contracts";
-import type { ReactNode } from "react";
-import { useEffect, useState } from "react";
-import { Button } from "@/components/ui/button";
 import {
+	Button,
 	Dialog,
 	DialogContent,
 	DialogFooter,
 	DialogHeader,
 	DialogTitle,
-} from "@/components/ui/dialog";
-import { Textarea } from "@/components/ui/textarea";
+	Textarea,
+} from "@thinkrail/plugin-ui";
+import type { ReactNode } from "react";
+import { useEffect, useState } from "react";
 import { cn } from "@/lib";
 import { assembleTemplate, stripFrontmatter } from "@/prompt";
 import { useAppStore } from "@/store";

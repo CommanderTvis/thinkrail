@@ -19,15 +19,15 @@ import {
 	RiDeleteBin6Line as Trash2,
 } from "@remixicon/react";
 import type { ReviewComment, TodoGroupItem, TodoItem } from "@thinkrail/contracts";
-import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
 	DropdownMenuItem,
 	DropdownMenuSeparator,
 	DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { IconTooltip } from "@/components/ui/tooltip";
+	IconTooltip,
+} from "@thinkrail/plugin-ui";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { AskStatesContext, deriveAskStates } from "../chat/askState";
 import { type ChatActions, ChatActionsContext } from "../chat/ChatActions";
 import { Markdown } from "../chat/Markdown";

@@ -1,7 +1,7 @@
 import { RiCheckLine as Check, RiArrowDownSLine as ChevronDown } from "@remixicon/react";
 import type { ThinkingLevel } from "@thinkrail/contracts";
+import { Popover, PopoverContent, PopoverTrigger } from "@thinkrail/plugin-ui";
 import { useState } from "react";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib";
 
 export function ThinkingSelector({

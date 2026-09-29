@@ -8,7 +8,7 @@ import { ClipboardAddon } from "@xterm/addon-clipboard";
 import { FitAddon } from "@xterm/addon-fit";
 import { Unicode11Addon } from "@xterm/addon-unicode11";
 import { WebFontsAddon } from "@xterm/addon-web-fonts";
-import { type ITheme, Terminal as XTerm } from "@xterm/xterm";
+import { type IBufferCell, type IBufferLine, type ITheme, Terminal as XTerm } from "@xterm/xterm";
 import {
 	type ForwardedRef,
 	forwardRef,
@@ -19,8 +19,9 @@ import {
 	useState,
 } from "react";
 import "@xterm/xterm/css/xterm.css";
+import type { TerminalAccessoryApi } from "@thinkrail/plugin-api/web";
+import { Button } from "@thinkrail/plugin-ui";
 import { type QuietScrollEdges, QuietScrollFrame } from "@/components/QuietScrollArea";
-import { Button } from "@/components/ui/button";
 import { carriesFileDrag, cssColorToHex, draggedFile, shellQuotePath } from "@/lib";
 import { tupleKey } from "@/lib/utils";
 import { SettingsSection, selectWorkspaceById, useAppStore } from "../store";
@@ -42,12 +43,28 @@ function sendTerminalWrite(send: Promise<unknown>): void {
 
 const PICKER_TAIL_LINES = 48;
 
-function terminalTail(term: XTerm, tailLines: number = PICKER_TAIL_LINES): string[] {
+function withoutFaint(line: IBufferLine, cell: IBufferCell): string {
+	let text = "";
+	for (let x = 0; x < line.length; x++) {
+		line.getCell(x, cell);
+		if (cell.getWidth() === 0) continue;
+		text += cell.isDim() ? " " : cell.getChars() || " ";
+	}
+	return text.trimEnd();
+}
+
+function terminalTail(
+	term: XTerm,
+	tailLines: number = PICKER_TAIL_LINES,
+	omitFaint = false,
+): string[] {
 	const buffer = term.buffer.active;
 	const start = Math.max(0, buffer.length - tailLines);
+	const cell = buffer.getNullCell();
 	const lines: string[] = [];
 	for (let i = start; i < buffer.length; i++) {
-		lines.push(buffer.getLine(i)?.translateToString(true) ?? "");
+		const line = buffer.getLine(i);
+		lines.push(!line ? "" : omitFaint ? withoutFaint(line, cell) : line.translateToString(true));
 	}
 	return lines;
 }
@@ -129,11 +146,10 @@ interface Props {
 	initialCommand?: string;
 }
 
-export interface TerminalInstanceHandle {
-	write(data: string): void;
-	bufferTail(lines: number): string[];
-	setKeyEncoding(mode: "default" | "agent-newline"): void;
-}
+export type TerminalInstanceHandle = Pick<
+	TerminalAccessoryApi,
+	"write" | "bufferTail" | "setKeyEncoding"
+>;
 
 function TerminalInstance(
 	{ tabKey, workspaceId, initialCommand }: Props,
@@ -155,9 +171,9 @@ function TerminalInstance(
 				const id = serverIdRef.current;
 				if (id) sendTerminalWrite(getTransport().request("terminal.write", { id, data }));
 			},
-			bufferTail(lines) {
+			bufferTail(lines, options) {
 				const term = termRef.current;
-				return term ? terminalTail(term, lines) : [];
+				return term ? terminalTail(term, lines, options?.omitFaint) : [];
 			},
 			setKeyEncoding(mode) {
 				keyEncodingRef.current = mode;
@@ -371,7 +387,7 @@ function TerminalInstance(
 			prebind = attemptPrebind;
 			void getTransport()
 				.request("terminal.attach", { workspaceId, tabKey, ...spawnedAt })
-				.then(({ id, created, replay }) => {
+				.then(({ id, created, replay, prefill, prefillSubmit }) => {
 					if (disposed) return;
 					if (attachGeneration !== startedAt || prebind !== attemptPrebind) {
 						attemptPrebind.stop();
@@ -414,6 +430,16 @@ function TerminalInstance(
 						}
 						if (buffered.exit) handleExit(buffered.exit);
 						applyFit();
+						// Typed, never submitted: the user decides whether to spend a resume — unless the
+						// surface that owns this terminal promised to bring its agent back. See SPEC.md.
+						if (prefill && serverIdRef.current === id) {
+							sendTerminalWrite(
+								getTransport().request("terminal.write", {
+									id,
+									data: prefillSubmit ? `${prefill}\r` : prefill,
+								}),
+							);
+						}
 						if (created && serverIdRef.current === id && initialCommandRef.current) {
 							sendTerminalWrite(
 								getTransport().request("terminal.write", {

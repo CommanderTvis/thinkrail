@@ -1,14 +1,14 @@
 import { RiFileTransferLine as FileSymlink } from "@remixicon/react";
+import { pluginMethodName } from "@thinkrail/plugin-api";
+import { OutlineColumn, OutlineToggle, scrollToHeading, ToggleSegment } from "@thinkrail/plugin-ui";
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { abbreviateHomePath, isMarkdownPath } from "@/lib/utils";
-import { OutlineColumn, OutlineToggle, scrollToHeading } from "@/panels/Outline";
-import { ToggleSegment } from "@/panels/ToggleSegment";
 import { EmbeddedSplit } from "../components/EmbeddedSplit";
 import { LoadingRegion } from "../components/Skeleton";
+import { selectFileViewer, usePluginRegistry } from "../plugins/registry";
 import type { ExternalFileTab, FileTab } from "../store";
 import { useAppStore } from "../store";
 import { getTransport, wsErrorCode } from "../transport";
-import { coreViewerFor } from "./coreViewers";
 import { isFileTabDirty, mergeDiskIntoDraft, saveFileTab } from "./fileSave";
 import { jsonKeyLine } from "./jsonKeyLine";
 import { type HeadingEntry, sourceHeadings } from "./outlineTree";
@@ -16,6 +16,8 @@ import { reviewFlagFor } from "./reviewModel";
 import { SendReviewButton } from "./SendReviewButton";
 import { useLiveTabContent } from "./useLiveTabContent";
 import { useFileReview } from "./useReviewCommenting";
+
+const CLAUDE_CODE_ID = "claude-code";
 
 const MonacoEditor = lazy(() => import("./MonacoEditor"));
 const MarkdownPreview = lazy(() => import("./MarkdownPreview"));
@@ -34,7 +36,7 @@ function FilePaneBody({ tab }: { tab: FileTab | ExternalFileTab }) {
 	);
 
 	const external = tab.kind === "external-file";
-	const viewer = coreViewerFor(tab.path);
+	const viewer = tab.raw ? null : usePluginRegistry((state) => selectFileViewer(state, tab.path));
 	const binary = !external && viewer?.read === "none";
 	const clearFocus = useCallback(() => useAppStore.getState().clearFileFocus(tab.path), [tab.path]);
 	const buffer = tab.draft ?? tab.content;
@@ -71,10 +73,10 @@ function FilePaneBody({ tab }: { tab: FileTab | ExternalFileTab }) {
 			binary
 				? Promise.resolve({ content: "", hash: "" })
 				: (
-						getTransport().request("fs.readFile", {
-							workspaceId: tab.workspaceId,
-							path: tab.path,
-						}) as Promise<{ content: string; hash: string }>
+						getTransport().request(
+							external ? pluginMethodName(CLAUDE_CODE_ID, "readFile") : "fs.readFile",
+							{ workspaceId: tab.workspaceId, path: tab.path },
+						) as Promise<{ content: string; hash: string }>
 					).then(
 						(fresh) => {
 							if (deleted) setFileTabDeleted(tab.workspaceId, tab.id, false);
@@ -189,7 +191,12 @@ function FilePaneBody({ tab }: { tab: FileTab | ExternalFileTab }) {
 		const Viewer = viewer.component;
 		return (
 			<Suspense fallback={loading}>
-				<Viewer workspaceId={tab.workspaceId} path={tab.path} revision={byteRevision} />
+				<Viewer
+					key={viewer.pluginId}
+					workspaceId={tab.workspaceId}
+					path={tab.path}
+					revision={byteRevision}
+				/>
 			</Suspense>
 		);
 	}

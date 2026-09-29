@@ -3,13 +3,17 @@ import {
 	RiFileCopyLine as Copy,
 	RiParagraph as Pilcrow,
 } from "@remixicon/react";
+import {
+	IconTooltip,
+	OutlineColumn,
+	OutlineToggle,
+	scrollToHeading,
+	ToggleSegment,
+} from "@thinkrail/plugin-ui";
+import { editorFontSize } from "@thinkrail/plugin-ui/editor";
 import { lazy, Suspense, useState } from "react";
-import { IconTooltip } from "@/components/ui/tooltip";
 import { useElementSize } from "@/lib";
 import { copyText, isMarkdownPath } from "@/lib/utils";
-import { editorFontSize } from "@/panels/editorFont";
-import { OutlineColumn, OutlineToggle, scrollToHeading } from "@/panels/Outline";
-import { ToggleSegment } from "@/panels/ToggleSegment";
 import { LoadingRegion } from "../components/Skeleton";
 import type { DiffTab } from "../store";
 import { selectDiffTabTargetRef, useAppStore } from "../store";

@@ -9,6 +9,7 @@ import {
 	type RemixiconComponentType as LucideIcon,
 	RiChat2Line as MessageSquareText,
 	RiPaletteLine as Palette,
+	RiPuzzle2Line as Puzzle,
 	RiSearchEyeLine as ScanEye,
 	RiShieldCheckLine as ShieldCheck,
 	RiEqualizerLine as SlidersHorizontal,
@@ -16,9 +17,10 @@ import {
 	RiTextWrap as TextWrap,
 } from "@remixicon/react";
 import { DEFAULT_MODEL_PROTOCOL_VERSION } from "@thinkrail/contracts";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@thinkrail/plugin-ui";
 import type { ComponentType, ReactNode } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib";
+import { selectSettingsSections, usePluginRegistry } from "@/plugins/registry";
 import { SettingsSection, useAppStore } from "@/store";
 import { AppearanceSettings } from "./AppearanceSettings";
 import { ChatSettings } from "./ChatSettings";
@@ -26,13 +28,14 @@ import { FeedbackSettings } from "./FeedbackSettings";
 import { GithubSettings } from "./GithubSettings";
 import { LineWidthSettings } from "./LineWidthSettings";
 import { ModelsSettings } from "./ModelsSettings";
+import { PluginsSettings } from "./PluginsSettings";
 import { PrivacySettings } from "./PrivacySettings";
 import { ProvidersSettings } from "./ProvidersSettings";
 import { ReviewSettings } from "./ReviewSettings";
 import { TemplatesSettings } from "./TemplatesSettings";
 import { TerminalSettings } from "./TerminalSettings";
 
-type SectionIcon = ComponentType<{ className?: string | undefined }>;
+type SectionIcon = LucideIcon | ComponentType<{ className?: string }>;
 
 const CORE_SECTIONS: {
 	id: SettingsSection;
@@ -63,6 +66,7 @@ const CORE_SECTIONS: {
 	{ id: SettingsSection.Templates, label: "Templates", icon: LayoutTemplate },
 	{ id: SettingsSection.Review, label: "Review", icon: ScanEye },
 	{ id: SettingsSection.Privacy, label: "Privacy", icon: ShieldCheck },
+	{ id: SettingsSection.Plugins, label: "Plugins", icon: Puzzle },
 	{ id: SettingsSection.Feedback, label: "Feedback", icon: Feedback },
 ];
 const SOON: { label: string; icon: LucideIcon }[] = [{ label: "General", icon: SlidersHorizontal }];
@@ -77,9 +81,19 @@ const CORE_CONTENT: Partial<Record<SettingsSection, () => ReactNode>> = {
 	[SettingsSection.Templates]: () => <TemplatesSettings />,
 	[SettingsSection.Review]: () => <ReviewSettings />,
 	[SettingsSection.Privacy]: () => <PrivacySettings />,
+	[SettingsSection.Plugins]: () => <PluginsSettings />,
 	[SettingsSection.Feedback]: () => <FeedbackSettings />,
 	[SettingsSection.Appearance]: () => <AppearanceSettings />,
 };
+
+function PluginSettingsSection({ id }: { id: string }) {
+	const registration = usePluginRegistry((s) =>
+		selectSettingsSections(s).find((candidate) => candidate.pluginId === id),
+	);
+	if (!registration) return null;
+	const Content = registration.value.component;
+	return <Content />;
+}
 
 export function SettingsDialog({
 	layoutSettings,
@@ -91,17 +105,40 @@ export function SettingsDialog({
 	const open = useAppStore((s) => s.settingsOpen);
 	const section = useAppStore((s) => s.settingsSection);
 	const protocolVersion = useAppStore((s) => s.protocolVersion);
-	const sections = [
-		...CORE_SECTIONS.filter(
-			(candidate) =>
-				(!candidate.requiresInjectedContent || updateSettings !== undefined) &&
-				(candidate.requiresProtocolVersion === undefined ||
-					(protocolVersion !== null && protocolVersion >= candidate.requiresProtocolVersion)),
-		),
-	];
-	const selectedSection = sections.some((candidate) => candidate.id === section)
-		? section
-		: SettingsSection.Appearance;
+	const pluginSections = usePluginRegistry(selectSettingsSections);
+	const sections = CORE_SECTIONS.filter(
+		(candidate) =>
+			(!candidate.requiresInjectedContent || updateSettings !== undefined) &&
+			(candidate.requiresProtocolVersion === undefined ||
+				(protocolVersion !== null && protocolVersion >= candidate.requiresProtocolVersion)),
+	);
+	const selectedSection =
+		sections.some((candidate) => candidate.id === section) ||
+		pluginSections.some((registration) => registration.pluginId === section)
+			? section
+			: SettingsSection.Appearance;
+
+	function sectionButton(id: string, label: string, Icon: SectionIcon) {
+		const active = selectedSection === id;
+		return (
+			<button
+				key={id}
+				type="button"
+				data-testid={`settings-nav-${id}`}
+				data-active={active}
+				onClick={() => useAppStore.getState().setSettingsSection(id)}
+				className={cn(
+					"flex shrink-0 items-center gap-8 rounded-[var(--radius-sm)] px-12 py-8 text-left tr-text-ui outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary",
+					active
+						? "bg-primary-subtle text-primary"
+						: "text-text-muted hover:bg-control-bg-hovered hover:text-text-default",
+				)}
+			>
+				<Icon className="size-16 shrink-0" />
+				{label}
+			</button>
+		);
+	}
 
 	return (
 		<Dialog
@@ -131,27 +168,28 @@ export function SettingsDialog({
 						aria-label="Settings sections"
 						className="flex shrink-0 gap-4 overflow-x-auto border-border-default border-b p-8 md:w-[192px] md:flex-col md:gap-2 md:overflow-x-visible md:overflow-y-auto md:border-r md:border-b-0 md:bg-container-elevated-bg md:p-12"
 					>
-						{sections.map(({ id, label, icon: Icon }) => {
-							const active = selectedSection === id;
-							return (
-								<button
+						{sections.map(({ id, label, icon }) =>
+							id === SettingsSection.Plugins ? (
+								<fieldset
 									key={id}
-									type="button"
-									data-testid={`settings-nav-${id}`}
-									data-active={active}
-									onClick={() => useAppStore.getState().setSettingsSection(id)}
-									className={cn(
-										"flex shrink-0 items-center gap-8 rounded-[var(--radius-sm)] px-12 py-8 text-left tr-text-ui outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary",
-										active
-											? "bg-primary-subtle text-primary"
-											: "text-text-muted hover:bg-control-bg-hovered hover:text-text-default",
-									)}
+									aria-label="Plugins"
+									className="flex min-w-0 shrink-0 gap-4 md:flex-col md:gap-2"
 								>
-									<Icon className="size-16 shrink-0" />
-									{label}
-								</button>
-							);
-						})}
+									{sectionButton(id, label, icon)}
+									<div className="flex gap-4 md:ml-16 md:flex-col md:gap-2 md:border-border-default md:border-l md:pl-4">
+										{pluginSections.map((registration) =>
+											sectionButton(
+												registration.pluginId,
+												registration.value.label,
+												registration.value.icon,
+											),
+										)}
+									</div>
+								</fieldset>
+							) : (
+								sectionButton(id, label, icon)
+							),
+						)}
 						{SOON.map(({ label, icon: Icon }) => (
 							<span
 								key={label}
@@ -171,7 +209,9 @@ export function SettingsDialog({
 							? layoutSettings
 							: selectedSection === SettingsSection.Updates && updateSettings !== undefined
 								? updateSettings
-								: (CORE_CONTENT[selectedSection]?.() ?? null)}
+								: (CORE_CONTENT[selectedSection]?.() ?? (
+										<PluginSettingsSection id={selectedSection} />
+									))}
 					</div>
 				</div>
 			</DialogContent>

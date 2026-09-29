@@ -4,18 +4,19 @@ import {
 	type DiffOnMount,
 	type MonacoDiffEditor,
 } from "@monaco-editor/react";
-import type { editor } from "monaco-editor";
-import { useCallback, useEffect, useRef } from "react";
-import { decorateEditorContextMenus } from "@/panels/monacoMenuIcons";
 import {
+	applyReviewDecorations,
+	attachReviewCommenting,
+	attachReviewThreads,
+	decorateEditorContextMenus,
 	defineThinkrailTheme,
 	languageForPath,
 	sharedEditorOptions,
 	THEME,
 	watchThemeSwap,
-} from "@/panels/monacoSetup";
-import { applyReviewDecorations } from "@/panels/reviewGutter";
-import { attachReviewCommenting, attachReviewThreads } from "@/panels/reviewWidgets";
+} from "@thinkrail/plugin-ui/editor";
+import type { editor } from "monaco-editor";
+import { useCallback, useEffect, useRef } from "react";
 import { LoadingRegion } from "../components/Skeleton";
 import { useAppStore } from "../store";
 import type { EditorReview, SideReview } from "./useReviewCommenting";

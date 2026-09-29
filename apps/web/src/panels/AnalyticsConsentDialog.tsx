@@ -1,13 +1,13 @@
-import { useEffect, useRef, useState } from "react";
-import { Button } from "@/components/ui/button";
 import {
+	Button,
 	Dialog,
 	DialogContent,
 	DialogDescription,
 	DialogFooter,
 	DialogHeader,
 	DialogTitle,
-} from "@/components/ui/dialog";
+} from "@thinkrail/plugin-ui";
+import { useEffect, useRef, useState } from "react";
 import { ANALYTICS_DESCRIPTION, AnalyticsSharingSwitch } from "./AnalyticsPreferences";
 import { useAnalyticsConsent } from "./useAnalyticsConsent";
 
@@ -25,7 +25,7 @@ export function AnalyticsConsentDialog() {
 	return (
 		<Dialog
 			open
-			onOpenChange={(open) => {
+			onOpenChange={(open: boolean) => {
 				if (!open) save(draft);
 			}}
 		>

@@ -8,6 +8,7 @@ import {
 	RiCloseLine as X,
 } from "@remixicon/react";
 import type { ComposerGrowthLimit, ThinkingLevel, WireModel } from "@thinkrail/contracts";
+import { Popover, PopoverContent, PopoverTrigger } from "@thinkrail/plugin-ui";
 import {
 	type DragEvent,
 	forwardRef,
@@ -20,7 +21,6 @@ import {
 	useState,
 } from "react";
 import { FileTypeIcon } from "@/components/FileTypeIcon";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn, draggedFile } from "@/lib";
 import {
 	applyTemplateSlotEdit,

@@ -1,9 +1,9 @@
 import type { ModelDefault, ThinkingLevel, WireModel } from "@thinkrail/contracts";
+import { Button } from "@thinkrail/plugin-ui";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ModelSelector } from "@/chat/ModelSelector";
 import { ThinkingSelector } from "@/chat/ThinkingSelector";
 import { useModelCatalog } from "@/chat/useModelCatalog";
-import { Button } from "@/components/ui/button";
 import { toast, useAppStore } from "@/store";
 import { getTransport } from "@/transport";
 

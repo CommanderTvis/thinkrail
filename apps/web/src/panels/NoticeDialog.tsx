@@ -1,14 +1,14 @@
 import { RiAlertLine as TriangleAlert } from "@remixicon/react";
-import type { ReactNode } from "react";
-import { Button } from "@/components/ui/button";
 import {
+	Button,
 	Dialog,
 	DialogContent,
 	DialogDescription,
 	DialogFooter,
 	DialogHeader,
 	DialogTitle,
-} from "@/components/ui/dialog";
+} from "@thinkrail/plugin-ui";
+import type { ReactNode } from "react";
 
 export function NoticeDialog({
 	open,

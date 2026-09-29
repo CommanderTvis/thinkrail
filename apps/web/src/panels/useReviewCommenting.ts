@@ -1,11 +1,11 @@
 import type { GitDiffScope, ReviewAnchor } from "@thinkrail/contracts";
-import { useMemo } from "react";
-import type { LineSelection } from "@/panels/reviewGutter";
 import type {
+	LineSelection,
 	ReviewCommentingCallbacks,
 	ReviewThreadActions,
 	ReviewThreadData,
-} from "@/panels/reviewWidgets";
+} from "@thinkrail/plugin-ui/editor";
+import { useMemo } from "react";
 import { toast, useAppStore } from "../store";
 import { errorText, getTransport } from "../transport";
 import { fileThreads } from "./reviewModel";

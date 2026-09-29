@@ -15,8 +15,8 @@ import {
 	RiUser3Line as UserRound,
 } from "@remixicon/react";
 import type { TodoGroupItem, TodoItem, TodoPlan, TodoStatus } from "@thinkrail/contracts";
+import { IconTooltip } from "@thinkrail/plugin-ui";
 import { useState } from "react";
-import { IconTooltip } from "@/components/ui/tooltip";
 import { cn } from "../lib";
 import { PlanStatusIcon, SectionLabel } from "./planKit";
 import {

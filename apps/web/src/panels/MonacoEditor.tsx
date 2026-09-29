@@ -1,8 +1,8 @@
+import type { EditorReview } from "@thinkrail/plugin-ui/editor";
 import {
 	type EditorSelectionChange,
 	MonacoEditor as KitMonacoEditor,
-} from "@/panels/MonacoEditorBase";
-import type { EditorReview } from "@/panels/reviewTypes";
+} from "@thinkrail/plugin-ui/editor";
 import { LoadingRegion } from "../components/Skeleton";
 import { useAppStore } from "../store";
 import { reportIdeDocumentClosed } from "../transport";
@@ -61,18 +61,24 @@ export default function MonacoEditor({
 					endColumn,
 					text,
 				} = change;
-				useAppStore
-					.getState()
-					.setEditorSelection(
-						ws,
-						change.empty ? null : { text, startLine, endLine, language: change.language, path: p },
-					);
+				useAppStore.getState().setEditorSelection(
+					ws,
+					change.empty
+						? null
+						: {
+								text,
+								startLine,
+								endLine: endColumn === 1 && endLine > startLine ? endLine - 1 : endLine,
+								language: change.language,
+								path: p,
+							},
+				);
 				const ref = findEditorRef(ws, p);
 				if (ref) {
 					emitEditorEvent({
 						kind: "selection",
 						editor: ref,
-						selection: change.empty ? null : { startLine, startColumn, endLine, endColumn, text },
+						selection: { startLine, startColumn, endLine, endColumn, text },
 					});
 				}
 			}}

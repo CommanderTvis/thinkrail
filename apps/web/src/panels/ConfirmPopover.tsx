@@ -1,7 +1,6 @@
 import { RiAlertLine as TriangleAlert } from "@remixicon/react";
+import { Button, Popover, PopoverContent } from "@thinkrail/plugin-ui";
 import { type ComponentProps, type ReactNode, useId } from "react";
-import { Button } from "@/components/ui/button";
-import { Popover, PopoverContent } from "@/components/ui/popover";
 
 export function ConfirmPopover({
 	open,

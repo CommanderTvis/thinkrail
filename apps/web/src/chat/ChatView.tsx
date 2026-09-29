@@ -10,6 +10,18 @@ import type {
 	WireModel,
 } from "@thinkrail/contracts";
 import {
+	Button,
+	Dialog,
+	DialogContent,
+	DialogDescription,
+	DialogFooter,
+	DialogTitle,
+	Popover,
+	PopoverAnchor,
+	PopoverContent,
+	PopoverTrigger,
+} from "@thinkrail/plugin-ui";
+import {
 	type RefCallback,
 	useCallback,
 	useEffect,
@@ -19,16 +31,8 @@ import {
 	useState,
 } from "react";
 import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
-import { Button } from "@/components/ui/button";
-import {
-	Dialog,
-	DialogContent,
-	DialogDescription,
-	DialogFooter,
-	DialogTitle,
-} from "@/components/ui/dialog";
-import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn, selectionLines, selectionQuote } from "@/lib";
+import { selectSlot, usePluginRegistry } from "@/plugins/registry";
 import { type ParsedTemplate, templateToSlashCommand, useTemplateCommandPicker } from "@/prompt";
 import {
 	EMPTY_RUNTIME,
@@ -245,13 +249,18 @@ export default function ChatView({
 	}, [workspaces]);
 	const specNodes = useAppStore((s) => s.specsByWorkspace[workspaceId]);
 	const isSpec = useMemo(() => specPathMatcher(specNodes ?? []), [specNodes]);
+	const writtenPathGroupSlots = usePluginRegistry((s) => selectSlot(s, "writtenPathGroup"));
 	const groupFor = useCallback<WrittenPathGroupResolver>(
 		(toolName, path) => {
+			for (const resolve of writtenPathGroupSlots) {
+				const group = resolve(workspaceId, path);
+				if (group) return group;
+			}
 			return toolName === "spec_create" || isSpec(path)
 				? { id: "specs", label: (n) => `${n} ${n === 1 ? "spec" : "specs"}`, tool: "specs" }
 				: null;
 		},
-		[isSpec],
+		[writtenPathGroupSlots, workspaceId, isSpec],
 	);
 	const {
 		turns,

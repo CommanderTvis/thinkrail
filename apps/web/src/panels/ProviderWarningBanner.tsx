@@ -1,7 +1,7 @@
 import { RiAlertLine as TriangleAlert } from "@remixicon/react";
 import { hasConnectedProvider } from "@thinkrail/contracts";
+import { Button } from "@thinkrail/plugin-ui";
 import { useCallback, useEffect, useState } from "react";
-import { Button } from "@/components/ui/button";
 import { useAppStore } from "@/store";
 import { getTransport } from "@/transport";
 

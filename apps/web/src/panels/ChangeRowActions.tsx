@@ -4,14 +4,14 @@ import {
 	RiFileScanLine as FileDiff,
 	RiPencilLine as Pencil,
 } from "@remixicon/react";
-import type { MouseEvent, ReactNode } from "react";
-import { useState } from "react";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
 	DropdownMenuItem,
 	DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+} from "@thinkrail/plugin-ui";
+import type { MouseEvent, ReactNode } from "react";
+import { useState } from "react";
 import { copyText } from "@/lib";
 
 export const ROW_MENU_SLOT = "mr-4 size-20 shrink-0";

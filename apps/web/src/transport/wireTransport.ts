@@ -4,6 +4,7 @@ import type {
 	ExtUiRequest,
 	HostUpdateNotice,
 	LoginPush,
+	PluginRosterEntry,
 	Project,
 	ReviewChangedPayload,
 	ServerWelcome,
@@ -173,6 +174,7 @@ export function initTransport(): WsTransport {
 					: undefined,
 				welcome.hostUpdate,
 			);
+		if (Array.isArray(welcome.plugins)) useAppStore.getState().applyPluginRoster(welcome.plugins);
 		const connectionGeneration = useAppStore.getState().connectionGeneration;
 		refreshLoadedWorkspaceLists(connectionGeneration);
 		if (welcome.protocolVersion >= SESSION_STATE_PROTOCOL_VERSION) {
@@ -279,6 +281,10 @@ export function initTransport(): WsTransport {
 
 	transport.subscribe(WS_CHANNELS.settingsChanged, (data) => {
 		useAppStore.getState().applyConfig(data as AppConfig);
+	});
+
+	transport.subscribe(WS_CHANNELS.pluginsChanged, (data) => {
+		useAppStore.getState().applyPluginRoster(data as PluginRosterEntry[]);
 	});
 
 	transport.connect();

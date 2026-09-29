@@ -1,6 +1,6 @@
 import { RiFileAddLine as FilePlus } from "@remixicon/react";
-import { CodeBlock } from "@/chat/tools/CodeBlock";
-import { ToolFileLink } from "@/chat/tools/ToolFileLink";
+import { ToolFileLink } from "@thinkrail/plugin-ui";
+import { CodeBlock } from "@thinkrail/plugin-ui/markdown";
 import type { ToolRenderProps } from "../toolRegistry";
 import { Collapsible, countLines } from "./Collapsible";
 import { languageFromPath, resultText, strArg } from "./toolHelpers";

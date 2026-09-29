@@ -5,7 +5,10 @@
 @import "./styles/generated/spacing.css";
 @import "./styles/tokens.css";
 @import "./styles/global.css";
-@import "./styles/tooltip.css";
+@import "@thinkrail/plugin-ui/tokens.css";
+
+@source "../../../packages/plugin-ui/src";
+@source "../../../packages/plugin-*/web/**";
 
 /*
  * Map the ThinkRail design tokens (tokens.css) onto Tailwind's theme namespaces. `inline` makes the

@@ -1,28 +1,7 @@
+import type { EditorEvent, EditorRef } from "@thinkrail/plugin-api/web";
 import type { EditorTab } from "../store";
 import { useAppStore } from "../store";
 import { isFileTabDirty } from "./fileSave";
-
-export interface EditorRef {
-	id: string;
-	workspaceId: string;
-	path: string;
-	kind: "file" | "external-file" | "diff";
-	dirty: boolean;
-}
-
-export type EditorEvent =
-	| { kind: "opened" | "closed" | "activated" | "saved"; editor: EditorRef }
-	| {
-			kind: "selection";
-			editor: EditorRef;
-			selection: {
-				startLine: number;
-				startColumn: number;
-				endLine: number;
-				endColumn: number;
-				text: string;
-			} | null;
-	  };
 
 type EditorEventHandler = (event: EditorEvent) => void;
 

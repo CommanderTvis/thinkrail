@@ -1,4 +1,5 @@
 import type { GitDiffScope } from "@thinkrail/contracts";
+import { pluginMethodName } from "@thinkrail/plugin-api";
 import type { LayoutOpenOptions } from "@/store";
 import {
 	DOUBLE_CLICK_SETTLE_MS,
@@ -7,6 +8,7 @@ import {
 	projectRelativePath,
 	tupleKey,
 } from "../lib";
+import { selectFileViewer, usePluginRegistry } from "../plugins/registry";
 import {
 	type CenterNavigationStamp,
 	type EditorTab,
@@ -21,8 +23,9 @@ import {
 } from "../store";
 import { getTransport } from "../transport";
 import { diffTabId, diffTabName } from "./changesModel";
-import { coreViewerFor } from "./coreViewers";
 import { emitEditorEvent, findEditorRef } from "./editorEvents";
+
+const CLAUDE_CODE_ID = "claude-code";
 
 function baseName(path: string): string {
 	return path.split("/").pop() || path;
@@ -159,18 +162,20 @@ export function openFileInTab(
 	intent: TabIntent,
 	requestedNavigation?: CenterNavigationStamp | null,
 	extraOptions?: Partial<LayoutOpenOptions>,
-	_viewerOptions?: { raw?: boolean },
+	viewerOptions?: { raw?: boolean },
 ): Promise<void> {
 	const path = projectRelativePath(
 		reported,
 		selectWorkspaceById(useAppStore.getState(), workspaceId)?.worktreePath,
 	);
+	const viewer = viewerOptions?.raw ? null : selectFileViewer(usePluginRegistry.getState(), path);
+	if (viewer?.open?.(workspaceId, path)) return Promise.resolve();
 	// An absolute path here is one that fell outside the worktree: the worktree-relative form cannot name
 	// it, so it becomes its own tab kind rather than an invalid file tab — see contracts' LayoutExternalFileTab.
 	const external = isAbsolutePath(path);
 	const kind = external ? ("external-file" as const) : ("file" as const);
 	const id = tupleKey(kind, workspaceId, path);
-	const binary = !external && coreViewerFor(path)?.read === "none";
+	const binary = !external && viewer ? viewer.read === "none" : false;
 	return openReadTab(
 		workspaceId,
 		id,
@@ -179,7 +184,12 @@ export function openFileInTab(
 		(): Promise<{ content: string; hash: string }> =>
 			binary
 				? Promise.resolve({ content: "", hash: "" })
-				: getTransport().request("fs.readFile", { workspaceId, path }),
+				: external
+					? (getTransport().request(pluginMethodName(CLAUDE_CODE_ID, "readFile"), {
+							workspaceId,
+							path,
+						}) as Promise<{ content: string; hash: string }>)
+					: getTransport().request("fs.readFile", { workspaceId, path }),
 		({ content, hash }, loadedTick) => ({
 			kind,
 			id,
@@ -189,6 +199,7 @@ export function openFileInTab(
 			content,
 			hash,
 			loadedTick,
+			...(viewerOptions?.raw ? { raw: true } : {}),
 		}),
 		requestedNavigation,
 		extraOptions,

@@ -51,6 +51,11 @@ Durable decisions every feature follows; [[architecture]] carries the structure 
 
 - **pi is the only engine**, run in-process — no second runtime (no `claude-agent-sdk`). `pi` owns the
   model registry, system prompt, skills/extensions, compaction, cost, and session state.
+  One surface deliberately runs on more than one runtime and does not contradict this: the blueprint
+  generator, which drafts an interactive spec before a project exists, runs on `pi` and on Claude Code
+  headless, because its product is a document format and a format only one vendor can emit is owned by
+  that vendor. Those runners are text completions, not agent sessions — no tools, no filesystem, no
+  session state ([[architecture]] Decision 13).
 - **Influence by feeding, never by assembling.** Features shape the agent only through what they feed
   `pi` — prompt context, files, pi's own skills/extensions — and the flags a session starts with.
 - **Expose, don't recompute.** The host shows what `pi` reports rather than deriving its own copy.

@@ -14,8 +14,8 @@ import {
 	RiNetworkFill,
 	RiStackFill,
 } from "@remixicon/react";
+import { Button } from "@thinkrail/plugin-ui";
 import { useEffect, useMemo, useState } from "react";
-import { Button } from "@/components/ui/button";
 import { LoadingRegion } from "../components/Skeleton";
 import { cn } from "../lib";
 import { selectActiveEditorTab, useAppStore } from "../store";

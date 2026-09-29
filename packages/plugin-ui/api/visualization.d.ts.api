@@ -1,0 +1,105 @@
+// ---- visualization/index.d.ts ----
+export { type ComparisonOptionView, parseComparisonOptions } from "./args";
+export { ComparisonCard } from "./ComparisonCard";
+export { DiagramCard } from "./DiagramCard";
+export { MermaidView } from "./MermaidView";
+export { type MermaidRenderResult, renderMermaid } from "./mermaid";
+export { PanZoomView } from "./PanZoomView";
+export { resultText, strArg, type VisualizationToolProps } from "./toolProps";
+export { VisualizationCard } from "./VisualizationCard";
+export { clampZoomScale, isZoomGesture, ZOOM_MAX_SCALE, ZOOM_MIN_SCALE, ZOOM_SCALE_STEP, zoomScaleForWheel, } from "./zoomGesture";
+
+// ---- visualization/args.d.ts ----
+export interface ComparisonOptionView {
+    name: string;
+    description: string | undefined;
+    pros: string[];
+    cons: string[];
+    recommended: boolean;
+    mermaid: string | undefined;
+}
+export declare function parseComparisonOptions(value: unknown): ComparisonOptionView[];
+
+// ---- visualization/ComparisonCard.d.ts ----
+import type { VisualizationToolProps as ToolRenderProps } from "./toolProps";
+export declare function ComparisonCard({ args }: ToolRenderProps): import("react").JSX.Element;
+
+// ---- visualization/DiagramCard.d.ts ----
+import type { VisualizationToolProps as ToolRenderProps } from "./toolProps";
+export declare function DiagramCard({ args, status, interactive, onRender }: ToolRenderProps): import("react").JSX.Element;
+
+// ---- visualization/mermaid.d.ts ----
+export interface MermaidRenderResult {
+    svg?: string;
+    error?: string;
+}
+export declare function renderMermaid(source: string): Promise<MermaidRenderResult>;
+
+// ---- visualization/MermaidView.d.ts ----
+import { type ReactNode } from "react";
+export declare function MermaidView({ source, title, fallback, interactive, onRender, }: {
+    source: string;
+    title?: string;
+    fallback?: ReactNode;
+    /** Fill the space and be navigable in place — a pane, rather than a card in a transcript. */
+    interactive?: boolean;
+    /** What the renderer made of this source: `null` when it drew, the parse error when it did not. */
+    onRender?: (error: string | null) => void;
+}): string | number | bigint | boolean | import("react").JSX.Element | Iterable<ReactNode> | Promise<string | number | bigint | boolean | Iterable<ReactNode> | import("react").ReactElement<unknown, string | import("react").JSXElementConstructor<any>> | import("react").ReactPortal | null | undefined>;
+
+// ---- visualization/PanZoomView.d.ts ----
+import type * as React from "react";
+/**
+ * A diagram you can get around in: ⌘/Ctrl+wheel and trackpad pinch zoom, drag pans, plain wheel scrolls.
+ * The same gesture vocabulary the PDF preview uses, from the same shared module. See chat/SPEC.md.
+ */
+export declare function PanZoomView({ svg, testid, capped, }: {
+    svg: string;
+    testid?: string;
+    /** Size to the diagram, up to a cap, instead of filling the parent — inline in a document. */
+    capped?: boolean;
+}): React.JSX.Element;
+
+// ---- visualization/toolProps.d.ts ----
+/**
+ * Mirrors `apps/web/src/chat/toolRegistry.tsx`'s `ToolRenderProps` field-for-field, so a host's chat tool
+ * renderer type is structurally identical to this one and every existing call site keeps compiling
+ * unchanged. The kit cannot import that module directly (it is chat-internal). See SPEC.md.
+ */
+export interface VisualizationToolProps {
+    toolCallId: string;
+    toolName: string;
+    args: Record<string, unknown>;
+    result: unknown;
+    status: "running" | "done" | "error";
+    workspaceRoot?: string | undefined;
+    onOpenFile?: ((path: string) => void) | undefined;
+    streaming: boolean;
+    interactive?: boolean;
+    onRender?: ((error: string | null) => void) | undefined;
+}
+export declare function resultText(result: unknown): string;
+export declare function strArg(args: Record<string, unknown>, key: string): string;
+
+// ---- visualization/VisualizationCard.d.ts ----
+import type { VisualizationToolProps as ToolRenderProps } from "./toolProps";
+export declare function VisualizationCard(props: ToolRenderProps): import("react").JSX.Element;
+
+// ---- visualization/zoomGesture.d.ts ----
+export declare const ZOOM_MIN_SCALE = 0.25;
+export declare const ZOOM_MAX_SCALE = 6;
+export declare const ZOOM_SCALE_STEP = 1.15;
+export declare function clampZoomScale(scale: number): number;
+/**
+ * Where a wheel gesture leaves the zoom. A negative `deltaY` is a pinch-open / scroll-up, which zooms in.
+ * Proportional to the delta, so a pinch is as fine-grained as the fingers moving it. See panels/SPEC.md.
+ */
+export declare function zoomScaleForWheel(scale: number, deltaY: number, deltaMode?: number): number;
+/**
+ * Whether a wheel event is a zoom gesture rather than a scroll: macOS delivers a trackpad pinch as a wheel
+ * event with `ctrlKey` set, whatever the platform's own shortcut modifier happens to be.
+ */
+export declare function isZoomGesture(event: {
+    ctrlKey: boolean;
+    metaKey: boolean;
+}): boolean;

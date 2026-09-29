@@ -1,4 +1,5 @@
-import { basename } from "node:path";
+import { realpathSync } from "node:fs";
+import { basename, join } from "node:path";
 import { expect, type Locator, type Page, test, type WebSocketRoute } from "@playwright/test";
 import {
 	createWorkspaceViaDialog,
@@ -12,6 +13,7 @@ import {
 	stagePlainFolder,
 	waitTerminalReady,
 } from "./fixtures/app";
+import { E2E_FIXTURE_REPO } from "./fixtures/paths";
 
 async function openDefaultWorkbench(page: Page): Promise<void> {
 	await openFixtureProject(page);
@@ -1651,6 +1653,64 @@ test("vertical tabs at home in Projects hang under the workspace with its start 
 	await expect(page.getByTestId("center-tabs").getByTestId("editor-tab")).toHaveCount(2);
 	await pressPlatformShortcut(page, "b");
 	await expect(home.getByTestId("editor-tab")).toHaveCount(2);
+});
+
+test("file tabs copy paths from the strip and its overflow list", async ({ page, context }) => {
+	await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+	await openDefaultWorkbench(page);
+	await openKeptFiles(page, ["README.md", "notes.txt", "LINKS.md"]);
+	const readme = page.getByTestId("editor-tab").filter({ hasText: "README.md" });
+	await readme.click({ button: "right" });
+	await page.getByTestId("tab-copy-path").click();
+	await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe("README.md");
+	await readme.click({ button: "right" });
+	await page.getByTestId("tab-copy-absolute-path").click();
+	await expect
+		.poll(() => page.evaluate(() => navigator.clipboard.readText()))
+		.toBe(join(realpathSync(E2E_FIXTURE_REPO), "README.md"));
+
+	await page.setViewportSize({ width: 620, height: 800 });
+	await page
+		.getByTestId("center-tab-strip")
+		.getByRole("button", { name: "Search open tabs" })
+		.click();
+	await page.getByRole("option", { name: /notes\.txt/ }).click({ button: "right" });
+	await page.getByTestId("tab-path-actions").getByTestId("tab-copy-absolute-path").click();
+	await expect
+		.poll(() => page.evaluate(() => navigator.clipboard.readText()))
+		.toBe(join(realpathSync(E2E_FIXTURE_REPO), "notes.txt"));
+	await expect(page.getByTestId("editor-tab").filter({ hasText: "notes.txt" })).not.toHaveAttribute(
+		"data-active",
+		"true",
+	);
+});
+
+test("inactive workspace file previews copy paths without switching workspaces", async ({
+	page,
+	context,
+}) => {
+	await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+	await openDefaultWorkbench(page);
+	await openKeptFiles(page, ["README.md"]);
+	await page.getByTestId("open-settings").click();
+	await page.getByTestId("settings-nav-layout").click();
+	const vertical = page.getByTestId("vertical-center-tabs");
+	if (!(await vertical.isChecked())) await vertical.click();
+	const inProjects = page.getByTestId("vertical-tabs-in-projects");
+	if (!(await inProjects.isChecked())) await inProjects.click();
+	await page.keyboard.press("Escape");
+	await createWorkspaceViaDialog(page);
+	await expect(defaultWorkspaceRow(page)).toHaveAttribute("data-active", "false");
+	const preview = page.getByTestId("workspace-tabs-preview").getByTestId("workspace-tab-preview");
+	await preview.click({ button: "right" });
+	await page.getByTestId("tab-copy-path").click();
+	await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe("README.md");
+	await preview.click({ button: "right" });
+	await page.getByTestId("tab-copy-absolute-path").click();
+	await expect
+		.poll(() => page.evaluate(() => navigator.clipboard.readText()))
+		.toBe(join(realpathSync(E2E_FIXTURE_REPO), "README.md"));
+	await expect(defaultWorkspaceRow(page)).toHaveAttribute("data-active", "false");
 });
 
 test("tab group in project-connected vertical tabs renders as one bubble", async ({ page }) => {

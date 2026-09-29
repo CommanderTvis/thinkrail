@@ -1,13 +1,14 @@
 import type { Project } from "@thinkrail/contracts";
-import { useState } from "react";
-import { Button } from "@/components/ui/button";
 import {
+	Button,
 	Dialog,
 	DialogContent,
 	DialogDescription,
 	DialogHeader,
 	DialogTitle,
-} from "@/components/ui/dialog";
+} from "@thinkrail/plugin-ui";
+import { useState } from "react";
+import { selectProjectActions, usePluginRegistry } from "@/plugins/registry";
 import { errorText, getTransport } from "@/transport";
 import { FolderField } from "./FolderField";
 
@@ -23,6 +24,7 @@ export function NewProjectDialog({
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const [created, setCreated] = useState<Project | null>(null);
+	const projectActions = usePluginRegistry(selectProjectActions);
 
 	const trimmed = name.trim();
 	const target = parent && trimmed ? `${parent.replace(/\/$/, "")}/${trimmed}` : null;
@@ -55,6 +57,13 @@ export function NewProjectDialog({
 							</DialogDescription>
 						</DialogHeader>
 						<p className="break-all tr-text-metadata text-text-muted">{created.path}</p>
+						{projectActions.length > 0 ? (
+							<div className="flex flex-wrap justify-center gap-8">
+								{projectActions.map((action) => (
+									<action.value.component key={action.pluginId} projectId={created.id} />
+								))}
+							</div>
+						) : null}
 						<div className="flex justify-end gap-8">
 							<Button size="sm" data-testid="new-project-done" onClick={() => onOpenChange(false)}>
 								Done

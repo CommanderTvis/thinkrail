@@ -483,8 +483,9 @@ its own launcher through `ctx.launcher()` from `@thinkrail/plugin-claude-code`'s
 exists at all only while that plugin is active (off means no chip, not a disabled one), and Blueprint's
 own start dialog
 reads the same registered launcher rather than a hard-coded pair. With a launcher chosen the pi model and
-effort pickers give way to that launcher's own model menu when it declares one (`ws-claude-model`: Default
-model or one of the launcher's `models`, sent as `--model`), and create opens **a terminal in the centre
+effort pickers give way to that launcher's own model menu when it declares a static `models` list or a
+reactive `useModels()` hook (`ws-claude-model` / `ws-codex-model`: Default model or a catalog entry, sent
+as `--model`), and create opens **a terminal in the centre
 group** running `launcher.terminalCommand({ model, initialPrompt })` instead of a chat — the same
 composition the tab strip's launcher and Blueprint's own start flow use. No pi session means no
 prompt-driven auto-rename, so the naming hint stays hidden for a launcher agent and the worktree keeps
@@ -559,7 +560,9 @@ a project picker, the prompt hero, and the reused
   create dialog.) **`SettingsDialog`** is the app-settings surface the shell's topbar gear opens — a
   **store-driven two-pane shell** (left section rail + scrollable content pane; mobile collapses the rail to
   a horizontal segmented strip): `settingsOpen`/`settingsSection` live in the store so the gear AND the
-  Welcome banner can open it deep-linked to a section. Live sections: **`ProvidersSettings`** (the in-app
+  Welcome banner can open it deep-linked to a section. Plugin-contributed settings are always-visible
+  children beneath Plugins, indented with a branch line on desktop and adjacent in the mobile strip.
+  Plugins itself opens plugin management; registration and removal update its children live. Live sections: **`ProvidersSettings`** (the in-app
   provider-auth surface — Connected cards each with a **Sign-out only when `canLogout`** (env /
   models.json auth shows a "Managed" tag instead, since the host can't unset it; a `kind: "central"` row
   is labelled "JetBrains AI" and its Managed tag points at the JetBrains AI card, which owns that
@@ -1376,13 +1379,11 @@ opening at line 1 leaves the reader hunting for the row they just clicked.
 
 - **A key path names a value; the line is computed here.** A `{ workspaceId, path, keyPath }` focus
   request names the value as JSON object keys (`["mcpServers", "git"]`), and `FilePane` turns it into a
-  line with `jsonKeyLine` against `tab.content` — the text the editor is about to show. A line resolved by
+  line with `jsonKeyLine` against `tab.draft ?? tab.content` — including unsaved edits. A line resolved by
   whoever requested the focus would be measured against the file as it stood when they last read it, and
   would be wrong for every row below an edit made since. Resolving here also costs one lookup per click
-  instead of a scan per resolved key, and adds no round trip. **Currently unproduced**: the Claude
-  configuration pane was the one caller (`ClaudeConfigOrigin.keyPath`), and `PluginWebContext`'s
-  `editors.open()` has no `keyPath` option, so nothing calls `requestFileFocus` with one today — the
-  mechanism works the moment something does; see `store/SPEC.md`.
+  instead of a scan per resolved key, and adds no round trip. Plugin source links supply the key path
+  through `editors.open()`; the plugin loader forwards it to `requestFileFocus`.
 - **A markdown file has no editor to land in, so the block lands instead.** Markdown opens rendered, and
   the request carries a source line — a line nothing on screen is numbered by. The preview resolves it
   through the same `data-md-line-*` stamps the review path already puts on every block, scrolls the block
@@ -1466,7 +1467,9 @@ opening at line 1 leaves the reader hunting for the row they just clicked.
   Each accessory is keyed by plugin id and given a `TerminalAccessoryApi` built from a
   `TerminalInstanceHandle` — the imperative ref `TerminalInstance` (now `forwardRef`) exposes via
   `useImperativeHandle`: `write` sends through the same `terminal.write` request path as a keystroke,
-  `bufferTail` reuses the picker's own tail-reader (parametrized by line count), and `setKeyEncoding`
+  `bufferTail` reuses the picker's own tail-reader (parametrized by line count; `omitFaint` reads each
+  cell and blanks the dim ones, since an agent's input-line placeholder or suggestion is dim text that a
+  plain string cannot tell from a draft), and `setKeyEncoding`
   toggles a ref the key handler reads on every keystroke (`"agent-newline"` sends the newline byte the
   `claude-code` plugin's own accessory needs, `"default"` otherwise) — this used to be a store lookup
   hardcoded to `agent?.kind === "claude"` inside `TerminalInstance` itself; the decision is now the
@@ -1475,7 +1478,9 @@ opening at line 1 leaves the reader hunting for the row they just clicked.
   `useLaunchers()` registration — each rendered through its own `LauncherAgentOption` so
   `launcher.useAvailable()` is that component's own single hook call. A selected launcher's
   `terminalCommand()` opens a terminal exactly where the old hardcoded `claude` branch did; the Claude
-  Code plugin's own `ctx.launcher()` registration is what exercises this path now.
+  Code plugin's own `ctx.launcher()` registration exercises this path. A selected launcher's picker reads its static or
+  reactive catalog, while the dialog stores only the chosen model ID for the launch command. Switching
+  agents clears that choice.
 - **Editor events** (`editorEvents.ts`): a plain `Set`-based emitter (`emitEditorEvent`/`onEditorEvent`),
   plus `findEditorRef(workspaceId, path)` — the one place that turns those two into an `EditorRef` by
   looking up the live tab, shared by every emitter that only has a path (`openTabs`, `fileSave`,
@@ -1484,6 +1489,11 @@ opening at line 1 leaves the reader hunting for the row they just clicked.
   (`reportIdeSelection`); `fileSave` emits `"saved"` once a write actually lands; `openTabs` emits
   `"opened"` as described above. Nothing emits `"closed"`/`"activated"` yet — those are tab-lifecycle
   events the shell's own tab-close/-focus paths will need to raise, not a panel concern.
+
+Monaco selection events retain the exact one-based range, including empty cursor positions and
+an endpoint at column one on the next line. Only the chat-store projection trims that trailing
+line for its displayed line span. IDE consumers convert the raw positions to their own protocol;
+they must not receive chat's trimmed endpoint paired with an untrimmed column and text.
 
 ## Get right
 

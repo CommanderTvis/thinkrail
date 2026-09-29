@@ -3,9 +3,9 @@ import {
 	RiArrowUpSLine as ChevronUp,
 	RiCloseLine as X,
 } from "@remixicon/react";
+import { Button } from "@thinkrail/plugin-ui";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Button } from "@/components/ui/button";
 
 export const FIND_HIGHLIGHT = "thinkrail-find";
 export const FIND_CURRENT_HIGHLIGHT = "thinkrail-find-current";

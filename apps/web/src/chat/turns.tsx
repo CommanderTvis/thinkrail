@@ -16,10 +16,9 @@ import type {
 	ReviewFixDetails,
 	UserMessage,
 } from "@thinkrail/contracts";
+import { Button, Dialog, DialogContent, DialogHeader, DialogTitle } from "@thinkrail/plugin-ui";
 import { type MouseEvent as ReactMouseEvent, type ReactNode, useEffect, useState } from "react";
 import { CustomIcon } from "@/components/CustomIcon";
-import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
 	cn,
 	parseSkillInvocation,

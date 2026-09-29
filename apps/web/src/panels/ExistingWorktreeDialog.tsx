@@ -5,17 +5,17 @@ import {
 	RiRefreshLine as RefreshCw,
 } from "@remixicon/react";
 import type { ExistingWorktreeCandidate, Workspace } from "@thinkrail/contracts";
-import { useCallback, useEffect, useRef, useState } from "react";
-import { LoadingRegion } from "@/components/Skeleton";
-import { Button } from "@/components/ui/button";
 import {
+	Button,
 	Dialog,
 	DialogContent,
 	DialogDescription,
 	DialogFooter,
 	DialogHeader,
 	DialogTitle,
-} from "@/components/ui/dialog";
+} from "@thinkrail/plugin-ui";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { LoadingRegion } from "@/components/Skeleton";
 import { errorText, getTransport } from "../transport";
 
 export function ExistingWorktreeDialog({

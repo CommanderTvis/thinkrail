@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { normalizeEol } from "../../scripts/generatedFiles";
 import {
@@ -12,6 +12,7 @@ import {
 
 const typography = loadTypography();
 const SRC = new URL("..", import.meta.url).pathname;
+const PLUGIN_UI_SRC = new URL("../../../../packages/plugin-ui/src/", import.meta.url).pathname;
 
 function sourceFiles(dir: string): string[] {
 	const out: string[] = [];
@@ -26,7 +27,10 @@ function sourceFiles(dir: string): string[] {
 	}
 	return out;
 }
-const FILES = [...sourceFiles(SRC)];
+const FILES = [
+	...sourceFiles(SRC),
+	...(existsSync(PLUGIN_UI_SRC) ? sourceFiles(PLUGIN_UI_SRC) : []),
+];
 const read = (p: string) => normalizeEol(readFileSync(p, "utf8"));
 const code = (p: string) =>
 	read(p)
@@ -152,7 +156,7 @@ describe("component usage", () => {
 });
 
 describe("markdown prose systems", () => {
-	const chat = code(join(SRC, "chat/Markdown.tsx"));
+	const chat = code(join(PLUGIN_UI_SRC, "markdown/Markdown.tsx"));
 	const preview = code(join(SRC, "panels/MarkdownPreview.tsx"));
 
 	it("gives each markdown surface exactly one generated prose system", () => {
@@ -166,7 +170,7 @@ describe("markdown prose systems", () => {
 		const perElementType =
 			/\[&[^\]]*\]:(?:text-(?!primary|muted|hint|text|balance|pretty|left|center|right)|font-|leading-|tracking-)/g;
 		for (const [label, src] of [
-			["chat/Markdown.tsx", chat],
+			["plugin-ui/markdown/Markdown.tsx", chat],
 			["panels/MarkdownPreview.tsx", preview],
 		] as const)
 			expect(

@@ -3,6 +3,7 @@ import {
 	type BackgroundCommandSummary,
 	CHAT_RESOURCES_PROTOCOL_VERSION,
 	type GitDiffScope,
+	type PluginRosterEntry,
 	type Project,
 	SESSION_RENAME_PROTOCOL_VERSION,
 	SESSION_STATE_PROTOCOL_VERSION,
@@ -390,6 +391,38 @@ export function selectAttentionCenterTab(
 	return find(document.center);
 }
 
+export function selectShownTerminalKeys(
+	state: CenterResourceCacheState,
+	workspaceId: string,
+): string[] {
+	const document = state.layoutDocumentsByWorkspace[workspaceId];
+	if (!document) return [];
+	const attention = state.layoutAttentionByWorkspace[workspaceId];
+	const known = new Set((state.terminalsByWorkspace[workspaceId] ?? []).map((tab) => tab.tabKey));
+	const shown = (group: { id: string; tabs: readonly LayoutTab[] }): string | null => {
+		const selectedId = attention ? readLayoutSelection(attention, group.id) : undefined;
+		const tab = group.tabs.find((candidate) => candidate.id === selectedId) ?? group.tabs[0];
+		return tab?.kind === "terminal" && known.has(tab.tabKey) ? tab.tabKey : null;
+	};
+	const center: { id: string; key: string | null }[] = [];
+	const collect = (node: WorkspaceLayoutDocument["center"]): void => {
+		if (node.kind === "split") {
+			collect(node.children[0]);
+			collect(node.children[1]);
+		} else center.push({ id: node.id, key: shown(node) });
+	};
+	collect(document.center);
+	const auxiliary = (["bottom", "right", "left"] as const).flatMap((region) =>
+		document[region].groups.map((group) => ({ id: group.id, region, key: shown(group) })),
+	);
+	const lastCenter = center.find((group) => group.id === attention?.lastFocusedCenterGroupId);
+	const lastBottom = auxiliary.find(
+		(group) => group.region === "bottom" && group.id === attention?.lastFocusedSideGroupId.bottom,
+	);
+	const ordered = [lastCenter, lastBottom, ...center, ...auxiliary];
+	return [...new Set(ordered.flatMap((group) => (group?.key ? [group.key] : [])))];
+}
+
 /**
  * The file the user is *in*: the selected tab of the focused center group, whatever renders it. A path is
  * a path — an editor, a markdown preview and a PDF all say the same thing about where the user is, and a
@@ -642,6 +675,20 @@ export function selectCompactionTurnIds(
 	);
 }
 
+/**
+ * Whether Claude Code is what runs in this terminal, by the host's process-table watch (`agent`, a tick
+ * behind) — the plugin's own live-reported status is no longer store state a core selector can reach; see
+ * plugin-claude-code/SPEC.md.
+ */
+export function selectTerminalRunsClaude(
+	state: { terminalsByWorkspace: Record<string, TerminalTab[]> },
+	workspaceId: string,
+	tabKey: string,
+): boolean {
+	const terminal = state.terminalsByWorkspace[workspaceId]?.find((tab) => tab.tabKey === tabKey);
+	return terminal?.agent?.kind === "claude";
+}
+
 export function selectWorkspaceTick(
 	state: { fsChangesByWorkspace: Record<string, { tick: number }> },
 	workspaceId: string,
@@ -750,6 +797,12 @@ export function selectAgentReviewCommentCount(
 	return snapshot.comments.filter(
 		(c) => c.author === "agent" && c.status !== "resolved" && c.status !== "dismissed",
 	).length;
+}
+
+export function selectPluginRoster(state: {
+	pluginRoster: PluginRosterEntry[];
+}): PluginRosterEntry[] {
+	return state.pluginRoster;
 }
 
 /** The workspace's open file tabs whose file was deleted on disk, NUL-joined so a selector compares by value. */

@@ -1,6 +1,9 @@
 import { beforeEach, expect, mock, test } from "bun:test";
 import type { Workspace } from "@thinkrail/contracts";
+import { pluginMethodName } from "@thinkrail/plugin-api";
 import { diffTabId } from "./changesModel";
+
+const CLAUDE_CODE_ID = "claude-code";
 
 let pending: { resolve: (value: unknown) => void } | null = null;
 const requests: { method: string; params: unknown }[] = [];
@@ -22,6 +25,7 @@ type WorkspaceLayoutDocument = ReturnType<
 	typeof useAppStore.getState
 >["layoutDocumentsByWorkspace"][string];
 const { onEditorEvent } = await import("./editorEvents");
+const { usePluginRegistry } = await import("../plugins/registry");
 const { openDiffInTab, openFileInTab } = await import("./openTabs");
 
 const workspace = (overrides: Partial<Workspace> = {}): Workspace => ({
@@ -48,6 +52,7 @@ beforeEach(() => {
 		navTickByWorkspace: {},
 		fsChangesByWorkspace: {},
 	});
+	usePluginRegistry.setState({ fileViewers: [] });
 });
 
 const openedDiffTab = () => {
@@ -321,6 +326,69 @@ test("an undisturbed open stamps the state it actually read against", async () =
 	const tab = openedDiffTab();
 	expect(tab.loadedTarget).toBe("main");
 	expect(tab.loadedTick).toBe(1);
+});
+
+test("a viewer registered before another for the same path wins, and its own `open` short-circuits the dispatch", async () => {
+	let opened: string | null = null;
+	usePluginRegistry.getState().addFileViewer("plugin1", {
+		matches: (path) => path.endsWith(".widget"),
+		component: () => null,
+		open: (workspaceId, path) => {
+			opened = `${workspaceId}:${path}`;
+			return true;
+		},
+		read: "none",
+	});
+	usePluginRegistry.getState().addFileViewer("core", {
+		matches: (path) => path.endsWith(".widget"),
+		component: () => null,
+		read: "text",
+	});
+
+	await openFileInTab("w1", "notes.widget", "keep");
+
+	expect(opened).toBe("w1:notes.widget");
+	expect(requests).toHaveLength(0);
+	expect(useAppStore.getState().tabsByWorkspace.w1 ?? []).toHaveLength(0);
+});
+
+test('a binary viewer (read: "none") opens without reading the file\'s content', async () => {
+	usePluginRegistry.getState().addFileViewer("core", {
+		matches: (path) => path.endsWith(".png"),
+		component: () => null,
+		read: "none",
+	});
+
+	await openFileInTab("w1", "logo.png", "keep");
+
+	expect(requests).toHaveLength(0);
+	const tab = (useAppStore.getState().tabsByWorkspace.w1 ?? [])[0];
+	expect(tab).toMatchObject({ kind: "file", path: "logo.png", content: "" });
+});
+
+test('an external-scope path matching a binary viewer (read: "none") still reads its content, never treated as binary', async () => {
+	usePluginRegistry.getState().addFileViewer("core", {
+		matches: (path) => path.endsWith(".png"),
+		component: () => null,
+		read: "none",
+	});
+
+	const open = openFileInTab("w1", "/outside/logo.png", "keep");
+	expect(requests).toEqual([
+		{
+			method: pluginMethodName(CLAUDE_CODE_ID, "readFile"),
+			params: { workspaceId: "w1", path: "/outside/logo.png" },
+		},
+	]);
+	pending?.resolve({ content: "raw-bytes", hash: "h1" });
+	await open;
+
+	const tab = (useAppStore.getState().tabsByWorkspace.w1 ?? [])[0];
+	expect(tab).toMatchObject({
+		kind: "external-file",
+		path: "/outside/logo.png",
+		content: "raw-bytes",
+	});
 });
 
 test('a file with no matching viewer reads its content as text and fires an "opened" editor event once it lands', async () => {

@@ -1,4 +1,4 @@
-import type { LineSelection } from "@/panels/reviewGutter";
+import type { LineSelection } from "@thinkrail/plugin-ui/editor";
 
 export function normalizeFragment(text: string): string {
 	return text
