@@ -14,6 +14,7 @@ import { join, relative, resolve } from "node:path";
 import type { Workspace } from "@thinkrail/contracts";
 import { WORKSPACE_CONTEXT_DIR } from "@thinkrail/shared/paths";
 import {
+	adoptManagedWorktrees,
 	backfillWorkspaceActivity,
 	completeInitialTerminalReservation,
 	createWorkspace,
@@ -26,7 +27,7 @@ import {
 	reclaimWorktree,
 	recordWorkspaceActivity,
 	recordWorkspaceHead,
-	refreshUserOwnedWorkspace,
+	refreshWorkspaceBranch,
 	removeWorkspace,
 	renameWorkspace,
 	seedWorkspaceHead,
@@ -312,6 +313,58 @@ test("openExistingWorktree adopts idempotently and removal never reclaims the ch
 	expect(gitOut(repo, "show-ref", "--verify", "refs/heads/feature/auth")).not.toBe("");
 });
 
+test("a worktree made in ThinkRail's folder is adopted as a workspace, once", async () => {
+	const inside = join(dataDir, "worktrees", "repo", "agent", "work");
+	git(repo, "worktree", "add", inside, "-b", "agent/work", "main");
+	const outside = join(dataDir, "made elsewhere");
+	git(repo, "worktree", "add", outside, "-b", "elsewhere", "main");
+	git(repo, "worktree", "add", "--detach", join(dataDir, "worktrees", "repo", "loose"), "main");
+	const events: WorkspaceLifecycleEvent[] = [];
+	setWorkspacePublisher((event) => events.push(event));
+
+	const adopted = await adoptManagedWorktrees("p1");
+	expect(adopted).toHaveLength(1);
+	expect(adopted[0]).toMatchObject({
+		branch: "agent/work",
+		worktreePath: inside,
+		baseBranch: "main",
+		renamed: true,
+	});
+	expect(adopted[0]?.kind).toBeUndefined();
+	expect(events).toEqual([{ kind: "created", workspace: adopted[0] as Workspace }]);
+	expect((await listExistingWorktrees("p1")).map((candidate) => candidate.path)).toContain(outside);
+
+	expect(await adoptManagedWorktrees("p1")).toHaveLength(0);
+});
+
+test("a removed adopted worktree is not adopted again", async () => {
+	const inside = join(dataDir, "worktrees", "repo", "agent-work");
+	git(repo, "worktree", "add", inside, "-b", "agent-work", "main");
+	const [adopted] = await adoptManagedWorktrees("p1");
+	if (!adopted) throw new Error("worktree was not adopted");
+
+	forgetWorkspace(adopted.id);
+	expect(await adoptManagedWorktrees("p1")).toHaveLength(0);
+	expect(await worktrees()).toHaveLength(0);
+
+	reclaimWorktree(adopted);
+	expect(existsSync(inside)).toBe(false);
+	expect(await adoptManagedWorktrees("p1")).toHaveLength(0);
+	const [project] = JSON.parse(readFileSync(join(dataDir, "projects.json"), "utf8")) as Array<{
+		dismissedWorktrees?: string[];
+	}>;
+	expect(project?.dismissedWorktrees).toBeUndefined();
+});
+
+test("a workspace ThinkRail is creating is never mistaken for an outside worktree", async () => {
+	const created = createWorkspace("p1", "Mid Flight");
+	const scans = await Promise.all([adoptManagedWorktrees("p1"), adoptManagedWorktrees("p1")]);
+	const workspace = await created;
+	expect(scans.flat()).toHaveLength(0);
+	expect((await worktrees()).map((row) => row.id)).toEqual([workspace.id]);
+	expect(workspace.kind).toBeUndefined();
+});
+
 test("openExistingWorktree rejects detached and unrelated paths", async () => {
 	const detached = join(dataDir, "detached checkout");
 	git(repo, "worktree", "add", "--detach", detached, "main");
@@ -354,7 +407,7 @@ test("external workspace branch metadata converges on refresh and list", async (
 	setWorkspacePublisher((event) => events.push(event));
 
 	git(external, "switch", "-c", "feature/live");
-	refreshUserOwnedWorkspace(workspace.id);
+	refreshWorkspaceBranch(workspace.id);
 	expect(events).toEqual([
 		{
 			kind: "updated",
@@ -372,7 +425,7 @@ test("external workspace branch metadata converges on refresh and list", async (
 
 	events.length = 0;
 	rmSync(external, { recursive: true, force: true });
-	refreshUserOwnedWorkspace(workspace.id);
+	refreshWorkspaceBranch(workspace.id);
 	expect(events).toHaveLength(0);
 	expect(
 		listWorkspaceRecords("p1").find((candidate) => candidate.id === workspace.id)?.branch,
@@ -792,7 +845,7 @@ test("the Default workspace's branch and base refresh from the folder on each li
 	expect((await listWorkspaces("p1"))[0]?.diffStats).toEqual({ added: 2, removed: 0 });
 });
 
-test("refreshUserOwnedWorkspace re-syncs and publishes Default drift off the list path", async () => {
+test("refreshWorkspaceBranch re-syncs and publishes Default drift off the list path", async () => {
 	await listWorkspaces("p1");
 	const def = listWorkspaceRecords("p1").find((w) => w.kind === "default");
 	if (!def) throw new Error("expected the ensured Default workspace");
@@ -801,25 +854,25 @@ test("refreshUserOwnedWorkspace re-syncs and publishes Default drift off the lis
 	const events: WorkspaceLifecycleEvent[] = [];
 	setWorkspacePublisher((e) => events.push(e));
 
-	refreshUserOwnedWorkspace(def.id);
+	refreshWorkspaceBranch(def.id);
 	expect(events).toHaveLength(0);
 
 	setWorkspaceReview(def.id, { kind: "pull-request", number: 5, state: "merged" }, def.branch);
 	events.length = 0;
 	git(repo, "switch", "-c", "feature/live");
-	refreshUserOwnedWorkspace(def.id);
+	refreshWorkspaceBranch(def.id);
 	expect(events).toEqual([
 		{ kind: "updated", workspace: { ...def, branch: "feature/live", baseBranch: "feature/live" } },
 	]);
 	expect(listWorkspaceRecords("p1").find((w) => w.id === def.id)?.branch).toBe("feature/live");
 	expect(listWorkspaceRecords("p1").find((w) => w.id === def.id)?.review).toBeUndefined();
 
-	refreshUserOwnedWorkspace(worktree.id);
-	refreshUserOwnedWorkspace("nope");
+	refreshWorkspaceBranch(worktree.id);
+	refreshWorkspaceBranch("nope");
 	expect(events).toHaveLength(1);
 });
 
-test("refreshUserOwnedWorkspace drops an external worktree's branch-bound review", async () => {
+test("refreshWorkspaceBranch drops an external worktree's branch-bound review", async () => {
 	const path = join(dataDir, "outside");
 	git(repo, "worktree", "add", "-b", "outside-a", path);
 	const external = await openExistingWorktree("p1", path);
@@ -832,7 +885,7 @@ test("refreshUserOwnedWorkspace drops an external worktree's branch-bound review
 	setWorkspacePublisher((event) => events.push(event));
 
 	git(path, "switch", "-c", "outside-b");
-	refreshUserOwnedWorkspace(external.id);
+	refreshWorkspaceBranch(external.id);
 
 	const refreshed = listWorkspaceRecords("p1").find((workspace) => workspace.id === external.id);
 	if (!refreshed) throw new Error("expected the refreshed external workspace");

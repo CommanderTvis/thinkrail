@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { mkdirSync, readdirSync, rmdirSync, rmSync, statSync } from "node:fs";
 import { stat } from "node:fs/promises";
 import { homedir } from "node:os";
-import { basename, isAbsolute, join, resolve } from "node:path";
+import { basename, isAbsolute, join, resolve, sep } from "node:path";
 import type {
 	McpProjectOverride,
 	McpToolGrant,
@@ -11,7 +11,7 @@ import type {
 } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
 import { canonicalPath, git } from "../git";
-import { loadProjects, loadWorkspaces, saveProjects } from "../persistence";
+import { dataDir, loadProjects, loadWorkspaces, saveProjects } from "../persistence";
 
 type ProjectPublisher = (project: Project) => void;
 
@@ -116,7 +116,15 @@ export function openProject(inputPath: string, displayName?: string): Project {
 	}
 
 	const wanted = canonicalPath(root);
-	if (loadWorkspaces().some((ws) => canonicalPath(ws.worktreePath) === wanted))
+	const projectIds = new Set(projects.map((project) => project.id));
+	if (
+		loadWorkspaces().some(
+			(workspace) =>
+				canonicalPath(workspace.worktreePath) === wanted &&
+				(projectIds.has(workspace.projectId) ||
+					wanted.startsWith(canonicalPath(join(dataDir(), "worktrees")) + sep)),
+		)
+	)
 		throw new CodedError(
 			"ALREADY_OPEN",
 			`This folder is already open in ThinkRail as a workspace: ${root}`,

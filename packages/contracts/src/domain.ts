@@ -78,6 +78,9 @@ export interface Project {
 	mcpOverrides?: Record<string, McpProjectOverride>;
 	/** "Always allow" MCP tools per server name (never written to `.pi/mcp.json`). */
 	mcpToolGrants?: Record<string, McpToolGrant>;
+	/** `false` for a plain folder ThinkRail opened without a git repo; absent/`true` otherwise. */
+	hasGit?: boolean;
+	dismissedWorktrees?: string[];
 }
 
 /** Tools (pi tool names) granted while the server keeps the command + args or URL hashed as `target`. */

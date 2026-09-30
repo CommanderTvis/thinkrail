@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { existsSync, lstatSync, mkdirSync, rmSync, statSync, writeFileSync } from "node:fs";
-import { basename, dirname, join, resolve } from "node:path";
+import { basename, dirname, join, resolve, sep } from "node:path";
 import {
 	DEFAULT_WORKSPACE_NAME,
 	type DiffStats,
@@ -29,7 +29,13 @@ import {
 	tryCurrentBranch,
 } from "../git";
 import { logger } from "../log";
-import { dataDir, loadProjects, loadWorkspaces, saveWorkspaces } from "../persistence";
+import {
+	dataDir,
+	loadProjects,
+	loadWorkspaces,
+	saveProjects,
+	saveWorkspaces,
+} from "../persistence";
 import { getProjects, listProjects } from "../projects";
 
 const log = logger("workspaces");
@@ -42,6 +48,7 @@ export type WorkspaceLifecycleEvent =
 type WorkspacePublisher = (event: WorkspaceLifecycleEvent) => void;
 
 let publishLifecycle: WorkspacePublisher | null = null;
+const worktreesBeingCreated = new Set<string>();
 
 export function setWorkspacePublisher(fn: WorkspacePublisher | null): void {
 	publishLifecycle = fn;
@@ -103,6 +110,10 @@ function openProjectById(projectId: string): Project {
 	return project;
 }
 
+export function suggestWorkspaceName(projectId: string): string {
+	return nextAutoBranch(openProjectById(projectId));
+}
+
 interface GitWorktreeEntry {
 	path: string;
 	branch?: string;
@@ -129,11 +140,10 @@ async function gitWorktreeEntries(repoPath: string): Promise<GitWorktreeEntry[]>
 	return entries;
 }
 
-export async function listExistingWorktrees(
-	projectId: string,
-): Promise<ExistingWorktreeCandidate[]> {
-	const project = openProjectById(projectId);
-	const entries = await gitWorktreeEntries(project.path);
+function unattachedWorktrees(
+	project: Project,
+	entries: GitWorktreeEntry[],
+): ExistingWorktreeCandidate[] {
 	const projectPath = canonicalPath(project.path);
 	const representedPaths = new Set([
 		...loadProjects().map((knownProject) => canonicalPath(knownProject.path)),
@@ -146,6 +156,83 @@ export async function listExistingWorktrees(
 			? [{ path: entry.path, branch: entry.branch, status: "available" }]
 			: [{ path: entry.path, status: "detached" }];
 	});
+}
+
+export async function listExistingWorktrees(
+	projectId: string,
+): Promise<ExistingWorktreeCandidate[]> {
+	const project = openProjectById(projectId);
+	return unattachedWorktrees(project, await gitWorktreeEntries(project.path));
+}
+
+function setWorktreeDismissed(projectId: string, path: string, dismissed: boolean): void {
+	const projects = loadProjects();
+	const project = projects.find((candidate) => candidate.id === projectId);
+	if (!project) return;
+	const wanted = canonicalPath(path);
+	const before = project.dismissedWorktrees ?? [];
+	const next = before.filter((entry) => entry !== wanted);
+	if (dismissed) next.push(wanted);
+	if (next.length === before.length && next.every((entry, i) => entry === before[i])) return;
+	if (next.length > 0) project.dismissedWorktrees = next;
+	else delete project.dismissedWorktrees;
+	saveProjects(projects);
+}
+
+export async function adoptManagedWorktrees(projectId: string): Promise<Workspace[]> {
+	const project = getProjects().find((candidate) => candidate.id === projectId);
+	if (!project || project.hasGit === false) return [];
+	const adopted: Workspace[] = [];
+	try {
+		const entries = await gitWorktreeEntries(project.path);
+		pruneDismissedWorktrees(projectId, entries);
+		const dismissed = new Set(
+			loadProjects().find((candidate) => candidate.id === projectId)?.dismissedWorktrees,
+		);
+		const managedRoot = join(canonicalPath(join(dataDir(), "worktrees")), project.slug) + sep;
+		const baseBranch = resolveDefaultBranch(project.path);
+		for (const candidate of unattachedWorktrees(project, entries)) {
+			const path = canonicalPath(candidate.path);
+			if (
+				candidate.status !== "available" ||
+				!path.startsWith(managedRoot) ||
+				dismissed.has(path) ||
+				worktreesBeingCreated.has(path)
+			)
+				continue;
+			const workspace: Workspace = {
+				id: randomUUID(),
+				projectId,
+				name: toDisplayName(candidate.branch) ?? candidate.branch,
+				branch: candidate.branch,
+				worktreePath: candidate.path,
+				baseBranch,
+				renamed: true,
+				initialTerminalPending: true,
+			};
+			ensureWorkspaceScratchDir(workspace);
+			const all = loadWorkspaces();
+			all.push(workspace);
+			saveWorkspaces(all);
+			emit({ kind: "created", workspace });
+			adopted.push(workspace);
+		}
+	} catch (err) {
+		log.warn(`adopting worktrees of ${projectId} failed: ${(err as Error).message}`);
+	}
+	return adopted;
+}
+
+function pruneDismissedWorktrees(projectId: string, entries: GitWorktreeEntry[]): void {
+	const projects = loadProjects();
+	const project = projects.find((candidate) => candidate.id === projectId);
+	if (!project?.dismissedWorktrees) return;
+	const registered = new Set(entries.map((entry) => canonicalPath(entry.path)));
+	const kept = project.dismissedWorktrees.filter((path) => registered.has(path));
+	if (kept.length === project.dismissedWorktrees.length) return;
+	if (kept.length > 0) project.dismissedWorktrees = kept;
+	else delete project.dismissedWorktrees;
+	saveProjects(projects);
 }
 
 export async function openExistingWorktree(
@@ -271,35 +358,41 @@ export async function createWorkspace(
 
 	const worktreePath = join(dataDir(), "worktrees", project.slug, branch);
 	mkdirSync(dirname(worktreePath), { recursive: true });
-	const added = git(project.path, [
-		"worktree",
-		"add",
-		worktreePath,
-		"-b",
-		branch,
-		"--no-track",
-		"--end-of-options",
-		remoteBase ?? baseBranch,
-	]);
-	if (!added.ok) throw new Error(`git worktree add failed: ${added.err}`);
+	const claimed = join(canonicalPath(dirname(worktreePath)), basename(worktreePath));
+	worktreesBeingCreated.add(claimed);
+	try {
+		const added = git(project.path, [
+			"worktree",
+			"add",
+			worktreePath,
+			"-b",
+			branch,
+			"--no-track",
+			"--end-of-options",
+			remoteBase ?? baseBranch,
+		]);
+		if (!added.ok) throw new Error(`git worktree add failed: ${added.err}`);
 
-	const workspace: Workspace = {
-		id: randomUUID(),
-		projectId,
-		name: wsName,
-		branch,
-		worktreePath,
-		baseBranch,
-		initialTerminalPending: true,
-		lastActiveAt: Date.now(),
-		...(displayName ? { renamed: true } : {}),
-	};
-	ensureWorkspaceScratchDir(workspace);
-	const all = loadWorkspaces();
-	all.push(workspace);
-	saveWorkspaces(all);
-	emit({ kind: "created", workspace });
-	return workspace;
+		const workspace: Workspace = {
+			id: randomUUID(),
+			projectId,
+			name: wsName,
+			branch,
+			worktreePath,
+			baseBranch,
+			initialTerminalPending: true,
+			lastActiveAt: Date.now(),
+			...(displayName ? { renamed: true } : {}),
+		};
+		ensureWorkspaceScratchDir(workspace);
+		const all = loadWorkspaces();
+		all.push(workspace);
+		saveWorkspaces(all);
+		emit({ kind: "created", workspace });
+		return workspace;
+	} finally {
+		worktreesBeingCreated.delete(claimed);
+	}
 }
 
 export function ensureWorkspaceScratchDir(ws: Workspace): void {
@@ -371,21 +464,21 @@ export function completeInitialTerminalReservation(workspaceId: string): Workspa
 	return workspace;
 }
 
-export function refreshUserOwnedWorkspace(workspaceId: string): void {
+export function refreshWorkspaceBranch(workspaceId: string): void {
 	const peek = loadWorkspaces().find((workspace) => workspace.id === workspaceId);
-	if (peek?.kind !== "default" && peek?.kind !== "external") return;
+	if (!peek) return;
 	const truth =
 		peek.kind === "default"
 			? { kind: "default" as const, ...folderTruth(peek.worktreePath) }
 			: (() => {
 					const branch = tryCurrentBranch(peek.worktreePath);
-					return branch === null ? null : { kind: "external" as const, branch };
+					return branch === null ? null : { kind: peek.kind, branch };
 				})();
 	if (!truth) return;
 
 	const all = loadWorkspaces();
 	const workspace = all.find((candidate) => candidate.id === workspaceId);
-	if (workspace?.kind !== truth.kind) return;
+	if (!workspace || workspace.kind !== truth.kind) return;
 	if (truth.kind === "default") {
 		if (!applyFolderTruth(workspace, truth)) return;
 	} else {
@@ -621,25 +714,40 @@ export function setWorkspaceReview(
 	return ws;
 }
 
+/** Only a Default workspace can lack git: a worktree needs a commit to branch from. */
+function withVcsGap(w: Workspace): Workspace {
+	if (w.kind !== "default") return w;
+	const vcs = vcsGap(w);
+	return vcs ? { ...w, vcs } : w;
+}
+
+/** Asked only when a diff has failed or for a Default workspace, so an ordinary worktree pays nothing for it. */
+function vcsGap(ws: Workspace): Workspace["vcs"] {
+	if (!git(ws.worktreePath, ["rev-parse", "--git-dir"]).ok) return "none";
+	if (!git(ws.worktreePath, ["rev-parse", "--verify", "HEAD"]).ok) return "unborn";
+	return undefined;
+}
+
 export async function listWorkspaces(
 	projectId: string,
 	opts: { includeDiffStats?: boolean } = {},
 ): Promise<Workspace[]> {
 	const project = getProjects().find((p) => p.id === projectId);
 	if (project) ensureDefaultWorkspace(project);
+	void adoptManagedWorktrees(projectId);
 	for (const workspace of loadWorkspaces()) {
-		if (workspace.projectId === projectId && workspace.kind === "external") {
-			refreshUserOwnedWorkspace(workspace.id);
+		if (workspace.projectId === projectId && workspace.kind !== "default") {
+			refreshWorkspaceBranch(workspace.id);
 		}
 	}
 	const rows = projectRows(projectId);
-	if (opts.includeDiffStats === false) return rows;
+	if (opts.includeDiffStats === false) return rows.map(withVcsGap);
 	const statsByKey = new Map(
 		await Promise.all(rows.map(async (w) => [workspaceDiffKey(w), await diffStats(w)] as const)),
 	);
 	return projectRows(projectId).map((w) => {
 		const stats = statsByKey.get(workspaceDiffKey(w));
-		return stats ? { ...w, diffStats: stats } : w;
+		return withVcsGap(stats ? { ...w, diffStats: stats } : w);
 	});
 }
 
@@ -671,6 +779,7 @@ export function forgetWorkspace(id: string): Workspace | null {
 	saveWorkspaces(all.filter((w) => w.id !== id));
 	observedActivityAt.delete(id);
 	observedHeadSha.delete(id);
+	setWorktreeDismissed(ws.projectId, ws.worktreePath, true);
 	emit({ kind: "removed", projectId: ws.projectId, id: ws.id });
 	return ws;
 }
