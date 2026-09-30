@@ -1,0 +1,14 @@
+{
+	"extends": "../../../tsconfig.base.json",
+	"compilerOptions": {
+		"noEmit": true,
+		"types": [
+			"bun"
+		],
+		"noUncheckedIndexedAccess": false,
+		"allowImportingTsExtensions": true
+	},
+	"include": [
+		"**/*.ts"
+	]
+}

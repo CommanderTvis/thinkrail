@@ -1,0 +1,559 @@
+{
+  "metadata": {
+    "name": "intellij-community-project",
+    "binary": "/Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn/apps/native/.bench/IntelliJ IDEA OSS.app/Contents/MacOS/idea",
+    "appArgs": [
+      "nosplash",
+      "dontReopenProjects",
+      "/Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn"
+    ],
+    "macos": "26.6.2",
+    "cpu": "Apple M4 Pro",
+    "power": "Now drawing from 'AC Power'",
+    "root": "/Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn/apps/native",
+    "powerVerification": {
+      "intervalMs": 1000,
+      "allChecksAC": true,
+      "checks": [
+        {
+          "at": 1792139578299,
+          "source": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792139579299,
+          "source": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792139580301,
+          "source": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792139581302,
+          "source": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792139582304,
+          "source": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792139583305,
+          "source": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792139584306,
+          "source": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792139585306,
+          "source": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792139586307,
+          "source": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792139587309,
+          "source": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792139588313,
+          "source": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792139589314,
+          "source": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792139590316,
+          "source": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792139591317,
+          "source": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792139592317,
+          "source": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792139593318,
+          "source": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792139594321,
+          "source": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792139595324,
+          "source": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792139596324,
+          "source": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792139597497,
+          "source": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792139598498,
+          "source": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792139599499,
+          "source": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792139600500,
+          "source": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792139601501,
+          "source": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792139602502,
+          "source": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792139603503,
+          "source": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792139604504,
+          "source": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792139605505,
+          "source": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792139606506,
+          "source": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792139607508,
+          "source": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792139608508,
+          "source": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792139609513,
+          "source": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792139610514,
+          "source": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792139611515,
+          "source": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792139612516,
+          "source": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792139613517,
+          "source": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792139614518,
+          "source": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792139615519,
+          "source": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792139616520,
+          "source": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792139617521,
+          "source": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792139618522,
+          "source": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792139619523,
+          "source": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792139620524,
+          "source": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792139621525,
+          "source": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792139622526,
+          "source": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792139623528,
+          "source": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792139624530,
+          "source": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792139625531,
+          "source": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792139626532,
+          "source": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792139627533,
+          "source": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792139628534,
+          "source": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792139629535,
+          "source": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792139630536,
+          "source": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792139631537,
+          "source": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792139632538,
+          "source": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792139633590,
+          "source": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792139634591,
+          "source": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792139635592,
+          "source": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792139636593,
+          "source": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792139637594,
+          "source": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792139638594,
+          "source": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792139639595,
+          "source": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792139640596,
+          "source": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792139641598,
+          "source": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792139642599,
+          "source": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792139643599,
+          "source": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792139644599,
+          "source": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792139645600,
+          "source": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792139646603,
+          "source": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792139647604,
+          "source": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792139648606,
+          "source": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792139649606,
+          "source": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792139650607,
+          "source": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792139651608,
+          "source": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792139652609,
+          "source": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792139653612,
+          "source": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792139654613,
+          "source": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792139655614,
+          "source": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792139656615,
+          "source": "Now drawing from 'AC Power'"
+        }
+      ]
+    },
+    "distribution": {
+      "name": "IntelliJ IDEA Community",
+      "version": "2026.2.3",
+      "productCode": "IC",
+      "build": "262.10968.63",
+      "releaseURL": "https://github.com/JetBrains/intellij-community/releases/tag/idea/2026.2.3",
+      "assetURL": "https://github.com/JetBrains/intellij-community/releases/download/idea/2026.2.3/idea-2026.2.3-aarch64.dmg",
+      "sha256": "14d0e3bc182d5f3352943f9d1af8f5242e141ea21cca9af7af4a1b37b7973227",
+      "runtime": "JetBrains Runtime 25.0.4+1-b508.27",
+      "architecture": "aarch64"
+    },
+    "profile": {
+      "isolated": true,
+      "reusedAfterExcludedWarmup": true,
+      "propertiesFile": "/Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn/apps/native/.bench/intellij-community-profile/idea.properties"
+    },
+    "project": "/Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn",
+    "workload": "Open repository with README.md restored; splash disabled; project scanning/indexing may still be active at five seconds"
+  },
+  "warmup": {
+    "round": 0,
+    "launchToWindowMs": 1417,
+    "footprintMiB": 1518,
+    "processCount": 3,
+    "windows": [
+      {
+        "id": 274871,
+        "title": "riirn – README.md",
+        "width": 1332,
+        "height": 808
+      }
+    ]
+  },
+  "results": [
+    {
+      "round": 1,
+      "launchToWindowMs": 1081,
+      "footprintMiB": 2126,
+      "processCount": 7,
+      "windows": [
+        {
+          "id": 274877,
+          "title": "riirn – README.md",
+          "width": 1332,
+          "height": 808
+        },
+        {
+          "id": 274878,
+          "title": "",
+          "width": 500,
+          "height": 500
+        }
+      ]
+    },
+    {
+      "round": 2,
+      "launchToWindowMs": 995,
+      "footprintMiB": 2040,
+      "processCount": 7,
+      "windows": [
+        {
+          "id": 274890,
+          "title": "",
+          "width": 500,
+          "height": 500
+        },
+        {
+          "id": 274889,
+          "title": "riirn – README.md",
+          "width": 532,
+          "height": 323
+        }
+      ]
+    },
+    {
+      "round": 3,
+      "launchToWindowMs": 997,
+      "footprintMiB": 2006,
+      "processCount": 7,
+      "windows": [
+        {
+          "id": 274912,
+          "title": "",
+          "width": 500,
+          "height": 500
+        },
+        {
+          "id": 274911,
+          "title": "riirn – README.md",
+          "width": 1332,
+          "height": 808
+        }
+      ]
+    },
+    {
+      "round": 4,
+      "launchToWindowMs": 1223,
+      "footprintMiB": 1957,
+      "processCount": 7,
+      "windows": [
+        {
+          "id": 274924,
+          "title": "riirn – README.md",
+          "width": 1332,
+          "height": 808
+        },
+        {
+          "id": 274925,
+          "title": "",
+          "width": 500,
+          "height": 500
+        }
+      ]
+    },
+    {
+      "round": 5,
+      "launchToWindowMs": 1033,
+      "footprintMiB": 1989,
+      "processCount": 7,
+      "windows": [
+        {
+          "id": 274937,
+          "title": "riirn – README.md",
+          "width": 1332,
+          "height": 808
+        },
+        {
+          "id": 274938,
+          "title": "",
+          "width": 500,
+          "height": 500
+        }
+      ]
+    },
+    {
+      "round": 6,
+      "launchToWindowMs": 987,
+      "footprintMiB": 1997,
+      "processCount": 7,
+      "windows": [
+        {
+          "id": 274950,
+          "title": "riirn – README.md",
+          "width": 1332,
+          "height": 808
+        },
+        {
+          "id": 274951,
+          "title": "",
+          "width": 500,
+          "height": 500
+        }
+      ]
+    },
+    {
+      "round": 7,
+      "launchToWindowMs": 1013,
+      "footprintMiB": 1963,
+      "processCount": 7,
+      "windows": [
+        {
+          "id": 274964,
+          "title": "riirn – README.md",
+          "width": 1332,
+          "height": 808
+        },
+        {
+          "id": 274965,
+          "title": "",
+          "width": 500,
+          "height": 500
+        }
+      ]
+    },
+    {
+      "round": 8,
+      "launchToWindowMs": 989,
+      "footprintMiB": 2232,
+      "processCount": 7,
+      "windows": [
+        {
+          "id": 274978,
+          "title": "",
+          "width": 500,
+          "height": 500
+        },
+        {
+          "id": 274977,
+          "title": "riirn – README.md",
+          "width": 1332,
+          "height": 808
+        }
+      ]
+    },
+    {
+      "round": 9,
+      "launchToWindowMs": 1517,
+      "footprintMiB": 1645,
+      "processCount": 9,
+      "windows": [
+        {
+          "id": 274991,
+          "title": "riirn – README.md",
+          "width": 1319,
+          "height": 800
+        }
+      ]
+    },
+    {
+      "round": 10,
+      "launchToWindowMs": 1225,
+      "footprintMiB": 2157,
+      "processCount": 7,
+      "windows": [
+        {
+          "id": 275007,
+          "title": "riirn – README.md",
+          "width": 1012,
+          "height": 614
+        }
+      ]
+    }
+  ]
+}

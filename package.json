@@ -5,6 +5,7 @@
 	"workspaces": {
 		"packages": [
 			"apps/*",
+			"!apps/native",
 			"packages/*"
 		],
 		"catalog": {

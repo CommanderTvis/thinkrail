@@ -1,0 +1,1053 @@
+{
+  "metadata": {
+    "name": "refresh-idea",
+    "binary": "/Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn/apps/native/.bench/IntelliJ IDEA OSS.app/Contents/MacOS/idea",
+    "appArgs": [
+      "nosplash",
+      "dontReopenProjects",
+      "/Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn"
+    ],
+    "project": "/Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn",
+    "recordedAt": "2026-10-17T20:22:10.108Z",
+    "macos": "26.6.2",
+    "cpu": "Apple M4 Pro",
+    "powerVerification": {
+      "intervalMs": 1000,
+      "allChecksAC": true,
+      "checks": [
+        {
+          "at": 1792268450720,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268450727,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268451732,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268452732,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268453733,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268454734,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268455742,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268455895,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268456737,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268457738,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268457939,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268458740,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268459745,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268460744,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268461746,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268462745,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268463106,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268463744,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268464746,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268465152,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268465748,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268466759,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268467765,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268468750,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268469751,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268470317,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268470752,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268471757,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268472363,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268472754,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268473756,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268474758,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268475758,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268476758,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268477533,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268477759,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268478764,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268479580,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268479762,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268480770,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268481763,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268482768,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268483764,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268484748,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268484783,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268485777,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268486778,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268486795,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268487785,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268488799,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268489786,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268490788,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268491786,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268491973,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268492787,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268493787,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268494028,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268494794,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268495790,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268496809,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268497795,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268498793,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268499197,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268499793,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268500795,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268501241,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268501798,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268502800,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268503799,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268504798,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268505796,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268506408,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268506797,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268507798,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268508453,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268508800,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268509802,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268510869,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268511808,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268512806,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268513624,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268513807,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268514807,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268515668,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268515809,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268516811,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268517825,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268518815,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268519818,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268520857,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268520889,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268521883,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268522884,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268522906,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268523886,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268524903,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268525902,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268526892,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268527893,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268528070,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268528893,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268529893,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        }
+      ]
+    },
+    "exitedDuringFootprint": [],
+    "workload": "Same repository open; isolated profile; no running agent; profile and caches retained after an excluded warm-up; README.md restored; splash disabled; indexing may still be active",
+    "binarySha256": "8bae385ee0b2d7e33657b59aa17d824390f21a699c137c1a0994ce5ad9d097c7",
+    "distribution": {
+      "name": "IntelliJ IDEA Community",
+      "version": "2026.2.3",
+      "productCode": "IC",
+      "build": "262.10968.63",
+      "releaseURL": "https://github.com/JetBrains/intellij-community/releases/tag/idea/2026.2.3",
+      "assetURL": "https://github.com/JetBrains/intellij-community/releases/download/idea/2026.2.3/idea-2026.2.3-aarch64.dmg",
+      "sha256": "14d0e3bc182d5f3352943f9d1af8f5242e141ea21cca9af7af4a1b37b7973227",
+      "runtime": "JetBrains Runtime 25.0.4+1-b508.27",
+      "architecture": "aarch64"
+    },
+    "profile": "/Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn/apps/native/.bench/refresh-2026-10-17/idea-profile"
+  },
+  "warmup": {
+    "round": 0,
+    "launchToWindowMs": 1762,
+    "sampledAtMs": 5015,
+    "footprintMiB": 1315.5506057739258,
+    "processCount": 2,
+    "processes": [
+      {
+        "pid": 58319,
+        "parent": 58230,
+        "command": "/Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn/apps/native/.bench/IntelliJ IDEA OSS.app/Contents/MacOS/idea"
+      },
+      {
+        "pid": 58592,
+        "parent": 58319,
+        "command": "/Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn/apps/native/.bench/IntelliJ IDEA OSS.app/Contents/bin/fsnotifier"
+      }
+    ],
+    "windows": [
+      {
+        "id": 296734,
+        "title": "",
+        "width": 384,
+        "height": 480
+      },
+      {
+        "id": 296731,
+        "title": "riirn",
+        "width": 1332,
+        "height": 808
+      }
+    ]
+  },
+  "results": [
+    {
+      "round": 1,
+      "launchToWindowMs": 964,
+      "sampledAtMs": 5001,
+      "footprintMiB": 2336.4630126953125,
+      "processCount": 7,
+      "processes": [
+        {
+          "pid": 68162,
+          "parent": 58230,
+          "command": "/Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn/apps/native/.bench/IntelliJ IDEA OSS.app/Contents/MacOS/idea"
+        },
+        {
+          "pid": 68191,
+          "parent": 68162,
+          "command": "/Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn/apps/native/.bench/IntelliJ IDEA OSS.app/Contents/bin/fsnotifier"
+        },
+        {
+          "pid": 68761,
+          "parent": 68162,
+          "command": "/Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn/apps/native/.bench/IntelliJ IDEA OSS.app/Contents/plugins/jcef-plugin/jcef/Frameworks/cef_server.app/Contents/MacOS/cef_server"
+        },
+        {
+          "pid": 69090,
+          "parent": 68761,
+          "command": "/Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn/apps/native/.bench/IntelliJ IDEA OSS.app/Contents/plugins/jcef-plugin/jcef/Frameworks/cef_server.app/Contents/Frameworks/cef_server Helper.app/Contents/MacOS/cef_server Helper"
+        },
+        {
+          "pid": 69092,
+          "parent": 68761,
+          "command": "/Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn/apps/native/.bench/IntelliJ IDEA OSS.app/Contents/plugins/jcef-plugin/jcef/Frameworks/cef_server.app/Contents/Frameworks/cef_server Helper.app/Contents/MacOS/cef_server Helper"
+        },
+        {
+          "pid": 69095,
+          "parent": 68761,
+          "command": "/Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn/apps/native/.bench/IntelliJ IDEA OSS.app/Contents/plugins/jcef-plugin/jcef/Frameworks/cef_server.app/Contents/Frameworks/cef_server Helper.app/Contents/MacOS/cef_server Helper"
+        },
+        {
+          "pid": 69743,
+          "parent": 68761,
+          "command": "/Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn/apps/native/.bench/IntelliJ IDEA OSS.app/Contents/plugins/jcef-plugin/jcef/Frameworks/cef_server.app/Contents/Frameworks/cef_server Helper (Renderer).app/Contents/MacOS/cef_server Helper (Renderer)"
+        }
+      ],
+      "windows": [
+        {
+          "id": 296741,
+          "title": "",
+          "width": 500,
+          "height": 500
+        },
+        {
+          "id": 296740,
+          "title": "riirn – README.md",
+          "width": 1332,
+          "height": 808
+        }
+      ]
+    },
+    {
+      "round": 2,
+      "launchToWindowMs": 982,
+      "sampledAtMs": 5001,
+      "footprintMiB": 2073.2439880371094,
+      "processCount": 7,
+      "processes": [
+        {
+          "pid": 70891,
+          "parent": 58230,
+          "command": "/Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn/apps/native/.bench/IntelliJ IDEA OSS.app/Contents/MacOS/idea"
+        },
+        {
+          "pid": 70910,
+          "parent": 70891,
+          "command": "/Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn/apps/native/.bench/IntelliJ IDEA OSS.app/Contents/bin/fsnotifier"
+        },
+        {
+          "pid": 71297,
+          "parent": 70891,
+          "command": "/Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn/apps/native/.bench/IntelliJ IDEA OSS.app/Contents/plugins/jcef-plugin/jcef/Frameworks/cef_server.app/Contents/MacOS/cef_server"
+        },
+        {
+          "pid": 71322,
+          "parent": 71297,
+          "command": "/Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn/apps/native/.bench/IntelliJ IDEA OSS.app/Contents/plugins/jcef-plugin/jcef/Frameworks/cef_server.app/Contents/Frameworks/cef_server Helper.app/Contents/MacOS/cef_server Helper"
+        },
+        {
+          "pid": 71323,
+          "parent": 71297,
+          "command": "/Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn/apps/native/.bench/IntelliJ IDEA OSS.app/Contents/plugins/jcef-plugin/jcef/Frameworks/cef_server.app/Contents/Frameworks/cef_server Helper.app/Contents/MacOS/cef_server Helper"
+        },
+        {
+          "pid": 71328,
+          "parent": 71297,
+          "command": "/Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn/apps/native/.bench/IntelliJ IDEA OSS.app/Contents/plugins/jcef-plugin/jcef/Frameworks/cef_server.app/Contents/Frameworks/cef_server Helper.app/Contents/MacOS/cef_server Helper"
+        },
+        {
+          "pid": 71473,
+          "parent": 71297,
+          "command": "/Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn/apps/native/.bench/IntelliJ IDEA OSS.app/Contents/plugins/jcef-plugin/jcef/Frameworks/cef_server.app/Contents/Frameworks/cef_server Helper (Renderer).app/Contents/MacOS/cef_server Helper (Renderer)"
+        }
+      ],
+      "windows": [
+        {
+          "id": 296757,
+          "title": "",
+          "width": 500,
+          "height": 500
+        },
+        {
+          "id": 296756,
+          "title": "riirn – README.md",
+          "width": 1332,
+          "height": 808
+        }
+      ]
+    },
+    {
+      "round": 3,
+      "launchToWindowMs": 1010,
+      "sampledAtMs": 5001,
+      "footprintMiB": 1942.7753524780273,
+      "processCount": 7,
+      "processes": [
+        {
+          "pid": 72394,
+          "parent": 58230,
+          "command": "/Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn/apps/native/.bench/IntelliJ IDEA OSS.app/Contents/MacOS/idea"
+        },
+        {
+          "pid": 72451,
+          "parent": 72394,
+          "command": "/Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn/apps/native/.bench/IntelliJ IDEA OSS.app/Contents/bin/fsnotifier"
+        },
+        {
+          "pid": 72865,
+          "parent": 72394,
+          "command": "/Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn/apps/native/.bench/IntelliJ IDEA OSS.app/Contents/plugins/jcef-plugin/jcef/Frameworks/cef_server.app/Contents/MacOS/cef_server"
+        },
+        {
+          "pid": 72908,
+          "parent": 72865,
+          "command": "/Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn/apps/native/.bench/IntelliJ IDEA OSS.app/Contents/plugins/jcef-plugin/jcef/Frameworks/cef_server.app/Contents/Frameworks/cef_server Helper.app/Contents/MacOS/cef_server Helper"
+        },
+        {
+          "pid": 72909,
+          "parent": 72865,
+          "command": "/Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn/apps/native/.bench/IntelliJ IDEA OSS.app/Contents/plugins/jcef-plugin/jcef/Frameworks/cef_server.app/Contents/Frameworks/cef_server Helper.app/Contents/MacOS/cef_server Helper"
+        },
+        {
+          "pid": 72910,
+          "parent": 72865,
+          "command": "/Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn/apps/native/.bench/IntelliJ IDEA OSS.app/Contents/plugins/jcef-plugin/jcef/Frameworks/cef_server.app/Contents/Frameworks/cef_server Helper.app/Contents/MacOS/cef_server Helper"
+        },
+        {
+          "pid": 72956,
+          "parent": 72865,
+          "command": "/Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn/apps/native/.bench/IntelliJ IDEA OSS.app/Contents/plugins/jcef-plugin/jcef/Frameworks/cef_server.app/Contents/Frameworks/cef_server Helper (Renderer).app/Contents/MacOS/cef_server Helper (Renderer)"
+        }
+      ],
+      "windows": [
+        {
+          "id": 296771,
+          "title": "",
+          "width": 500,
+          "height": 500
+        },
+        {
+          "id": 296770,
+          "title": "riirn – README.md",
+          "width": 1332,
+          "height": 808
+        }
+      ]
+    },
+    {
+      "round": 4,
+      "launchToWindowMs": 1041,
+      "sampledAtMs": 5001,
+      "footprintMiB": 2066.4160690307617,
+      "processCount": 7,
+      "processes": [
+        {
+          "pid": 73471,
+          "parent": 58230,
+          "command": "/Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn/apps/native/.bench/IntelliJ IDEA OSS.app/Contents/MacOS/idea"
+        },
+        {
+          "pid": 73513,
+          "parent": 73471,
+          "command": "/Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn/apps/native/.bench/IntelliJ IDEA OSS.app/Contents/bin/fsnotifier"
+        },
+        {
+          "pid": 73775,
+          "parent": 73471,
+          "command": "/Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn/apps/native/.bench/IntelliJ IDEA OSS.app/Contents/plugins/jcef-plugin/jcef/Frameworks/cef_server.app/Contents/MacOS/cef_server"
+        },
+        {
+          "pid": 73811,
+          "parent": 73775,
+          "command": "/Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn/apps/native/.bench/IntelliJ IDEA OSS.app/Contents/plugins/jcef-plugin/jcef/Frameworks/cef_server.app/Contents/Frameworks/cef_server Helper.app/Contents/MacOS/cef_server Helper"
+        },
+        {
+          "pid": 73812,
+          "parent": 73775,
+          "command": "/Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn/apps/native/.bench/IntelliJ IDEA OSS.app/Contents/plugins/jcef-plugin/jcef/Frameworks/cef_server.app/Contents/Frameworks/cef_server Helper.app/Contents/MacOS/cef_server Helper"
+        },
+        {
+          "pid": 73813,
+          "parent": 73775,
+          "command": "/Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn/apps/native/.bench/IntelliJ IDEA OSS.app/Contents/plugins/jcef-plugin/jcef/Frameworks/cef_server.app/Contents/Frameworks/cef_server Helper.app/Contents/MacOS/cef_server Helper"
+        },
+        {
+          "pid": 73850,
+          "parent": 73775,
+          "command": "/Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn/apps/native/.bench/IntelliJ IDEA OSS.app/Contents/plugins/jcef-plugin/jcef/Frameworks/cef_server.app/Contents/Frameworks/cef_server Helper (Renderer).app/Contents/MacOS/cef_server Helper (Renderer)"
+        }
+      ],
+      "windows": [
+        {
+          "id": 296784,
+          "title": "riirn – README.md",
+          "width": 656,
+          "height": 399
+        },
+        {
+          "id": 296785,
+          "title": "",
+          "width": 500,
+          "height": 500
+        }
+      ]
+    },
+    {
+      "round": 5,
+      "launchToWindowMs": 1037,
+      "sampledAtMs": 5001,
+      "footprintMiB": 2022.8534774780273,
+      "processCount": 7,
+      "processes": [
+        {
+          "pid": 74398,
+          "parent": 58230,
+          "command": "/Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn/apps/native/.bench/IntelliJ IDEA OSS.app/Contents/MacOS/idea"
+        },
+        {
+          "pid": 74406,
+          "parent": 74398,
+          "command": "/Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn/apps/native/.bench/IntelliJ IDEA OSS.app/Contents/bin/fsnotifier"
+        },
+        {
+          "pid": 74828,
+          "parent": 74398,
+          "command": "/Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn/apps/native/.bench/IntelliJ IDEA OSS.app/Contents/plugins/jcef-plugin/jcef/Frameworks/cef_server.app/Contents/MacOS/cef_server"
+        },
+        {
+          "pid": 74880,
+          "parent": 74828,
+          "command": "/Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn/apps/native/.bench/IntelliJ IDEA OSS.app/Contents/plugins/jcef-plugin/jcef/Frameworks/cef_server.app/Contents/Frameworks/cef_server Helper.app/Contents/MacOS/cef_server Helper"
+        },
+        {
+          "pid": 74881,
+          "parent": 74828,
+          "command": "/Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn/apps/native/.bench/IntelliJ IDEA OSS.app/Contents/plugins/jcef-plugin/jcef/Frameworks/cef_server.app/Contents/Frameworks/cef_server Helper.app/Contents/MacOS/cef_server Helper"
+        },
+        {
+          "pid": 74882,
+          "parent": 74828,
+          "command": "/Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn/apps/native/.bench/IntelliJ IDEA OSS.app/Contents/plugins/jcef-plugin/jcef/Frameworks/cef_server.app/Contents/Frameworks/cef_server Helper.app/Contents/MacOS/cef_server Helper"
+        },
+        {
+          "pid": 74938,
+          "parent": 74828,
+          "command": "/Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn/apps/native/.bench/IntelliJ IDEA OSS.app/Contents/plugins/jcef-plugin/jcef/Frameworks/cef_server.app/Contents/Frameworks/cef_server Helper (Renderer).app/Contents/MacOS/cef_server Helper (Renderer)"
+        }
+      ],
+      "windows": [
+        {
+          "id": 296798,
+          "title": "riirn – README.md",
+          "width": 1332,
+          "height": 808
+        }
+      ]
+    },
+    {
+      "round": 6,
+      "launchToWindowMs": 1032,
+      "sampledAtMs": 5001,
+      "footprintMiB": 1962.0252151489258,
+      "processCount": 7,
+      "processes": [
+        {
+          "pid": 75553,
+          "parent": 58230,
+          "command": "/Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn/apps/native/.bench/IntelliJ IDEA OSS.app/Contents/MacOS/idea"
+        },
+        {
+          "pid": 75576,
+          "parent": 75553,
+          "command": "/Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn/apps/native/.bench/IntelliJ IDEA OSS.app/Contents/bin/fsnotifier"
+        },
+        {
+          "pid": 75860,
+          "parent": 75553,
+          "command": "/Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn/apps/native/.bench/IntelliJ IDEA OSS.app/Contents/plugins/jcef-plugin/jcef/Frameworks/cef_server.app/Contents/MacOS/cef_server"
+        },
+        {
+          "pid": 75897,
+          "parent": 75860,
+          "command": "/Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn/apps/native/.bench/IntelliJ IDEA OSS.app/Contents/plugins/jcef-plugin/jcef/Frameworks/cef_server.app/Contents/Frameworks/cef_server Helper.app/Contents/MacOS/cef_server Helper"
+        },
+        {
+          "pid": 75898,
+          "parent": 75860,
+          "command": "/Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn/apps/native/.bench/IntelliJ IDEA OSS.app/Contents/plugins/jcef-plugin/jcef/Frameworks/cef_server.app/Contents/Frameworks/cef_server Helper.app/Contents/MacOS/cef_server Helper"
+        },
+        {
+          "pid": 75900,
+          "parent": 75860,
+          "command": "/Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn/apps/native/.bench/IntelliJ IDEA OSS.app/Contents/plugins/jcef-plugin/jcef/Frameworks/cef_server.app/Contents/Frameworks/cef_server Helper.app/Contents/MacOS/cef_server Helper"
+        },
+        {
+          "pid": 75950,
+          "parent": 75860,
+          "command": "/Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn/apps/native/.bench/IntelliJ IDEA OSS.app/Contents/plugins/jcef-plugin/jcef/Frameworks/cef_server.app/Contents/Frameworks/cef_server Helper (Renderer).app/Contents/MacOS/cef_server Helper (Renderer)"
+        }
+      ],
+      "windows": [
+        {
+          "id": 296806,
+          "title": "",
+          "width": 500,
+          "height": 500
+        },
+        {
+          "id": 296805,
+          "title": "riirn – README.md",
+          "width": 1332,
+          "height": 808
+        }
+      ]
+    },
+    {
+      "round": 7,
+      "launchToWindowMs": 938,
+      "sampledAtMs": 5001,
+      "footprintMiB": 2001.8376693725586,
+      "processCount": 7,
+      "processes": [
+        {
+          "pid": 76651,
+          "parent": 58230,
+          "command": "/Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn/apps/native/.bench/IntelliJ IDEA OSS.app/Contents/MacOS/idea"
+        },
+        {
+          "pid": 76659,
+          "parent": 76651,
+          "command": "/Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn/apps/native/.bench/IntelliJ IDEA OSS.app/Contents/bin/fsnotifier"
+        },
+        {
+          "pid": 76847,
+          "parent": 76651,
+          "command": "/Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn/apps/native/.bench/IntelliJ IDEA OSS.app/Contents/plugins/jcef-plugin/jcef/Frameworks/cef_server.app/Contents/MacOS/cef_server"
+        },
+        {
+          "pid": 76886,
+          "parent": 76847,
+          "command": "/Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn/apps/native/.bench/IntelliJ IDEA OSS.app/Contents/plugins/jcef-plugin/jcef/Frameworks/cef_server.app/Contents/Frameworks/cef_server Helper.app/Contents/MacOS/cef_server Helper"
+        },
+        {
+          "pid": 76887,
+          "parent": 76847,
+          "command": "/Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn/apps/native/.bench/IntelliJ IDEA OSS.app/Contents/plugins/jcef-plugin/jcef/Frameworks/cef_server.app/Contents/Frameworks/cef_server Helper.app/Contents/MacOS/cef_server Helper"
+        },
+        {
+          "pid": 76888,
+          "parent": 76847,
+          "command": "/Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn/apps/native/.bench/IntelliJ IDEA OSS.app/Contents/plugins/jcef-plugin/jcef/Frameworks/cef_server.app/Contents/Frameworks/cef_server Helper.app/Contents/MacOS/cef_server Helper"
+        },
+        {
+          "pid": 76934,
+          "parent": 76847,
+          "command": "/Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn/apps/native/.bench/IntelliJ IDEA OSS.app/Contents/plugins/jcef-plugin/jcef/Frameworks/cef_server.app/Contents/Frameworks/cef_server Helper (Renderer).app/Contents/MacOS/cef_server Helper (Renderer)"
+        }
+      ],
+      "windows": [
+        {
+          "id": 296819,
+          "title": "riirn – README.md",
+          "width": 1332,
+          "height": 808
+        },
+        {
+          "id": 296820,
+          "title": "",
+          "width": 500,
+          "height": 500
+        }
+      ]
+    },
+    {
+      "round": 8,
+      "launchToWindowMs": 980,
+      "sampledAtMs": 5002,
+      "footprintMiB": 2063.6348190307617,
+      "processCount": 7,
+      "processes": [
+        {
+          "pid": 77511,
+          "parent": 58230,
+          "command": "/Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn/apps/native/.bench/IntelliJ IDEA OSS.app/Contents/MacOS/idea"
+        },
+        {
+          "pid": 77535,
+          "parent": 77511,
+          "command": "/Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn/apps/native/.bench/IntelliJ IDEA OSS.app/Contents/bin/fsnotifier"
+        },
+        {
+          "pid": 77781,
+          "parent": 77511,
+          "command": "/Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn/apps/native/.bench/IntelliJ IDEA OSS.app/Contents/plugins/jcef-plugin/jcef/Frameworks/cef_server.app/Contents/MacOS/cef_server"
+        },
+        {
+          "pid": 77832,
+          "parent": 77781,
+          "command": "/Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn/apps/native/.bench/IntelliJ IDEA OSS.app/Contents/plugins/jcef-plugin/jcef/Frameworks/cef_server.app/Contents/Frameworks/cef_server Helper.app/Contents/MacOS/cef_server Helper"
+        },
+        {
+          "pid": 77833,
+          "parent": 77781,
+          "command": "/Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn/apps/native/.bench/IntelliJ IDEA OSS.app/Contents/plugins/jcef-plugin/jcef/Frameworks/cef_server.app/Contents/Frameworks/cef_server Helper.app/Contents/MacOS/cef_server Helper"
+        },
+        {
+          "pid": 77835,
+          "parent": 77781,
+          "command": "/Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn/apps/native/.bench/IntelliJ IDEA OSS.app/Contents/plugins/jcef-plugin/jcef/Frameworks/cef_server.app/Contents/Frameworks/cef_server Helper.app/Contents/MacOS/cef_server Helper"
+        },
+        {
+          "pid": 77874,
+          "parent": 77781,
+          "command": "/Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn/apps/native/.bench/IntelliJ IDEA OSS.app/Contents/plugins/jcef-plugin/jcef/Frameworks/cef_server.app/Contents/Frameworks/cef_server Helper (Renderer).app/Contents/MacOS/cef_server Helper (Renderer)"
+        }
+      ],
+      "windows": [
+        {
+          "id": 296833,
+          "title": "riirn – README.md",
+          "width": 1332,
+          "height": 808
+        },
+        {
+          "id": 296834,
+          "title": "",
+          "width": 500,
+          "height": 500
+        }
+      ]
+    },
+    {
+      "round": 9,
+      "launchToWindowMs": 1139,
+      "sampledAtMs": 5002,
+      "footprintMiB": 2186.400421142578,
+      "processCount": 7,
+      "processes": [
+        {
+          "pid": 78417,
+          "parent": 58230,
+          "command": "/Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn/apps/native/.bench/IntelliJ IDEA OSS.app/Contents/MacOS/idea"
+        },
+        {
+          "pid": 78516,
+          "parent": 78417,
+          "command": "/Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn/apps/native/.bench/IntelliJ IDEA OSS.app/Contents/bin/fsnotifier"
+        },
+        {
+          "pid": 78988,
+          "parent": 78417,
+          "command": "/Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn/apps/native/.bench/IntelliJ IDEA OSS.app/Contents/plugins/jcef-plugin/jcef/Frameworks/cef_server.app/Contents/MacOS/cef_server"
+        },
+        {
+          "pid": 79024,
+          "parent": 78988,
+          "command": "/Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn/apps/native/.bench/IntelliJ IDEA OSS.app/Contents/plugins/jcef-plugin/jcef/Frameworks/cef_server.app/Contents/Frameworks/cef_server Helper.app/Contents/MacOS/cef_server Helper"
+        },
+        {
+          "pid": 79025,
+          "parent": 78988,
+          "command": "/Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn/apps/native/.bench/IntelliJ IDEA OSS.app/Contents/plugins/jcef-plugin/jcef/Frameworks/cef_server.app/Contents/Frameworks/cef_server Helper.app/Contents/MacOS/cef_server Helper"
+        },
+        {
+          "pid": 79026,
+          "parent": 78988,
+          "command": "/Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn/apps/native/.bench/IntelliJ IDEA OSS.app/Contents/plugins/jcef-plugin/jcef/Frameworks/cef_server.app/Contents/Frameworks/cef_server Helper.app/Contents/MacOS/cef_server Helper"
+        },
+        {
+          "pid": 79082,
+          "parent": 78988,
+          "command": "/Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn/apps/native/.bench/IntelliJ IDEA OSS.app/Contents/plugins/jcef-plugin/jcef/Frameworks/cef_server.app/Contents/Frameworks/cef_server Helper (Renderer).app/Contents/MacOS/cef_server Helper (Renderer)"
+        }
+      ],
+      "windows": [
+        {
+          "id": 296848,
+          "title": "",
+          "width": 500,
+          "height": 500
+        },
+        {
+          "id": 296847,
+          "title": "riirn – README.md",
+          "width": 1332,
+          "height": 808
+        }
+      ]
+    },
+    {
+      "round": 10,
+      "launchToWindowMs": 1029,
+      "sampledAtMs": 5001,
+      "footprintMiB": 2200.3534774780273,
+      "processCount": 7,
+      "processes": [
+        {
+          "pid": 79661,
+          "parent": 58230,
+          "command": "/Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn/apps/native/.bench/IntelliJ IDEA OSS.app/Contents/MacOS/idea"
+        },
+        {
+          "pid": 79711,
+          "parent": 79661,
+          "command": "/Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn/apps/native/.bench/IntelliJ IDEA OSS.app/Contents/bin/fsnotifier"
+        },
+        {
+          "pid": 80009,
+          "parent": 79661,
+          "command": "/Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn/apps/native/.bench/IntelliJ IDEA OSS.app/Contents/plugins/jcef-plugin/jcef/Frameworks/cef_server.app/Contents/MacOS/cef_server"
+        },
+        {
+          "pid": 80047,
+          "parent": 80009,
+          "command": "/Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn/apps/native/.bench/IntelliJ IDEA OSS.app/Contents/plugins/jcef-plugin/jcef/Frameworks/cef_server.app/Contents/Frameworks/cef_server Helper.app/Contents/MacOS/cef_server Helper"
+        },
+        {
+          "pid": 80049,
+          "parent": 80009,
+          "command": "/Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn/apps/native/.bench/IntelliJ IDEA OSS.app/Contents/plugins/jcef-plugin/jcef/Frameworks/cef_server.app/Contents/Frameworks/cef_server Helper.app/Contents/MacOS/cef_server Helper"
+        },
+        {
+          "pid": 80058,
+          "parent": 80009,
+          "command": "/Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn/apps/native/.bench/IntelliJ IDEA OSS.app/Contents/plugins/jcef-plugin/jcef/Frameworks/cef_server.app/Contents/Frameworks/cef_server Helper.app/Contents/MacOS/cef_server Helper"
+        },
+        {
+          "pid": 80102,
+          "parent": 80009,
+          "command": "/Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn/apps/native/.bench/IntelliJ IDEA OSS.app/Contents/plugins/jcef-plugin/jcef/Frameworks/cef_server.app/Contents/Frameworks/cef_server Helper (Renderer).app/Contents/MacOS/cef_server Helper (Renderer)"
+        }
+      ],
+      "windows": [
+        {
+          "id": 296861,
+          "title": "riirn – README.md",
+          "width": 1332,
+          "height": 808
+        },
+        {
+          "id": 296862,
+          "title": "",
+          "width": 500,
+          "height": 500
+        }
+      ]
+    }
+  ]
+}

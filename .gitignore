@@ -41,3 +41,4 @@ playwright-report-desktop/
 
 # Astro's generated type cache
 .astro/
+apps/native/.bench/

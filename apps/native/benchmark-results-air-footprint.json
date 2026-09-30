@@ -1,0 +1,785 @@
+{
+  "metadata": {
+    "name": "refresh-air",
+    "binary": "/Applications/Air.app/Contents/MacOS/Air",
+    "appArgs": [
+      "/Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn"
+    ],
+    "project": "/Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn",
+    "recordedAt": "2026-10-17T20:19:17.969Z",
+    "macos": "26.6.2",
+    "cpu": "Apple M4 Pro",
+    "powerVerification": {
+      "intervalMs": 1000,
+      "allChecksAC": true,
+      "checks": [
+        {
+          "at": 1792268279025,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268279031,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268280036,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268281051,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268282052,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268283037,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268284038,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268284178,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268285039,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268286040,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268286222,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268287044,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268288045,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268289047,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268290044,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268291045,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268291352,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268292047,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268293046,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268293395,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268294048,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268295057,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268296052,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268297054,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268298052,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268298519,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268299052,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268300061,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268300562,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268301065,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268302073,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268303064,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268304064,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268305064,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268305676,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268306066,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268307068,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268307718,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268308068,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268309073,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268310076,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268311070,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268312072,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268312837,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268313073,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268314072,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268314884,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268315073,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268316076,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268317084,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268318077,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268319078,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268319995,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268320081,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268321080,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268322040,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268322082,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268323088,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268324086,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268325084,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268326084,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268327161,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268327199,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268328188,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268329187,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268329212,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268330192,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268331213,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268332196,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268333194,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268334194,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268334335,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268335195,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268336196,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268336390,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268337197,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268338211,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268339202,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268340202,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268341204,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268341527,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268342204,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268343205,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268343568,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268344207,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268345214,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268346213,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268347208,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268348209,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268348763,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268349210,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268350212,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268350809,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268351213,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268352216,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268353230,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268354216,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268355217,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268355934,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268356218,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268357219,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        }
+      ]
+    },
+    "exitedDuringFootprint": [
+      {
+        "round": 9,
+        "pids": [
+          43905
+        ]
+      }
+    ],
+    "workload": "Same repository open; isolated profile; no running agent; profile and caches retained after an excluded warm-up",
+    "binarySha256": "6b3c21cdb04a1d16b85d2e9233bd2c1c1748ba2f0259d10f9ac12d3a7627cb1f",
+    "directoryOpenVerification": {
+      "log": "/Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn/apps/native/.bench/refresh-2026-10-17/air-profile/Library/Logs/JetBrains/Air/air.log",
+      "openingCount": 11
+    },
+    "version": "262.834.70",
+    "profile": "/Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn/apps/native/.bench/refresh-2026-10-17/air-profile"
+  },
+  "warmup": {
+    "round": 0,
+    "launchToWindowMs": 2381,
+    "sampledAtMs": 5007,
+    "footprintMiB": 893.5652923583984,
+    "processCount": 2,
+    "processes": [
+      {
+        "pid": 650,
+        "parent": 572,
+        "command": "/Applications/Air.app/Contents/MacOS/Air"
+      },
+      {
+        "pid": 1424,
+        "parent": 650,
+        "command": "/Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn/apps/native/.bench/refresh-2026-10-17/air-profile/Library/Caches/JetBrains/Air/downloaded-code-cache/4a4b8419293cba8b540f2727aefdcfa85779426bf9d1d7ec29d17cef59ca7ed7/fsdaemon"
+      }
+    ],
+    "windows": [
+      {
+        "id": 296544,
+        "title": "Air",
+        "width": 1280,
+        "height": 800
+      },
+      {
+        "id": 296550,
+        "title": "",
+        "width": 500,
+        "height": 500
+      }
+    ]
+  },
+  "results": [
+    {
+      "round": 1,
+      "launchToWindowMs": 1420,
+      "sampledAtMs": 5000,
+      "footprintMiB": 749.5339279174805,
+      "processCount": 2,
+      "processes": [
+        {
+          "pid": 6390,
+          "parent": 572,
+          "command": "/Applications/Air.app/Contents/MacOS/Air"
+        },
+        {
+          "pid": 6471,
+          "parent": 6390,
+          "command": "/Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn/apps/native/.bench/refresh-2026-10-17/air-profile/Library/Caches/JetBrains/Air/downloaded-code-cache/4a4b8419293cba8b540f2727aefdcfa85779426bf9d1d7ec29d17cef59ca7ed7/fsdaemon"
+        }
+      ],
+      "windows": [
+        {
+          "id": 296557,
+          "title": "Air",
+          "width": 1280,
+          "height": 800
+        },
+        {
+          "id": 296563,
+          "title": "",
+          "width": 500,
+          "height": 500
+        }
+      ]
+    },
+    {
+      "round": 2,
+      "launchToWindowMs": 1417,
+      "sampledAtMs": 5001,
+      "footprintMiB": 880.0183258056641,
+      "processCount": 2,
+      "processes": [
+        {
+          "pid": 10520,
+          "parent": 572,
+          "command": "/Applications/Air.app/Contents/MacOS/Air"
+        },
+        {
+          "pid": 10631,
+          "parent": 10520,
+          "command": "/Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn/apps/native/.bench/refresh-2026-10-17/air-profile/Library/Caches/JetBrains/Air/downloaded-code-cache/4a4b8419293cba8b540f2727aefdcfa85779426bf9d1d7ec29d17cef59ca7ed7/fsdaemon"
+        }
+      ],
+      "windows": [
+        {
+          "id": 296579,
+          "title": "Air",
+          "width": 1280,
+          "height": 800
+        }
+      ]
+    },
+    {
+      "round": 3,
+      "launchToWindowMs": 1393,
+      "sampledAtMs": 5001,
+      "footprintMiB": 914.4089736938477,
+      "processCount": 2,
+      "processes": [
+        {
+          "pid": 14465,
+          "parent": 572,
+          "command": "/Applications/Air.app/Contents/MacOS/Air"
+        },
+        {
+          "pid": 14521,
+          "parent": 14465,
+          "command": "/Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn/apps/native/.bench/refresh-2026-10-17/air-profile/Library/Caches/JetBrains/Air/downloaded-code-cache/4a4b8419293cba8b540f2727aefdcfa85779426bf9d1d7ec29d17cef59ca7ed7/fsdaemon"
+        }
+      ],
+      "windows": [
+        {
+          "id": 296593,
+          "title": "Air",
+          "width": 1280,
+          "height": 800
+        }
+      ]
+    },
+    {
+      "round": 4,
+      "launchToWindowMs": 1493,
+      "sampledAtMs": 5002,
+      "footprintMiB": 930.2995758056641,
+      "processCount": 2,
+      "processes": [
+        {
+          "pid": 18458,
+          "parent": 572,
+          "command": "/Applications/Air.app/Contents/MacOS/Air"
+        },
+        {
+          "pid": 18556,
+          "parent": 18458,
+          "command": "/Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn/apps/native/.bench/refresh-2026-10-17/air-profile/Library/Caches/JetBrains/Air/downloaded-code-cache/4a4b8419293cba8b540f2727aefdcfa85779426bf9d1d7ec29d17cef59ca7ed7/fsdaemon"
+        }
+      ],
+      "windows": [
+        {
+          "id": 296613,
+          "title": "Air",
+          "width": 525,
+          "height": 328
+        }
+      ]
+    },
+    {
+      "round": 5,
+      "launchToWindowMs": 1438,
+      "sampledAtMs": 5000,
+      "footprintMiB": 861.9870300292969,
+      "processCount": 2,
+      "processes": [
+        {
+          "pid": 22957,
+          "parent": 572,
+          "command": "/Applications/Air.app/Contents/MacOS/Air"
+        },
+        {
+          "pid": 22998,
+          "parent": 22957,
+          "command": "/Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn/apps/native/.bench/refresh-2026-10-17/air-profile/Library/Caches/JetBrains/Air/downloaded-code-cache/4a4b8419293cba8b540f2727aefdcfa85779426bf9d1d7ec29d17cef59ca7ed7/fsdaemon"
+        }
+      ],
+      "windows": [
+        {
+          "id": 296629,
+          "title": "Air",
+          "width": 525,
+          "height": 328
+        }
+      ]
+    },
+    {
+      "round": 6,
+      "launchToWindowMs": 1454,
+      "sampledAtMs": 5000,
+      "footprintMiB": 717.9401550292969,
+      "processCount": 2,
+      "processes": [
+        {
+          "pid": 27289,
+          "parent": 572,
+          "command": "/Applications/Air.app/Contents/MacOS/Air"
+        },
+        {
+          "pid": 27356,
+          "parent": 27289,
+          "command": "/Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn/apps/native/.bench/refresh-2026-10-17/air-profile/Library/Caches/JetBrains/Air/downloaded-code-cache/4a4b8419293cba8b540f2727aefdcfa85779426bf9d1d7ec29d17cef59ca7ed7/fsdaemon"
+        }
+      ],
+      "windows": [
+        {
+          "id": 296651,
+          "title": "",
+          "width": 500,
+          "height": 500
+        },
+        {
+          "id": 296645,
+          "title": "Air",
+          "width": 1280,
+          "height": 800
+        }
+      ]
+    },
+    {
+      "round": 7,
+      "launchToWindowMs": 1602,
+      "sampledAtMs": 5001,
+      "footprintMiB": 789.1120529174805,
+      "processCount": 2,
+      "processes": [
+        {
+          "pid": 31720,
+          "parent": 572,
+          "command": "/Applications/Air.app/Contents/MacOS/Air"
+        },
+        {
+          "pid": 31917,
+          "parent": 31720,
+          "command": "/Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn/apps/native/.bench/refresh-2026-10-17/air-profile/Library/Caches/JetBrains/Air/downloaded-code-cache/4a4b8419293cba8b540f2727aefdcfa85779426bf9d1d7ec29d17cef59ca7ed7/fsdaemon"
+        }
+      ],
+      "windows": [
+        {
+          "id": 296665,
+          "title": "",
+          "width": 500,
+          "height": 500
+        },
+        {
+          "id": 296659,
+          "title": "Air",
+          "width": 1280,
+          "height": 800
+        }
+      ]
+    },
+    {
+      "round": 8,
+      "launchToWindowMs": 1380,
+      "sampledAtMs": 5001,
+      "footprintMiB": 732.1589279174805,
+      "processCount": 2,
+      "processes": [
+        {
+          "pid": 36082,
+          "parent": 572,
+          "command": "/Applications/Air.app/Contents/MacOS/Air"
+        },
+        {
+          "pid": 36134,
+          "parent": 36082,
+          "command": "/Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn/apps/native/.bench/refresh-2026-10-17/air-profile/Library/Caches/JetBrains/Air/downloaded-code-cache/4a4b8419293cba8b540f2727aefdcfa85779426bf9d1d7ec29d17cef59ca7ed7/fsdaemon"
+        }
+      ],
+      "windows": [
+        {
+          "id": 296679,
+          "title": "",
+          "width": 500,
+          "height": 500
+        },
+        {
+          "id": 296673,
+          "title": "Air",
+          "width": 1280,
+          "height": 800
+        }
+      ]
+    },
+    {
+      "round": 9,
+      "launchToWindowMs": 1506,
+      "sampledAtMs": 5001,
+      "footprintMiB": 790.3932800292969,
+      "processCount": 3,
+      "processes": [
+        {
+          "pid": 39838,
+          "parent": 572,
+          "command": "/Applications/Air.app/Contents/MacOS/Air"
+        },
+        {
+          "pid": 39934,
+          "parent": 39838,
+          "command": "/Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn/apps/native/.bench/refresh-2026-10-17/air-profile/Library/Caches/JetBrains/Air/downloaded-code-cache/4a4b8419293cba8b540f2727aefdcfa85779426bf9d1d7ec29d17cef59ca7ed7/fsdaemon"
+        },
+        {
+          "pid": 43905,
+          "parent": 39838,
+          "command": "(jetbrainsd)"
+        }
+      ],
+      "windows": [
+        {
+          "id": 296694,
+          "title": "",
+          "width": 500,
+          "height": 500
+        },
+        {
+          "id": 296688,
+          "title": "Air",
+          "width": 1280,
+          "height": 800
+        }
+      ]
+    },
+    {
+      "round": 10,
+      "launchToWindowMs": 1332,
+      "sampledAtMs": 5001,
+      "footprintMiB": 961.4402236938477,
+      "processCount": 2,
+      "processes": [
+        {
+          "pid": 44229,
+          "parent": 572,
+          "command": "/Applications/Air.app/Contents/MacOS/Air"
+        },
+        {
+          "pid": 44285,
+          "parent": 44229,
+          "command": "/Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn/apps/native/.bench/refresh-2026-10-17/air-profile/Library/Caches/JetBrains/Air/downloaded-code-cache/4a4b8419293cba8b540f2727aefdcfa85779426bf9d1d7ec29d17cef59ca7ed7/fsdaemon"
+        }
+      ],
+      "windows": [
+        {
+          "id": 296701,
+          "title": "Air",
+          "width": 1280,
+          "height": 800
+        },
+        {
+          "id": 296707,
+          "title": "",
+          "width": 500,
+          "height": 500
+        }
+      ]
+    }
+  ]
+}

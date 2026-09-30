@@ -1,0 +1,409 @@
+{
+  "metadata": {
+    "powerVerification": {
+      "intervalMs": 1000,
+      "allChecksAC": true,
+      "checks": [
+        {
+          "at": 1792268603662,
+          "output": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792268604663,
+          "output": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792268605663,
+          "output": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792268606663,
+          "output": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792268607664,
+          "output": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792268608665,
+          "output": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792268609666,
+          "output": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792268610667,
+          "output": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792268611667,
+          "output": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792268612668,
+          "output": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792268613669,
+          "output": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792268614669,
+          "output": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792268615670,
+          "output": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792268616671,
+          "output": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792268617672,
+          "output": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792268618673,
+          "output": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792268619673,
+          "output": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792268620674,
+          "output": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792268621675,
+          "output": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792268622676,
+          "output": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792268623677,
+          "output": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792268624697,
+          "output": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792268625697,
+          "output": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792268626699,
+          "output": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792268627700,
+          "output": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792268628700,
+          "output": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792268629702,
+          "output": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792268630703,
+          "output": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792268631704,
+          "output": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792268632704,
+          "output": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792268633705,
+          "output": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792268634706,
+          "output": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792268635707,
+          "output": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792268636708,
+          "output": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792268637708,
+          "output": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792268638709,
+          "output": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792268639710,
+          "output": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792268640712,
+          "output": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792268641713,
+          "output": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792268642713,
+          "output": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792268643714,
+          "output": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792268644714,
+          "output": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792268645715,
+          "output": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792268646716,
+          "output": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792268647722,
+          "output": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792268648723,
+          "output": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792268649724,
+          "output": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792268650724,
+          "output": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792268651725,
+          "output": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792268652804,
+          "output": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792268653805,
+          "output": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792268654806,
+          "output": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792268655807,
+          "output": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792268656808,
+          "output": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792268657809,
+          "output": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792268658810,
+          "output": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792268659810,
+          "output": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792268660811,
+          "output": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792268661812,
+          "output": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792268662813,
+          "output": "Now drawing from 'AC Power'"
+        },
+        {
+          "at": 1792268663814,
+          "output": "Now drawing from 'AC Power'"
+        }
+      ]
+    },
+    "exitedDuringFootprint": [],
+    "macos": "26.6.2",
+    "cpu": "Apple M4 Pro",
+    "power": "Now drawing from 'AC Power'",
+    "baselineCommit": "3bee4f16454515674c5548cb96ed46c57c2a4956",
+    "original": "/Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn/apps/native/.bench/refresh-2026-10-17/upstream-instrumented.app",
+    "optimized": null,
+    "project": "/Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn",
+    "branch": "riirn",
+    "recordedAt": "2026-10-17T20:25:37.126Z",
+    "repository": "https://github.com/JetBrains/thinkrail",
+    "provenance": {
+      "commit": "3bee4f16454515674c5548cb96ed46c57c2a4956",
+      "configuration": "canary",
+      "package": "/Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn/apps/native/.bench/refresh-2026-10-17/upstream-package/ThinkRail-canary.app",
+      "instrumentedEntrySha256": "333fb486c5b73a59fc50163c9514dc2dc334e368f98664a5a8c8cd4f85be5284",
+      "bunSha256": "539598c775882420b9d8deb7dc14d845f20f7d26f5600c50ab067dde6ac3f3bf"
+    },
+    "footprintMethod": "App process tree and newly started WebKit processes belonging to the current user; independent five-second timer; zombies and confirmed exited children omitted"
+  },
+  "warmups": [
+    {
+      "client": "original",
+      "round": 0,
+      "launchToWindowMs": 1516,
+      "launchToDomReadyMs": 4611,
+      "launchToWorkspaceMs": 4611,
+      "at5s": {
+        "sampledAtMs": 5001,
+        "appFootprintMiB": 334,
+        "processCount": 5
+      }
+    }
+  ],
+  "results": [
+    {
+      "client": "original",
+      "round": 1,
+      "launchToWindowMs": 579,
+      "launchToDomReadyMs": 3021,
+      "launchToWorkspaceMs": 3021,
+      "at5s": {
+        "sampledAtMs": 5001,
+        "appFootprintMiB": 501,
+        "processCount": 7
+      }
+    },
+    {
+      "client": "original",
+      "round": 2,
+      "launchToWindowMs": 602,
+      "launchToDomReadyMs": 3919,
+      "launchToWorkspaceMs": 3919,
+      "at5s": {
+        "sampledAtMs": 4999,
+        "appFootprintMiB": 490,
+        "processCount": 7
+      }
+    },
+    {
+      "client": "original",
+      "round": 3,
+      "launchToWindowMs": 589,
+      "launchToDomReadyMs": 2071,
+      "launchToWorkspaceMs": 2070,
+      "at5s": {
+        "sampledAtMs": 5001,
+        "appFootprintMiB": 485,
+        "processCount": 5
+      }
+    },
+    {
+      "client": "original",
+      "round": 4,
+      "launchToWindowMs": 544,
+      "launchToDomReadyMs": 3545,
+      "launchToWorkspaceMs": 3545,
+      "at5s": {
+        "sampledAtMs": 5002,
+        "appFootprintMiB": 459,
+        "processCount": 5
+      }
+    },
+    {
+      "client": "original",
+      "round": 5,
+      "launchToWindowMs": 562,
+      "launchToDomReadyMs": 1925,
+      "launchToWorkspaceMs": 1924,
+      "at5s": {
+        "sampledAtMs": 5001,
+        "appFootprintMiB": 460,
+        "processCount": 5
+      }
+    },
+    {
+      "client": "original",
+      "round": 6,
+      "launchToWindowMs": 550,
+      "launchToDomReadyMs": 2830,
+      "launchToWorkspaceMs": 2830,
+      "at5s": {
+        "sampledAtMs": 5000,
+        "appFootprintMiB": 348,
+        "processCount": 5
+      }
+    },
+    {
+      "client": "original",
+      "round": 7,
+      "launchToWindowMs": 541,
+      "launchToDomReadyMs": 2747,
+      "launchToWorkspaceMs": 2747,
+      "at5s": {
+        "sampledAtMs": 5001,
+        "appFootprintMiB": 402,
+        "processCount": 5
+      }
+    },
+    {
+      "client": "original",
+      "round": 8,
+      "launchToWindowMs": 683,
+      "launchToDomReadyMs": 3054,
+      "launchToWorkspaceMs": 3055,
+      "at5s": {
+        "sampledAtMs": 5001,
+        "appFootprintMiB": 373,
+        "processCount": 6
+      }
+    },
+    {
+      "client": "original",
+      "round": 9,
+      "launchToWindowMs": 565,
+      "launchToDomReadyMs": 2866,
+      "launchToWorkspaceMs": 2866,
+      "at5s": {
+        "sampledAtMs": 5001,
+        "appFootprintMiB": 338,
+        "processCount": 5
+      }
+    },
+    {
+      "client": "original",
+      "round": 10,
+      "launchToWindowMs": 586,
+      "launchToDomReadyMs": 2884,
+      "launchToWorkspaceMs": 2884,
+      "at5s": {
+        "sampledAtMs": 5001,
+        "appFootprintMiB": 379,
+        "processCount": 6
+      }
+    }
+  ]
+}

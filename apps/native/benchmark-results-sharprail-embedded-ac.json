@@ -1,0 +1,416 @@
+{
+  "mode": "embedded",
+  "unreadableProcesses": [],
+  "workload": "C# project/files/spec/Git/worktree host with PTY terminals; Avalonia workbench with default terminal tab; no Pi",
+  "root": "/Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn",
+  "binaries": [
+    {
+      "file": "/private/tmp/claude-501/-Users-commandertvis--thinkrail-worktrees-thinkrail-riirn/c622d18f-e3ac-4790-8ade-11d176ada229/scratchpad/sharprail-up/artifacts/SharpRail.app/Contents/MacOS/SharpRail.UI.dll",
+      "sha256": "f0b532fe1f5bb63b84f2723d75a943dc48258367f169c5e28a9c57e22017b411"
+    },
+    {
+      "file": "/private/tmp/claude-501/-Users-commandertvis--thinkrail-worktrees-thinkrail-riirn/c622d18f-e3ac-4790-8ade-11d176ada229/scratchpad/sharprail-up/artifacts/SharpRail.app/Contents/MacOS/SharpRail.Host.Core.dll",
+      "sha256": "2270984777844547959bb5123010f49383f67d8fdeb4da2a8937bea53a82180d"
+    },
+    {
+      "file": "/private/tmp/claude-501/-Users-commandertvis--thinkrail-worktrees-thinkrail-riirn/c622d18f-e3ac-4790-8ade-11d176ada229/scratchpad/sharprail-up/artifacts/host/SharpRail.Host.Core.dll",
+      "sha256": "2270984777844547959bb5123010f49383f67d8fdeb4da2a8937bea53a82180d"
+    },
+    {
+      "file": "/private/tmp/claude-501/-Users-commandertvis--thinkrail-worktrees-thinkrail-riirn/c622d18f-e3ac-4790-8ade-11d176ada229/scratchpad/sharprail-up/artifacts/host/SharpRail.Host.Remote.dll",
+      "sha256": "b7f2ffdfba310b9196269485c116ef5a33cd1b8844b7b8cc926fd84cbcb1b924"
+    }
+  ],
+  "recordedAt": "2026-10-07T12:25:23.351Z",
+  "rounds": 10,
+  "summary": {
+    "firstWindowMs": {
+      "mean": 436.5,
+      "sampleStandardDeviation": 7.011894655987543
+    },
+    "workspaceLayoutMs": {
+      "mean": 417.3,
+      "sampleStandardDeviation": 8.327331171776734
+    },
+    "hostReadyMs": null,
+    "clientFootprintMiB": {
+      "mean": 329.53745040893557,
+      "sampleStandardDeviation": 6.169885803661936
+    },
+    "hostFootprintMiB": {
+      "mean": 0,
+      "sampleStandardDeviation": 0
+    },
+    "totalFootprintMiB": {
+      "mean": 329.53745040893557,
+      "sampleStandardDeviation": 6.169885803661936
+    }
+  },
+  "samples": [
+    {
+      "firstWindowMs": 428,
+      "workspaceLayoutMs": 402,
+      "hostReadyMs": null,
+      "clientFootprintMiB": 333.4390106201172,
+      "hostFootprintMiB": 0,
+      "totalFootprintMiB": 333.4390106201172,
+      "powerReadings": [
+        {
+          "at": 1791375872334,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t34%; charging; 2:08 remaining present: true"
+        },
+        {
+          "at": 1791375873342,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t34%; charging; 2:08 remaining present: true"
+        },
+        {
+          "at": 1791375874343,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t34%; charging; 2:08 remaining present: true"
+        },
+        {
+          "at": 1791375875344,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t34%; charging; 2:08 remaining present: true"
+        },
+        {
+          "at": 1791375876345,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t34%; charging; 2:08 remaining present: true"
+        },
+        {
+          "at": 1791375877426,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t34%; charging; 2:08 remaining present: true"
+        }
+      ],
+      "clientOutput": "SHARPRAIL_MAIN 1791375872361\n2026-10-07 14:24:32.720 SharpRail.UI[82530:53170410] GHOSTTY_AVALONIA renderer=Metal presentation=IOSurfaceLayer device=Apple M4 Pro\nSHARPRAIL_WORKSPACE_LAYOUT 1791375872737\nSHARPRAIL_TREE logical=217 files=32\n",
+      "hostOutput": ""
+    },
+    {
+      "firstWindowMs": 432,
+      "workspaceLayoutMs": 419,
+      "hostReadyMs": null,
+      "clientFootprintMiB": 333.3608856201172,
+      "hostFootprintMiB": 0,
+      "totalFootprintMiB": 333.3608856201172,
+      "powerReadings": [
+        {
+          "at": 1791375877484,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t34%; charging; 2:08 remaining present: true"
+        },
+        {
+          "at": 1791375878494,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t34%; charging; 2:08 remaining present: true"
+        },
+        {
+          "at": 1791375879494,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t34%; charging; 2:08 remaining present: true"
+        },
+        {
+          "at": 1791375880494,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t34%; charging; 2:08 remaining present: true"
+        },
+        {
+          "at": 1791375881495,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t34%; charging; 2:08 remaining present: true"
+        },
+        {
+          "at": 1791375882547,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t34%; charging; 2:08 remaining present: true"
+        }
+      ],
+      "clientOutput": "SHARPRAIL_MAIN 1791375877510\n2026-10-07 14:24:37.886 SharpRail.UI[83004:53171619] GHOSTTY_AVALONIA renderer=Metal presentation=IOSurfaceLayer device=Apple M4 Pro\nSHARPRAIL_WORKSPACE_LAYOUT 1791375877904\nSHARPRAIL_TREE logical=217 files=32\n",
+      "hostOutput": ""
+    },
+    {
+      "firstWindowMs": 425,
+      "workspaceLayoutMs": 414,
+      "hostReadyMs": null,
+      "clientFootprintMiB": 330.7202377319336,
+      "hostFootprintMiB": 0,
+      "totalFootprintMiB": 330.7202377319336,
+      "powerReadings": [
+        {
+          "at": 1791375882563,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t34%; charging; 2:08 remaining present: true"
+        },
+        {
+          "at": 1791375883572,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t34%; charging; 2:08 remaining present: true"
+        },
+        {
+          "at": 1791375884582,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t34%; charging; 2:08 remaining present: true"
+        },
+        {
+          "at": 1791375885574,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t34%; charging; 2:08 remaining present: true"
+        },
+        {
+          "at": 1791375886575,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t34%; charging; 2:08 remaining present: true"
+        },
+        {
+          "at": 1791375887651,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t34%; charging; 2:08 remaining present: true"
+        }
+      ],
+      "clientOutput": "SHARPRAIL_MAIN 1791375882588\n2026-10-07 14:24:42.960 SharpRail.UI[83503:53173171] GHOSTTY_AVALONIA renderer=Metal presentation=IOSurfaceLayer device=Apple M4 Pro\nSHARPRAIL_WORKSPACE_LAYOUT 1791375882977\nSHARPRAIL_TREE logical=217 files=32\n",
+      "hostOutput": ""
+    },
+    {
+      "firstWindowMs": 431,
+      "workspaceLayoutMs": 418,
+      "hostReadyMs": null,
+      "clientFootprintMiB": 312.3765106201172,
+      "hostFootprintMiB": 0,
+      "totalFootprintMiB": 312.3765106201172,
+      "powerReadings": [
+        {
+          "at": 1791375887665,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t34%; charging; 2:08 remaining present: true"
+        },
+        {
+          "at": 1791375888675,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t34%; charging; 2:08 remaining present: true"
+        },
+        {
+          "at": 1791375889683,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t34%; charging; 2:08 remaining present: true"
+        },
+        {
+          "at": 1791375890679,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t34%; charging; 2:08 remaining present: true"
+        },
+        {
+          "at": 1791375891683,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t34%; charging; 2:08 remaining present: true"
+        },
+        {
+          "at": 1791375892733,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t34%; charging; 2:08 remaining present: true"
+        }
+      ],
+      "clientOutput": "SHARPRAIL_MAIN 1791375887691\n2026-10-07 14:24:48.067 SharpRail.UI[83920:53174098] GHOSTTY_AVALONIA renderer=Metal presentation=IOSurfaceLayer device=Apple M4 Pro\nSHARPRAIL_WORKSPACE_LAYOUT 1791375888084\nSHARPRAIL_TREE logical=217 files=32\n",
+      "hostOutput": ""
+    },
+    {
+      "firstWindowMs": 440,
+      "workspaceLayoutMs": 421,
+      "hostReadyMs": null,
+      "clientFootprintMiB": 331.36083984375,
+      "hostFootprintMiB": 0,
+      "totalFootprintMiB": 331.36083984375,
+      "powerReadings": [
+        {
+          "at": 1791375892749,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t34%; charging; 2:08 remaining present: true"
+        },
+        {
+          "at": 1791375893757,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t34%; charging; 2:08 remaining present: true"
+        },
+        {
+          "at": 1791375894765,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t34%; charging; 2:08 remaining present: true"
+        },
+        {
+          "at": 1791375895762,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t34%; charging; 2:08 remaining present: true"
+        },
+        {
+          "at": 1791375896768,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t34%; charging; 2:08 remaining present: true"
+        },
+        {
+          "at": 1791375897835,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t34%; charging; 2:08 remaining present: true"
+        }
+      ],
+      "clientOutput": "SHARPRAIL_MAIN 1791375892774\n2026-10-07 14:24:53.153 SharpRail.UI[84104:53174553] GHOSTTY_AVALONIA renderer=Metal presentation=IOSurfaceLayer device=Apple M4 Pro\nSHARPRAIL_WORKSPACE_LAYOUT 1791375893170\nSHARPRAIL_TREE logical=217 files=32\n",
+      "hostOutput": ""
+    },
+    {
+      "firstWindowMs": 438,
+      "workspaceLayoutMs": 407,
+      "hostReadyMs": null,
+      "clientFootprintMiB": 330.7202377319336,
+      "hostFootprintMiB": 0,
+      "totalFootprintMiB": 330.7202377319336,
+      "powerReadings": [
+        {
+          "at": 1791375897850,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t34%; charging; 2:08 remaining present: true"
+        },
+        {
+          "at": 1791375898861,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t34%; charging; 2:08 remaining present: true"
+        },
+        {
+          "at": 1791375899868,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t34%; charging; 2:08 remaining present: true"
+        },
+        {
+          "at": 1791375900864,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t34%; charging; 2:08 remaining present: true"
+        },
+        {
+          "at": 1791375901869,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t34%; charging; 2:08 remaining present: true"
+        },
+        {
+          "at": 1791375902937,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t34%; charging; 2:08 remaining present: true"
+        }
+      ],
+      "clientOutput": "SHARPRAIL_MAIN 1791375897877\n2026-10-07 14:24:58.242 SharpRail.UI[84258:53174861] GHOSTTY_AVALONIA renderer=Metal presentation=IOSurfaceLayer device=Apple M4 Pro\nSHARPRAIL_WORKSPACE_LAYOUT 1791375898258\nSHARPRAIL_TREE logical=217 files=32\n",
+      "hostOutput": ""
+    },
+    {
+      "firstWindowMs": 441,
+      "workspaceLayoutMs": 421,
+      "hostReadyMs": null,
+      "clientFootprintMiB": 329.1265335083008,
+      "hostFootprintMiB": 0,
+      "totalFootprintMiB": 329.1265335083008,
+      "powerReadings": [
+        {
+          "at": 1791375902952,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t34%; charging; 2:08 remaining present: true"
+        },
+        {
+          "at": 1791375903962,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t35%; charging; 2:07 remaining present: true"
+        },
+        {
+          "at": 1791375904966,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t35%; charging; 2:07 remaining present: true"
+        },
+        {
+          "at": 1791375905962,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t35%; charging; 2:07 remaining present: true"
+        },
+        {
+          "at": 1791375906972,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t35%; charging; 2:07 remaining present: true"
+        },
+        {
+          "at": 1791375908037,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t35%; charging; 2:07 remaining present: true"
+        }
+      ],
+      "clientOutput": "SHARPRAIL_MAIN 1791375902977\n2026-10-07 14:25:03.356 SharpRail.UI[84393:53175200] GHOSTTY_AVALONIA renderer=Metal presentation=IOSurfaceLayer device=Apple M4 Pro\nSHARPRAIL_WORKSPACE_LAYOUT 1791375903373\nSHARPRAIL_TREE logical=217 files=32\n",
+      "hostOutput": ""
+    },
+    {
+      "firstWindowMs": 441,
+      "workspaceLayoutMs": 430,
+      "hostReadyMs": null,
+      "clientFootprintMiB": 330.7046813964844,
+      "hostFootprintMiB": 0,
+      "totalFootprintMiB": 330.7046813964844,
+      "powerReadings": [
+        {
+          "at": 1791375908051,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t35%; charging; 2:07 remaining present: true"
+        },
+        {
+          "at": 1791375909062,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t35%; charging; 2:07 remaining present: true"
+        },
+        {
+          "at": 1791375910068,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t35%; charging; 2:07 remaining present: true"
+        },
+        {
+          "at": 1791375911067,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t35%; charging; 2:07 remaining present: true"
+        },
+        {
+          "at": 1791375912070,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t35%; charging; 2:07 remaining present: true"
+        },
+        {
+          "at": 1791375913137,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t35%; charging; 2:07 remaining present: true"
+        }
+      ],
+      "clientOutput": "SHARPRAIL_MAIN 1791375908076\n2026-10-07 14:25:08.459 SharpRail.UI[84528:53175500] GHOSTTY_AVALONIA renderer=Metal presentation=IOSurfaceLayer device=Apple M4 Pro\nSHARPRAIL_WORKSPACE_LAYOUT 1791375908482\nSHARPRAIL_TREE logical=217 files=32\n",
+      "hostOutput": ""
+    },
+    {
+      "firstWindowMs": 446,
+      "workspaceLayoutMs": 426,
+      "hostReadyMs": null,
+      "clientFootprintMiB": 332.2983856201172,
+      "hostFootprintMiB": 0,
+      "totalFootprintMiB": 332.2983856201172,
+      "powerReadings": [
+        {
+          "at": 1791375913151,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t35%; charging; 2:07 remaining present: true"
+        },
+        {
+          "at": 1791375914161,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t35%; charging; 2:07 remaining present: true"
+        },
+        {
+          "at": 1791375915170,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t35%; charging; 2:07 remaining present: true"
+        },
+        {
+          "at": 1791375916165,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t35%; charging; 2:07 remaining present: true"
+        },
+        {
+          "at": 1791375917172,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t35%; charging; 2:07 remaining present: true"
+        },
+        {
+          "at": 1791375918240,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t35%; charging; 2:07 remaining present: true"
+        }
+      ],
+      "clientOutput": "SHARPRAIL_MAIN 1791375913178\n2026-10-07 14:25:13.557 SharpRail.UI[84663:53175854] GHOSTTY_AVALONIA renderer=Metal presentation=IOSurfaceLayer device=Apple M4 Pro\nSHARPRAIL_WORKSPACE_LAYOUT 1791375913578\nSHARPRAIL_TREE logical=217 files=32\n",
+      "hostOutput": ""
+    },
+    {
+      "firstWindowMs": 443,
+      "workspaceLayoutMs": 415,
+      "hostReadyMs": null,
+      "clientFootprintMiB": 331.2671813964844,
+      "hostFootprintMiB": 0,
+      "totalFootprintMiB": 331.2671813964844,
+      "powerReadings": [
+        {
+          "at": 1791375918254,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t35%; charging; 2:07 remaining present: true"
+        },
+        {
+          "at": 1791375919265,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t35%; charging; 2:07 remaining present: true"
+        },
+        {
+          "at": 1791375920269,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t35%; charging; 2:07 remaining present: true"
+        },
+        {
+          "at": 1791375921273,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t35%; charging; 2:07 remaining present: true"
+        },
+        {
+          "at": 1791375922272,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t35%; charging; 2:07 remaining present: true"
+        },
+        {
+          "at": 1791375923342,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t35%; charging; 2:07 remaining present: true"
+        }
+      ],
+      "clientOutput": "SHARPRAIL_MAIN 1791375918280\n2026-10-07 14:25:18.653 SharpRail.UI[84798:53176190] GHOSTTY_AVALONIA renderer=Metal presentation=IOSurfaceLayer device=Apple M4 Pro\nSHARPRAIL_WORKSPACE_LAYOUT 1791375918670\nSHARPRAIL_TREE logical=217 files=32\n",
+      "hostOutput": ""
+    }
+  ],
+  "source": {
+    "repository": "https://github.com/CommanderTvis/sharprail/tree/upstream",
+    "branch": "upstream",
+    "commit": "e2cfefb"
+  }
+}

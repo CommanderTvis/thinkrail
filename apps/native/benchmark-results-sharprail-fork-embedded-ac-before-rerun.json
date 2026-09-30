@@ -1,0 +1,422 @@
+{
+  "mode": "embedded",
+  "unreadableProcesses": [
+    "exited"
+  ],
+  "workload": "ThinkRail fork port: C# host and Avalonia workbench with docked panes, Scintilla editor, Ghostty terminals, Git/worktrees/review and bundled plugins; fresh profile; no built-in Pi chat or running agent",
+  "root": "/Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn",
+  "binaries": [
+    {
+      "file": "/Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn/apps/native/.bench/sharprail-fork-source/artifacts/SharpRail.app/Contents/MacOS/SharpRail.UI.dll",
+      "sha256": "ad61bb02c268472ea0612e8901c7b1ea659b1264e98a0d67de2e5aaac627ab06"
+    },
+    {
+      "file": "/Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn/apps/native/.bench/sharprail-fork-source/artifacts/SharpRail.app/Contents/MacOS/SharpRail.Host.Core.dll",
+      "sha256": "942706ba480390c4dce60a389b91682158b70cf62d6b16893fbda55d3f7ec16b"
+    }
+  ],
+  "recordedAt": "2026-10-16T08:13:18.625Z",
+  "rounds": 10,
+  "summary": {
+    "firstWindowMs": {
+      "mean": 1845,
+      "sampleStandardDeviation": 340.2952966011856
+    },
+    "workspaceLayoutMs": {
+      "mean": 2017.7,
+      "sampleStandardDeviation": 312.46050417079385
+    },
+    "hostReadyMs": null,
+    "clientFootprintMiB": {
+      "mean": 431.80438842773435,
+      "sampleStandardDeviation": 12.802389846100546
+    },
+    "hostFootprintMiB": {
+      "mean": 0,
+      "sampleStandardDeviation": 0
+    },
+    "totalFootprintMiB": {
+      "mean": 431.80438842773435,
+      "sampleStandardDeviation": 12.802389846100546
+    }
+  },
+  "samples": [
+    {
+      "firstWindowMs": 2482,
+      "workspaceLayoutMs": 2653,
+      "hostReadyMs": null,
+      "clientFootprintMiB": 406.6105422973633,
+      "hostFootprintMiB": 0,
+      "totalFootprintMiB": 406.6105422973633,
+      "powerReadings": [
+        {
+          "at": 1792138342575,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t3%; charging; (no estimate) present: true"
+        },
+        {
+          "at": 1792138343824,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t3%; charging; (no estimate) present: true"
+        },
+        {
+          "at": 1792138344822,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t3%; charging; (no estimate) present: true"
+        },
+        {
+          "at": 1792138345799,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t3%; charging; (no estimate) present: true"
+        },
+        {
+          "at": 1792138346826,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t3%; charging; (no estimate) present: true"
+        },
+        {
+          "at": 1792138348147,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t3%; charging; (no estimate) present: true"
+        }
+      ],
+      "clientOutput": "SHARPRAIL_MAIN 1792138342794\nSHARPRAIL_WORKSPACE_LAYOUT 1792138345229\nSHARPRAIL_TREE logical=208\n",
+      "hostOutput": ""
+    },
+    {
+      "firstWindowMs": 1500,
+      "workspaceLayoutMs": 1706,
+      "hostReadyMs": null,
+      "clientFootprintMiB": 436.7355651855469,
+      "hostFootprintMiB": 0,
+      "totalFootprintMiB": 436.7355651855469,
+      "powerReadings": [
+        {
+          "at": 1792138348212,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t3%; charging; (no estimate) present: true"
+        },
+        {
+          "at": 1792138349346,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t3%; charging; (no estimate) present: true"
+        },
+        {
+          "at": 1792138350499,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t3%; charging; (no estimate) present: true"
+        },
+        {
+          "at": 1792138351427,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t3%; charging; (no estimate) present: true"
+        },
+        {
+          "at": 1792138352311,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t3%; charging; (no estimate) present: true"
+        },
+        {
+          "at": 1792138353665,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t3%; charging; (no estimate) present: true"
+        }
+      ],
+      "clientOutput": "SHARPRAIL_MAIN 1792138348329\nSHARPRAIL_WORKSPACE_LAYOUT 1792138349918\nSHARPRAIL_TREE logical=208\n",
+      "hostOutput": ""
+    },
+    {
+      "firstWindowMs": 1601,
+      "workspaceLayoutMs": 1815,
+      "hostReadyMs": null,
+      "clientFootprintMiB": 446.1418151855469,
+      "hostFootprintMiB": 0,
+      "totalFootprintMiB": 446.1418151855469,
+      "powerReadings": [
+        {
+          "at": 1792138353842,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t3%; charging; (no estimate) present: true"
+        },
+        {
+          "at": 1792138354903,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t3%; charging; (no estimate) present: true"
+        },
+        {
+          "at": 1792138356093,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t3%; charging; (no estimate) present: true"
+        },
+        {
+          "at": 1792138356997,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t3%; charging; (no estimate) present: true"
+        },
+        {
+          "at": 1792138357961,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t3%; charging; (no estimate) present: true"
+        },
+        {
+          "at": 1792138359457,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t3%; charging; (no estimate) present: true"
+        }
+      ],
+      "clientOutput": "SHARPRAIL_MAIN 1792138354032\nSHARPRAIL_WORKSPACE_LAYOUT 1792138355659\nSHARPRAIL_TREE logical=208\n",
+      "hostOutput": ""
+    },
+    {
+      "firstWindowMs": 1530,
+      "workspaceLayoutMs": 1762,
+      "hostReadyMs": null,
+      "clientFootprintMiB": 441.9855194091797,
+      "hostFootprintMiB": 0,
+      "totalFootprintMiB": 441.9855194091797,
+      "powerReadings": [
+        {
+          "at": 1792138359582,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t3%; charging; (no estimate) present: true"
+        },
+        {
+          "at": 1792138360661,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t3%; charging; (no estimate) present: true"
+        },
+        {
+          "at": 1792138361781,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t3%; charging; (no estimate) present: true"
+        },
+        {
+          "at": 1792138362796,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t3%; charging; (no estimate) present: true"
+        },
+        {
+          "at": 1792138363663,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t3%; charging; (no estimate) present: true"
+        },
+        {
+          "at": 1792138365205,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t3%; charging; (no estimate) present: true"
+        }
+      ],
+      "clientOutput": "SHARPRAIL_MAIN 1792138359745\nSHARPRAIL_WORKSPACE_LAYOUT 1792138361345\nSHARPRAIL_TREE logical=208\n",
+      "hostOutput": ""
+    },
+    {
+      "firstWindowMs": 1564,
+      "workspaceLayoutMs": 1779,
+      "hostReadyMs": null,
+      "clientFootprintMiB": 436.09539794921875,
+      "hostFootprintMiB": 0,
+      "totalFootprintMiB": 436.09539794921875,
+      "powerReadings": [
+        {
+          "at": 1792138365319,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t3%; charging; (no estimate) present: true"
+        },
+        {
+          "at": 1792138366401,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t3%; charging; (no estimate) present: true"
+        },
+        {
+          "at": 1792138367529,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t3%; charging; (no estimate) present: true"
+        },
+        {
+          "at": 1792138368430,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t3%; charging; (no estimate) present: true"
+        },
+        {
+          "at": 1792138369490,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t3%; charging; (no estimate) present: true"
+        },
+        {
+          "at": 1792138370586,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t3%; charging; (no estimate) present: true"
+        }
+      ],
+      "clientOutput": "SHARPRAIL_MAIN 1792138365561\nSHARPRAIL_WORKSPACE_LAYOUT 1792138367100\nSHARPRAIL_TREE logical=208\n",
+      "hostOutput": ""
+    },
+    {
+      "firstWindowMs": 1750,
+      "workspaceLayoutMs": 1931,
+      "hostReadyMs": null,
+      "clientFootprintMiB": 440.72039794921875,
+      "hostFootprintMiB": 0,
+      "totalFootprintMiB": 440.72039794921875,
+      "powerReadings": [
+        {
+          "at": 1792138370723,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t3%; charging; (no estimate) present: true"
+        },
+        {
+          "at": 1792138371812,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t4%; charging; 2:26 remaining present: true"
+        },
+        {
+          "at": 1792138372932,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t4%; charging; 2:26 remaining present: true"
+        },
+        {
+          "at": 1792138373861,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t4%; charging; 2:26 remaining present: true"
+        },
+        {
+          "at": 1792138374790,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t4%; charging; 2:26 remaining present: true"
+        },
+        {
+          "at": 1792138376008,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t4%; charging; 2:26 remaining present: true"
+        }
+      ],
+      "clientOutput": "SHARPRAIL_MAIN 1792138370962\nSHARPRAIL_WORKSPACE_LAYOUT 1792138372654\nSHARPRAIL_TREE logical=208\n",
+      "hostOutput": ""
+    },
+    {
+      "firstWindowMs": 1797,
+      "workspaceLayoutMs": 2030,
+      "hostReadyMs": null,
+      "clientFootprintMiB": 412.0948944091797,
+      "hostFootprintMiB": 0,
+      "totalFootprintMiB": 412.0948944091797,
+      "powerReadings": [
+        {
+          "at": 1792138376219,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t4%; charging; 2:26 remaining present: true"
+        },
+        {
+          "at": 1792138377310,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t4%; charging; 2:26 remaining present: true"
+        },
+        {
+          "at": 1792138378556,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t4%; charging; 2:26 remaining present: true"
+        },
+        {
+          "at": 1792138379320,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t4%; charging; 2:26 remaining present: true"
+        },
+        {
+          "at": 1792138380443,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t4%; charging; 2:26 remaining present: true"
+        },
+        {
+          "at": 1792138381857,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t4%; charging; 2:26 remaining present: true"
+        }
+      ],
+      "clientOutput": "SHARPRAIL_MAIN 1792138376403\nSHARPRAIL_WORKSPACE_LAYOUT 1792138378253\nSHARPRAIL_TREE logical=208\n",
+      "hostOutput": ""
+    },
+    {
+      "firstWindowMs": 2196,
+      "workspaceLayoutMs": 2433,
+      "hostReadyMs": null,
+      "clientFootprintMiB": 429.2042465209961,
+      "hostFootprintMiB": 0,
+      "totalFootprintMiB": 429.2042465209961,
+      "powerReadings": [
+        {
+          "at": 1792138381945,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t4%; charging; 2:26 remaining present: true"
+        },
+        {
+          "at": 1792138383051,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t4%; charging; 2:26 remaining present: true"
+        },
+        {
+          "at": 1792138384017,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t4%; charging; 2:26 remaining present: true"
+        },
+        {
+          "at": 1792138385202,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t4%; charging; 2:26 remaining present: true"
+        },
+        {
+          "at": 1792138386259,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t4%; charging; 2:26 remaining present: true"
+        },
+        {
+          "at": 1792138387687,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t4%; charging; 2:26 remaining present: true"
+        }
+      ],
+      "clientOutput": "SHARPRAIL_MAIN 1792138382219\nSHARPRAIL_WORKSPACE_LAYOUT 1792138384379\nSHARPRAIL_TREE logical=208\n",
+      "hostOutput": ""
+    },
+    {
+      "firstWindowMs": 2224,
+      "workspaceLayoutMs": 2164,
+      "hostReadyMs": null,
+      "clientFootprintMiB": 433.23558807373047,
+      "hostFootprintMiB": 0,
+      "totalFootprintMiB": 433.23558807373047,
+      "powerReadings": [
+        {
+          "at": 1792138387792,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t4%; charging; 2:26 remaining present: true"
+        },
+        {
+          "at": 1792138388942,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t4%; charging; 2:26 remaining present: true"
+        },
+        {
+          "at": 1792138390209,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t4%; charging; 2:26 remaining present: true"
+        },
+        {
+          "at": 1792138390936,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t4%; charging; 2:26 remaining present: true"
+        },
+        {
+          "at": 1792138391937,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t4%; charging; 2:26 remaining present: true"
+        },
+        {
+          "at": 1792138393111,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t4%; charging; 2:26 remaining present: true"
+        }
+      ],
+      "clientOutput": "SHARPRAIL_MAIN 1792138387971\nSHARPRAIL_WORKSPACE_LAYOUT 1792138389957\nSHARPRAIL_TREE logical=208\n",
+      "hostOutput": ""
+    },
+    {
+      "firstWindowMs": 1806,
+      "workspaceLayoutMs": 1904,
+      "hostReadyMs": null,
+      "clientFootprintMiB": 435.2199172973633,
+      "hostFootprintMiB": 0,
+      "totalFootprintMiB": 435.2199172973633,
+      "powerReadings": [
+        {
+          "at": 1792138393236,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t4%; charging; 2:26 remaining present: true"
+        },
+        {
+          "at": 1792138394288,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t4%; charging; 2:26 remaining present: true"
+        },
+        {
+          "at": 1792138395426,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t4%; charging; 2:26 remaining present: true"
+        },
+        {
+          "at": 1792138396453,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t4%; charging; 2:26 remaining present: true"
+        },
+        {
+          "at": 1792138397350,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t4%; charging; 2:26 remaining present: true"
+        },
+        {
+          "at": 1792138398472,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t4%; charging; 2:26 remaining present: true"
+        }
+      ],
+      "clientOutput": "SHARPRAIL_MAIN 1792138393690\nSHARPRAIL_WORKSPACE_LAYOUT 1792138395142\nSHARPRAIL_TREE logical=208\n",
+      "hostOutput": ""
+    }
+  ],
+  "source": {
+    "repository": "/Users/commandertvis/thinkrail/sharprail",
+    "branch": "main",
+    "commit": "a72eef0b2d6ea19fe11654a199923d664958e104",
+    "sourceSha256": "f642aaf5b5a3af6439f462743adaac571a1d38287ff69a09d11d74e6791493e6",
+    "sourceFileCount": 917,
+    "workingTree": "M tests/SharpRail.Checks/SPEC.md\n M tests/SharpRail.Checks/WindowsChecks.cs",
+    "sdk": "10.0.401",
+    "publish": {
+      "configuration": "Release",
+      "runtime": "osx-arm64",
+      "selfContained": true,
+      "readyToRun": true,
+      "readyToRunComposite": false
+    },
+    "isolatedBuildRoot": "/Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn/apps/native/.bench/sharprail-fork-source"
+  }
+}

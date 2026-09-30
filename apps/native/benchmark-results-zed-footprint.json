@@ -1,0 +1,729 @@
+{
+  "metadata": {
+    "name": "refresh-zed",
+    "binary": "/Applications/Zed.app/Contents/MacOS/zed",
+    "appArgs": [
+      "--user-data-dir",
+      "/Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn/apps/native/.bench/refresh-2026-10-17/zed-profile",
+      "/Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn"
+    ],
+    "project": "/Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn",
+    "recordedAt": "2026-10-17T20:20:46.610Z",
+    "macos": "26.6.2",
+    "cpu": "Apple M4 Pro",
+    "powerVerification": {
+      "intervalMs": 1000,
+      "allChecksAC": true,
+      "checks": [
+        {
+          "at": 1792268367862,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268367870,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268368870,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268369872,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268370873,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268371878,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268372875,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268372987,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268373882,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268374877,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268375043,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268375878,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268376878,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268377881,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268378880,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268379882,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268380154,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268380882,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268381884,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268382200,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268382885,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268383886,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268384890,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268385887,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268386889,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268387309,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268387889,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268388892,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268389354,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268389892,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268390895,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268391893,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268392894,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268393894,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268394470,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268394895,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268395895,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268396513,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268396897,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268397898,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268398899,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268399900,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268400904,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268401625,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268401904,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268402903,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268403668,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268403904,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268404904,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268405911,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268406912,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268407908,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268408781,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268408909,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268409909,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268410822,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268410912,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268411912,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268412912,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268413913,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268414913,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268415931,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268415954,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268416956,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268417957,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268417973,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268418960,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268419959,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268420959,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268421960,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268422963,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268423092,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268423962,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268424962,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268425140,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268425964,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268426965,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268427966,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268428967,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268429968,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268430248,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268430973,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268431970,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268432292,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268432972,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268433972,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268434973,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268435974,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268436975,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268437407,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268437976,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268438978,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268439449,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268439979,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268440979,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268441980,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268442982,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268443982,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268444574,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268444983,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1792268445984,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        }
+      ]
+    },
+    "exitedDuringFootprint": [],
+    "workload": "Same repository open; isolated profile; no running agent; profile and caches retained after an excluded warm-up",
+    "binarySha256": "a6427ca3acaeb3929d44feb68ef71134105f100badfdc015dd59130aaa0b6bc0",
+    "version": "1.24.2",
+    "profile": "/Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn/apps/native/.bench/refresh-2026-10-17/zed-profile"
+  },
+  "warmup": {
+    "round": 0,
+    "launchToWindowMs": 289,
+    "sampledAtMs": 5005,
+    "footprintMiB": 133.59564971923828,
+    "processCount": 2,
+    "processes": [
+      {
+        "pid": 49158,
+        "parent": 49106,
+        "command": "/Applications/Zed.app/Contents/MacOS/zed"
+      },
+      {
+        "pid": 49435,
+        "parent": 49158,
+        "command": "/Applications/Zed.app/Contents/MacOS/zed"
+      }
+    ],
+    "windows": [
+      {
+        "id": 296712,
+        "title": "riirn",
+        "width": 1352,
+        "height": 848
+      }
+    ]
+  },
+  "results": [
+    {
+      "round": 1,
+      "launchToWindowMs": 215,
+      "sampledAtMs": 5001,
+      "footprintMiB": 145.1580581665039,
+      "processCount": 2,
+      "processes": [
+        {
+          "pid": 50732,
+          "parent": 49106,
+          "command": "/Applications/Zed.app/Contents/MacOS/zed"
+        },
+        {
+          "pid": 50734,
+          "parent": 50732,
+          "command": "/Applications/Zed.app/Contents/MacOS/zed"
+        }
+      ],
+      "windows": [
+        {
+          "id": 296713,
+          "title": "riirn",
+          "width": 1352,
+          "height": 848
+        }
+      ]
+    },
+    {
+      "round": 2,
+      "launchToWindowMs": 220,
+      "sampledAtMs": 5001,
+      "footprintMiB": 146.7517852783203,
+      "processCount": 2,
+      "processes": [
+        {
+          "pid": 51322,
+          "parent": 49106,
+          "command": "/Applications/Zed.app/Contents/MacOS/zed"
+        },
+        {
+          "pid": 51324,
+          "parent": 51322,
+          "command": "/Applications/Zed.app/Contents/MacOS/zed"
+        }
+      ],
+      "windows": [
+        {
+          "id": 296714,
+          "title": "riirn",
+          "width": 1352,
+          "height": 848
+        }
+      ]
+    },
+    {
+      "round": 3,
+      "launchToWindowMs": 189,
+      "sampledAtMs": 5001,
+      "footprintMiB": 146.3143310546875,
+      "processCount": 2,
+      "processes": [
+        {
+          "pid": 52063,
+          "parent": 49106,
+          "command": "/Applications/Zed.app/Contents/MacOS/zed"
+        },
+        {
+          "pid": 52065,
+          "parent": 52063,
+          "command": "/Applications/Zed.app/Contents/MacOS/zed"
+        }
+      ],
+      "windows": [
+        {
+          "id": 296715,
+          "title": "riirn",
+          "width": 1352,
+          "height": 848
+        }
+      ]
+    },
+    {
+      "round": 4,
+      "launchToWindowMs": 201,
+      "sampledAtMs": 5002,
+      "footprintMiB": 145.9080581665039,
+      "processCount": 2,
+      "processes": [
+        {
+          "pid": 52560,
+          "parent": 49106,
+          "command": "/Applications/Zed.app/Contents/MacOS/zed"
+        },
+        {
+          "pid": 52563,
+          "parent": 52560,
+          "command": "/Applications/Zed.app/Contents/MacOS/zed"
+        }
+      ],
+      "windows": [
+        {
+          "id": 296716,
+          "title": "riirn",
+          "width": 1352,
+          "height": 848
+        }
+      ]
+    },
+    {
+      "round": 5,
+      "launchToWindowMs": 198,
+      "sampledAtMs": 5001,
+      "footprintMiB": 128.2361831665039,
+      "processCount": 2,
+      "processes": [
+        {
+          "pid": 53182,
+          "parent": 49106,
+          "command": "/Applications/Zed.app/Contents/MacOS/zed"
+        },
+        {
+          "pid": 53192,
+          "parent": 53182,
+          "command": "/Applications/Zed.app/Contents/MacOS/zed"
+        }
+      ],
+      "windows": [
+        {
+          "id": 296719,
+          "title": "riirn",
+          "width": 1352,
+          "height": 848
+        }
+      ]
+    },
+    {
+      "round": 6,
+      "launchToWindowMs": 196,
+      "sampledAtMs": 5001,
+      "footprintMiB": 127.1424331665039,
+      "processCount": 2,
+      "processes": [
+        {
+          "pid": 53805,
+          "parent": 49106,
+          "command": "/Applications/Zed.app/Contents/MacOS/zed"
+        },
+        {
+          "pid": 53813,
+          "parent": 53805,
+          "command": "/Applications/Zed.app/Contents/MacOS/zed"
+        }
+      ],
+      "windows": [
+        {
+          "id": 296720,
+          "title": "riirn",
+          "width": 1352,
+          "height": 848
+        }
+      ]
+    },
+    {
+      "round": 7,
+      "launchToWindowMs": 211,
+      "sampledAtMs": 5001,
+      "footprintMiB": 244.3768310546875,
+      "processCount": 2,
+      "processes": [
+        {
+          "pid": 54624,
+          "parent": 49106,
+          "command": "/Applications/Zed.app/Contents/MacOS/zed"
+        },
+        {
+          "pid": 54626,
+          "parent": 54624,
+          "command": "/Applications/Zed.app/Contents/MacOS/zed"
+        }
+      ],
+      "windows": [
+        {
+          "id": 296721,
+          "title": "riirn",
+          "width": 1352,
+          "height": 848
+        }
+      ]
+    },
+    {
+      "round": 8,
+      "launchToWindowMs": 238,
+      "sampledAtMs": 5000,
+      "footprintMiB": 127.7830581665039,
+      "processCount": 2,
+      "processes": [
+        {
+          "pid": 55670,
+          "parent": 49106,
+          "command": "/Applications/Zed.app/Contents/MacOS/zed"
+        },
+        {
+          "pid": 55679,
+          "parent": 55670,
+          "command": "/Applications/Zed.app/Contents/MacOS/zed"
+        }
+      ],
+      "windows": [
+        {
+          "id": 296722,
+          "title": "riirn",
+          "width": 1352,
+          "height": 848
+        }
+      ]
+    },
+    {
+      "round": 9,
+      "launchToWindowMs": 220,
+      "sampledAtMs": 5001,
+      "footprintMiB": 128.7830581665039,
+      "processCount": 2,
+      "processes": [
+        {
+          "pid": 56393,
+          "parent": 49106,
+          "command": "/Applications/Zed.app/Contents/MacOS/zed"
+        },
+        {
+          "pid": 56397,
+          "parent": 56393,
+          "command": "/Applications/Zed.app/Contents/MacOS/zed"
+        }
+      ],
+      "windows": [
+        {
+          "id": 296723,
+          "title": "riirn",
+          "width": 1352,
+          "height": 848
+        }
+      ]
+    },
+    {
+      "round": 10,
+      "launchToWindowMs": 236,
+      "sampledAtMs": 5001,
+      "footprintMiB": 146.7518081665039,
+      "processCount": 2,
+      "processes": [
+        {
+          "pid": 56977,
+          "parent": 49106,
+          "command": "/Applications/Zed.app/Contents/MacOS/zed"
+        },
+        {
+          "pid": 56984,
+          "parent": 56977,
+          "command": "/Applications/Zed.app/Contents/MacOS/zed"
+        }
+      ],
+      "windows": [
+        {
+          "id": 296724,
+          "title": "riirn",
+          "width": 1352,
+          "height": 848
+        }
+      ]
+    }
+  ]
+}
