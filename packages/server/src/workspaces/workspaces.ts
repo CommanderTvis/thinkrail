@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { existsSync, lstatSync, mkdirSync, rmSync, statSync, writeFileSync } from "node:fs";
-import { basename, dirname, join, resolve } from "node:path";
+import { basename, dirname, join, resolve, sep } from "node:path";
 import type {
 	DiffStats,
 	ExistingWorktreeCandidate,
@@ -25,7 +25,13 @@ import {
 	tryCurrentBranch,
 } from "../git";
 import { logger } from "../log";
-import { dataDir, loadProjects, loadWorkspaces, saveWorkspaces } from "../persistence";
+import {
+	dataDir,
+	loadProjects,
+	loadWorkspaces,
+	saveProjects,
+	saveWorkspaces,
+} from "../persistence";
 import { getProjects, listProjects } from "../projects";
 
 const log = logger("workspaces");
@@ -38,6 +44,7 @@ export type WorkspaceLifecycleEvent =
 type WorkspacePublisher = (event: WorkspaceLifecycleEvent) => void;
 
 let publishLifecycle: WorkspacePublisher | null = null;
+const worktreesBeingCreated = new Set<string>();
 
 export function setWorkspacePublisher(fn: WorkspacePublisher | null): void {
 	publishLifecycle = fn;
@@ -130,11 +137,10 @@ async function gitWorktreeEntries(repoPath: string): Promise<GitWorktreeEntry[]>
 	return entries;
 }
 
-export async function listExistingWorktrees(
-	projectId: string,
-): Promise<ExistingWorktreeCandidate[]> {
-	const project = openProjectById(projectId);
-	const entries = await gitWorktreeEntries(project.path);
+function unattachedWorktrees(
+	project: Project,
+	entries: GitWorktreeEntry[],
+): ExistingWorktreeCandidate[] {
 	const projectPath = canonicalPath(project.path);
 	const representedPaths = new Set([
 		...loadProjects().map((knownProject) => canonicalPath(knownProject.path)),
@@ -147,6 +153,83 @@ export async function listExistingWorktrees(
 			? [{ path: entry.path, branch: entry.branch, status: "available" }]
 			: [{ path: entry.path, status: "detached" }];
 	});
+}
+
+export async function listExistingWorktrees(
+	projectId: string,
+): Promise<ExistingWorktreeCandidate[]> {
+	const project = openProjectById(projectId);
+	return unattachedWorktrees(project, await gitWorktreeEntries(project.path));
+}
+
+function setWorktreeDismissed(projectId: string, path: string, dismissed: boolean): void {
+	const projects = loadProjects();
+	const project = projects.find((candidate) => candidate.id === projectId);
+	if (!project) return;
+	const wanted = canonicalPath(path);
+	const before = project.dismissedWorktrees ?? [];
+	const next = before.filter((entry) => entry !== wanted);
+	if (dismissed) next.push(wanted);
+	if (next.length === before.length && next.every((entry, i) => entry === before[i])) return;
+	if (next.length > 0) project.dismissedWorktrees = next;
+	else delete project.dismissedWorktrees;
+	saveProjects(projects);
+}
+
+export async function adoptManagedWorktrees(projectId: string): Promise<Workspace[]> {
+	const project = getProjects().find((candidate) => candidate.id === projectId);
+	if (!project || project.hasGit === false) return [];
+	const adopted: Workspace[] = [];
+	try {
+		const entries = await gitWorktreeEntries(project.path);
+		pruneDismissedWorktrees(projectId, entries);
+		const dismissed = new Set(
+			loadProjects().find((candidate) => candidate.id === projectId)?.dismissedWorktrees,
+		);
+		const managedRoot = join(canonicalPath(join(dataDir(), "worktrees")), project.slug) + sep;
+		const baseBranch = resolveDefaultBranch(project.path);
+		for (const candidate of unattachedWorktrees(project, entries)) {
+			const path = canonicalPath(candidate.path);
+			if (
+				candidate.status !== "available" ||
+				!path.startsWith(managedRoot) ||
+				dismissed.has(path) ||
+				worktreesBeingCreated.has(path)
+			)
+				continue;
+			const workspace: Workspace = {
+				id: randomUUID(),
+				projectId,
+				name: toDisplayName(candidate.branch) ?? candidate.branch,
+				branch: candidate.branch,
+				worktreePath: candidate.path,
+				baseBranch,
+				renamed: true,
+				initialTerminalPending: true,
+			};
+			ensureWorkspaceScratchDir(workspace);
+			const all = loadWorkspaces();
+			all.push(workspace);
+			saveWorkspaces(all);
+			emit({ kind: "created", workspace });
+			adopted.push(workspace);
+		}
+	} catch (err) {
+		log.warn(`adopting worktrees of ${projectId} failed: ${(err as Error).message}`);
+	}
+	return adopted;
+}
+
+function pruneDismissedWorktrees(projectId: string, entries: GitWorktreeEntry[]): void {
+	const projects = loadProjects();
+	const project = projects.find((candidate) => candidate.id === projectId);
+	if (!project?.dismissedWorktrees) return;
+	const registered = new Set(entries.map((entry) => canonicalPath(entry.path)));
+	const kept = project.dismissedWorktrees.filter((path) => registered.has(path));
+	if (kept.length === project.dismissedWorktrees.length) return;
+	if (kept.length > 0) project.dismissedWorktrees = kept;
+	else delete project.dismissedWorktrees;
+	saveProjects(projects);
 }
 
 export async function openExistingWorktree(
@@ -279,34 +362,40 @@ export async function createWorkspace(
 
 	const worktreePath = join(dataDir(), "worktrees", project.slug, branch);
 	mkdirSync(dirname(worktreePath), { recursive: true });
-	const added = git(project.path, [
-		"worktree",
-		"add",
-		worktreePath,
-		"-b",
-		branch,
-		"--no-track",
-		"--end-of-options",
-		remoteBase ?? baseBranch,
-	]);
-	if (!added.ok) throw new Error(`git worktree add failed: ${added.err}`);
+	const claimed = join(canonicalPath(dirname(worktreePath)), basename(worktreePath));
+	worktreesBeingCreated.add(claimed);
+	try {
+		const added = git(project.path, [
+			"worktree",
+			"add",
+			worktreePath,
+			"-b",
+			branch,
+			"--no-track",
+			"--end-of-options",
+			remoteBase ?? baseBranch,
+		]);
+		if (!added.ok) throw new Error(`git worktree add failed: ${added.err}`);
 
-	const workspace: Workspace = {
-		id: randomUUID(),
-		projectId,
-		name: wsName,
-		branch,
-		worktreePath,
-		baseBranch,
-		initialTerminalPending: true,
-		...(displayName ? { renamed: true } : {}),
-	};
-	ensureWorkspaceScratchDir(workspace);
-	const all = loadWorkspaces();
-	all.push(workspace);
-	saveWorkspaces(all);
-	emit({ kind: "created", workspace });
-	return workspace;
+		const workspace: Workspace = {
+			id: randomUUID(),
+			projectId,
+			name: wsName,
+			branch,
+			worktreePath,
+			baseBranch,
+			initialTerminalPending: true,
+			...(displayName ? { renamed: true } : {}),
+		};
+		ensureWorkspaceScratchDir(workspace);
+		const all = loadWorkspaces();
+		all.push(workspace);
+		saveWorkspaces(all);
+		emit({ kind: "created", workspace });
+		return workspace;
+	} finally {
+		worktreesBeingCreated.delete(claimed);
+	}
 }
 
 export function ensureWorkspaceScratchDir(ws: Workspace): void {
@@ -515,6 +604,7 @@ export async function listWorkspaces(
 ): Promise<Workspace[]> {
 	const project = getProjects().find((p) => p.id === projectId);
 	if (project) ensureDefaultWorkspace(project);
+	void adoptManagedWorktrees(projectId);
 	for (const workspace of loadWorkspaces()) {
 		if (workspace.projectId === projectId && workspace.kind !== "default") {
 			refreshWorkspaceBranch(workspace.id);
@@ -559,6 +649,7 @@ export function forgetWorkspace(id: string): Workspace | null {
 	if (!ws) return null;
 	if (ws.kind === "default") throw new Error("The Default workspace cannot be removed");
 	saveWorkspaces(all.filter((w) => w.id !== id));
+	setWorktreeDismissed(ws.projectId, ws.worktreePath, true);
 	emit({ kind: "removed", projectId: ws.projectId, id: ws.id });
 	return ws;
 }

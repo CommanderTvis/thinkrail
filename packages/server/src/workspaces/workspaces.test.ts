@@ -13,6 +13,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Workspace } from "@thinkrail/contracts";
 import {
+	adoptManagedWorktrees,
 	completeInitialTerminalReservation,
 	createWorkspace,
 	ensureWorkspaceScratchDir,
@@ -271,6 +272,58 @@ test("openExistingWorktree adopts idempotently and removal never reclaims the ch
 	expect(readFileSync(join(external, "uncommitted.txt"), "utf8")).toBe("keep untracked\n");
 	expectCheckoutUnchanged();
 	expect(gitOut(repo, "show-ref", "--verify", "refs/heads/feature/auth")).not.toBe("");
+});
+
+test("a worktree made in ThinkRail's folder is adopted as a workspace, once", async () => {
+	const inside = join(dataDir, "worktrees", "repo", "agent", "work");
+	git(repo, "worktree", "add", inside, "-b", "agent/work", "main");
+	const outside = join(dataDir, "made elsewhere");
+	git(repo, "worktree", "add", outside, "-b", "elsewhere", "main");
+	git(repo, "worktree", "add", "--detach", join(dataDir, "worktrees", "repo", "loose"), "main");
+	const events: WorkspaceLifecycleEvent[] = [];
+	setWorkspacePublisher((event) => events.push(event));
+
+	const adopted = await adoptManagedWorktrees("p1");
+	expect(adopted).toHaveLength(1);
+	expect(adopted[0]).toMatchObject({
+		branch: "agent/work",
+		worktreePath: inside,
+		baseBranch: "main",
+		renamed: true,
+	});
+	expect(adopted[0]?.kind).toBeUndefined();
+	expect(events).toEqual([{ kind: "created", workspace: adopted[0] as Workspace }]);
+	expect((await listExistingWorktrees("p1")).map((candidate) => candidate.path)).toContain(outside);
+
+	expect(await adoptManagedWorktrees("p1")).toHaveLength(0);
+});
+
+test("a removed adopted worktree is not adopted again", async () => {
+	const inside = join(dataDir, "worktrees", "repo", "agent-work");
+	git(repo, "worktree", "add", inside, "-b", "agent-work", "main");
+	const [adopted] = await adoptManagedWorktrees("p1");
+	if (!adopted) throw new Error("worktree was not adopted");
+
+	forgetWorkspace(adopted.id);
+	expect(await adoptManagedWorktrees("p1")).toHaveLength(0);
+	expect(await worktrees()).toHaveLength(0);
+
+	reclaimWorktree(adopted);
+	expect(existsSync(inside)).toBe(false);
+	expect(await adoptManagedWorktrees("p1")).toHaveLength(0);
+	const [project] = JSON.parse(readFileSync(join(dataDir, "projects.json"), "utf8")) as Array<{
+		dismissedWorktrees?: string[];
+	}>;
+	expect(project?.dismissedWorktrees).toBeUndefined();
+});
+
+test("a workspace ThinkRail is creating is never mistaken for an outside worktree", async () => {
+	const created = createWorkspace("p1", "Mid Flight");
+	const scans = await Promise.all([adoptManagedWorktrees("p1"), adoptManagedWorktrees("p1")]);
+	const workspace = await created;
+	expect(scans.flat()).toHaveLength(0);
+	expect((await worktrees()).map((row) => row.id)).toEqual([workspace.id]);
+	expect(workspace.kind).toBeUndefined();
 });
 
 test("openExistingWorktree rejects detached and unrelated paths", async () => {
