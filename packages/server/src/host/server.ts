@@ -83,7 +83,9 @@ import {
 	stopAllWatches,
 } from "../watch";
 import {
+	adoptManagedWorktrees,
 	getWorkspace,
+	listAllWorkspaceRecords,
 	refreshWorkspaceBranch,
 	setWorkspacePublisher,
 } from "../workspaces";
@@ -603,6 +605,8 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 
 	setRepoMetaPublisher((workspaceId) => {
 		refreshWorkspaceBranch(workspaceId);
+		const workspace = listAllWorkspaceRecords().find((candidate) => candidate.id === workspaceId);
+		if (workspace?.kind === "default") void adoptManagedWorktrees(workspace.projectId);
 		publishFsChanged({ workspaceId, paths: [], truncated: false, skillChange: "none" });
 	});
 

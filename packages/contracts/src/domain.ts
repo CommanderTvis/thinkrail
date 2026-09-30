@@ -20,6 +20,7 @@ export interface Project {
 	disabledGroups?: string[];
 	/** `false` for a plain folder ThinkRail opened without a git repo; absent/`true` otherwise. */
 	hasGit?: boolean;
+	dismissedWorktrees?: string[];
 }
 
 export type ProjectPathStatus = { kind: "repo" | "initable" | "missing" | "notDirectory" };
