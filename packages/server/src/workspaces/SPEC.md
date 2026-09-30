@@ -24,6 +24,24 @@ folder itself (git's *main working tree*) — the "just work in my project folde
 **non-removable and non-renamable**. Any **existing worktree** the user explicitly attaches is recorded in
 place as `kind: "external"` — outside the data dir, never created or mutated here.
 
+**Worktrees made in ThinkRail's folder are adopted automatically.** `adoptManagedWorktrees(projectId)` reads
+the same `git worktree list` registry and records every branch-backed worktree of the project that sits
+under `<dataDir>/worktrees/<project-slug>/` and has no workspace, as an ordinary workspace (not `external`:
+the folder is ThinkRail's, so it is renamable and reclaimed on removal like one it made itself; `renamed`
+is set so auto-rename never moves the branch an agent chose). A worktree an agent or a terminal made there
+with plain `git worktree add` appears in the rail without a dialog. Worktrees outside that folder,
+detached ones and prunable ones are never adopted; they stay with the Existing-Worktree dialog. The scan
+runs from `listWorkspaces` (background, so the rows snapshot the listing returns is unchanged and the new
+workspace arrives through the push) and from the host on a repo-metadata nudge of the project's Default
+workspace. Two rules keep it from fighting the user and itself:
+- **Removal is remembered.** `forgetWorkspace` records the canonical path in the project's
+  `dismissedWorktrees`, and the scan skips those.
+  Entries git no longer lists are pruned on each scan, so the list cannot outgrow the registry. Recording
+  every kind covers the window between `forgetWorkspace` and the later
+  `reclaimWorktree` of a ThinkRail-made checkout, when git still lists it.
+- **A checkout being created is not adopted.** `createWorkspace` holds its worktree path in an in-flight set
+  from `git worktree add` until the record is saved; the scan skips that path.
+
 ## Boundary
 
 - **Owns:** `listExistingWorktrees(projectId)` (**async** — parses `git worktree list --porcelain -z` read
@@ -234,7 +252,7 @@ place as `kind: "external"` — outside the data dir, never created or mutated h
   module the **single source of workspace lifecycle pushes** (the naming handler never pushes — rename
   self-publishes), so registry membership stays shared domain state across every client (architecture #9).
 - **Public surface (barrel):** `createWorkspace`, `listExistingWorktrees`, `openExistingWorktree`,
-  `listWorkspaces`, `listWorkspaceRecords`, `listAllWorkspaceRecords`, `forgetWorkspace`,
+  `adoptManagedWorktrees`, `listWorkspaces`, `listWorkspaceRecords`, `listAllWorkspaceRecords`, `forgetWorkspace`,
   `reclaimWorktree`, `removeWorkspace`,
   `workspaceDiffStats`, `workspaceDiffKey`, `getWorkspace`, `renameWorkspace`, `refreshWorkspaceBranch`,
   `completeInitialTerminalReservation`, `ensureWorkspaceScratchDir`, `setWorkspacePublisher`,

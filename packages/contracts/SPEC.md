@@ -208,7 +208,9 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   (the per-project grant), **`acknowledgedSkills`** (re-confirm-new — which committed aliases are OK'd) and
   **`disabledSkills`** / **`disabledGroups`** (project-baseline per-skill and per-group off — a group is a
   plugin, a source tier, or the special `@plugins`), which gate what its skills contribute; a workspace layers
-  **`Workspace.skillOverrides`** (per-skill on/off) over that baseline;
+  **`Workspace.skillOverrides`** (per-skill on/off) over that baseline; optional
+  **`dismissedWorktrees`** (canonical paths of worktrees the user removed, which the server's automatic
+  adoption of worktrees in its own folder leaves alone);
   **`SubagentOverride`** (`"on" | "off"`) + optional **`Workspace.subagentsOverride`** let a workspace
   force subagents on/off, while absence inherits the host's `AppConfig.subagentsEnabled` default;
   "does it have specs?" is **not** a field — it's the lazy `project.hasSpecs` query, since it's a full-tree
