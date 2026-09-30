@@ -27,6 +27,9 @@ export interface Project {
 	mcpApprovals?: Record<string, string>;
 	/** Per-project enablement/exposure of user-level MCP servers (never written to `.pi/mcp.json`). */
 	mcpOverrides?: Record<string, McpProjectOverride>;
+	/** `false` for a plain folder ThinkRail opened without a git repo; absent/`true` otherwise. */
+	hasGit?: boolean;
+	dismissedWorktrees?: string[];
 }
 
 export type ProjectPathStatus = { kind: "repo" | "initable" | "missing" | "notDirectory" };
