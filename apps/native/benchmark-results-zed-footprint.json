@@ -1,0 +1,82 @@
+{
+  "metadata": {
+    "name": "zed",
+    "binary": "/Applications/Zed.app/Contents/MacOS/zed",
+    "appArgs": [
+      "--user-data-dir",
+      "/Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn/prototypes/ThinkRailNative/.bench/zed-data"
+    ],
+    "macos": "26.6.2",
+    "cpu": "Apple M4 Pro",
+    "power": "Now drawing from 'AC Power'",
+    "root": "/Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn/prototypes/ThinkRailNative"
+  },
+  "warmup": {
+    "round": 0,
+    "launchToWindowMs": 284,
+    "footprintMiB": 127,
+    "processCount": 2
+  },
+  "results": [
+    {
+      "round": 1,
+      "launchToWindowMs": 223,
+      "footprintMiB": 127,
+      "processCount": 2
+    },
+    {
+      "round": 2,
+      "launchToWindowMs": 240,
+      "footprintMiB": 126,
+      "processCount": 2
+    },
+    {
+      "round": 3,
+      "launchToWindowMs": 248,
+      "footprintMiB": 125,
+      "processCount": 2
+    },
+    {
+      "round": 4,
+      "launchToWindowMs": 238,
+      "footprintMiB": 125,
+      "processCount": 2
+    },
+    {
+      "round": 5,
+      "launchToWindowMs": 218,
+      "footprintMiB": 126,
+      "processCount": 2
+    },
+    {
+      "round": 6,
+      "launchToWindowMs": 283,
+      "footprintMiB": 147,
+      "processCount": 2
+    },
+    {
+      "round": 7,
+      "launchToWindowMs": 226,
+      "footprintMiB": 126,
+      "processCount": 2
+    },
+    {
+      "round": 8,
+      "launchToWindowMs": 222,
+      "footprintMiB": 127,
+      "processCount": 2
+    },
+    {
+      "round": 9,
+      "launchToWindowMs": 225,
+      "footprintMiB": 126,
+      "processCount": 2
+    },
+    {
+      "round": 10,
+      "launchToWindowMs": 209,
+      "footprintMiB": 144,
+      "processCount": 2
+    }
+  ]
+}

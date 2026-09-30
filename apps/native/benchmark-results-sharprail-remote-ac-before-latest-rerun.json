@@ -1,0 +1,413 @@
+{
+  "mode": "remote",
+  "workload": "C# project/files/Git/worktrees host; functional Avalonia workspace, Markdown, docking and settings; no Pi or PTY",
+  "root": "/Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn",
+  "binaries": [
+    {
+      "file": "/Users/commandertvis/thinkrail/sharprail/artifacts/SharpRail.app/Contents/MacOS/SharpRail.UI.dll",
+      "sha256": "a12aaa60c8d6be5a7b8e9f782cd76a0f184acc1112c80d75c11b58d1c3c08eec"
+    },
+    {
+      "file": "/Users/commandertvis/thinkrail/sharprail/artifacts/SharpRail.app/Contents/MacOS/SharpRail.Host.Core.dll",
+      "sha256": "8a42db9f623261233d9b249d98d2596991fe557544f9ba0f697f3b6745cb11e2"
+    },
+    {
+      "file": "/Users/commandertvis/thinkrail/sharprail/artifacts/host/SharpRail.Host.Core.dll",
+      "sha256": "5eb2d7863bd565d598aef752d7f03d1f665b4b0753f57eb2e7290284604bfaec"
+    },
+    {
+      "file": "/Users/commandertvis/thinkrail/sharprail/artifacts/host/SharpRail.Host.Remote.dll",
+      "sha256": "5a1c9ed1b2e0bcd00843965d1053dbb0dea6d094cd44eaea914101409c97e089"
+    }
+  ],
+  "recordedAt": "2026-09-29T10:08:08.427Z",
+  "rounds": 10,
+  "summary": {
+    "firstWindowMs": {
+      "mean": 502.4,
+      "sampleStandardDeviation": 15.457468529268734
+    },
+    "workspaceLayoutMs": {
+      "mean": 576.3,
+      "sampleStandardDeviation": 24.882166750952823
+    },
+    "hostReadyMs": {
+      "mean": 136.6,
+      "sampleStandardDeviation": 7.042726744663605
+    },
+    "clientFootprintMiB": {
+      "mean": 294.0917694091797,
+      "sampleStandardDeviation": 67.72929263006094
+    },
+    "hostFootprintMiB": {
+      "mean": 79.11481552124023,
+      "sampleStandardDeviation": 0.1411313336547128
+    },
+    "totalFootprintMiB": {
+      "mean": 373.2065849304199,
+      "sampleStandardDeviation": 67.69143123467649
+    }
+  },
+  "samples": [
+    {
+      "firstWindowMs": 489,
+      "workspaceLayoutMs": 554,
+      "hostReadyMs": 139,
+      "clientFootprintMiB": 275.1886672973633,
+      "hostFootprintMiB": 79.12580108642578,
+      "totalFootprintMiB": 354.31446838378906,
+      "powerReadings": [
+        {
+          "at": 1790676437314,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t96%; charging; 0:23 remaining present: true"
+        },
+        {
+          "at": 1790676438322,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t96%; charging; 0:23 remaining present: true"
+        },
+        {
+          "at": 1790676439324,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t96%; charging; 0:23 remaining present: true"
+        },
+        {
+          "at": 1790676440325,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t96%; charging; 0:23 remaining present: true"
+        },
+        {
+          "at": 1790676441326,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t96%; charging; 0:23 remaining present: true"
+        },
+        {
+          "at": 1790676442399,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t96%; charging; 0:23 remaining present: true"
+        }
+      ],
+      "clientOutput": "SHARPRAIL_MAIN 1790676437474\nSHARPRAIL_WORKSPACE_LAYOUT 1790676437870\nSHARPRAIL_TREE logical=212 files=33\n",
+      "hostOutput": "info: ProtoBuf.Grpc.Server.ServicesExtensions.CodeFirstServiceMethodProvider[0]\n      RPC services being provided by SharpRail.Host.Remote.WorkspaceRpc: 2\ninfo: ProtoBuf.Grpc.Server.ServicesExtensions.CodeFirstServiceMethodProvider[0]\n      RPC services being provided by SharpRail.Host.Remote.ProjectRpc: 8\ninfo: Microsoft.Hosting.Lifetime[14]\n      Now listening on: http://127.0.0.1:50194\ninfo: Microsoft.Hosting.Lifetime[0]\n      Application started. Press Ctrl+C to shut down.\ninfo: Microsoft.Hosting.Lifetime[0]\n      Hosting environment: Production\ninfo: Microsoft.Hosting.Lifetime[0]\n      Content root path: /Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn/prototypes/ThinkRailNative\nSHARPRAIL_HOST_READY 1790676437455\ninfo: Microsoft.AspNetCore.Hosting.Diagnostics[1]\n      Request starting HTTP/2 POST http://127.0.0.1:50194/SharpRail.Host.Protocol.ProjectRpc/OpenProject - application/grpc -\ninfo: Microsoft.AspNetCore.Routing.EndpointMiddleware[0]\n      Executing endpoint 'gRPC - /SharpRail.Host.Protocol.ProjectRpc/OpenProject'\ninfo: Microsoft.AspNetCore.Routing.EndpointMiddleware[1]\n      Executed endpoint 'gRPC - /SharpRail.Host.Protocol.ProjectRpc/OpenProject'\ninfo: Microsoft.AspNetCore.Hosting.Diagnostics[2]\n      Request finished HTTP/2 POST http://127.0.0.1:50194/SharpRail.Host.Protocol.ProjectRpc/OpenProject - 200 - application/grpc 56.2948ms\ninfo: Microsoft.AspNetCore.Hosting.Diagnostics[1]\n      Request starting HTTP/2 POST http://127.0.0.1:50194/SharpRail.Host.Protocol.ProjectRpc/ListFiles - application/grpc -\ninfo: Microsoft.AspNetCore.Routing.EndpointMiddleware[0]\n      Executing endpoint 'gRPC - /SharpRail.Host.Protocol.ProjectRpc/ListFiles'\ninfo: Microsoft.AspNetCore.Routing.EndpointMiddleware[1]\n      Executed endpoint 'gRPC - /SharpRail.Host.Protocol.ProjectRpc/ListFiles'\ninfo: Microsoft.AspNetCore.Hosting.Diagnostics[2]\n      Request finished HTTP/2 POST http://127.0.0.1:50194/SharpRail.Host.Protocol.ProjectRpc/ListFiles - 200 - application/grpc 4.1819ms\ninfo: Microsoft.AspNetCore.Hosting.Diagnostics[1]\n      Request starting HTTP/2 POST http://127.0.0.1:50194/SharpRail.Host.Protocol.ProjectRpc/ListSpecs - application/grpc -\ninfo: Microsoft.AspNetCore.Routing.EndpointMiddleware[0]\n      Executing endpoint 'gRPC - /SharpRail.Host.Protocol.ProjectRpc/ListSpecs'\ninfo: Microsoft.AspNetCore.Hosting.Diagnostics[1]\n      Request starting HTTP/2 POST http://127.0.0.1:50194/SharpRail.Host.Protocol.ProjectRpc/GetGit - application/grpc -\ninfo: Microsoft.AspNetCore.Routing.EndpointMiddleware[0]\n      Executing endpoint 'gRPC - /SharpRail.Host.Protocol.ProjectRpc/GetGit'\ninfo: Microsoft.AspNetCore.Routing.EndpointMiddleware[1]\n      Executed endpoint 'gRPC - /SharpRail.Host.Protocol.ProjectRpc/ListSpecs'\ninfo: Microsoft.AspNetCore.Hosting.Diagnostics[2]\n      Request finished HTTP/2 POST http://127.0.0.1:50194/SharpRail.Host.Protocol.ProjectRpc/ListSpecs - 200 - application/grpc 178.7542ms\ninfo: Microsoft.AspNetCore.Routing.EndpointMiddleware[1]\n      Executed endpoint 'gRPC - /SharpRail.Host.Protocol.ProjectRpc/GetGit'\ninfo: Microsoft.AspNetCore.Hosting.Diagnostics[2]\n      Request finished HTTP/2 POST http://127.0.0.1:50194/SharpRail.Host.Protocol.ProjectRpc/GetGit - 200 - application/grpc 165.9550ms\n"
+    },
+    {
+      "firstWindowMs": 502,
+      "workspaceLayoutMs": 571,
+      "hostReadyMs": 142,
+      "clientFootprintMiB": 264.9386672973633,
+      "hostFootprintMiB": 79.0788803100586,
+      "totalFootprintMiB": 344.0175476074219,
+      "powerReadings": [
+        {
+          "at": 1790676442426,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t96%; charging; 0:23 remaining present: true"
+        },
+        {
+          "at": 1790676443434,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t96%; charging; 0:23 remaining present: true"
+        },
+        {
+          "at": 1790676444436,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t96%; charging; 0:23 remaining present: true"
+        },
+        {
+          "at": 1790676445439,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t96%; charging; 0:23 remaining present: true"
+        },
+        {
+          "at": 1790676446439,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t96%; charging; 0:23 remaining present: true"
+        },
+        {
+          "at": 1790676447509,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t96%; charging; 0:23 remaining present: true"
+        }
+      ],
+      "clientOutput": "SHARPRAIL_MAIN 1790676442587\nSHARPRAIL_WORKSPACE_LAYOUT 1790676442997\nSHARPRAIL_TREE logical=212 files=33\n",
+      "hostOutput": "info: ProtoBuf.Grpc.Server.ServicesExtensions.CodeFirstServiceMethodProvider[0]\n      RPC services being provided by SharpRail.Host.Remote.WorkspaceRpc: 2\ninfo: ProtoBuf.Grpc.Server.ServicesExtensions.CodeFirstServiceMethodProvider[0]\n      RPC services being provided by SharpRail.Host.Remote.ProjectRpc: 8\ninfo: Microsoft.Hosting.Lifetime[14]\n      Now listening on: http://127.0.0.1:50196\ninfo: Microsoft.Hosting.Lifetime[0]\n      Application started. Press Ctrl+C to shut down.\ninfo: Microsoft.Hosting.Lifetime[0]\n      Hosting environment: Production\ninfo: Microsoft.Hosting.Lifetime[0]\n      Content root path: /Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn/prototypes/ThinkRailNative\nSHARPRAIL_HOST_READY 1790676442568\ninfo: Microsoft.AspNetCore.Hosting.Diagnostics[1]\n      Request starting HTTP/2 POST http://127.0.0.1:50196/SharpRail.Host.Protocol.ProjectRpc/OpenProject - application/grpc -\ninfo: Microsoft.AspNetCore.Routing.EndpointMiddleware[0]\n      Executing endpoint 'gRPC - /SharpRail.Host.Protocol.ProjectRpc/OpenProject'\ninfo: Microsoft.AspNetCore.Routing.EndpointMiddleware[1]\n      Executed endpoint 'gRPC - /SharpRail.Host.Protocol.ProjectRpc/OpenProject'\ninfo: Microsoft.AspNetCore.Hosting.Diagnostics[2]\n      Request finished HTTP/2 POST http://127.0.0.1:50196/SharpRail.Host.Protocol.ProjectRpc/OpenProject - 200 - application/grpc 52.2931ms\ninfo: Microsoft.AspNetCore.Hosting.Diagnostics[1]\n      Request starting HTTP/2 POST http://127.0.0.1:50196/SharpRail.Host.Protocol.ProjectRpc/ListFiles - application/grpc -\ninfo: Microsoft.AspNetCore.Routing.EndpointMiddleware[0]\n      Executing endpoint 'gRPC - /SharpRail.Host.Protocol.ProjectRpc/ListFiles'\ninfo: Microsoft.AspNetCore.Routing.EndpointMiddleware[1]\n      Executed endpoint 'gRPC - /SharpRail.Host.Protocol.ProjectRpc/ListFiles'\ninfo: Microsoft.AspNetCore.Hosting.Diagnostics[2]\n      Request finished HTTP/2 POST http://127.0.0.1:50196/SharpRail.Host.Protocol.ProjectRpc/ListFiles - 200 - application/grpc 6.4129ms\ninfo: Microsoft.AspNetCore.Hosting.Diagnostics[1]\n      Request starting HTTP/2 POST http://127.0.0.1:50196/SharpRail.Host.Protocol.ProjectRpc/ListSpecs - application/grpc -\ninfo: Microsoft.AspNetCore.Routing.EndpointMiddleware[0]\n      Executing endpoint 'gRPC - /SharpRail.Host.Protocol.ProjectRpc/ListSpecs'\ninfo: Microsoft.AspNetCore.Hosting.Diagnostics[1]\n      Request starting HTTP/2 POST http://127.0.0.1:50196/SharpRail.Host.Protocol.ProjectRpc/GetGit - application/grpc -\ninfo: Microsoft.AspNetCore.Routing.EndpointMiddleware[0]\n      Executing endpoint 'gRPC - /SharpRail.Host.Protocol.ProjectRpc/GetGit'\ninfo: Microsoft.AspNetCore.Routing.EndpointMiddleware[1]\n      Executed endpoint 'gRPC - /SharpRail.Host.Protocol.ProjectRpc/ListSpecs'\ninfo: Microsoft.AspNetCore.Routing.EndpointMiddleware[1]\n      Executed endpoint 'gRPC - /SharpRail.Host.Protocol.ProjectRpc/GetGit'\ninfo: Microsoft.AspNetCore.Hosting.Diagnostics[2]\n      Request finished HTTP/2 POST http://127.0.0.1:50196/SharpRail.Host.Protocol.ProjectRpc/GetGit - 200 - application/grpc 155.2162ms\ninfo: Microsoft.AspNetCore.Hosting.Diagnostics[2]\n      Request finished HTTP/2 POST http://127.0.0.1:50196/SharpRail.Host.Protocol.ProjectRpc/ListSpecs - 200 - application/grpc 168.6871ms\n"
+    },
+    {
+      "firstWindowMs": 510,
+      "workspaceLayoutMs": 587,
+      "hostReadyMs": 131,
+      "clientFootprintMiB": 269.7667694091797,
+      "hostFootprintMiB": 78.938232421875,
+      "totalFootprintMiB": 348.7050018310547,
+      "powerReadings": [
+        {
+          "at": 1790676447533,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t96%; charging; 0:23 remaining present: true"
+        },
+        {
+          "at": 1790676448542,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t96%; charging; 0:23 remaining present: true"
+        },
+        {
+          "at": 1790676449543,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t96%; charging; 0:23 remaining present: true"
+        },
+        {
+          "at": 1790676450544,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t96%; charging; 0:23 remaining present: true"
+        },
+        {
+          "at": 1790676451545,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t96%; charging; 0:23 remaining present: true"
+        },
+        {
+          "at": 1790676452618,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t96%; charging; 0:23 remaining present: true"
+        }
+      ],
+      "clientOutput": "SHARPRAIL_MAIN 1790676447683\nSHARPRAIL_WORKSPACE_LAYOUT 1790676448120\nSHARPRAIL_TREE logical=212 files=33\n",
+      "hostOutput": "info: ProtoBuf.Grpc.Server.ServicesExtensions.CodeFirstServiceMethodProvider[0]\n      RPC services being provided by SharpRail.Host.Remote.WorkspaceRpc: 2\ninfo: ProtoBuf.Grpc.Server.ServicesExtensions.CodeFirstServiceMethodProvider[0]\n      RPC services being provided by SharpRail.Host.Remote.ProjectRpc: 8\ninfo: Microsoft.Hosting.Lifetime[14]\n      Now listening on: http://127.0.0.1:50198\ninfo: Microsoft.Hosting.Lifetime[0]\n      Application started. Press Ctrl+C to shut down.\ninfo: Microsoft.Hosting.Lifetime[0]\n      Hosting environment: Production\ninfo: Microsoft.Hosting.Lifetime[0]\n      Content root path: /Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn/prototypes/ThinkRailNative\nSHARPRAIL_HOST_READY 1790676447664\ninfo: Microsoft.AspNetCore.Hosting.Diagnostics[1]\n      Request starting HTTP/2 POST http://127.0.0.1:50198/SharpRail.Host.Protocol.ProjectRpc/OpenProject - application/grpc -\ninfo: Microsoft.AspNetCore.Routing.EndpointMiddleware[0]\n      Executing endpoint 'gRPC - /SharpRail.Host.Protocol.ProjectRpc/OpenProject'\ninfo: Microsoft.AspNetCore.Routing.EndpointMiddleware[1]\n      Executed endpoint 'gRPC - /SharpRail.Host.Protocol.ProjectRpc/OpenProject'\ninfo: Microsoft.AspNetCore.Hosting.Diagnostics[2]\n      Request finished HTTP/2 POST http://127.0.0.1:50198/SharpRail.Host.Protocol.ProjectRpc/OpenProject - 200 - application/grpc 75.1285ms\ninfo: Microsoft.AspNetCore.Hosting.Diagnostics[1]\n      Request starting HTTP/2 POST http://127.0.0.1:50198/SharpRail.Host.Protocol.ProjectRpc/ListFiles - application/grpc -\ninfo: Microsoft.AspNetCore.Routing.EndpointMiddleware[0]\n      Executing endpoint 'gRPC - /SharpRail.Host.Protocol.ProjectRpc/ListFiles'\ninfo: Microsoft.AspNetCore.Routing.EndpointMiddleware[1]\n      Executed endpoint 'gRPC - /SharpRail.Host.Protocol.ProjectRpc/ListFiles'\ninfo: Microsoft.AspNetCore.Hosting.Diagnostics[2]\n      Request finished HTTP/2 POST http://127.0.0.1:50198/SharpRail.Host.Protocol.ProjectRpc/ListFiles - 200 - application/grpc 3.7005ms\ninfo: Microsoft.AspNetCore.Hosting.Diagnostics[1]\n      Request starting HTTP/2 POST http://127.0.0.1:50198/SharpRail.Host.Protocol.ProjectRpc/ListSpecs - application/grpc -\ninfo: Microsoft.AspNetCore.Routing.EndpointMiddleware[0]\n      Executing endpoint 'gRPC - /SharpRail.Host.Protocol.ProjectRpc/ListSpecs'\ninfo: Microsoft.AspNetCore.Hosting.Diagnostics[1]\n      Request starting HTTP/2 POST http://127.0.0.1:50198/SharpRail.Host.Protocol.ProjectRpc/GetGit - application/grpc -\ninfo: Microsoft.AspNetCore.Routing.EndpointMiddleware[0]\n      Executing endpoint 'gRPC - /SharpRail.Host.Protocol.ProjectRpc/GetGit'\ninfo: Microsoft.AspNetCore.Routing.EndpointMiddleware[1]\n      Executed endpoint 'gRPC - /SharpRail.Host.Protocol.ProjectRpc/ListSpecs'\ninfo: Microsoft.AspNetCore.Hosting.Diagnostics[2]\n      Request finished HTTP/2 POST http://127.0.0.1:50198/SharpRail.Host.Protocol.ProjectRpc/ListSpecs - 200 - application/grpc 224.2563ms\ninfo: Microsoft.AspNetCore.Routing.EndpointMiddleware[1]\n      Executed endpoint 'gRPC - /SharpRail.Host.Protocol.ProjectRpc/GetGit'\ninfo: Microsoft.AspNetCore.Hosting.Diagnostics[2]\n      Request finished HTTP/2 POST http://127.0.0.1:50198/SharpRail.Host.Protocol.ProjectRpc/GetGit - 200 - application/grpc 211.4954ms\n"
+    },
+    {
+      "firstWindowMs": 481,
+      "workspaceLayoutMs": 549,
+      "hostReadyMs": 135,
+      "clientFootprintMiB": 462.2667694091797,
+      "hostFootprintMiB": 79.04765319824219,
+      "totalFootprintMiB": 541.3144226074219,
+      "powerReadings": [
+        {
+          "at": 1790676452646,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t96%; charging; 0:23 remaining present: true"
+        },
+        {
+          "at": 1790676453656,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t96%; charging; 0:23 remaining present: true"
+        },
+        {
+          "at": 1790676454656,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t96%; charging; 0:23 remaining present: true"
+        },
+        {
+          "at": 1790676455656,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t96%; charging; 0:23 remaining present: true"
+        },
+        {
+          "at": 1790676456659,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t96%; charging; 0:23 remaining present: true"
+        },
+        {
+          "at": 1790676457736,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t96%; charging; 0:23 remaining present: true"
+        }
+      ],
+      "clientOutput": "SHARPRAIL_MAIN 1790676452801\nSHARPRAIL_WORKSPACE_LAYOUT 1790676453196\nSHARPRAIL_TREE logical=212 files=33\n",
+      "hostOutput": "info: ProtoBuf.Grpc.Server.ServicesExtensions.CodeFirstServiceMethodProvider[0]\n      RPC services being provided by SharpRail.Host.Remote.WorkspaceRpc: 2\ninfo: ProtoBuf.Grpc.Server.ServicesExtensions.CodeFirstServiceMethodProvider[0]\n      RPC services being provided by SharpRail.Host.Remote.ProjectRpc: 8\ninfo: Microsoft.Hosting.Lifetime[14]\n      Now listening on: http://127.0.0.1:50200\ninfo: Microsoft.Hosting.Lifetime[0]\n      Application started. Press Ctrl+C to shut down.\nSHARPRAIL_HOST_READY 1790676452782\ninfo: Microsoft.Hosting.Lifetime[0]\n      Hosting environment: Production\ninfo: Microsoft.Hosting.Lifetime[0]\n      Content root path: /Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn/prototypes/ThinkRailNative\ninfo: Microsoft.AspNetCore.Hosting.Diagnostics[1]\n      Request starting HTTP/2 POST http://127.0.0.1:50200/SharpRail.Host.Protocol.ProjectRpc/OpenProject - application/grpc -\ninfo: Microsoft.AspNetCore.Routing.EndpointMiddleware[0]\n      Executing endpoint 'gRPC - /SharpRail.Host.Protocol.ProjectRpc/OpenProject'\ninfo: Microsoft.AspNetCore.Routing.EndpointMiddleware[1]\n      Executed endpoint 'gRPC - /SharpRail.Host.Protocol.ProjectRpc/OpenProject'\ninfo: Microsoft.AspNetCore.Hosting.Diagnostics[2]\n      Request finished HTTP/2 POST http://127.0.0.1:50200/SharpRail.Host.Protocol.ProjectRpc/OpenProject - 200 - application/grpc 66.2195ms\ninfo: Microsoft.AspNetCore.Hosting.Diagnostics[1]\n      Request starting HTTP/2 POST http://127.0.0.1:50200/SharpRail.Host.Protocol.ProjectRpc/ListFiles - application/grpc -\ninfo: Microsoft.AspNetCore.Routing.EndpointMiddleware[0]\n      Executing endpoint 'gRPC - /SharpRail.Host.Protocol.ProjectRpc/ListFiles'\ninfo: Microsoft.AspNetCore.Routing.EndpointMiddleware[1]\n      Executed endpoint 'gRPC - /SharpRail.Host.Protocol.ProjectRpc/ListFiles'\ninfo: Microsoft.AspNetCore.Hosting.Diagnostics[2]\n      Request finished HTTP/2 POST http://127.0.0.1:50200/SharpRail.Host.Protocol.ProjectRpc/ListFiles - 200 - application/grpc 4.1902ms\ninfo: Microsoft.AspNetCore.Hosting.Diagnostics[1]\n      Request starting HTTP/2 POST http://127.0.0.1:50200/SharpRail.Host.Protocol.ProjectRpc/ListSpecs - application/grpc -\ninfo: Microsoft.AspNetCore.Routing.EndpointMiddleware[0]\n      Executing endpoint 'gRPC - /SharpRail.Host.Protocol.ProjectRpc/ListSpecs'\ninfo: Microsoft.AspNetCore.Hosting.Diagnostics[1]\n      Request starting HTTP/2 POST http://127.0.0.1:50200/SharpRail.Host.Protocol.ProjectRpc/GetGit - application/grpc -\ninfo: Microsoft.AspNetCore.Routing.EndpointMiddleware[0]\n      Executing endpoint 'gRPC - /SharpRail.Host.Protocol.ProjectRpc/GetGit'\ninfo: Microsoft.AspNetCore.Routing.EndpointMiddleware[1]\n      Executed endpoint 'gRPC - /SharpRail.Host.Protocol.ProjectRpc/ListSpecs'\ninfo: Microsoft.AspNetCore.Hosting.Diagnostics[2]\n      Request finished HTTP/2 POST http://127.0.0.1:50200/SharpRail.Host.Protocol.ProjectRpc/ListSpecs - 200 - application/grpc 219.3855ms\ninfo: Microsoft.AspNetCore.Routing.EndpointMiddleware[1]\n      Executed endpoint 'gRPC - /SharpRail.Host.Protocol.ProjectRpc/GetGit'\ninfo: Microsoft.AspNetCore.Hosting.Diagnostics[2]\n      Request finished HTTP/2 POST http://127.0.0.1:50200/SharpRail.Host.Protocol.ProjectRpc/GetGit - 200 - application/grpc 206.6772ms\n"
+    },
+    {
+      "firstWindowMs": 483,
+      "workspaceLayoutMs": 553,
+      "hostReadyMs": 133,
+      "clientFootprintMiB": 257.9230194091797,
+      "hostFootprintMiB": 79.031982421875,
+      "totalFootprintMiB": 336.9550018310547,
+      "powerReadings": [
+        {
+          "at": 1790676457760,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t96%; charging; 0:23 remaining present: true"
+        },
+        {
+          "at": 1790676458774,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t96%; charging; 0:23 remaining present: true"
+        },
+        {
+          "at": 1790676459770,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t96%; charging; 0:23 remaining present: true"
+        },
+        {
+          "at": 1790676460771,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t96%; charging; 0:23 remaining present: true"
+        },
+        {
+          "at": 1790676461772,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t96%; charging; 0:23 remaining present: true"
+        },
+        {
+          "at": 1790676462847,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t96%; charging; 0:23 remaining present: true"
+        }
+      ],
+      "clientOutput": "SHARPRAIL_MAIN 1790676457912\nSHARPRAIL_WORKSPACE_LAYOUT 1790676458313\nSHARPRAIL_TREE logical=212 files=33\n",
+      "hostOutput": "info: ProtoBuf.Grpc.Server.ServicesExtensions.CodeFirstServiceMethodProvider[0]\n      RPC services being provided by SharpRail.Host.Remote.WorkspaceRpc: 2\ninfo: ProtoBuf.Grpc.Server.ServicesExtensions.CodeFirstServiceMethodProvider[0]\n      RPC services being provided by SharpRail.Host.Remote.ProjectRpc: 8\ninfo: Microsoft.Hosting.Lifetime[14]\n      Now listening on: http://127.0.0.1:50202\ninfo: Microsoft.Hosting.Lifetime[0]\n      Application started. Press Ctrl+C to shut down.\ninfo: Microsoft.Hosting.Lifetime[0]\n      Hosting environment: Production\ninfo: Microsoft.Hosting.Lifetime[0]\n      Content root path: /Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn/prototypes/ThinkRailNative\nSHARPRAIL_HOST_READY 1790676457893\ninfo: Microsoft.AspNetCore.Hosting.Diagnostics[1]\n      Request starting HTTP/2 POST http://127.0.0.1:50202/SharpRail.Host.Protocol.ProjectRpc/OpenProject - application/grpc -\ninfo: Microsoft.AspNetCore.Routing.EndpointMiddleware[0]\n      Executing endpoint 'gRPC - /SharpRail.Host.Protocol.ProjectRpc/OpenProject'\ninfo: Microsoft.AspNetCore.Routing.EndpointMiddleware[1]\n      Executed endpoint 'gRPC - /SharpRail.Host.Protocol.ProjectRpc/OpenProject'\ninfo: Microsoft.AspNetCore.Hosting.Diagnostics[2]\n      Request finished HTTP/2 POST http://127.0.0.1:50202/SharpRail.Host.Protocol.ProjectRpc/OpenProject - 200 - application/grpc 55.4362ms\ninfo: Microsoft.AspNetCore.Hosting.Diagnostics[1]\n      Request starting HTTP/2 POST http://127.0.0.1:50202/SharpRail.Host.Protocol.ProjectRpc/ListFiles - application/grpc -\ninfo: Microsoft.AspNetCore.Routing.EndpointMiddleware[0]\n      Executing endpoint 'gRPC - /SharpRail.Host.Protocol.ProjectRpc/ListFiles'\ninfo: Microsoft.AspNetCore.Routing.EndpointMiddleware[1]\n      Executed endpoint 'gRPC - /SharpRail.Host.Protocol.ProjectRpc/ListFiles'\ninfo: Microsoft.AspNetCore.Hosting.Diagnostics[2]\n      Request finished HTTP/2 POST http://127.0.0.1:50202/SharpRail.Host.Protocol.ProjectRpc/ListFiles - 200 - application/grpc 3.8159ms\ninfo: Microsoft.AspNetCore.Hosting.Diagnostics[1]\n      Request starting HTTP/2 POST http://127.0.0.1:50202/SharpRail.Host.Protocol.ProjectRpc/ListSpecs - application/grpc -\ninfo: Microsoft.AspNetCore.Routing.EndpointMiddleware[0]\n      Executing endpoint 'gRPC - /SharpRail.Host.Protocol.ProjectRpc/ListSpecs'\ninfo: Microsoft.AspNetCore.Hosting.Diagnostics[1]\n      Request starting HTTP/2 POST http://127.0.0.1:50202/SharpRail.Host.Protocol.ProjectRpc/GetGit - application/grpc -\ninfo: Microsoft.AspNetCore.Routing.EndpointMiddleware[0]\n      Executing endpoint 'gRPC - /SharpRail.Host.Protocol.ProjectRpc/GetGit'\ninfo: Microsoft.AspNetCore.Routing.EndpointMiddleware[1]\n      Executed endpoint 'gRPC - /SharpRail.Host.Protocol.ProjectRpc/ListSpecs'\ninfo: Microsoft.AspNetCore.Hosting.Diagnostics[2]\n      Request finished HTTP/2 POST http://127.0.0.1:50202/SharpRail.Host.Protocol.ProjectRpc/ListSpecs - 200 - application/grpc 186.2125ms\ninfo: Microsoft.AspNetCore.Routing.EndpointMiddleware[1]\n      Executed endpoint 'gRPC - /SharpRail.Host.Protocol.ProjectRpc/GetGit'\ninfo: Microsoft.AspNetCore.Hosting.Diagnostics[2]\n      Request finished HTTP/2 POST http://127.0.0.1:50202/SharpRail.Host.Protocol.ProjectRpc/GetGit - 200 - application/grpc 174.3992ms\n"
+    },
+    {
+      "firstWindowMs": 504,
+      "workspaceLayoutMs": 574,
+      "hostReadyMs": 134,
+      "clientFootprintMiB": 260.8761215209961,
+      "hostFootprintMiB": 79.0788345336914,
+      "totalFootprintMiB": 339.9549560546875,
+      "powerReadings": [
+        {
+          "at": 1790676462872,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t96%; charging; 0:23 remaining present: true"
+        },
+        {
+          "at": 1790676463881,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t96%; charging; 0:23 remaining present: true"
+        },
+        {
+          "at": 1790676464882,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t96%; charging; 0:23 remaining present: true"
+        },
+        {
+          "at": 1790676465883,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t96%; charging; 0:23 remaining present: true"
+        },
+        {
+          "at": 1790676466884,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t96%; charging; 0:23 remaining present: true"
+        },
+        {
+          "at": 1790676467956,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t96%; charging; 0:23 remaining present: true"
+        }
+      ],
+      "clientOutput": "SHARPRAIL_MAIN 1790676463025\nSHARPRAIL_WORKSPACE_LAYOUT 1790676463446\nSHARPRAIL_TREE logical=212 files=33\n",
+      "hostOutput": "info: ProtoBuf.Grpc.Server.ServicesExtensions.CodeFirstServiceMethodProvider[0]\n      RPC services being provided by SharpRail.Host.Remote.WorkspaceRpc: 2\ninfo: ProtoBuf.Grpc.Server.ServicesExtensions.CodeFirstServiceMethodProvider[0]\n      RPC services being provided by SharpRail.Host.Remote.ProjectRpc: 8\ninfo: Microsoft.Hosting.Lifetime[14]\n      Now listening on: http://127.0.0.1:50204\ninfo: Microsoft.Hosting.Lifetime[0]\n      Application started. Press Ctrl+C to shut down.\ninfo: Microsoft.Hosting.Lifetime[0]\n      Hosting environment: Production\ninfo: Microsoft.Hosting.Lifetime[0]\n      Content root path: /Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn/prototypes/ThinkRailNative\nSHARPRAIL_HOST_READY 1790676463006\ninfo: Microsoft.AspNetCore.Hosting.Diagnostics[1]\n      Request starting HTTP/2 POST http://127.0.0.1:50204/SharpRail.Host.Protocol.ProjectRpc/OpenProject - application/grpc -\ninfo: Microsoft.AspNetCore.Routing.EndpointMiddleware[0]\n      Executing endpoint 'gRPC - /SharpRail.Host.Protocol.ProjectRpc/OpenProject'\ninfo: Microsoft.AspNetCore.Routing.EndpointMiddleware[1]\n      Executed endpoint 'gRPC - /SharpRail.Host.Protocol.ProjectRpc/OpenProject'\ninfo: Microsoft.AspNetCore.Hosting.Diagnostics[2]\n      Request finished HTTP/2 POST http://127.0.0.1:50204/SharpRail.Host.Protocol.ProjectRpc/OpenProject - 200 - application/grpc 49.4268ms\ninfo: Microsoft.AspNetCore.Hosting.Diagnostics[1]\n      Request starting HTTP/2 POST http://127.0.0.1:50204/SharpRail.Host.Protocol.ProjectRpc/ListFiles - application/grpc -\ninfo: Microsoft.AspNetCore.Routing.EndpointMiddleware[0]\n      Executing endpoint 'gRPC - /SharpRail.Host.Protocol.ProjectRpc/ListFiles'\ninfo: Microsoft.AspNetCore.Routing.EndpointMiddleware[1]\n      Executed endpoint 'gRPC - /SharpRail.Host.Protocol.ProjectRpc/ListFiles'\ninfo: Microsoft.AspNetCore.Hosting.Diagnostics[2]\n      Request finished HTTP/2 POST http://127.0.0.1:50204/SharpRail.Host.Protocol.ProjectRpc/ListFiles - 200 - application/grpc 4.3178ms\ninfo: Microsoft.AspNetCore.Hosting.Diagnostics[1]\n      Request starting HTTP/2 POST http://127.0.0.1:50204/SharpRail.Host.Protocol.ProjectRpc/ListSpecs - application/grpc -\ninfo: Microsoft.AspNetCore.Routing.EndpointMiddleware[0]\n      Executing endpoint 'gRPC - /SharpRail.Host.Protocol.ProjectRpc/ListSpecs'\ninfo: Microsoft.AspNetCore.Hosting.Diagnostics[1]\n      Request starting HTTP/2 POST http://127.0.0.1:50204/SharpRail.Host.Protocol.ProjectRpc/GetGit - application/grpc -\ninfo: Microsoft.AspNetCore.Routing.EndpointMiddleware[0]\n      Executing endpoint 'gRPC - /SharpRail.Host.Protocol.ProjectRpc/GetGit'\ninfo: Microsoft.AspNetCore.Routing.EndpointMiddleware[1]\n      Executed endpoint 'gRPC - /SharpRail.Host.Protocol.ProjectRpc/GetGit'\ninfo: Microsoft.AspNetCore.Hosting.Diagnostics[2]\n      Request finished HTTP/2 POST http://127.0.0.1:50204/SharpRail.Host.Protocol.ProjectRpc/GetGit - 200 - application/grpc 143.2176ms\ninfo: Microsoft.AspNetCore.Routing.EndpointMiddleware[1]\n      Executed endpoint 'gRPC - /SharpRail.Host.Protocol.ProjectRpc/ListSpecs'\ninfo: Microsoft.AspNetCore.Hosting.Diagnostics[2]\n      Request finished HTTP/2 POST http://127.0.0.1:50204/SharpRail.Host.Protocol.ProjectRpc/ListSpecs - 200 - application/grpc 157.6218ms\n"
+    },
+    {
+      "firstWindowMs": 506,
+      "workspaceLayoutMs": 576,
+      "hostReadyMs": 128,
+      "clientFootprintMiB": 259.2980194091797,
+      "hostFootprintMiB": 79.235107421875,
+      "totalFootprintMiB": 338.5331268310547,
+      "powerReadings": [
+        {
+          "at": 1790676467980,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t96%; charging; 0:23 remaining present: true"
+        },
+        {
+          "at": 1790676468990,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t96%; charging; 0:21 remaining present: true"
+        },
+        {
+          "at": 1790676469990,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t96%; charging; 0:21 remaining present: true"
+        },
+        {
+          "at": 1790676470991,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t96%; charging; 0:21 remaining present: true"
+        },
+        {
+          "at": 1790676471992,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t96%; charging; 0:21 remaining present: true"
+        },
+        {
+          "at": 1790676473062,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t96%; charging; 0:21 remaining present: true"
+        }
+      ],
+      "clientOutput": "SHARPRAIL_MAIN 1790676468127\nSHARPRAIL_WORKSPACE_LAYOUT 1790676468556\nSHARPRAIL_TREE logical=212 files=33\n",
+      "hostOutput": "info: ProtoBuf.Grpc.Server.ServicesExtensions.CodeFirstServiceMethodProvider[0]\n      RPC services being provided by SharpRail.Host.Remote.WorkspaceRpc: 2\ninfo: ProtoBuf.Grpc.Server.ServicesExtensions.CodeFirstServiceMethodProvider[0]\n      RPC services being provided by SharpRail.Host.Remote.ProjectRpc: 8\ninfo: Microsoft.Hosting.Lifetime[14]\n      Now listening on: http://127.0.0.1:50206\ninfo: Microsoft.Hosting.Lifetime[0]\n      Application started. Press Ctrl+C to shut down.\ninfo: Microsoft.Hosting.Lifetime[0]\n      Hosting environment: Production\ninfo: Microsoft.Hosting.Lifetime[0]\n      Content root path: /Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn/prototypes/ThinkRailNative\nSHARPRAIL_HOST_READY 1790676468108\ninfo: Microsoft.AspNetCore.Hosting.Diagnostics[1]\n      Request starting HTTP/2 POST http://127.0.0.1:50206/SharpRail.Host.Protocol.ProjectRpc/OpenProject - application/grpc -\ninfo: Microsoft.AspNetCore.Routing.EndpointMiddleware[0]\n      Executing endpoint 'gRPC - /SharpRail.Host.Protocol.ProjectRpc/OpenProject'\ninfo: Microsoft.AspNetCore.Routing.EndpointMiddleware[1]\n      Executed endpoint 'gRPC - /SharpRail.Host.Protocol.ProjectRpc/OpenProject'\ninfo: Microsoft.AspNetCore.Hosting.Diagnostics[2]\n      Request finished HTTP/2 POST http://127.0.0.1:50206/SharpRail.Host.Protocol.ProjectRpc/OpenProject - 200 - application/grpc 55.5112ms\ninfo: Microsoft.AspNetCore.Hosting.Diagnostics[1]\n      Request starting HTTP/2 POST http://127.0.0.1:50206/SharpRail.Host.Protocol.ProjectRpc/ListFiles - application/grpc -\ninfo: Microsoft.AspNetCore.Routing.EndpointMiddleware[0]\n      Executing endpoint 'gRPC - /SharpRail.Host.Protocol.ProjectRpc/ListFiles'\ninfo: Microsoft.AspNetCore.Routing.EndpointMiddleware[1]\n      Executed endpoint 'gRPC - /SharpRail.Host.Protocol.ProjectRpc/ListFiles'\ninfo: Microsoft.AspNetCore.Hosting.Diagnostics[2]\n      Request finished HTTP/2 POST http://127.0.0.1:50206/SharpRail.Host.Protocol.ProjectRpc/ListFiles - 200 - application/grpc 4.1933ms\ninfo: Microsoft.AspNetCore.Hosting.Diagnostics[1]\n      Request starting HTTP/2 POST http://127.0.0.1:50206/SharpRail.Host.Protocol.ProjectRpc/ListSpecs - application/grpc -\ninfo: Microsoft.AspNetCore.Routing.EndpointMiddleware[0]\n      Executing endpoint 'gRPC - /SharpRail.Host.Protocol.ProjectRpc/ListSpecs'\ninfo: Microsoft.AspNetCore.Hosting.Diagnostics[1]\n      Request starting HTTP/2 POST http://127.0.0.1:50206/SharpRail.Host.Protocol.ProjectRpc/GetGit - application/grpc -\ninfo: Microsoft.AspNetCore.Routing.EndpointMiddleware[0]\n      Executing endpoint 'gRPC - /SharpRail.Host.Protocol.ProjectRpc/GetGit'\ninfo: Microsoft.AspNetCore.Routing.EndpointMiddleware[1]\n      Executed endpoint 'gRPC - /SharpRail.Host.Protocol.ProjectRpc/ListSpecs'\ninfo: Microsoft.AspNetCore.Hosting.Diagnostics[2]\n      Request finished HTTP/2 POST http://127.0.0.1:50206/SharpRail.Host.Protocol.ProjectRpc/ListSpecs - 200 - application/grpc 183.4832ms\ninfo: Microsoft.AspNetCore.Routing.EndpointMiddleware[1]\n      Executed endpoint 'gRPC - /SharpRail.Host.Protocol.ProjectRpc/GetGit'\ninfo: Microsoft.AspNetCore.Hosting.Diagnostics[2]\n      Request finished HTTP/2 POST http://127.0.0.1:50206/SharpRail.Host.Protocol.ProjectRpc/GetGit - 200 - application/grpc 171.7265ms\n"
+    },
+    {
+      "firstWindowMs": 534,
+      "workspaceLayoutMs": 635,
+      "hostReadyMs": 153,
+      "clientFootprintMiB": 367.7667465209961,
+      "hostFootprintMiB": 79.0476303100586,
+      "totalFootprintMiB": 446.8143768310547,
+      "powerReadings": [
+        {
+          "at": 1790676473087,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t96%; charging; 0:21 remaining present: true"
+        },
+        {
+          "at": 1790676474099,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t96%; charging; 0:21 remaining present: true"
+        },
+        {
+          "at": 1790676475101,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t96%; charging; 0:21 remaining present: true"
+        },
+        {
+          "at": 1790676476099,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t96%; charging; 0:21 remaining present: true"
+        },
+        {
+          "at": 1790676477100,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t96%; charging; 0:21 remaining present: true"
+        },
+        {
+          "at": 1790676478174,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t96%; charging; 0:21 remaining present: true"
+        }
+      ],
+      "clientOutput": "SHARPRAIL_MAIN 1790676473260\nSHARPRAIL_WORKSPACE_LAYOUT 1790676473722\nSHARPRAIL_TREE logical=212 files=33\n",
+      "hostOutput": "info: ProtoBuf.Grpc.Server.ServicesExtensions.CodeFirstServiceMethodProvider[0]\n      RPC services being provided by SharpRail.Host.Remote.WorkspaceRpc: 2\ninfo: ProtoBuf.Grpc.Server.ServicesExtensions.CodeFirstServiceMethodProvider[0]\n      RPC services being provided by SharpRail.Host.Remote.ProjectRpc: 8\ninfo: Microsoft.Hosting.Lifetime[14]\n      Now listening on: http://127.0.0.1:50208\ninfo: Microsoft.Hosting.Lifetime[0]\n      Application started. Press Ctrl+C to shut down.\ninfo: Microsoft.Hosting.Lifetime[0]\n      Hosting environment: Production\ninfo: Microsoft.Hosting.Lifetime[0]\n      Content root path: /Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn/prototypes/ThinkRailNative\nSHARPRAIL_HOST_READY 1790676473240\ninfo: Microsoft.AspNetCore.Hosting.Diagnostics[1]\n      Request starting HTTP/2 POST http://127.0.0.1:50208/SharpRail.Host.Protocol.ProjectRpc/OpenProject - application/grpc -\ninfo: Microsoft.AspNetCore.Routing.EndpointMiddleware[0]\n      Executing endpoint 'gRPC - /SharpRail.Host.Protocol.ProjectRpc/OpenProject'\ninfo: Microsoft.AspNetCore.Routing.EndpointMiddleware[1]\n      Executed endpoint 'gRPC - /SharpRail.Host.Protocol.ProjectRpc/OpenProject'\ninfo: Microsoft.AspNetCore.Hosting.Diagnostics[2]\n      Request finished HTTP/2 POST http://127.0.0.1:50208/SharpRail.Host.Protocol.ProjectRpc/OpenProject - 200 - application/grpc 77.6910ms\ninfo: Microsoft.AspNetCore.Hosting.Diagnostics[1]\n      Request starting HTTP/2 POST http://127.0.0.1:50208/SharpRail.Host.Protocol.ProjectRpc/ListFiles - application/grpc -\ninfo: Microsoft.AspNetCore.Routing.EndpointMiddleware[0]\n      Executing endpoint 'gRPC - /SharpRail.Host.Protocol.ProjectRpc/ListFiles'\ninfo: Microsoft.AspNetCore.Routing.EndpointMiddleware[1]\n      Executed endpoint 'gRPC - /SharpRail.Host.Protocol.ProjectRpc/ListFiles'\ninfo: Microsoft.AspNetCore.Hosting.Diagnostics[2]\n      Request finished HTTP/2 POST http://127.0.0.1:50208/SharpRail.Host.Protocol.ProjectRpc/ListFiles - 200 - application/grpc 15.5397ms\ninfo: Microsoft.AspNetCore.Hosting.Diagnostics[1]\n      Request starting HTTP/2 POST http://127.0.0.1:50208/SharpRail.Host.Protocol.ProjectRpc/ListSpecs - application/grpc -\ninfo: Microsoft.AspNetCore.Routing.EndpointMiddleware[0]\n      Executing endpoint 'gRPC - /SharpRail.Host.Protocol.ProjectRpc/ListSpecs'\ninfo: Microsoft.AspNetCore.Hosting.Diagnostics[1]\n      Request starting HTTP/2 POST http://127.0.0.1:50208/SharpRail.Host.Protocol.ProjectRpc/GetGit - application/grpc -\ninfo: Microsoft.AspNetCore.Routing.EndpointMiddleware[0]\n      Executing endpoint 'gRPC - /SharpRail.Host.Protocol.ProjectRpc/GetGit'\ninfo: Microsoft.AspNetCore.Routing.EndpointMiddleware[1]\n      Executed endpoint 'gRPC - /SharpRail.Host.Protocol.ProjectRpc/ListSpecs'\ninfo: Microsoft.AspNetCore.Hosting.Diagnostics[2]\n      Request finished HTTP/2 POST http://127.0.0.1:50208/SharpRail.Host.Protocol.ProjectRpc/ListSpecs - 200 - application/grpc 242.6903ms\ninfo: Microsoft.AspNetCore.Routing.EndpointMiddleware[1]\n      Executed endpoint 'gRPC - /SharpRail.Host.Protocol.ProjectRpc/GetGit'\ninfo: Microsoft.AspNetCore.Hosting.Diagnostics[2]\n      Request finished HTTP/2 POST http://127.0.0.1:50208/SharpRail.Host.Protocol.ProjectRpc/GetGit - 200 - application/grpc 228.8097ms\n"
+    },
+    {
+      "firstWindowMs": 510,
+      "workspaceLayoutMs": 574,
+      "hostReadyMs": 138,
+      "clientFootprintMiB": 264.7667694091797,
+      "hostFootprintMiB": 79.110107421875,
+      "totalFootprintMiB": 343.8768768310547,
+      "powerReadings": [
+        {
+          "at": 1790676478200,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t96%; charging; 0:21 remaining present: true"
+        },
+        {
+          "at": 1790676479210,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t96%; charging; 0:21 remaining present: true"
+        },
+        {
+          "at": 1790676480209,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t96%; charging; 0:21 remaining present: true"
+        },
+        {
+          "at": 1790676481210,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t96%; charging; 0:21 remaining present: true"
+        },
+        {
+          "at": 1790676482211,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t96%; charging; 0:21 remaining present: true"
+        },
+        {
+          "at": 1790676483299,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t96%; charging; 0:21 remaining present: true"
+        }
+      ],
+      "clientOutput": "SHARPRAIL_MAIN 1790676478357\nSHARPRAIL_WORKSPACE_LAYOUT 1790676478774\nSHARPRAIL_TREE logical=212 files=33\n",
+      "hostOutput": "info: ProtoBuf.Grpc.Server.ServicesExtensions.CodeFirstServiceMethodProvider[0]\n      RPC services being provided by SharpRail.Host.Remote.WorkspaceRpc: 2\ninfo: ProtoBuf.Grpc.Server.ServicesExtensions.CodeFirstServiceMethodProvider[0]\n      RPC services being provided by SharpRail.Host.Remote.ProjectRpc: 8\ninfo: Microsoft.Hosting.Lifetime[14]\n      Now listening on: http://127.0.0.1:50210\ninfo: Microsoft.Hosting.Lifetime[0]\n      Application started. Press Ctrl+C to shut down.\nSHARPRAIL_HOST_READY 1790676478338\ninfo: Microsoft.Hosting.Lifetime[0]\n      Hosting environment: Production\ninfo: Microsoft.Hosting.Lifetime[0]\n      Content root path: /Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn/prototypes/ThinkRailNative\ninfo: Microsoft.AspNetCore.Hosting.Diagnostics[1]\n      Request starting HTTP/2 POST http://127.0.0.1:50210/SharpRail.Host.Protocol.ProjectRpc/OpenProject - application/grpc -\ninfo: Microsoft.AspNetCore.Routing.EndpointMiddleware[0]\n      Executing endpoint 'gRPC - /SharpRail.Host.Protocol.ProjectRpc/OpenProject'\ninfo: Microsoft.AspNetCore.Routing.EndpointMiddleware[1]\n      Executed endpoint 'gRPC - /SharpRail.Host.Protocol.ProjectRpc/OpenProject'\ninfo: Microsoft.AspNetCore.Hosting.Diagnostics[2]\n      Request finished HTTP/2 POST http://127.0.0.1:50210/SharpRail.Host.Protocol.ProjectRpc/OpenProject - 200 - application/grpc 68.6169ms\ninfo: Microsoft.AspNetCore.Hosting.Diagnostics[1]\n      Request starting HTTP/2 POST http://127.0.0.1:50210/SharpRail.Host.Protocol.ProjectRpc/ListFiles - application/grpc -\ninfo: Microsoft.AspNetCore.Routing.EndpointMiddleware[0]\n      Executing endpoint 'gRPC - /SharpRail.Host.Protocol.ProjectRpc/ListFiles'\ninfo: Microsoft.AspNetCore.Routing.EndpointMiddleware[1]\n      Executed endpoint 'gRPC - /SharpRail.Host.Protocol.ProjectRpc/ListFiles'\ninfo: Microsoft.AspNetCore.Hosting.Diagnostics[2]\n      Request finished HTTP/2 POST http://127.0.0.1:50210/SharpRail.Host.Protocol.ProjectRpc/ListFiles - 200 - application/grpc 4.1000ms\ninfo: Microsoft.AspNetCore.Hosting.Diagnostics[1]\n      Request starting HTTP/2 POST http://127.0.0.1:50210/SharpRail.Host.Protocol.ProjectRpc/ListSpecs - application/grpc -\ninfo: Microsoft.AspNetCore.Routing.EndpointMiddleware[0]\n      Executing endpoint 'gRPC - /SharpRail.Host.Protocol.ProjectRpc/ListSpecs'\ninfo: Microsoft.AspNetCore.Hosting.Diagnostics[1]\n      Request starting HTTP/2 POST http://127.0.0.1:50210/SharpRail.Host.Protocol.ProjectRpc/GetGit - application/grpc -\ninfo: Microsoft.AspNetCore.Routing.EndpointMiddleware[0]\n      Executing endpoint 'gRPC - /SharpRail.Host.Protocol.ProjectRpc/GetGit'\ninfo: Microsoft.AspNetCore.Routing.EndpointMiddleware[1]\n      Executed endpoint 'gRPC - /SharpRail.Host.Protocol.ProjectRpc/ListSpecs'\ninfo: Microsoft.AspNetCore.Hosting.Diagnostics[2]\n      Request finished HTTP/2 POST http://127.0.0.1:50210/SharpRail.Host.Protocol.ProjectRpc/ListSpecs - 200 - application/grpc 215.1638ms\ninfo: Microsoft.AspNetCore.Routing.EndpointMiddleware[1]\n      Executed endpoint 'gRPC - /SharpRail.Host.Protocol.ProjectRpc/GetGit'\ninfo: Microsoft.AspNetCore.Hosting.Diagnostics[2]\n      Request finished HTTP/2 POST http://127.0.0.1:50210/SharpRail.Host.Protocol.ProjectRpc/GetGit - 200 - application/grpc 203.1232ms\n"
+    },
+    {
+      "firstWindowMs": 505,
+      "workspaceLayoutMs": 590,
+      "hostReadyMs": 133,
+      "clientFootprintMiB": 258.1261444091797,
+      "hostFootprintMiB": 79.45392608642578,
+      "totalFootprintMiB": 337.58007049560547,
+      "powerReadings": [
+        {
+          "at": 1790676483324,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t96%; charging; 0:21 remaining present: true"
+        },
+        {
+          "at": 1790676484333,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t96%; charging; 0:21 remaining present: true"
+        },
+        {
+          "at": 1790676485334,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t96%; charging; 0:21 remaining present: true"
+        },
+        {
+          "at": 1790676486334,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t96%; charging; 0:21 remaining present: true"
+        },
+        {
+          "at": 1790676487336,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t96%; charging; 0:21 remaining present: true"
+        },
+        {
+          "at": 1790676488407,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t96%; charging; 0:21 remaining present: true"
+        }
+      ],
+      "clientOutput": "SHARPRAIL_MAIN 1790676483476\nSHARPRAIL_WORKSPACE_LAYOUT 1790676483914\nSHARPRAIL_TREE logical=212 files=33\n",
+      "hostOutput": "info: ProtoBuf.Grpc.Server.ServicesExtensions.CodeFirstServiceMethodProvider[0]\n      RPC services being provided by SharpRail.Host.Remote.WorkspaceRpc: 2\ninfo: ProtoBuf.Grpc.Server.ServicesExtensions.CodeFirstServiceMethodProvider[0]\n      RPC services being provided by SharpRail.Host.Remote.ProjectRpc: 8\ninfo: Microsoft.Hosting.Lifetime[14]\n      Now listening on: http://127.0.0.1:50212\ninfo: Microsoft.Hosting.Lifetime[0]\n      Application started. Press Ctrl+C to shut down.\ninfo: Microsoft.Hosting.Lifetime[0]\n      Hosting environment: Production\ninfo: Microsoft.Hosting.Lifetime[0]\n      Content root path: /Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn/prototypes/ThinkRailNative\nSHARPRAIL_HOST_READY 1790676483457\ninfo: Microsoft.AspNetCore.Hosting.Diagnostics[1]\n      Request starting HTTP/2 POST http://127.0.0.1:50212/SharpRail.Host.Protocol.ProjectRpc/OpenProject - application/grpc -\ninfo: Microsoft.AspNetCore.Routing.EndpointMiddleware[0]\n      Executing endpoint 'gRPC - /SharpRail.Host.Protocol.ProjectRpc/OpenProject'\ninfo: Microsoft.AspNetCore.Routing.EndpointMiddleware[1]\n      Executed endpoint 'gRPC - /SharpRail.Host.Protocol.ProjectRpc/OpenProject'\ninfo: Microsoft.AspNetCore.Hosting.Diagnostics[2]\n      Request finished HTTP/2 POST http://127.0.0.1:50212/SharpRail.Host.Protocol.ProjectRpc/OpenProject - 200 - application/grpc 71.9679ms\ninfo: Microsoft.AspNetCore.Hosting.Diagnostics[1]\n      Request starting HTTP/2 POST http://127.0.0.1:50212/SharpRail.Host.Protocol.ProjectRpc/ListFiles - application/grpc -\ninfo: Microsoft.AspNetCore.Routing.EndpointMiddleware[0]\n      Executing endpoint 'gRPC - /SharpRail.Host.Protocol.ProjectRpc/ListFiles'\ninfo: Microsoft.AspNetCore.Routing.EndpointMiddleware[1]\n      Executed endpoint 'gRPC - /SharpRail.Host.Protocol.ProjectRpc/ListFiles'\ninfo: Microsoft.AspNetCore.Hosting.Diagnostics[2]\n      Request finished HTTP/2 POST http://127.0.0.1:50212/SharpRail.Host.Protocol.ProjectRpc/ListFiles - 200 - application/grpc 4.1317ms\ninfo: Microsoft.AspNetCore.Hosting.Diagnostics[1]\n      Request starting HTTP/2 POST http://127.0.0.1:50212/SharpRail.Host.Protocol.ProjectRpc/ListSpecs - application/grpc -\ninfo: Microsoft.AspNetCore.Routing.EndpointMiddleware[0]\n      Executing endpoint 'gRPC - /SharpRail.Host.Protocol.ProjectRpc/ListSpecs'\ninfo: Microsoft.AspNetCore.Hosting.Diagnostics[1]\n      Request starting HTTP/2 POST http://127.0.0.1:50212/SharpRail.Host.Protocol.ProjectRpc/GetGit - application/grpc -\ninfo: Microsoft.AspNetCore.Routing.EndpointMiddleware[0]\n      Executing endpoint 'gRPC - /SharpRail.Host.Protocol.ProjectRpc/GetGit'\ninfo: Microsoft.AspNetCore.Routing.EndpointMiddleware[1]\n      Executed endpoint 'gRPC - /SharpRail.Host.Protocol.ProjectRpc/GetGit'\ninfo: Microsoft.AspNetCore.Hosting.Diagnostics[2]\n      Request finished HTTP/2 POST http://127.0.0.1:50212/SharpRail.Host.Protocol.ProjectRpc/GetGit - 200 - application/grpc 217.2015ms\ninfo: Microsoft.AspNetCore.Routing.EndpointMiddleware[1]\n      Executed endpoint 'gRPC - /SharpRail.Host.Protocol.ProjectRpc/ListSpecs'\ninfo: Microsoft.AspNetCore.Hosting.Diagnostics[2]\n      Request finished HTTP/2 POST http://127.0.0.1:50212/SharpRail.Host.Protocol.ProjectRpc/ListSpecs - 200 - application/grpc 238.6955ms\n"
+    }
+  ]
+}

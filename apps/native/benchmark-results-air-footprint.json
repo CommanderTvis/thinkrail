@@ -1,0 +1,79 @@
+{
+  "metadata": {
+    "name": "air",
+    "binary": "/Applications/Air.app/Contents/MacOS/Air",
+    "appArgs": [],
+    "macos": "26.6.2",
+    "cpu": "Apple M4 Pro",
+    "power": "Now drawing from 'AC Power'",
+    "root": "/Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn/prototypes/ThinkRailNative"
+  },
+  "warmup": {
+    "round": 0,
+    "launchToWindowMs": 2138,
+    "footprintMiB": 1466,
+    "processCount": 5
+  },
+  "results": [
+    {
+      "round": 1,
+      "launchToWindowMs": 1504,
+      "footprintMiB": 1541,
+      "processCount": 7
+    },
+    {
+      "round": 2,
+      "launchToWindowMs": 1638,
+      "footprintMiB": 1500,
+      "processCount": 7
+    },
+    {
+      "round": 3,
+      "launchToWindowMs": 1527,
+      "footprintMiB": 1502,
+      "processCount": 7
+    },
+    {
+      "round": 4,
+      "launchToWindowMs": 1610,
+      "footprintMiB": 1529,
+      "processCount": 7
+    },
+    {
+      "round": 5,
+      "launchToWindowMs": 1523,
+      "footprintMiB": 1505,
+      "processCount": 7
+    },
+    {
+      "round": 6,
+      "launchToWindowMs": 1695,
+      "footprintMiB": 1556,
+      "processCount": 7
+    },
+    {
+      "round": 7,
+      "launchToWindowMs": 1514,
+      "footprintMiB": 1539,
+      "processCount": 7
+    },
+    {
+      "round": 8,
+      "launchToWindowMs": 1492,
+      "footprintMiB": 1579,
+      "processCount": 7
+    },
+    {
+      "round": 9,
+      "launchToWindowMs": 1591,
+      "footprintMiB": 1532,
+      "processCount": 7
+    },
+    {
+      "round": 10,
+      "launchToWindowMs": 1754,
+      "footprintMiB": 1526,
+      "processCount": 7
+    }
+  ]
+}

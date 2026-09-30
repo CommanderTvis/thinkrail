@@ -1,0 +1,418 @@
+{
+  "mode": "embedded",
+  "unreadableProcesses": [
+    "/usr/bin/login"
+  ],
+  "workload": "C# project/files/spec/Git/worktree host with PTY terminals; Avalonia workbench with default terminal tab; no Pi",
+  "root": "/Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn",
+  "binaries": [
+    {
+      "file": "/private/tmp/claude-501/-Users-commandertvis--thinkrail-worktrees-thinkrail-riirn/c622d18f-e3ac-4790-8ade-11d176ada229/scratchpad/sharprail-up/artifacts/SharpRail.app/Contents/MacOS/SharpRail.UI.dll",
+      "sha256": "1cfd29435e8508285a2b9ca63c592ebecce9c1db2f8e8d6cb3ddd528258a2cab"
+    },
+    {
+      "file": "/private/tmp/claude-501/-Users-commandertvis--thinkrail-worktrees-thinkrail-riirn/c622d18f-e3ac-4790-8ade-11d176ada229/scratchpad/sharprail-up/artifacts/SharpRail.app/Contents/MacOS/SharpRail.Host.Core.dll",
+      "sha256": "6a54166956c61ccd0af4963c1bb7e0ec90d227f4d99e284180e181232e81405e"
+    },
+    {
+      "file": "/private/tmp/claude-501/-Users-commandertvis--thinkrail-worktrees-thinkrail-riirn/c622d18f-e3ac-4790-8ade-11d176ada229/scratchpad/sharprail-up/artifacts/host/SharpRail.Host.Core.dll",
+      "sha256": "6a54166956c61ccd0af4963c1bb7e0ec90d227f4d99e284180e181232e81405e"
+    },
+    {
+      "file": "/private/tmp/claude-501/-Users-commandertvis--thinkrail-worktrees-thinkrail-riirn/c622d18f-e3ac-4790-8ade-11d176ada229/scratchpad/sharprail-up/artifacts/host/SharpRail.Host.Remote.dll",
+      "sha256": "05e9b1f3f24d521821b3427dba6278c4e7d2526febed2b4666abdf2884cd4029"
+    }
+  ],
+  "recordedAt": "2026-10-04T10:46:13.926Z",
+  "rounds": 10,
+  "summary": {
+    "firstWindowMs": {
+      "mean": 443.2,
+      "sampleStandardDeviation": 15.977762324208259
+    },
+    "workspaceLayoutMs": {
+      "mean": 420.6,
+      "sampleStandardDeviation": 17.050252523382497
+    },
+    "hostReadyMs": null,
+    "clientFootprintMiB": {
+      "mean": 412.88512420654297,
+      "sampleStandardDeviation": 10.26881121840009
+    },
+    "hostFootprintMiB": {
+      "mean": 0,
+      "sampleStandardDeviation": 0
+    },
+    "totalFootprintMiB": {
+      "mean": 412.88512420654297,
+      "sampleStandardDeviation": 10.26881121840009
+    }
+  },
+  "samples": [
+    {
+      "firstWindowMs": 447,
+      "workspaceLayoutMs": 420,
+      "hostReadyMs": null,
+      "clientFootprintMiB": 429.42418670654297,
+      "hostFootprintMiB": 0,
+      "totalFootprintMiB": 429.42418670654297,
+      "powerReadings": [
+        {
+          "at": 1791110691954,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1791110692964,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1791110693971,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1791110694964,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1791110695979,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1791110697119,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        }
+      ],
+      "clientOutput": "SHARPRAIL_MAIN 1791110691992\nSHARPRAIL_WORKSPACE_LAYOUT 1791110692376\nSHARPRAIL_TREE logical=216 files=32\ninfo: ProtoBuf.Grpc.Server.ServicesExtensions.CodeFirstServiceMethodProvider[0]\n      RPC services being provided by SharpRail.Host.Remote.TerminalRpc: 3\ninfo: Microsoft.Hosting.Lifetime[14]\n      Now listening on: http://unix:/var/folders/ph/7mrpl8cs1pd49nvgnbhyfzgm0000gn/T/sharprail-relay-commandertvis/2edf3ca55c0d.sock\ninfo: Microsoft.Hosting.Lifetime[0]\n      Application started. Press Ctrl+C to shut down.\ninfo: Microsoft.Hosting.Lifetime[0]\n      Hosting environment: Production\ninfo: Microsoft.Hosting.Lifetime[0]\n      Content root path: /Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn/apps/native\n2026-10-04 12:44:52.652 SharpRail.UI[85009:47293554] GHOSTTY_AVALONIA renderer=Metal presentation=IOSurfaceLayer device=Apple M4 Pro\ninfo: Microsoft.AspNetCore.Hosting.Diagnostics[1]\n      Request starting HTTP/2 POST http://localhost/SharpRail.Host.Protocol.TerminalRpc/Run - application/grpc -\ninfo: Microsoft.AspNetCore.Routing.EndpointMiddleware[0]\n      Executing endpoint 'gRPC - /SharpRail.Host.Protocol.TerminalRpc/Run'\n",
+      "hostOutput": ""
+    },
+    {
+      "firstWindowMs": 470,
+      "workspaceLayoutMs": 453,
+      "hostReadyMs": null,
+      "clientFootprintMiB": 402.75231170654297,
+      "hostFootprintMiB": 0,
+      "totalFootprintMiB": 402.75231170654297,
+      "powerReadings": [
+        {
+          "at": 1791110700168,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1791110701177,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1791110702188,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1791110703183,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1791110704192,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1791110705330,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        }
+      ],
+      "clientOutput": "SHARPRAIL_MAIN 1791110700209\nSHARPRAIL_WORKSPACE_LAYOUT 1791110700622\nSHARPRAIL_TREE logical=216 files=32\ninfo: ProtoBuf.Grpc.Server.ServicesExtensions.CodeFirstServiceMethodProvider[0]\n      RPC services being provided by SharpRail.Host.Remote.TerminalRpc: 3\ninfo: Microsoft.Hosting.Lifetime[14]\n      Now listening on: http://unix:/var/folders/ph/7mrpl8cs1pd49nvgnbhyfzgm0000gn/T/sharprail-relay-commandertvis/0b94cc5e4c13.sock\ninfo: Microsoft.Hosting.Lifetime[0]\n      Application started. Press Ctrl+C to shut down.\ninfo: Microsoft.Hosting.Lifetime[0]\n      Hosting environment: Production\ninfo: Microsoft.Hosting.Lifetime[0]\n      Content root path: /Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn/apps/native\n2026-10-04 12:45:00.898 SharpRail.UI[85190:47294177] GHOSTTY_AVALONIA renderer=Metal presentation=IOSurfaceLayer device=Apple M4 Pro\ninfo: Microsoft.AspNetCore.Hosting.Diagnostics[1]\n      Request starting HTTP/2 POST http://localhost/SharpRail.Host.Protocol.TerminalRpc/Run - application/grpc -\ninfo: Microsoft.AspNetCore.Routing.EndpointMiddleware[0]\n      Executing endpoint 'gRPC - /SharpRail.Host.Protocol.TerminalRpc/Run'\n",
+      "hostOutput": ""
+    },
+    {
+      "firstWindowMs": 431,
+      "workspaceLayoutMs": 417,
+      "hostReadyMs": null,
+      "clientFootprintMiB": 420.90858459472656,
+      "hostFootprintMiB": 0,
+      "totalFootprintMiB": 420.90858459472656,
+      "powerReadings": [
+        {
+          "at": 1791110708372,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1791110709381,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1791110710385,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1791110711392,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1791110712395,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1791110713534,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        }
+      ],
+      "clientOutput": "SHARPRAIL_MAIN 1791110708408\nSHARPRAIL_WORKSPACE_LAYOUT 1791110708790\nSHARPRAIL_TREE logical=216 files=32\ninfo: ProtoBuf.Grpc.Server.ServicesExtensions.CodeFirstServiceMethodProvider[0]\n      RPC services being provided by SharpRail.Host.Remote.TerminalRpc: 3\ninfo: Microsoft.Hosting.Lifetime[14]\n      Now listening on: http://unix:/var/folders/ph/7mrpl8cs1pd49nvgnbhyfzgm0000gn/T/sharprail-relay-commandertvis/c0846f7f6878.sock\ninfo: Microsoft.Hosting.Lifetime[0]\n      Application started. Press Ctrl+C to shut down.\ninfo: Microsoft.Hosting.Lifetime[0]\n      Hosting environment: Production\ninfo: Microsoft.Hosting.Lifetime[0]\n      Content root path: /Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn/apps/native\n2026-10-04 12:45:09.062 SharpRail.UI[85341:47294677] GHOSTTY_AVALONIA renderer=Metal presentation=IOSurfaceLayer device=Apple M4 Pro\ninfo: Microsoft.AspNetCore.Hosting.Diagnostics[1]\n      Request starting HTTP/2 POST http://localhost/SharpRail.Host.Protocol.TerminalRpc/Run - application/grpc -\ninfo: Microsoft.AspNetCore.Routing.EndpointMiddleware[0]\n      Executing endpoint 'gRPC - /SharpRail.Host.Protocol.TerminalRpc/Run'\n",
+      "hostOutput": ""
+    },
+    {
+      "firstWindowMs": 440,
+      "workspaceLayoutMs": 412,
+      "hostReadyMs": null,
+      "clientFootprintMiB": 402.84606170654297,
+      "hostFootprintMiB": 0,
+      "totalFootprintMiB": 402.84606170654297,
+      "powerReadings": [
+        {
+          "at": 1791110716565,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1791110717574,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1791110718578,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1791110719587,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1791110720577,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1791110721725,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        }
+      ],
+      "clientOutput": "SHARPRAIL_MAIN 1791110716605\nSHARPRAIL_WORKSPACE_LAYOUT 1791110716977\nSHARPRAIL_TREE logical=216 files=32\ninfo: ProtoBuf.Grpc.Server.ServicesExtensions.CodeFirstServiceMethodProvider[0]\n      RPC services being provided by SharpRail.Host.Remote.TerminalRpc: 3\ninfo: Microsoft.Hosting.Lifetime[14]\n      Now listening on: http://unix:/var/folders/ph/7mrpl8cs1pd49nvgnbhyfzgm0000gn/T/sharprail-relay-commandertvis/f057196ccd27.sock\ninfo: Microsoft.Hosting.Lifetime[0]\n      Application started. Press Ctrl+C to shut down.\ninfo: Microsoft.Hosting.Lifetime[0]\n      Hosting environment: Production\ninfo: Microsoft.Hosting.Lifetime[0]\n      Content root path: /Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn/apps/native\n2026-10-04 12:45:17.226 SharpRail.UI[85488:47295163] GHOSTTY_AVALONIA renderer=Metal presentation=IOSurfaceLayer device=Apple M4 Pro\ninfo: Microsoft.AspNetCore.Hosting.Diagnostics[1]\n      Request starting HTTP/2 POST http://localhost/SharpRail.Host.Protocol.TerminalRpc/Run - application/grpc -\ninfo: Microsoft.AspNetCore.Routing.EndpointMiddleware[0]\n      Executing endpoint 'gRPC - /SharpRail.Host.Protocol.TerminalRpc/Run'\n",
+      "hostOutput": ""
+    },
+    {
+      "firstWindowMs": 432,
+      "workspaceLayoutMs": 403,
+      "hostReadyMs": null,
+      "clientFootprintMiB": 420.54918670654297,
+      "hostFootprintMiB": 0,
+      "totalFootprintMiB": 420.54918670654297,
+      "powerReadings": [
+        {
+          "at": 1791110724773,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1791110725782,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1791110726797,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1791110727794,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1791110728797,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1791110729934,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        }
+      ],
+      "clientOutput": "SHARPRAIL_MAIN 1791110724812\nSHARPRAIL_WORKSPACE_LAYOUT 1791110725176\nSHARPRAIL_TREE logical=216 files=32\ninfo: ProtoBuf.Grpc.Server.ServicesExtensions.CodeFirstServiceMethodProvider[0]\n      RPC services being provided by SharpRail.Host.Remote.TerminalRpc: 3\ninfo: Microsoft.Hosting.Lifetime[14]\n      Now listening on: http://unix:/var/folders/ph/7mrpl8cs1pd49nvgnbhyfzgm0000gn/T/sharprail-relay-commandertvis/b95b08c46ce4.sock\ninfo: Microsoft.Hosting.Lifetime[0]\n      Application started. Press Ctrl+C to shut down.\ninfo: Microsoft.Hosting.Lifetime[0]\n      Hosting environment: Production\ninfo: Microsoft.Hosting.Lifetime[0]\n      Content root path: /Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn/apps/native\n2026-10-04 12:45:25.438 SharpRail.UI[85634:47295709] GHOSTTY_AVALONIA renderer=Metal presentation=IOSurfaceLayer device=Apple M4 Pro\ninfo: Microsoft.AspNetCore.Hosting.Diagnostics[1]\n      Request starting HTTP/2 POST http://localhost/SharpRail.Host.Protocol.TerminalRpc/Run - application/grpc -\ninfo: Microsoft.AspNetCore.Routing.EndpointMiddleware[0]\n      Executing endpoint 'gRPC - /SharpRail.Host.Protocol.TerminalRpc/Run'\n",
+      "hostOutput": ""
+    },
+    {
+      "firstWindowMs": 435,
+      "workspaceLayoutMs": 414,
+      "hostReadyMs": null,
+      "clientFootprintMiB": 406.50238037109375,
+      "hostFootprintMiB": 0,
+      "totalFootprintMiB": 406.50238037109375,
+      "powerReadings": [
+        {
+          "at": 1791110732968,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1791110733979,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1791110734982,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1791110735992,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1791110736993,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1791110738113,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        }
+      ],
+      "clientOutput": "SHARPRAIL_MAIN 1791110733007\nSHARPRAIL_WORKSPACE_LAYOUT 1791110733383\nSHARPRAIL_TREE logical=216 files=32\ninfo: ProtoBuf.Grpc.Server.ServicesExtensions.CodeFirstServiceMethodProvider[0]\n      RPC services being provided by SharpRail.Host.Remote.TerminalRpc: 3\ninfo: Microsoft.Hosting.Lifetime[14]\n      Now listening on: http://unix:/var/folders/ph/7mrpl8cs1pd49nvgnbhyfzgm0000gn/T/sharprail-relay-commandertvis/6f221b56458b.sock\ninfo: Microsoft.Hosting.Lifetime[0]\n      Application started. Press Ctrl+C to shut down.\ninfo: Microsoft.Hosting.Lifetime[0]\n      Hosting environment: Production\ninfo: Microsoft.Hosting.Lifetime[0]\n      Content root path: /Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn/apps/native\n2026-10-04 12:45:33.648 SharpRail.UI[85809:47296250] GHOSTTY_AVALONIA renderer=Metal presentation=IOSurfaceLayer device=Apple M4 Pro\ninfo: Microsoft.AspNetCore.Hosting.Diagnostics[1]\n      Request starting HTTP/2 POST http://localhost/SharpRail.Host.Protocol.TerminalRpc/Run - application/grpc -\ninfo: Microsoft.AspNetCore.Routing.EndpointMiddleware[0]\n      Executing endpoint 'gRPC - /SharpRail.Host.Protocol.TerminalRpc/Run'\n",
+      "hostOutput": ""
+    },
+    {
+      "firstWindowMs": 454,
+      "workspaceLayoutMs": 438,
+      "hostReadyMs": null,
+      "clientFootprintMiB": 402.95543670654297,
+      "hostFootprintMiB": 0,
+      "totalFootprintMiB": 402.95543670654297,
+      "powerReadings": [
+        {
+          "at": 1791110741164,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1791110742175,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1791110743179,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1791110744188,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1791110745187,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1791110746321,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        }
+      ],
+      "clientOutput": "SHARPRAIL_MAIN 1791110741202\nSHARPRAIL_WORKSPACE_LAYOUT 1791110741602\nSHARPRAIL_TREE logical=216 files=32\ninfo: ProtoBuf.Grpc.Server.ServicesExtensions.CodeFirstServiceMethodProvider[0]\n      RPC services being provided by SharpRail.Host.Remote.TerminalRpc: 3\ninfo: Microsoft.Hosting.Lifetime[14]\n      Now listening on: http://unix:/var/folders/ph/7mrpl8cs1pd49nvgnbhyfzgm0000gn/T/sharprail-relay-commandertvis/05770c936568.sock\ninfo: Microsoft.Hosting.Lifetime[0]\n      Application started. Press Ctrl+C to shut down.\ninfo: Microsoft.Hosting.Lifetime[0]\n      Hosting environment: Production\ninfo: Microsoft.Hosting.Lifetime[0]\n      Content root path: /Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn/apps/native\n2026-10-04 12:45:41.869 SharpRail.UI[85956:47296758] GHOSTTY_AVALONIA renderer=Metal presentation=IOSurfaceLayer device=Apple M4 Pro\ninfo: Microsoft.AspNetCore.Hosting.Diagnostics[1]\n      Request starting HTTP/2 POST http://localhost/SharpRail.Host.Protocol.TerminalRpc/Run - application/grpc -\ninfo: Microsoft.AspNetCore.Routing.EndpointMiddleware[0]\n      Executing endpoint 'gRPC - /SharpRail.Host.Protocol.TerminalRpc/Run'\n",
+      "hostOutput": ""
+    },
+    {
+      "firstWindowMs": 462,
+      "workspaceLayoutMs": 437,
+      "hostReadyMs": null,
+      "clientFootprintMiB": 402.6741180419922,
+      "hostFootprintMiB": 0,
+      "totalFootprintMiB": 402.6741180419922,
+      "powerReadings": [
+        {
+          "at": 1791110749353,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1791110750362,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1791110751368,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1791110752376,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1791110753378,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1791110754513,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        }
+      ],
+      "clientOutput": "SHARPRAIL_MAIN 1791110749395\nSHARPRAIL_WORKSPACE_LAYOUT 1791110749790\nSHARPRAIL_TREE logical=216 files=32\ninfo: ProtoBuf.Grpc.Server.ServicesExtensions.CodeFirstServiceMethodProvider[0]\n      RPC services being provided by SharpRail.Host.Remote.TerminalRpc: 3\ninfo: Microsoft.Hosting.Lifetime[14]\n      Now listening on: http://unix:/var/folders/ph/7mrpl8cs1pd49nvgnbhyfzgm0000gn/T/sharprail-relay-commandertvis/7d1bdd9ea9a9.sock\ninfo: Microsoft.Hosting.Lifetime[0]\n      Application started. Press Ctrl+C to shut down.\ninfo: Microsoft.Hosting.Lifetime[0]\n      Hosting environment: Production\ninfo: Microsoft.Hosting.Lifetime[0]\n      Content root path: /Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn/apps/native\n2026-10-04 12:45:50.063 SharpRail.UI[86130:47297285] GHOSTTY_AVALONIA renderer=Metal presentation=IOSurfaceLayer device=Apple M4 Pro\ninfo: Microsoft.AspNetCore.Hosting.Diagnostics[1]\n      Request starting HTTP/2 POST http://localhost/SharpRail.Host.Protocol.TerminalRpc/Run - application/grpc -\ninfo: Microsoft.AspNetCore.Routing.EndpointMiddleware[0]\n      Executing endpoint 'gRPC - /SharpRail.Host.Protocol.TerminalRpc/Run'\n",
+      "hostOutput": ""
+    },
+    {
+      "firstWindowMs": 445,
+      "workspaceLayoutMs": 414,
+      "hostReadyMs": null,
+      "clientFootprintMiB": 419.5491638183594,
+      "hostFootprintMiB": 0,
+      "totalFootprintMiB": 419.5491638183594,
+      "powerReadings": [
+        {
+          "at": 1791110757561,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1791110758570,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1791110759573,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1791110760571,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1791110761580,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1791110762722,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        }
+      ],
+      "clientOutput": "SHARPRAIL_MAIN 1791110757598\nSHARPRAIL_WORKSPACE_LAYOUT 1791110757976\nSHARPRAIL_TREE logical=216 files=32\ninfo: ProtoBuf.Grpc.Server.ServicesExtensions.CodeFirstServiceMethodProvider[0]\n      RPC services being provided by SharpRail.Host.Remote.TerminalRpc: 3\ninfo: Microsoft.Hosting.Lifetime[14]\n      Now listening on: http://unix:/var/folders/ph/7mrpl8cs1pd49nvgnbhyfzgm0000gn/T/sharprail-relay-commandertvis/6822cd5c2caa.sock\ninfo: Microsoft.Hosting.Lifetime[0]\n      Application started. Press Ctrl+C to shut down.\ninfo: Microsoft.Hosting.Lifetime[0]\n      Hosting environment: Production\ninfo: Microsoft.Hosting.Lifetime[0]\n      Content root path: /Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn/apps/native\n2026-10-04 12:45:58.241 SharpRail.UI[86276:47297775] GHOSTTY_AVALONIA renderer=Metal presentation=IOSurfaceLayer device=Apple M4 Pro\ninfo: Microsoft.AspNetCore.Hosting.Diagnostics[1]\n      Request starting HTTP/2 POST http://localhost/SharpRail.Host.Protocol.TerminalRpc/Run - application/grpc -\ninfo: Microsoft.AspNetCore.Routing.EndpointMiddleware[0]\n      Executing endpoint 'gRPC - /SharpRail.Host.Protocol.TerminalRpc/Run'\n",
+      "hostOutput": ""
+    },
+    {
+      "firstWindowMs": 416,
+      "workspaceLayoutMs": 398,
+      "hostReadyMs": null,
+      "clientFootprintMiB": 420.68981170654297,
+      "hostFootprintMiB": 0,
+      "totalFootprintMiB": 420.68981170654297,
+      "powerReadings": [
+        {
+          "at": 1791110765745,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1791110766756,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1791110767762,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1791110768758,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1791110769769,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        },
+        {
+          "at": 1791110770890,
+          "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true"
+        }
+      ],
+      "clientOutput": "SHARPRAIL_MAIN 1791110765779\nSHARPRAIL_WORKSPACE_LAYOUT 1791110766144\nSHARPRAIL_TREE logical=216 files=32\ninfo: ProtoBuf.Grpc.Server.ServicesExtensions.CodeFirstServiceMethodProvider[0]\n      RPC services being provided by SharpRail.Host.Remote.TerminalRpc: 3\ninfo: Microsoft.Hosting.Lifetime[14]\n      Now listening on: http://unix:/var/folders/ph/7mrpl8cs1pd49nvgnbhyfzgm0000gn/T/sharprail-relay-commandertvis/e414492721a5.sock\ninfo: Microsoft.Hosting.Lifetime[0]\n      Application started. Press Ctrl+C to shut down.\ninfo: Microsoft.Hosting.Lifetime[0]\n      Hosting environment: Production\ninfo: Microsoft.Hosting.Lifetime[0]\n      Content root path: /Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn/apps/native\n2026-10-04 12:46:06.388 SharpRail.UI[86424:47298262] GHOSTTY_AVALONIA renderer=Metal presentation=IOSurfaceLayer device=Apple M4 Pro\ninfo: Microsoft.AspNetCore.Hosting.Diagnostics[1]\n      Request starting HTTP/2 POST http://localhost/SharpRail.Host.Protocol.TerminalRpc/Run - application/grpc -\ninfo: Microsoft.AspNetCore.Routing.EndpointMiddleware[0]\n      Executing endpoint 'gRPC - /SharpRail.Host.Protocol.TerminalRpc/Run'\n",
+      "hostOutput": ""
+    }
+  ],
+  "source": {
+    "repository": "https://github.com/CommanderTvis/sharprail/tree/upstream",
+    "branch": "upstream",
+    "commit": "104678a"
+  }
+}

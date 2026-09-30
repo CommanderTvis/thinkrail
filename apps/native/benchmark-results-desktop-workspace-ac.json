@@ -1,0 +1,137 @@
+{
+  "metadata": {
+    "macos": "26.6.2",
+    "cpu": "Apple M4 Pro",
+    "power": "Now drawing from 'AC Power'",
+    "baselineCommit": "3822748ba86a365d776c4db73af341f822d064dc",
+    "original": "/Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn/apps/native/.bench/upstream-main/apps/desktop/build/bench/ThinkRail-canary.app",
+    "optimized": null,
+    "project": "/Users/commandertvis/.thinkrail/worktrees/thinkrail/riirn",
+    "branch": "riirn"
+  },
+  "warmups": [
+    {
+      "client": "original",
+      "round": 0,
+      "launchToWindowMs": 1167,
+      "launchToDomReadyMs": 1906,
+      "launchToWorkspaceMs": 1905,
+      "at5s": {
+        "appFootprintMiB": 278,
+        "processCount": 5
+      }
+    }
+  ],
+  "results": [
+    {
+      "client": "original",
+      "round": 1,
+      "launchToWindowMs": 385,
+      "launchToDomReadyMs": 853,
+      "launchToWorkspaceMs": 853,
+      "at5s": {
+        "appFootprintMiB": 284,
+        "processCount": 5
+      }
+    },
+    {
+      "client": "original",
+      "round": 2,
+      "launchToWindowMs": 397,
+      "launchToDomReadyMs": 845,
+      "launchToWorkspaceMs": 845,
+      "at5s": {
+        "appFootprintMiB": 284,
+        "processCount": 5
+      }
+    },
+    {
+      "client": "original",
+      "round": 3,
+      "launchToWindowMs": 413,
+      "launchToDomReadyMs": 816,
+      "launchToWorkspaceMs": 815,
+      "at5s": {
+        "appFootprintMiB": 283,
+        "processCount": 5
+      }
+    },
+    {
+      "client": "original",
+      "round": 4,
+      "launchToWindowMs": 390,
+      "launchToDomReadyMs": 836,
+      "launchToWorkspaceMs": 836,
+      "at5s": {
+        "appFootprintMiB": 398,
+        "processCount": 5
+      }
+    },
+    {
+      "client": "original",
+      "round": 5,
+      "launchToWindowMs": 386,
+      "launchToDomReadyMs": 949,
+      "launchToWorkspaceMs": 948,
+      "at5s": {
+        "appFootprintMiB": 286,
+        "processCount": 5
+      }
+    },
+    {
+      "client": "original",
+      "round": 6,
+      "launchToWindowMs": 401,
+      "launchToDomReadyMs": 804,
+      "launchToWorkspaceMs": 804,
+      "at5s": {
+        "appFootprintMiB": 284,
+        "processCount": 5
+      }
+    },
+    {
+      "client": "original",
+      "round": 7,
+      "launchToWindowMs": 374,
+      "launchToDomReadyMs": 736,
+      "launchToWorkspaceMs": 756,
+      "at5s": {
+        "appFootprintMiB": 286,
+        "processCount": 5
+      }
+    },
+    {
+      "client": "original",
+      "round": 8,
+      "launchToWindowMs": 410,
+      "launchToDomReadyMs": 810,
+      "launchToWorkspaceMs": 810,
+      "at5s": {
+        "appFootprintMiB": 286,
+        "processCount": 5
+      }
+    },
+    {
+      "client": "original",
+      "round": 9,
+      "launchToWindowMs": 404,
+      "launchToDomReadyMs": 850,
+      "launchToWorkspaceMs": 849,
+      "at5s": {
+        "appFootprintMiB": 283,
+        "processCount": 5
+      }
+    },
+    {
+      "client": "original",
+      "round": 10,
+      "launchToWindowMs": 494,
+      "launchToDomReadyMs": 910,
+      "launchToWorkspaceMs": 910,
+      "at5s": {
+        "appFootprintMiB": 280,
+        "processCount": 5
+      }
+    }
+  ]
+}

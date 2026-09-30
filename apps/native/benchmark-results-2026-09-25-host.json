@@ -1,0 +1,779 @@
+{
+  "metadata": {
+    "date": "2026-09-25T13-49-36-571Z",
+    "macos": "26.6.2",
+    "cpu": "Apple M4 Pro",
+    "power": "Now drawing from 'AC Power'",
+    "baselineCommit": "50d5ac934f576d277f12e8bf34c74c78924d19d4",
+    "reactNativeMacos": "0.81.9",
+    "zed": "1.21.0"
+  },
+  "rounds": 10,
+  "warmups": [
+    {
+      "client": "original",
+      "round": 0,
+      "launchToWindowMs": 400,
+      "originalDomReadyMs": 841,
+      "at5s": {
+        "mainRssMiB": 317,
+        "hostRssMiB": null,
+        "treeRssMiB": 319,
+        "webKitRssMiB": 177,
+        "appRssMiB": 496,
+        "processCount": 5
+      },
+      "at10s": {
+        "mainRssMiB": 317,
+        "hostRssMiB": null,
+        "treeRssMiB": 319,
+        "webKitRssMiB": 177,
+        "appRssMiB": 496,
+        "processCount": 5
+      }
+    },
+    {
+      "client": "react-native",
+      "round": 0,
+      "launchToWindowMs": 455,
+      "launchToContentMs": 524,
+      "launchToHostReadyMs": 380,
+      "mainToContentMs": 504,
+      "at5s": {
+        "mainRssMiB": 132,
+        "hostRssMiB": 141,
+        "treeRssMiB": 274,
+        "webKitRssMiB": 0,
+        "appRssMiB": 274,
+        "processCount": 2
+      },
+      "at10s": {
+        "mainRssMiB": 132,
+        "hostRssMiB": 141,
+        "treeRssMiB": 274,
+        "webKitRssMiB": 0,
+        "appRssMiB": 274,
+        "processCount": 2
+      }
+    },
+    {
+      "client": "zed",
+      "round": 0,
+      "launchToWindowMs": 230,
+      "at5s": {
+        "mainRssMiB": 193,
+        "hostRssMiB": null,
+        "treeRssMiB": 213,
+        "webKitRssMiB": 0,
+        "appRssMiB": 213,
+        "processCount": 2
+      },
+      "at10s": {
+        "mainRssMiB": 193,
+        "hostRssMiB": null,
+        "treeRssMiB": 213,
+        "webKitRssMiB": 0,
+        "appRssMiB": 213,
+        "processCount": 2
+      }
+    }
+  ],
+  "results": [
+    {
+      "client": "react-native",
+      "round": 1,
+      "launchToWindowMs": 429,
+      "launchToContentMs": 488,
+      "launchToHostReadyMs": 362,
+      "mainToContentMs": 480,
+      "at5s": {
+        "mainRssMiB": 132,
+        "hostRssMiB": 142,
+        "treeRssMiB": 274,
+        "webKitRssMiB": 0,
+        "appRssMiB": 274,
+        "processCount": 2
+      },
+      "at10s": {
+        "mainRssMiB": 132,
+        "hostRssMiB": 142,
+        "treeRssMiB": 274,
+        "webKitRssMiB": 0,
+        "appRssMiB": 274,
+        "processCount": 2
+      }
+    },
+    {
+      "client": "zed",
+      "round": 1,
+      "launchToWindowMs": 208,
+      "at5s": {
+        "mainRssMiB": 192,
+        "hostRssMiB": null,
+        "treeRssMiB": 213,
+        "webKitRssMiB": 0,
+        "appRssMiB": 213,
+        "processCount": 2
+      },
+      "at10s": {
+        "mainRssMiB": 193,
+        "hostRssMiB": null,
+        "treeRssMiB": 213,
+        "webKitRssMiB": 0,
+        "appRssMiB": 213,
+        "processCount": 2
+      }
+    },
+    {
+      "client": "original",
+      "round": 1,
+      "launchToWindowMs": 386,
+      "originalDomReadyMs": 834,
+      "at5s": {
+        "mainRssMiB": 317,
+        "hostRssMiB": null,
+        "treeRssMiB": 319,
+        "webKitRssMiB": 175,
+        "appRssMiB": 494,
+        "processCount": 5
+      },
+      "at10s": {
+        "mainRssMiB": 317,
+        "hostRssMiB": null,
+        "treeRssMiB": 318,
+        "webKitRssMiB": 175,
+        "appRssMiB": 493,
+        "processCount": 5
+      }
+    },
+    {
+      "client": "zed",
+      "round": 2,
+      "launchToWindowMs": 237,
+      "at5s": {
+        "mainRssMiB": 193,
+        "hostRssMiB": null,
+        "treeRssMiB": 213,
+        "webKitRssMiB": 0,
+        "appRssMiB": 213,
+        "processCount": 2
+      },
+      "at10s": {
+        "mainRssMiB": 193,
+        "hostRssMiB": null,
+        "treeRssMiB": 213,
+        "webKitRssMiB": 0,
+        "appRssMiB": 213,
+        "processCount": 2
+      }
+    },
+    {
+      "client": "original",
+      "round": 2,
+      "launchToWindowMs": 387,
+      "originalDomReadyMs": 819,
+      "at5s": {
+        "mainRssMiB": 319,
+        "hostRssMiB": null,
+        "treeRssMiB": 320,
+        "webKitRssMiB": 178,
+        "appRssMiB": 498,
+        "processCount": 5
+      },
+      "at10s": {
+        "mainRssMiB": 319,
+        "hostRssMiB": null,
+        "treeRssMiB": 320,
+        "webKitRssMiB": 177,
+        "appRssMiB": 497,
+        "processCount": 5
+      }
+    },
+    {
+      "client": "react-native",
+      "round": 2,
+      "launchToWindowMs": 697,
+      "launchToContentMs": 799,
+      "launchToHostReadyMs": 616,
+      "mainToContentMs": 777,
+      "at5s": {
+        "mainRssMiB": 132,
+        "hostRssMiB": 144,
+        "treeRssMiB": 276,
+        "webKitRssMiB": 0,
+        "appRssMiB": 276,
+        "processCount": 2
+      },
+      "at10s": {
+        "mainRssMiB": 132,
+        "hostRssMiB": 144,
+        "treeRssMiB": 276,
+        "webKitRssMiB": 0,
+        "appRssMiB": 276,
+        "processCount": 2
+      }
+    },
+    {
+      "client": "original",
+      "round": 3,
+      "launchToWindowMs": 370,
+      "originalDomReadyMs": 794,
+      "at5s": {
+        "mainRssMiB": 318,
+        "hostRssMiB": null,
+        "treeRssMiB": 320,
+        "webKitRssMiB": 177,
+        "appRssMiB": 497,
+        "processCount": 5
+      },
+      "at10s": {
+        "mainRssMiB": 318,
+        "hostRssMiB": null,
+        "treeRssMiB": 320,
+        "webKitRssMiB": 177,
+        "appRssMiB": 497,
+        "processCount": 5
+      }
+    },
+    {
+      "client": "react-native",
+      "round": 3,
+      "launchToWindowMs": 420,
+      "launchToContentMs": 527,
+      "launchToHostReadyMs": 365,
+      "mainToContentMs": 520,
+      "at5s": {
+        "mainRssMiB": 128,
+        "hostRssMiB": 143,
+        "treeRssMiB": 270,
+        "webKitRssMiB": 0,
+        "appRssMiB": 270,
+        "processCount": 2
+      },
+      "at10s": {
+        "mainRssMiB": 128,
+        "hostRssMiB": 143,
+        "treeRssMiB": 270,
+        "webKitRssMiB": 0,
+        "appRssMiB": 270,
+        "processCount": 2
+      }
+    },
+    {
+      "client": "zed",
+      "round": 3,
+      "launchToWindowMs": 231,
+      "at5s": {
+        "mainRssMiB": 193,
+        "hostRssMiB": null,
+        "treeRssMiB": 214,
+        "webKitRssMiB": 0,
+        "appRssMiB": 214,
+        "processCount": 2
+      },
+      "at10s": {
+        "mainRssMiB": 193,
+        "hostRssMiB": null,
+        "treeRssMiB": 213,
+        "webKitRssMiB": 0,
+        "appRssMiB": 213,
+        "processCount": 2
+      }
+    },
+    {
+      "client": "react-native",
+      "round": 4,
+      "launchToWindowMs": 409,
+      "launchToContentMs": 512,
+      "launchToHostReadyMs": 347,
+      "mainToContentMs": 505,
+      "at5s": {
+        "mainRssMiB": 132,
+        "hostRssMiB": 142,
+        "treeRssMiB": 274,
+        "webKitRssMiB": 0,
+        "appRssMiB": 274,
+        "processCount": 2
+      },
+      "at10s": {
+        "mainRssMiB": 132,
+        "hostRssMiB": 142,
+        "treeRssMiB": 274,
+        "webKitRssMiB": 0,
+        "appRssMiB": 274,
+        "processCount": 2
+      }
+    },
+    {
+      "client": "zed",
+      "round": 4,
+      "launchToWindowMs": 215,
+      "at5s": {
+        "mainRssMiB": 194,
+        "hostRssMiB": null,
+        "treeRssMiB": 214,
+        "webKitRssMiB": 0,
+        "appRssMiB": 214,
+        "processCount": 2
+      },
+      "at10s": {
+        "mainRssMiB": 193,
+        "hostRssMiB": null,
+        "treeRssMiB": 214,
+        "webKitRssMiB": 0,
+        "appRssMiB": 214,
+        "processCount": 2
+      }
+    },
+    {
+      "client": "original",
+      "round": 4,
+      "launchToWindowMs": 376,
+      "originalDomReadyMs": 799,
+      "at5s": {
+        "mainRssMiB": 318,
+        "hostRssMiB": null,
+        "treeRssMiB": 320,
+        "webKitRssMiB": 176,
+        "appRssMiB": 496,
+        "processCount": 5
+      },
+      "at10s": {
+        "mainRssMiB": 318,
+        "hostRssMiB": null,
+        "treeRssMiB": 320,
+        "webKitRssMiB": 176,
+        "appRssMiB": 496,
+        "processCount": 5
+      }
+    },
+    {
+      "client": "zed",
+      "round": 5,
+      "launchToWindowMs": 248,
+      "at5s": {
+        "mainRssMiB": 192,
+        "hostRssMiB": null,
+        "treeRssMiB": 212,
+        "webKitRssMiB": 0,
+        "appRssMiB": 212,
+        "processCount": 2
+      },
+      "at10s": {
+        "mainRssMiB": 192,
+        "hostRssMiB": null,
+        "treeRssMiB": 212,
+        "webKitRssMiB": 0,
+        "appRssMiB": 212,
+        "processCount": 2
+      }
+    },
+    {
+      "client": "original",
+      "round": 5,
+      "launchToWindowMs": 386,
+      "originalDomReadyMs": 813,
+      "at5s": {
+        "mainRssMiB": 317,
+        "hostRssMiB": null,
+        "treeRssMiB": 319,
+        "webKitRssMiB": 176,
+        "appRssMiB": 495,
+        "processCount": 5
+      },
+      "at10s": {
+        "mainRssMiB": 317,
+        "hostRssMiB": null,
+        "treeRssMiB": 319,
+        "webKitRssMiB": 176,
+        "appRssMiB": 495,
+        "processCount": 5
+      }
+    },
+    {
+      "client": "react-native",
+      "round": 5,
+      "launchToWindowMs": 694,
+      "launchToContentMs": 808,
+      "launchToHostReadyMs": 619,
+      "mainToContentMs": 786,
+      "at5s": {
+        "mainRssMiB": 132,
+        "hostRssMiB": 142,
+        "treeRssMiB": 274,
+        "webKitRssMiB": 0,
+        "appRssMiB": 274,
+        "processCount": 2
+      },
+      "at10s": {
+        "mainRssMiB": 132,
+        "hostRssMiB": 142,
+        "treeRssMiB": 274,
+        "webKitRssMiB": 0,
+        "appRssMiB": 274,
+        "processCount": 2
+      }
+    },
+    {
+      "client": "original",
+      "round": 6,
+      "launchToWindowMs": 377,
+      "originalDomReadyMs": 796,
+      "at5s": {
+        "mainRssMiB": 318,
+        "hostRssMiB": null,
+        "treeRssMiB": 320,
+        "webKitRssMiB": 175,
+        "appRssMiB": 495,
+        "processCount": 5
+      },
+      "at10s": {
+        "mainRssMiB": 318,
+        "hostRssMiB": null,
+        "treeRssMiB": 320,
+        "webKitRssMiB": 175,
+        "appRssMiB": 495,
+        "processCount": 5
+      }
+    },
+    {
+      "client": "react-native",
+      "round": 6,
+      "launchToWindowMs": 423,
+      "launchToContentMs": 534,
+      "launchToHostReadyMs": 372,
+      "mainToContentMs": 523,
+      "at5s": {
+        "mainRssMiB": 128,
+        "hostRssMiB": 143,
+        "treeRssMiB": 270,
+        "webKitRssMiB": 0,
+        "appRssMiB": 270,
+        "processCount": 2
+      },
+      "at10s": {
+        "mainRssMiB": 127,
+        "hostRssMiB": 143,
+        "treeRssMiB": 270,
+        "webKitRssMiB": 0,
+        "appRssMiB": 270,
+        "processCount": 2
+      }
+    },
+    {
+      "client": "zed",
+      "round": 6,
+      "launchToWindowMs": 553,
+      "at5s": {
+        "mainRssMiB": 193,
+        "hostRssMiB": null,
+        "treeRssMiB": 214,
+        "webKitRssMiB": 0,
+        "appRssMiB": 214,
+        "processCount": 2
+      },
+      "at10s": {
+        "mainRssMiB": 193,
+        "hostRssMiB": null,
+        "treeRssMiB": 213,
+        "webKitRssMiB": 0,
+        "appRssMiB": 213,
+        "processCount": 2
+      }
+    },
+    {
+      "client": "react-native",
+      "round": 7,
+      "launchToWindowMs": 416,
+      "launchToContentMs": 513,
+      "launchToHostReadyMs": 352,
+      "mainToContentMs": 506,
+      "at5s": {
+        "mainRssMiB": 132,
+        "hostRssMiB": 143,
+        "treeRssMiB": 275,
+        "webKitRssMiB": 0,
+        "appRssMiB": 275,
+        "processCount": 2
+      },
+      "at10s": {
+        "mainRssMiB": 132,
+        "hostRssMiB": 143,
+        "treeRssMiB": 274,
+        "webKitRssMiB": 0,
+        "appRssMiB": 274,
+        "processCount": 2
+      }
+    },
+    {
+      "client": "zed",
+      "round": 7,
+      "launchToWindowMs": 216,
+      "at5s": {
+        "mainRssMiB": 192,
+        "hostRssMiB": null,
+        "treeRssMiB": 212,
+        "webKitRssMiB": 0,
+        "appRssMiB": 212,
+        "processCount": 2
+      },
+      "at10s": {
+        "mainRssMiB": 192,
+        "hostRssMiB": null,
+        "treeRssMiB": 212,
+        "webKitRssMiB": 0,
+        "appRssMiB": 212,
+        "processCount": 2
+      }
+    },
+    {
+      "client": "original",
+      "round": 7,
+      "launchToWindowMs": 401,
+      "originalDomReadyMs": 866,
+      "at5s": {
+        "mainRssMiB": 313,
+        "hostRssMiB": null,
+        "treeRssMiB": 315,
+        "webKitRssMiB": 182,
+        "appRssMiB": 497,
+        "processCount": 5
+      },
+      "at10s": {
+        "mainRssMiB": 313,
+        "hostRssMiB": null,
+        "treeRssMiB": 315,
+        "webKitRssMiB": 181,
+        "appRssMiB": 496,
+        "processCount": 5
+      }
+    },
+    {
+      "client": "zed",
+      "round": 8,
+      "launchToWindowMs": 243,
+      "at5s": {
+        "mainRssMiB": 192,
+        "hostRssMiB": null,
+        "treeRssMiB": 212,
+        "webKitRssMiB": 0,
+        "appRssMiB": 212,
+        "processCount": 2
+      },
+      "at10s": {
+        "mainRssMiB": 149,
+        "hostRssMiB": null,
+        "treeRssMiB": 162,
+        "webKitRssMiB": 0,
+        "appRssMiB": 162,
+        "processCount": 2
+      }
+    },
+    {
+      "client": "original",
+      "round": 8,
+      "launchToWindowMs": 779,
+      "originalDomReadyMs": 1123,
+      "at5s": {
+        "mainRssMiB": 305,
+        "hostRssMiB": null,
+        "treeRssMiB": 306,
+        "webKitRssMiB": 178,
+        "appRssMiB": 484,
+        "processCount": 5
+      },
+      "at10s": {
+        "mainRssMiB": 305,
+        "hostRssMiB": null,
+        "treeRssMiB": 306,
+        "webKitRssMiB": 177,
+        "appRssMiB": 483,
+        "processCount": 5
+      }
+    },
+    {
+      "client": "react-native",
+      "round": 8,
+      "launchToWindowMs": 722,
+      "launchToContentMs": 847,
+      "launchToHostReadyMs": 642,
+      "mainToContentMs": 824,
+      "at5s": {
+        "mainRssMiB": 132,
+        "hostRssMiB": 144,
+        "treeRssMiB": 276,
+        "webKitRssMiB": 0,
+        "appRssMiB": 276,
+        "processCount": 2
+      },
+      "at10s": {
+        "mainRssMiB": 132,
+        "hostRssMiB": 144,
+        "treeRssMiB": 276,
+        "webKitRssMiB": 0,
+        "appRssMiB": 276,
+        "processCount": 2
+      }
+    },
+    {
+      "client": "original",
+      "round": 9,
+      "launchToWindowMs": 407,
+      "originalDomReadyMs": 929,
+      "at5s": {
+        "mainRssMiB": 318,
+        "hostRssMiB": null,
+        "treeRssMiB": 319,
+        "webKitRssMiB": 178,
+        "appRssMiB": 497,
+        "processCount": 5
+      },
+      "at10s": {
+        "mainRssMiB": 318,
+        "hostRssMiB": null,
+        "treeRssMiB": 319,
+        "webKitRssMiB": 177,
+        "appRssMiB": 496,
+        "processCount": 5
+      }
+    },
+    {
+      "client": "react-native",
+      "round": 9,
+      "launchToWindowMs": 424,
+      "launchToContentMs": 527,
+      "launchToHostReadyMs": 367,
+      "mainToContentMs": 516,
+      "at5s": {
+        "mainRssMiB": 128,
+        "hostRssMiB": 142,
+        "treeRssMiB": 270,
+        "webKitRssMiB": 0,
+        "appRssMiB": 270,
+        "processCount": 2
+      },
+      "at10s": {
+        "mainRssMiB": 128,
+        "hostRssMiB": 142,
+        "treeRssMiB": 270,
+        "webKitRssMiB": 0,
+        "appRssMiB": 270,
+        "processCount": 2
+      }
+    },
+    {
+      "client": "zed",
+      "round": 9,
+      "launchToWindowMs": 619,
+      "at5s": {
+        "mainRssMiB": 192,
+        "hostRssMiB": null,
+        "treeRssMiB": 212,
+        "webKitRssMiB": 0,
+        "appRssMiB": 212,
+        "processCount": 2
+      },
+      "at10s": {
+        "mainRssMiB": 191,
+        "hostRssMiB": null,
+        "treeRssMiB": 211,
+        "webKitRssMiB": 0,
+        "appRssMiB": 211,
+        "processCount": 2
+      }
+    },
+    {
+      "client": "react-native",
+      "round": 10,
+      "launchToWindowMs": 418,
+      "launchToContentMs": 474,
+      "launchToHostReadyMs": 350,
+      "mainToContentMs": 467,
+      "at5s": {
+        "mainRssMiB": 132,
+        "hostRssMiB": 144,
+        "treeRssMiB": 276,
+        "webKitRssMiB": 0,
+        "appRssMiB": 276,
+        "processCount": 2
+      },
+      "at10s": {
+        "mainRssMiB": 132,
+        "hostRssMiB": 144,
+        "treeRssMiB": 276,
+        "webKitRssMiB": 0,
+        "appRssMiB": 276,
+        "processCount": 2
+      }
+    },
+    {
+      "client": "zed",
+      "round": 10,
+      "launchToWindowMs": 226,
+      "at5s": {
+        "mainRssMiB": 192,
+        "hostRssMiB": null,
+        "treeRssMiB": 212,
+        "webKitRssMiB": 0,
+        "appRssMiB": 212,
+        "processCount": 2
+      },
+      "at10s": {
+        "mainRssMiB": 191,
+        "hostRssMiB": null,
+        "treeRssMiB": 212,
+        "webKitRssMiB": 0,
+        "appRssMiB": 212,
+        "processCount": 2
+      }
+    },
+    {
+      "client": "original",
+      "round": 10,
+      "launchToWindowMs": 393,
+      "originalDomReadyMs": 899,
+      "at5s": {
+        "mainRssMiB": 317,
+        "hostRssMiB": null,
+        "treeRssMiB": 318,
+        "webKitRssMiB": 176,
+        "appRssMiB": 494,
+        "processCount": 5
+      },
+      "at10s": {
+        "mainRssMiB": 316,
+        "hostRssMiB": null,
+        "treeRssMiB": 318,
+        "webKitRssMiB": 176,
+        "appRssMiB": 494,
+        "processCount": 5
+      }
+    }
+  ],
+  "summary": {
+    "original": {
+      "windowMs": 386.5,
+      "mainRss5sMiB": 317.5,
+      "treeRss5sMiB": 319,
+      "treeRss10sMiB": 319,
+      "appRss5sMiB": 495.5,
+      "appRss10sMiB": 495.5
+    },
+    "react-native": {
+      "windowMs": 423.5,
+      "mainRss5sMiB": 132,
+      "treeRss5sMiB": 274,
+      "treeRss10sMiB": 274,
+      "appRss5sMiB": 274,
+      "appRss10sMiB": 274
+    },
+    "zed": {
+      "windowMs": 234,
+      "mainRss5sMiB": 192,
+      "treeRss5sMiB": 212.5,
+      "treeRss10sMiB": 212.5,
+      "appRss5sMiB": 212.5,
+      "appRss10sMiB": 212.5
+    }
+  }
+}

@@ -25,14 +25,19 @@ if (workspaces === undefined || Array.isArray(workspaces)) {
 	process.exit(1);
 }
 const catalog = workspaces.catalog ?? {};
-const patterns = workspaces.packages ?? [];
+const patterns = (workspaces.packages ?? []).filter((pattern) => !pattern.startsWith("!"));
+const excluded = new Set(
+	(workspaces.packages ?? [])
+		.filter((pattern) => pattern.startsWith("!"))
+		.map((pattern) => pattern.slice(1)),
+);
 
 function manifestPaths(): string[] {
 	const paths: string[] = [];
 	for (const pattern of patterns) {
 		const base = pattern.replace(/\/\*$/, "");
 		for (const entry of readdirSync(join(root, base), { withFileTypes: true })) {
-			if (!entry.isDirectory()) continue;
+			if (!entry.isDirectory() || excluded.has(`${base}/${entry.name}`)) continue;
 			const manifest = join(root, base, entry.name, "package.json");
 			if (existsSync(manifest)) paths.push(manifest);
 		}

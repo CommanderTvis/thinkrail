@@ -115,6 +115,13 @@ Green gates are necessary but not sufficient:
   templates. When creating an issue programmatically, reproduce the selected issue template and pass
   its frontmatter labels.
 
+## Branch `riirn`
+
+The `riirn` branch (the React Native macOS client in `apps/native`) is developed by one person and kept
+as a single commit on top of `main` so it rebases cleanly. Never add commits to it: stage changes and
+`git commit --amend`, keep the commit message describing the whole branch, then
+`git push --force-with-lease origin riirn`. Rebase onto `main` rather than merging it.
+
 ## Stack
 
 Bun + Turbo monorepo · TypeScript strict · React 19 + Zustand + Tailwind v4 · in-process `pi`
