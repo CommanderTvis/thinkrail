@@ -62,6 +62,15 @@ export async function applyAgentTitle(
 	return lines.join("\n");
 }
 
+export function applyTerminalTitle(
+	workspaceId: string,
+	params: { workspace_name: string; branch?: string | undefined },
+): string {
+	const workspaceName = clampWords(params.workspace_name, MAX_WORKSPACE_NAME);
+	if (!workspaceName) throw new Error("Pass a workspace_name with at least one letter or digit.");
+	return applyWorkspaceName(workspaceId, workspaceName, params.branch);
+}
+
 function workspaceStillNameable(workspaceId: string): boolean {
 	try {
 		return isNameable(getWorkspace(workspaceId));
