@@ -110,6 +110,7 @@ import { runObservation } from "./runAnalytics";
 import { resolveSubagentsEnabled } from "./subagentPolicy";
 import { taskObservation } from "./taskAnalytics";
 import { terminalDeliveryForSendStatus } from "./terminalSend";
+import { titleMcpTools } from "./titleMcp";
 import { titleToolHost } from "./titleTool";
 import { markClientStale, reconcilePendingReviewsOnBoot } from "./todoReview";
 
@@ -277,7 +278,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 				const body: unknown = await req.json().catch(() => null);
 				const reply = await serveMcp(body, {
 					cwd: worktreePath,
-					tools: mcpToolsFor(worktreePath),
+					tools: [...mcpToolsFor(worktreePath), ...titleMcpTools(owner.workspaceId)],
 				});
 				return reply.body === null
 					? new Response(null, { status: reply.status })

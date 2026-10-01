@@ -42,6 +42,8 @@ adapter over the same tool definitions, so a capability is written once and reac
   drawing lands beside the very terminal that asked for it. `blueprint_check` joins the same way, bound
   to the worktree the token resolved to ([[submodule-server-blueprint]]). Both handles are *structural* —
   neither module imports this one, and neither is named here.
+  The host's own workspace-only `set_title` joins the same way, bound to the token owner's workspace
+  (see `submodule-server-host`).
 - **`serveMcp`'s table is caller-supplied, not baked in.** The plugin loader passes `tools`, the complete
   table for that call — spec tools included, if the spec-dialect plugin is active — because once the spec
   dialect is a plugin, this module cannot assume `SPEC_TOOLS` belongs on every table any more than it can
