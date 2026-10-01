@@ -52,7 +52,7 @@ test("a terminal's MCP address serves the spec tools, scoped to its own worktree
 		page,
 		mcpCall("tools/list", "{}", '.result.tools | length | tostring + " tools listed"'),
 	);
-	await expect(terminal).toContainText("7 tools listed");
+	await expect(terminal).toContainText("8 tools listed");
 
 	await runInTerminal(
 		page,

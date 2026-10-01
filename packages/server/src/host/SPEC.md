@@ -361,6 +361,11 @@ channel fan-out, and the process-boot wrapper both launchers share.
   - `workspaceNeedsName(sessionId)` uses the same eligibility rule (managed, not `renamed`), so agent's
     turn-start `pending-naming` reminder and the write policy can't disagree.
   - A target the agent never names stays unnamed; there is no fallback.
+  - A terminal agent (Claude Code, Codex) reaches the same policy over MCP: `titleMcp.ts` adds a
+    workspace-only `set_title` (`workspace_name`, `branch?`) to every terminal's `/mcp/` table, bound to the
+    token owner's workspace, through `applyTerminalTitle`. A terminal has no pi chat, so there is no
+    `chat_title` and no turn-start reminder; the tool description and the server's MCP `instructions`
+    carry the "once, as soon as the task is clear" rule instead.
   - The **workspace-archive teardown** — the other composition of `agent` + `terminal` + `workspaces` only
     the host may make. `workspace.remove` **rejects a `kind: "default"` workspace loudly, before any
     side-effect** (the record's `worktreePath` is the project folder — the reclaim's `rm -rf` fallback

@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Workspace } from "@thinkrail/contracts";
 import { createWorkspace, getWorkspace, listWorkspaces, renameWorkspace } from "../workspaces";
+import { titleMcpTools } from "./titleMcp";
 import { type AgentTitleDeps, applyAgentTitle } from "./titleTool";
 
 let dataDir: string;
@@ -173,4 +174,24 @@ test("rejects calls from sessions the host does not manage, and empty names", as
 	await expect(
 		applyAgentTitle("s1", { chat_title: "  ", workspace_name: "!!" }, fakeChat(ws.id).deps),
 	).rejects.toThrow("Pass chat_title and/or workspace_name.");
+});
+
+test("a terminal agent names its workspace over MCP under the same once-only policy", async () => {
+	const ws = await createWorkspace("p1");
+	const [tool] = titleMcpTools(ws.id);
+	if (!tool) throw new Error("expected set_title");
+
+	expect(
+		await tool.call({ workspace_name: "Fix login redirect", branch: "fix-login-redirect" }),
+	).toEqual({
+		text: 'Workspace renamed to "Fix login redirect" (branch fix-login-redirect).',
+	});
+	expect(getWorkspace(ws.id)).toMatchObject({ branch: "fix-login-redirect", renamed: true });
+
+	expect(await tool.call({ workspace_name: "Something else" })).toEqual({
+		text: "Workspace name kept: this workspace is already named.",
+	});
+	expect(await tool.call({ branch: "x" })).toMatchObject({ isError: true });
+	expect(await tool.call({ workspace_name: "!!" })).toMatchObject({ isError: true });
+	expect(getWorkspace(ws.id).name).toBe("Fix login redirect");
 });
