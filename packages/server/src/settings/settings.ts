@@ -83,6 +83,7 @@ export function updateConfig(partial: AppConfigUpdate): AppConfig {
 		["notificationsEnabled", runtimeUpdate.notificationsEnabled],
 		["reviewAutoFix", runtimeUpdate.reviewAutoFix],
 		["agentReviewEnabled", runtimeUpdate.agentReviewEnabled],
+		["restoreLatestChat", runtimeUpdate.restoreLatestChat],
 	] as const) {
 		if (value !== undefined && typeof value !== "boolean") {
 			throw new Error(`${name} must be a boolean`);

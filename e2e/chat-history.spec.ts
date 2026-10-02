@@ -478,3 +478,35 @@ test("with no TODOs, the single newest disk chat opens as a fallback; older ones
 		page.getByTestId("closed-chat-item").filter({ hasText: "older fallback chat" }),
 	).toBeVisible();
 });
+
+test("disabling latest Pi chat restoration survives reload and leaves disk chats in history", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	await page.getByTestId("open-settings").click();
+	await page.getByTestId("settings-nav-chat").click();
+	const toggle = page.getByTestId("restore-latest-chat-toggle");
+	await expect(toggle).toHaveAttribute("aria-checked", "true");
+	await toggle.click();
+	await expect(toggle).toHaveAttribute("aria-checked", "false");
+	await page.keyboard.press("Escape");
+
+	seedWorkspaceSession(repoCwd(), {
+		name: "history-only chat",
+		messages: [{ role: "user", text: "keep this in history", timestamp: BASE_TS }],
+	});
+	await enterDefaultWorkspace(page);
+	await page.reload();
+	await expect(page.getByTestId("workspace-ready").first()).toBeVisible();
+	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(0);
+	await page.getByTestId("chat-history").first().click();
+	await expect(
+		page.getByTestId("closed-chat-item").filter({ hasText: "history-only chat" }),
+	).toBeVisible();
+	await page.keyboard.press("Escape");
+	await page.getByTestId("open-settings").click();
+	await page.getByTestId("settings-nav-chat").click();
+	await expect(toggle).toHaveAttribute("aria-checked", "false");
+	await toggle.click();
+	await expect(toggle).toHaveAttribute("aria-checked", "true");
+});
