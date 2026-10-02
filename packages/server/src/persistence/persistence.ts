@@ -288,6 +288,10 @@ export function loadConfig(): AppConfig {
 			typeof value.agentReviewEnabled === "boolean"
 				? value.agentReviewEnabled
 				: DEFAULT_CONFIG.agentReviewEnabled,
+		restoreLatestChat:
+			typeof value.restoreLatestChat === "boolean"
+				? value.restoreLatestChat
+				: DEFAULT_CONFIG.restoreLatestChat,
 		subagentsEnabled:
 			typeof value.subagentsEnabled === "boolean"
 				? value.subagentsEnabled

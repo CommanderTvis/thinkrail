@@ -14,6 +14,7 @@ import {
 	noteRecentModel,
 	resetConfigCache,
 	type SettingsPublisher,
+	setPluginNamespaceValidator,
 	setSettingsPublisher,
 	updateConfig,
 } from "./settings";
@@ -49,6 +50,7 @@ beforeEach(() => {
 
 afterEach(() => {
 	setSettingsPublisher(null);
+	setPluginNamespaceValidator(null);
 	resetConfigCache();
 	rmSync(dataDir, { recursive: true, force: true });
 	if (savedDataDir === undefined) delete process.env.THINKRAIL_DATA_DIR;
@@ -694,4 +696,55 @@ test("stored favorites and recents survive reload while malformed ones fall back
 	);
 	resetConfigCache();
 	expect(getConfig().favoriteModels.map((m) => m.id)).toEqual(["ok"]);
+});
+
+test("two plugin namespaces written in sequence both survive", () => {
+	updateConfig({ plugins: { alpha: { enabled: true, count: 1 } } });
+	const next = updateConfig({ plugins: { beta: { enabled: false } } });
+	expect(next.plugins).toEqual({ alpha: { enabled: true, count: 1 }, beta: { enabled: false } });
+});
+
+test("a plugin namespace patch merges into its own id only, and null resets it", () => {
+	updateConfig({ plugins: { alpha: { enabled: true, count: 1 } } });
+	const patched = updateConfig({ plugins: { alpha: { count: 2 } } });
+	expect(patched.plugins.alpha).toEqual({ enabled: true, count: 2 });
+	const reset = updateConfig({ plugins: { alpha: null } });
+	expect(reset.plugins.alpha).toEqual({});
+});
+
+test("the installed plugin namespace validator sees the update and the current namespaces", () => {
+	const seen: unknown[] = [];
+	setPluginNamespaceValidator((update, current) => {
+		seen.push([update, current]);
+		return { ...current, alpha: { enabled: true } };
+	});
+	const next = updateConfig({ plugins: { alpha: { enabled: false } } });
+	expect(next.plugins.alpha).toEqual({ enabled: true });
+	expect(seen).toEqual([[{ alpha: { enabled: false } }, DEFAULT_CONFIG.plugins]]);
+});
+
+test("pluginPaths must be absolute", () => {
+	expect(() => updateConfig({ pluginPaths: ["relative/path"] })).toThrow(
+		"pluginPaths must be absolute paths",
+	);
+	const next = updateConfig({ pluginPaths: ["/abs/one", "/abs/two"] });
+	expect(next.pluginPaths).toEqual(["/abs/one", "/abs/two"]);
+});
+
+test("latest-chat restoration defaults on, persists off, and rejects invalid updates atomically", () => {
+	expect(DEFAULT_CONFIG.restoreLatestChat).toBe(true);
+	writeFileSync(join(dataDir, "config.json"), JSON.stringify({ theme: "dark" }));
+	resetConfigCache();
+	expect(getConfig().restoreLatestChat).toBe(true);
+	updateConfig({ restoreLatestChat: false });
+	resetConfigCache();
+	expect(getConfig().restoreLatestChat).toBe(false);
+	const before = readFileSync(join(dataDir, "config.json"), "utf8");
+	const invalid = { restoreLatestChat: "false" } as unknown as AppConfigUpdate;
+	expect(() => updateConfig(invalid)).toThrow("restoreLatestChat must be a boolean");
+	expect(getConfig().restoreLatestChat).toBe(false);
+	expect(readFileSync(join(dataDir, "config.json"), "utf8")).toBe(before);
+	writeFileSync(join(dataDir, "config.json"), JSON.stringify(invalid));
+	resetConfigCache();
+	expect(getConfig().restoreLatestChat).toBe(true);
 });
