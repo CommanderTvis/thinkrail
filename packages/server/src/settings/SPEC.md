@@ -9,6 +9,8 @@ depends-on: [module-contracts]
 
 ## Responsibility
 
+`restoreLatestChat` is a host-wide boolean, defaulting to true for legacy config. False disables the latest-chat fallback in every workspace; explicit placements and active/unfinished auto-open remain independent. Invalid updates reject atomically.
+
 The server-synchronized app config: opaque fixed-theme selection, fixed/system mode and optional light/dark
 pair, additional-analytics preference and first-run dialog completion marker, host-owned new-chat model and
 effort defaults, terminal replay budget and Windows shell preference, chat composer growth preset, chat/file

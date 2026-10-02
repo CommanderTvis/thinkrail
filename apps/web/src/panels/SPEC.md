@@ -871,7 +871,7 @@ a project picker, the prompt hero, and the reused
   (`${kind}-line-width-bounded`); defaults are 120/on. A changed authoritative width from
   `settings.changed` replaces a stale draft; mutations converge only on that broadcast and rejected calls
   toast without changing geometry); **`ChatSettings`** (one **Appearance and behavior** group of rows —
-  **Message order** segmented over `store.chatMessageOrder` (Oldest first, the compatibility default /
+  a host-wide **Restore latest Pi chat** switch over `restoreLatestChat` (default on), disabling only the empty-workspace latest-chat fallback across workspaces; saved placements, exact routes, and active/unfinished chats remain independent; **Message order** segmented over `store.chatMessageOrder` (Oldest first, the compatibility default /
   Newest first, the opt-in), **Composer size** segmented over the composer-growth limit (Compact / Roomy /
   Half chat), the chat `LineWidthControl`, and the **Streaming response movement** row, a two-handle range
   over `store.streamingResponseMovement`. The movement row's

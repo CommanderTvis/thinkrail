@@ -14,6 +14,8 @@ import type {
 	PiEvent,
 	Project,
 	ProviderStatusReport,
+	PluginRosterEntry,
+	PluginSettingsNamespace,
 	RefreshedModels,
 	ResourceMeta,
 	ReviewChangedPayload,
@@ -28,6 +30,7 @@ import type {
 	SlashCommandInfo,
 	SpecGraphNode,
 	SystemThemePair,
+	TerminalAgentRecord,
 	TerminalTabInfo,
 	TerminalWindowsShell,
 	ThemeId,
@@ -59,6 +62,7 @@ import {
 	sameModel,
 } from "@thinkrail/contracts";
 import { t } from "@thinkrail/locales/react";
+import type { EditorRef } from "@thinkrail/plugin-api/web";
 import { create } from "zustand";
 import type { LoginState } from "../auth";
 import { assistantFailure, assistantFailureText } from "../chat/assistantFailure";
@@ -73,7 +77,7 @@ import type { ConnectionStatus } from "../transport";
 import { type ChatResourceRead, type ChatResourceScope, type ChatResourceSnapshots, staleChatResources } from "./chatResources";
 import { EMPTY_MCP_PROJECTION, foldMcpList, foldMcpSnapshot, type McpRead, type McpWorkspaceProjection, withoutMcpSession } from "./mcp";
 import { type HistoryTarget, isChatResourceReadCurrent, isChatResourceScopeAlive, isConnectedGeneration, type ModelRef, SETTLED_SHELF_PAGE, selectActiveWorkspaceProjectId, selectChatAttended, selectChatFirstPrompt, selectFilesTreeView, selectLayoutIdentityPlacement, selectLayoutResourcePlacement, selectSupportsMcp, selectWorkspaceById, selectWorkspaceNavTick, selectWorkspaceSessionIds, selectWorkspaceSettledReason, selectWorkspaceTick, supportsChatResources, supportsWorkspaceSettling, selectAttentionCenterTab } from "./selectors";
-import { type EditorRef, emitEditorEvent } from "../panels/editorEvents";
+import type { EditorRef } from "@thinkrail/plugin-api/web";
 
 export interface StreamingResponseMovement {
 	settle: number;
@@ -396,6 +400,7 @@ export const SettingsSection = {
 	Feedback: "feedback",
 	Extensions: "extensions",
 	Environment: "environment",
+	Plugins: "plugins",
 } as const;
 export type SettingsSection = string;
 
@@ -417,6 +422,7 @@ export interface TerminalTab {
 	initialCommand?: string;
 	reservationPending?: true;
 	attachPending?: true;
+	agent?: TerminalAgentRecord;
 }
 
 export interface ClosedChat {
@@ -1009,12 +1015,6 @@ interface AppState {
 	composerFocusRequest: { id: string; sessionId: string } | null;
 	/** What the editor has highlighted per workspace, and whether the chat is still carrying it. */
 	editorSelectionByWorkspace: Record<string, { selection: EditorSelection; attached: boolean }>;
-	specRequest: {
-		workspaceId: string;
-		path: string;
-		navigation: CenterNavigationStamp | null;
-	} | null;
-	specsByWorkspace: Record<string, SpecGraphNode[]>;
 	reviewsByWorkspace: Record<string, ReviewSnapshot>;
 	reviewFocusRequest: {
 		workspaceId: string;
@@ -1045,6 +1045,7 @@ interface AppState {
 	analyticsEnabled: boolean;
 	analyticsConsentConfirmed: boolean;
 	notificationsEnabled: boolean;
+	restoreLatestChat: boolean;
 	subagentsEnabled: boolean;
 	jbcentralQuotaEnabled: boolean;
 	jbcentralQuotaRefreshSeconds: number;
@@ -1077,7 +1078,10 @@ interface AppState {
 	onboardingDismissed: boolean;
 	onboardingWizard: OnboardingWizardGate;
 	customLayoutPresets: LayoutPreset[];
+	plugins: Record<string, PluginSettingsNamespace>;
+	pluginPaths: string[];
 	toasts: Toast[];
+	pluginRoster: PluginRosterEntry[];
 	setStatus: (status: ConnectionStatus) => void;
 	setOnboardingWizard: (gate: OnboardingWizardGate) => void;
 	installWelcomeSnapshot: (
@@ -1335,9 +1339,6 @@ interface AppState {
 	clearChatLocation: () => void;
 	requestHistoryOpen: (target: HistoryTarget) => void;
 	clearHistoryOpen: () => void;
-	requestSpecView: (workspaceId: string, path: string) => void;
-	clearSpecRequest: () => void;
-	setWorkspaceSpecs: (workspaceId: string, nodes: SpecGraphNode[]) => void;
 	setWorkspaceReview: (workspaceId: string, snapshot: ReviewSnapshot) => void;
 	requestReviewFocus: (workspaceId: string, commentId: string, surface: ReviewFocusSurface) => void;
 	clearReviewFocus: (commentId?: string) => void;
@@ -1355,6 +1356,7 @@ interface AppState {
 	focusEmbeddedPane: (workspaceId: string, hostKey: string, kind: EmbeddedPaneKind) => void;
 	pushToast: (toast: Omit<Toast, "id">) => string;
 	dismissToast: (id: string) => void;
+	applyPluginRoster: (roster: PluginRosterEntry[]) => void;
 }
 
 function sortProjects(projects: Project[]): Project[] {
@@ -1378,6 +1380,7 @@ function configPatch(config: AppConfig) {
 			typeof config.notificationsEnabled === "boolean"
 				? config.notificationsEnabled
 				: DEFAULT_CONFIG.notificationsEnabled,
+		restoreLatestChat: config.restoreLatestChat ?? DEFAULT_CONFIG.restoreLatestChat,
 		subagentsEnabled: config.subagentsEnabled ?? DEFAULT_CONFIG.subagentsEnabled,
 		jbcentralQuotaEnabled: config.jbcentralQuotaEnabled ?? DEFAULT_CONFIG.jbcentralQuotaEnabled,
 		jbcentralQuotaRefreshSeconds:
@@ -1418,10 +1421,17 @@ function configPatch(config: AppConfig) {
 			: DEFAULT_CONFIG.disabledExtensions,
 		locale: isLocalePreference(config.locale) ? config.locale : DEFAULT_CONFIG.locale,
 		onboardingDismissed: config.onboardingDismissed === true,
+		plugins: config.plugins ?? DEFAULT_CONFIG.plugins,
+		pluginPaths: config.pluginPaths ?? DEFAULT_CONFIG.pluginPaths,
 	};
 }
 
 function upsertProject(projects: Project[], project: Project): Project[] {
+		hiddenModels: Array.isArray(config.hiddenModels)
+			? config.hiddenModels.filter(
+					(id): id is string => typeof id === "string" && id.trim().length > 0,
+				)
+			: DEFAULT_CONFIG.hiddenModels,
 	return projects.some((candidate) => candidate.id === project.id)
 		? projects.map((candidate) => (candidate.id === project.id ? project : candidate))
 		: [...projects, project];
@@ -1663,21 +1673,6 @@ function patchDiffTab(
 			[wsId]: tabs.map((t) => (t.id === id && t.kind === "diff" ? patch(t) : t)),
 		},
 	};
-}
-
-function sameSpecNode(a: SpecGraphNode, b: SpecGraphNode): boolean {
-	return (
-		a.id === b.id &&
-		a.type === b.type &&
-		a.title === b.title &&
-		a.status === b.status &&
-		a.path === b.path &&
-		a.parent === b.parent &&
-		shallowEqualArrays(a.dependsOn, b.dependsOn) &&
-		shallowEqualArrays(a.references, b.references) &&
-		shallowEqualArrays(a.implements, b.implements) &&
-		shallowEqualArrays(a.tags, b.tags)
-	);
 }
 
 function bumpNav(s: AppState, workspaceId: string): Record<string, number> {
@@ -1972,14 +1967,6 @@ function withoutChat(
 	};
 }
 
-function sameSpecGraph(prev: SpecGraphNode[] | undefined, next: SpecGraphNode[]): boolean {
-	if (!prev || prev.length !== next.length) return false;
-	return prev.every((node, i) => {
-		const candidate = next[i];
-		return candidate !== undefined && sameSpecNode(node, candidate);
-	});
-}
-
 function sameReviewSnapshot(prev: ReviewSnapshot | undefined, next: ReviewSnapshot): boolean {
 	return prev !== undefined && JSON.stringify(prev) === JSON.stringify(next);
 }
@@ -2262,8 +2249,6 @@ export const useAppStore = create<AppState>((set, get) => ({
 	modelsRefreshing: false,
 	modelsFresh: false,
 	changesRequest: null,
-	specRequest: null,
-	specsByWorkspace: {},
 	reviewsByWorkspace: {},
 	embeddedPanes: {},
 	terminalInputByWorkspace: {},
@@ -2295,6 +2280,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	analyticsEnabled: DEFAULT_CONFIG.analyticsEnabled,
 	analyticsConsentConfirmed: DEFAULT_CONFIG.analyticsConsentConfirmed,
 	notificationsEnabled: DEFAULT_CONFIG.notificationsEnabled,
+	restoreLatestChat: DEFAULT_CONFIG.restoreLatestChat,
 	subagentsEnabled: DEFAULT_CONFIG.subagentsEnabled,
 	jbcentralQuotaEnabled: DEFAULT_CONFIG.jbcentralQuotaEnabled,
 	jbcentralQuotaRefreshSeconds: DEFAULT_CONFIG.jbcentralQuotaRefreshSeconds,
@@ -2327,11 +2313,14 @@ export const useAppStore = create<AppState>((set, get) => ({
 	installUserThemes: (snapshot) => set({ userThemes: snapshot }),
 	onboardingDismissed: DEFAULT_CONFIG.onboardingDismissed,
 	onboardingWizard: "pending",
+	plugins: DEFAULT_CONFIG.plugins,
+	pluginPaths: DEFAULT_CONFIG.pluginPaths,
 	toasts: [],
 	resourceSnapshots: {},
 	resourceRevision: 0,
 	invalidateChatResources: (scope) =>
 		set((state) => {
+	hiddenModels: DEFAULT_CONFIG.hiddenModels,
 			if (
 				!isChatResourceScopeAlive(state, scope) ||
 				!supportsChatResources(state.protocolVersion) ||
@@ -2406,6 +2395,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 			},
 		})),
 	setOnboardingWizard: (onboardingWizard) => set({ onboardingWizard }),
+	pluginRoster: [],
 	setStatus: (status) =>
 		set((state) => ({
 			status,
@@ -2535,14 +2525,12 @@ export const useAppStore = create<AppState>((set, get) => ({
 				resourceSnapshots: omitKey(state.resourceSnapshots, workspaceId),
 				sessionStateByWorkspace: omitKey(state.sessionStateByWorkspace, workspaceId),
 				skillChangeTickByWorkspace: omitKey(state.skillChangeTickByWorkspace, workspaceId),
-				specsByWorkspace: omitKey(state.specsByWorkspace, workspaceId),
 				diffScopeByWorkspace: omitKey(state.diffScopeByWorkspace, workspaceId),
 				filesTreeByWorkspace: omitKey(state.filesTreeByWorkspace, workspaceId),
 				reviewsByWorkspace: omitKey(state.reviewsByWorkspace, workspaceId),
 				embeddedPanes: omitKey(state.embeddedPanes, workspaceId),
 				changesRequest:
 					state.changesRequest?.workspaceId === workspaceId ? null : state.changesRequest,
-				specRequest: state.specRequest?.workspaceId === workspaceId ? null : state.specRequest,
 				chatLocationRequest:
 					state.chatLocationRequest?.workspaceId === workspaceId ? null : state.chatLocationRequest,
 				routeChatTarget:
@@ -3385,6 +3373,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 						workspaceId,
 						title: tab.title,
 						...(existing?.initialCommand ? { initialCommand: existing.initialCommand } : {}),
+						...(tab.agent ? { agent: tab.agent } : {}),
 					};
 				}),
 				...pending,
@@ -4648,6 +4637,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 		set((s) =>
 			s.toasts.some((t) => t.id === id) ? { toasts: s.toasts.filter((t) => t.id !== id) } : {},
 		),
+	applyPluginRoster: (roster) => set({ pluginRoster: roster }),
 }));
 
 useAppStore.subscribe((state) => {
