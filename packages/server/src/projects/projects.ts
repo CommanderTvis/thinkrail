@@ -197,7 +197,19 @@ export function listProjects(): Project[] {
 }
 
 export function listRecentProjects(): Project[] {
-	return newestFirst(getProjects());
+	return newestFirst(
+		getProjects().filter((project) => {
+			try {
+				return statSync(project.path).isDirectory();
+			} catch (error) {
+				return !(
+					error instanceof Error &&
+					"code" in error &&
+					(error.code === "ENOENT" || error.code === "ENOTDIR")
+				);
+			}
+		}),
+	);
 }
 
 export function closeProject(id: string): Project {

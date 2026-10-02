@@ -22,7 +22,11 @@ open and recent views, and open/close a project without breaking its workspace i
   cannot disagree. It then locates a git root when there is one (`git rev-parse --show-toplevel`), dedupes by
   root, assigns
   a stable unique readable `slug`; `getProjects` (all known records, with slug backfill), `listProjects`
-  (open records only, by `lastOpened`), and `listRecentProjects` (open + closed, by `lastOpened`). A
+  (open records only, by `lastOpened`), and `listRecentProjects` (open + closed, by `lastOpened`,
+  excluding paths that no longer name directories). Recents checks the host filesystem whenever its
+  snapshot is read; missing paths and paths replaced by files disappear, while permission or other
+  filesystem errors retain the entry. This projection never deletes saved project/workspace records
+  or touches their files, so a restored directory retains its identity. A
   persisted optional **`Project.closed: true`** is the entire membership state: absence means open, so
   existing records migrate as open. **`openProject`** finds a known root even when closed, clears
   `closed`, bumps `lastOpened`, preserves its id, persists, and publishes the full snapshot; **`closeProject`**
