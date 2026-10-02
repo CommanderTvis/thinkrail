@@ -260,6 +260,41 @@ test("legacy project records default to open in both projections", () => {
 	expect(listRecentProjects().map((project) => project.id)).toEqual(["legacy"]);
 });
 
+test("Recents omits deleted directories without losing saved project identities", () => {
+	const folder = join(dataDir, "folder");
+	mkdirSync(folder);
+	const project = openProject(folder);
+	closeProject(project.id);
+	const saved = readFileSync(join(dataDir, "projects.json"), "utf8");
+	rmSync(folder, { recursive: true });
+	expect(listRecentProjects()).toEqual([]);
+	expect(readFileSync(join(dataDir, "projects.json"), "utf8")).toBe(saved);
+	mkdirSync(folder);
+	expect(listRecentProjects().map((entry) => entry.id)).toEqual([project.id]);
+	expect(openProject(folder).id).toBe(project.id);
+});
+
+test("Recents omits directories replaced by files and keeps existing open and closed folders", () => {
+	const folders = [
+		join(dataDir, "open"),
+		join(dataDir, "closed"),
+		join(dataDir, "replaced"),
+	] as const;
+	const projects = folders.map((folder) => {
+		mkdirSync(folder);
+		return openProject(folder);
+	});
+	const closed = projects.find((project) => project.path === realpathSync(folders[1]));
+	if (!closed) throw new Error("Missing closed fixture project");
+	closeProject(closed.id);
+	rmSync(folders[2], { recursive: true });
+	writeFileSync(folders[2], "file");
+	expect(new Set(listRecentProjects().map((entry) => entry.id))).toEqual(
+		new Set(projects.slice(0, 2).map((entry) => entry.id)),
+	);
+	expect(listProjects()).toHaveLength(2);
+});
+
 test("close/reopen preserves the stable project identity and workspace associations", async () => {
 	const repo = join(dataDir, "repo");
 	makeRepo(repo);
