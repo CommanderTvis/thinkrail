@@ -119,10 +119,22 @@ function seedWorkspace(worktreePath: string, kind?: "default" | "external"): voi
 test("openProject refuses a checkout already attached as an external workspace", () => {
 	const attached = join(dataDir, "auth checkout");
 	makeRepo(attached);
+	writeFileSync(
+		join(dataDir, "projects.json"),
+		JSON.stringify([
+			{
+				id: "p-other",
+				name: "source",
+				path: join(dataDir, "source"),
+				slug: "source",
+				lastOpened: 1,
+			},
+		]),
+	);
 	seedWorkspace(attached, "external");
 
 	expect(() => openProject(attached)).toThrow("already open in ThinkRail");
-	expect(listProjects()).toHaveLength(0);
+	expect(listProjects().map((project) => project.id)).toEqual(["p-other"]);
 });
 
 test("openProject refuses a ThinkRail-managed worktree dir, whatever symlinks the path carries", () => {
