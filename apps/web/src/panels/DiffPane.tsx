@@ -66,7 +66,7 @@ export function DiffPane({ tab }: { tab: DiffTab }) {
 	);
 
 	const markdown = isMarkdownPath(tab.path);
-	const { ref: paneRef, width: paneWidth } = useElementSize();
+	const [paneRef, { width: paneWidth }] = useElementSize();
 	const view = tab.view ?? (narrowForSplit(paneWidth, editorFontSize()) ? "inline" : "split");
 	const rendered = markdown && (tab.rendered ?? true);
 	const outlineOpen = rendered && (tab.outlineOpen ?? false);

@@ -13,7 +13,7 @@ import {
 	type ThemeId,
 	type ThemeMode,
 } from "@thinkrail/contracts";
-import { useEffect, useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import { Button } from "@/components/ui/button";
 import {
 	DropdownMenu,
@@ -27,7 +27,7 @@ import { toast, useAppStore } from "@/store";
 import {
 	deriveSystemThemePair,
 	getThemes,
-	onThemeSwap,
+	onSystemAppearanceChange,
 	readSystemAppearance,
 	resolveTheme,
 	resolveThemePreference,
@@ -119,8 +119,7 @@ export function AppearanceSettings() {
 	const themeMode = useAppStore((state) => state.themeMode);
 	const systemThemePair = useAppStore((state) => state.systemThemePair);
 	const [pending, setPending] = useState(false);
-	const [, setThemeRevision] = useState(0);
-	useEffect(() => onThemeSwap(() => setThemeRevision((revision) => revision + 1)), []);
+	const systemAppearance = useSyncExternalStore(onSystemAppearanceChange, readSystemAppearance);
 
 	const themes = getThemes();
 	const editorGpu = useAppStore((state) => state.editorGpuRendering);
@@ -130,7 +129,6 @@ export function AppearanceSettings() {
 	const activeMode = systemSupported ? themeMode : "fixed";
 	const activeThemeId = resolveTheme(theme).id;
 	const pair = systemThemePair ?? deriveSystemThemePair(theme);
-	const systemAppearance = readSystemAppearance();
 	const preference = { theme, themeMode: "system" as const, systemThemePair: pair };
 	const current = resolveThemePreference(preference, systemAppearance);
 	const light = resolveThemePreference(preference, "light");

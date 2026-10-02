@@ -78,7 +78,17 @@ export function Shell() {
 	const nativeShell = isDesktopShell();
 
 	const welcomeCenterRef = useRef<HTMLDivElement>(null);
-	const welcomeProjects = useCollapsibleRegion(welcomeCenterRef, "welcome-left");
+	const {
+		collapsed: welcomeCollapsed,
+		contentRef: welcomeContentRef,
+		focusOrCollapse: welcomeFocusOrCollapse,
+		onCollapse: welcomeCollapse,
+		onDragging: welcomeDragging,
+		onExpand: welcomeExpand,
+		openAndFocus: welcomeOpenAndFocus,
+		panelRef: welcomePanelRef,
+		railRef: welcomeRailRef,
+	} = useCollapsibleRegion(welcomeCenterRef, "welcome-left");
 
 	const [themeHint] = useState(readThemeHint);
 	const [find, setFind] = useState<{ request: number; anchor: HTMLElement | null }>({
@@ -118,7 +128,7 @@ export function Shell() {
 						side: "left",
 					});
 				}
-			: welcomeProjects.focusOrCollapse,
+			: welcomeFocusOrCollapse,
 		...(hasActiveWorkspace
 			? {
 					onWorkspace: () => {
@@ -284,16 +294,16 @@ export function Shell() {
 			) : (
 				<div
 					data-testid="welcome-shell-layout"
-					data-left-collapsed={welcomeProjects.collapsed}
+					data-left-collapsed={welcomeCollapsed}
 					className="flex h-full min-h-0 min-w-0"
 				>
-					{welcomeProjects.collapsed ? (
+					{welcomeCollapsed ? (
 						<CollapsedPanelRail
-							ref={welcomeProjects.railRef}
+							ref={welcomeRailRef}
 							side="left"
 							label="Projects"
 							shortcutKey="B"
-							onOpen={welcomeProjects.openAndFocus}
+							onOpen={welcomeOpenAndFocus}
 						/>
 					) : null}
 					<ResizablePanelGroup
@@ -302,22 +312,22 @@ export function Shell() {
 						className="min-h-0 min-w-0 flex-1"
 					>
 						<ResizablePanel
-							ref={welcomeProjects.panelRef}
+							ref={welcomePanelRef}
 							id="left"
 							order={1}
 							defaultSize={18}
 							minSize={12}
 							collapsedSize={0}
 							collapsible
-							onCollapse={welcomeProjects.onCollapse}
-							onExpand={welcomeProjects.onExpand}
+							onCollapse={welcomeCollapse}
+							onExpand={welcomeExpand}
 						>
 							<aside
-								ref={welcomeProjects.contentRef}
+								ref={welcomeContentRef}
 								data-testid="left-nav"
 								tabIndex={-1}
-								aria-hidden={welcomeProjects.collapsed || undefined}
-								inert={welcomeProjects.collapsed ? true : undefined}
+								aria-hidden={welcomeCollapsed || undefined}
+								inert={welcomeCollapsed ? true : undefined}
 								className="h-full bg-container-sidebar-bg outline-none"
 							>
 								<QuietScrollArea className="h-full" viewportClassName="p-12">
@@ -328,10 +338,10 @@ export function Shell() {
 						<ResizableHandle
 							direction="horizontal"
 							data-testid="resize-left"
-							aria-hidden={welcomeProjects.collapsed}
-							tabIndex={welcomeProjects.collapsed ? -1 : 0}
-							onDragging={welcomeProjects.onDragging}
-							{...(welcomeProjects.collapsed ? { className: "hidden" } : {})}
+							aria-hidden={welcomeCollapsed}
+							tabIndex={welcomeCollapsed ? -1 : 0}
+							onDragging={welcomeDragging}
+							{...(welcomeCollapsed ? { className: "hidden" } : {})}
 						/>
 						<ResizablePanel id="welcome" order={2} defaultSize={82} minSize={40}>
 							<div

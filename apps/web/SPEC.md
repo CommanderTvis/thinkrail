@@ -84,6 +84,30 @@ reads `bun.lock` and rejects any second `react` or `react-dom` version. Every Re
 packages together and repeats the mounted-chat memory stress probe before this temporary canary pin can
 return to stable.
 
+### React Compiler
+
+Development and production bundles use `@vitejs/plugin-react`'s native compiler integration
+scoped to `/apps/web/src/`, backed by the exactly pinned `oxc-transform-react` optional peer. React 19 supplies
+the memo-cache runtime; no Babel pass or separate runtime dependency is needed. The compiler optimizes
+components and hooks it can prove safe and leaves unsupported functions unoptimized.
+Source ids use Vite's normalized forward slashes. Workspace libraries retain their existing transforms:
+each library owns its own compiler adoption and live-value audit.
+
+Compiler adoption preserves UI behavior. Check the generated production bundle for memo-cache calls
+and run browser E2E against that bundle: Bun unit tests do not run Vite's compiler transform.
+Do not depend on an unused memo dependency to reset mutable caches, or read clocks, media queries,
+or mutable refs during render when the result must remain live under automatic memoization.
+
+Latest-value refs update in `useInsertionEffect`, before child layout effects read their callbacks.
+Hooks and props keep refs separate from render values. Order-keyed mutable row-height caches reset
+through state rather than an unused memo dependency. Relative-time labels receive the shared 30-second
+clock snapshot; Appearance settings subscribe to system appearance changes.
+
+Compiler regression tests transform the shell, workbench, composer, and chat-scroll entry points and
+require memo caches in those functions. Unsupported control flow (notably `try/finally`) and render-time
+ref reads still cause individual bailouts, including `useVirtualRows`' visible-anchor adjustment;
+these remain unoptimized rather than being rewritten solely to satisfy the compiler.
+
 ### Dependency graph
 
 - `navigation` → `store`, `transport`, `contracts` (type-only); neither dependency imports it, and `main.tsx` initializes the integration

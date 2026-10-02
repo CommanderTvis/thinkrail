@@ -29,7 +29,7 @@ Tiny UI helpers shared across components.
   anchored browser-side mirror of Pi's canonical expanded `<skill>` user-message grammar, shared by
   `chat`'s compact renderer and `store`'s optimistic-echo reconciliation; malformed/quoted blocks fail
   closed),
-  **`relativeTime()`** (`just now` / `5m ago` / `2d ago` — shared by chat history, the tab strip's closed
+  **`relativeTime(ms, now)`** (`just now` / `5m ago` / `2d ago` against an explicit clock value — shared by chat history, the tab strip's closed
   chats, and the Changes scope menu's commit rows; it lives here because `chat/` may not import from
   `panels/`, which is what let three private twins of it accumulate), **`platformShortcutLabel()`** +
   **`hasPlatformModifier()`** (one Apple-vs-other definition for shortcut chrome and global handlers; both
@@ -83,7 +83,8 @@ Tiny UI helpers shared across components.
   `DOUBLE_CLICK_SETTLE_MS`, `tupleKey`, `parseTupleKey`, `layoutResourceIdentity`,
   `readLayoutSelection`, `readLayoutNavigationClock`, the `LayoutAttention` type, and `useElementSize`
   (the one ResizeObserver-backed element measurement, shared by the workbench's panes and the diff pane so a
-  width-driven decision is measured the same way everywhere).
+  width-driven decision is measured the same way everywhere; returns `[ref, { width, height }]` to keep
+  the ref separate from render values under automatic memoization).
 - **Allowed deps:** `clsx`, `tailwind-merge`; `react` (hooks only — `useElementSize`); `@thinkrail/contracts` (types only for canonical messages;
   the layout-resource identity input is a local structural type); `shiki`/`@shikijs/*` (the per-file shiki modules only — never reachable
   through the barrel).

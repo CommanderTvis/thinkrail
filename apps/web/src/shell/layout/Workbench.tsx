@@ -39,6 +39,7 @@ import {
 	useContext,
 	useDeferredValue,
 	useEffect,
+	useInsertionEffect,
 	useMemo,
 	useRef,
 	useState,
@@ -279,9 +280,11 @@ function useCommittedSizes(
 	const epoch = useRef(projectionEpoch);
 	const currentRef = useRef(current);
 	const commitRef = useRef(commit);
-	epoch.current = projectionEpoch;
-	currentRef.current = current;
-	commitRef.current = commit;
+	useInsertionEffect(() => {
+		epoch.current = projectionEpoch;
+		currentRef.current = current;
+		commitRef.current = commit;
+	});
 
 	const cancelStaleGesture = useCallback(() => {
 		const active = dragging.current || keyboard.current;
@@ -345,12 +348,9 @@ function useCommittedSizes(
 	return { onLayout, onDragging, onKeyboard, onKeyboardEnd };
 }
 
-function bindSideResize(
-	side: LayoutSide,
-	resize: ReturnType<typeof useCommittedSizes>,
-	activeSide: { current: LayoutSide | null },
-) {
-	return {
+function useSideResizeBinder() {
+	const activeSide = useRef<LayoutSide | null>(null);
+	const bind = (side: LayoutSide, resize: ReturnType<typeof useCommittedSizes>) => ({
 		onDragging: (active: boolean) => {
 			if (active) activeSide.current = side;
 			resize.onDragging(active);
@@ -364,7 +364,8 @@ function bindSideResize(
 			resize.onKeyboardEnd();
 			if (activeSide.current === side) activeSide.current = null;
 		},
-	};
+	});
+	return [activeSide, bind] as const;
 }
 
 interface HorizontalOverflow {
@@ -656,7 +657,7 @@ function ambiguousTabSubtitles(tabs: readonly LayoutTab[]): Map<string, string> 
 interface TabStripProps {
 	document: WorkspaceLayoutDocument;
 	attention: LayoutAttention;
-	selectionEpoch: React.MutableRefObject<number>;
+	selectionEpochRef: React.MutableRefObject<number>;
 	location: LayoutGroupLocation;
 	tabs: LayoutTab[];
 	selectedId?: string | undefined;
@@ -685,7 +686,7 @@ interface TabStripProps {
 function TabStrip({
 	document,
 	attention,
-	selectionEpoch,
+	selectionEpochRef,
 	location,
 	tabs,
 	selectedId,
@@ -719,21 +720,21 @@ function TabStrip({
 	const [overflowOpen, setOverflowOpen] = useState(false);
 	const overflowing = scrollOverflow.before || scrollOverflow.after;
 	const selectTab = (tabId: string, keep?: boolean) => {
-		selectionEpoch.current += 1;
+		selectionEpochRef.current += 1;
 		onSelect(tabId, keep);
 	};
 	const applyResult = (result: LayoutMutationResult) => {
-		selectionEpoch.current += 1;
+		selectionEpochRef.current += 1;
 		onApply(result);
 	};
 	const closeTab = (tab: LayoutTab) => {
-		selectionEpoch.current += 1;
+		selectionEpochRef.current += 1;
 		onClose(tab);
 	};
 	const acceptsAppend =
 		draggingTab !== null && canInsertDraggedTab(document, draggingTab, location, tabs.length);
 	const panelId = groupPanelId(location);
-	const groupDrop = useDroppable({
+	const { setNodeRef: setGroupDropRef, isOver: groupDropOver } = useDroppable({
 		id: tupleKey("dnd-group", location.area, location.groupId),
 		data: { target: { kind: "group", location } satisfies DropTarget },
 		disabled: !acceptsAppend,
@@ -801,7 +802,7 @@ function TabStrip({
 			index={index}
 			location={location}
 			attention={attention}
-			selectionEpoch={selectionEpoch}
+			selectionEpochRef={selectionEpochRef}
 			active={tab.id === selectedId}
 			preview={tab.id === previewId}
 			document={document}
@@ -872,12 +873,12 @@ function TabStrip({
 					: "workbench-tab-strip";
 	return (
 		<div
-			ref={groupDrop.setNodeRef}
+			ref={setGroupDropRef}
 			data-testid={compatibilityTestId}
 			data-area={location.area}
 			data-group-id={location.groupId}
-			data-drop-active={groupDrop.isOver || undefined}
-			data-drop-hint={(acceptsAppend && !groupDrop.isOver) || undefined}
+			data-drop-active={groupDropOver || undefined}
+			data-drop-hint={(acceptsAppend && !groupDropOver) || undefined}
 			className={
 				nested
 					? "relative flex w-full flex-col items-stretch rounded-[var(--radius-sm)] data-[drop-hint]:ring-1 data-[drop-hint]:ring-inset data-[drop-hint]:ring-primary-soft data-[drop-active]:bg-primary-subtle data-[drop-active]:ring-2 data-[drop-active]:ring-inset data-[drop-active]:ring-primary"
@@ -1023,7 +1024,7 @@ interface WorkbenchTabProps {
 	index: number;
 	location: LayoutGroupLocation;
 	attention: LayoutAttention;
-	selectionEpoch: React.MutableRefObject<number>;
+	selectionEpochRef: React.MutableRefObject<number>;
 	active: boolean;
 	preview: boolean;
 	document: WorkspaceLayoutDocument;
@@ -1056,7 +1057,7 @@ function WorkbenchTab({
 	index,
 	location,
 	attention,
-	selectionEpoch,
+	selectionEpochRef,
 	active,
 	preview,
 	document,
@@ -1085,9 +1086,15 @@ function WorkbenchTab({
 }: WorkbenchTabProps) {
 	const catalog = useContext(LayoutToolCatalogContext);
 	const vertical = orientation === "vertical";
-	const drag = useDraggable({ id: tupleKey("dnd-tab", tab.id), data: { tab } satisfies DragData });
+	const {
+		setNodeRef: setDragRef,
+		isDragging,
+		listeners: dragListeners,
+	} = useDraggable({ id: tupleKey("dnd-tab", tab.id), data: { tab } satisfies DragData });
 	const attentionRef = useRef(attention);
-	attentionRef.current = attention;
+	useInsertionEffect(() => {
+		attentionRef.current = attention;
+	});
 	const pendingPreviewKeep = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const nameInputRef = useRef<HTMLInputElement>(null);
 	const editStartNameRef = useRef("");
@@ -1149,12 +1156,12 @@ function WorkbenchTab({
 			return;
 		}
 		if (pendingPreviewKeep.current) clearTimeout(pendingPreviewKeep.current);
-		const gestureEpoch = ++selectionEpoch.current;
+		const gestureEpoch = ++selectionEpochRef.current;
 		const navigationClocks = navigationClockSnapshot(attentionRef.current);
 		pendingPreviewKeep.current = setTimeout(() => {
 			pendingPreviewKeep.current = null;
 			if (
-				selectionEpoch.current !== gestureEpoch ||
+				selectionEpochRef.current !== gestureEpoch ||
 				navigationClockSnapshot(attentionRef.current) !== navigationClocks
 			) {
 				return;
@@ -1189,7 +1196,7 @@ function WorkbenchTab({
 		);
 	// A tab already in a pane is joined, not re-arranged: one band, and it says which arrangement the
 	// newcomer is joining. See shell/layout/SPEC.md.
-	const paneWith = useDroppable({
+	const { setNodeRef: setPaneWithRef, isOver: paneWithOver } = useDroppable({
 		id: tupleKey("dnd-pane", location.groupId, tab.id, "with"),
 		data: {
 			target: {
@@ -1201,7 +1208,7 @@ function WorkbenchTab({
 		},
 		disabled: !acceptsPane || inPane,
 	});
-	const paneJoin = useDroppable({
+	const { setNodeRef: setPaneJoinRef, isOver: paneJoinOver } = useDroppable({
 		id: tupleKey("dnd-pane", location.groupId, tab.id, "join"),
 		data: {
 			target: {
@@ -1228,12 +1235,12 @@ function WorkbenchTab({
 						: [],
 				)
 			: [];
-	const before = useDroppable({
+	const { setNodeRef: setBeforeRef, isOver: beforeOver } = useDroppable({
 		id: tupleKey("dnd-insert", location.area, location.groupId, String(index), "before"),
 		data: { target: { kind: "insert", location, index } satisfies DropTarget },
 		disabled: !acceptsBefore,
 	});
-	const after = useDroppable({
+	const { setNodeRef: setAfterRef, isOver: afterOver } = useDroppable({
 		id: tupleKey("dnd-insert", location.area, location.groupId, String(index + 1), "after"),
 		data: { target: { kind: "insert", location, index: index + 1 } satisfies DropTarget },
 		disabled: !acceptsAfter,
@@ -1352,14 +1359,14 @@ function WorkbenchTab({
 			>
 				<ContextMenuTrigger asChild>
 					<div
-						ref={drag.setNodeRef}
+						ref={setDragRef}
 						role="presentation"
 						data-testid={tabTestId}
 						data-active={active}
 						data-preview={preview}
 						data-kind={tab.kind === "document" ? "plan" : tab.kind}
 						data-session-id={tab.kind === "chat" ? tab.sessionId : undefined}
-						data-dragging={drag.isDragging || undefined}
+						data-dragging={isDragging || undefined}
 						data-paned={inPane || undefined}
 						className={
 							nested
@@ -1372,10 +1379,10 @@ function WorkbenchTab({
 						}
 					>
 						<div
-							ref={before.setNodeRef}
+							ref={setBeforeRef}
 							aria-hidden="true"
 							data-drop-label={acceptsBefore ? `Insert before ${name}` : undefined}
-							data-drop-active={before.isOver || undefined}
+							data-drop-active={beforeOver || undefined}
 							className={
 								vertical
 									? "pointer-events-none absolute inset-x-0 top-0 z-10 h-1/4 border-primary data-[drop-active]:border-t-2"
@@ -1383,10 +1390,10 @@ function WorkbenchTab({
 							}
 						/>
 						<div
-							ref={after.setNodeRef}
+							ref={setAfterRef}
 							aria-hidden="true"
 							data-drop-label={acceptsAfter ? `Insert after ${name}` : undefined}
-							data-drop-active={after.isOver || undefined}
+							data-drop-active={afterOver || undefined}
 							className={
 								vertical
 									? "pointer-events-none absolute inset-x-0 bottom-0 z-10 h-1/4 border-primary data-[drop-active]:border-b-2"
@@ -1395,10 +1402,10 @@ function WorkbenchTab({
 						/>
 						{acceptsPane && inPane ? (
 							<div
-								ref={paneJoin.setNodeRef}
+								ref={setPaneJoinRef}
 								aria-hidden="true"
 								data-drop-label={`${ownPane?.direction === "vertical" ? "Show under" : "Show beside"} ${name}`}
-								data-drop-active={paneJoin.isOver || undefined}
+								data-drop-active={paneJoinOver || undefined}
 								className="pointer-events-none absolute inset-x-0 inset-y-1/4 z-20 border-primary data-[drop-active]:border-2 data-[drop-active]:bg-primary-subtle"
 							/>
 						) : null}
@@ -1407,10 +1414,10 @@ function WorkbenchTab({
 						    the setting never entered. The menu changes an arrangement afterwards. */}
 						{acceptsPane && !inPane ? (
 							<div
-								ref={paneWith.setNodeRef}
+								ref={setPaneWithRef}
 								aria-hidden="true"
 								data-drop-label={`${defaultPaneDirection === "vertical" ? "Show under" : "Show beside"} ${name}`}
-								data-drop-active={paneWith.isOver || undefined}
+								data-drop-active={paneWithOver || undefined}
 								className="pointer-events-none absolute inset-x-0 inset-y-1/4 z-20 border-primary data-[drop-active]:border-2 data-[drop-active]:bg-primary-subtle"
 							/>
 						) : null}
@@ -1440,7 +1447,7 @@ function WorkbenchTab({
 								aria-controls={panelId}
 								data-layout-tab-id={tab.id}
 								tabIndex={active ? 0 : -1}
-								{...drag.listeners}
+								{...dragListeners}
 								onMouseDown={(event) => {
 									if (event.button === 1) event.preventDefault();
 								}}
@@ -1689,7 +1696,7 @@ function findLayoutGroupTabs(
 interface SharedGroupProps {
 	document: WorkspaceLayoutDocument;
 	attention: LayoutAttention;
-	selectionEpoch: React.MutableRefObject<number>;
+	selectionEpochRef: React.MutableRefObject<number>;
 	maxSideGroups: number;
 	maxBottomGroups: number;
 	draggingTab: LayoutTab | null;
@@ -1756,7 +1763,7 @@ function CenterGroupStrip({
 			document={shared.document}
 			defaultPaneDirection={shared.defaultPaneDirection}
 			attention={shared.attention}
-			selectionEpoch={shared.selectionEpoch}
+			selectionEpochRef={shared.selectionEpochRef}
 			location={location}
 			tabs={group.tabs}
 			selectedId={selected?.id}
@@ -1824,7 +1831,7 @@ function CenterGroupView({
 	renderEmptyCenter: WorkbenchProps["renderEmptyCenter"];
 	renderCenterActions: WorkbenchProps["renderCenterActions"];
 }) {
-	const size = useElementSize();
+	const [sizeRef, size] = useElementSize();
 	const splitGeometry = {
 		horizontal: size.width >= LAYOUT_LIMITS.minCenterWidth * 2,
 		vertical: size.height >= LAYOUT_LIMITS.minCenterHeight * 2,
@@ -1964,7 +1971,7 @@ function CenterGroupView({
 	);
 	return (
 		<section
-			ref={size.ref}
+			ref={sizeRef}
 			id={groupDomId(location)}
 			data-testid="center-group"
 			data-group-id={group.id}
@@ -2097,7 +2104,7 @@ function CenterSplitView({
 	onNewChat,
 	...shared
 }: Omit<CenterNodeProps, "node"> & { node: LayoutCenterSplit }) {
-	const size = useElementSize();
+	const [sizeRef, size] = useElementSize();
 	const weights = node.weights.map((weight) => weight * 100);
 	const resize = useCommittedSizes(
 		weights,
@@ -2113,7 +2120,7 @@ function CenterSplitView({
 		node.direction === "horizontal" ? LAYOUT_LIMITS.minCenterWidth : LAYOUT_LIMITS.minCenterHeight;
 	const minimumPercent = dimension >= minimumPixels * 2 ? (minimumPixels / dimension) * 100 : 4;
 	return (
-		<div ref={size.ref} className="h-full min-h-0 min-w-0 overflow-hidden">
+		<div ref={sizeRef} className="h-full min-h-0 min-w-0 overflow-hidden">
 			<ResizablePanelGroup
 				key={tupleKey("center-split", node.id, String(projectionEpoch))}
 				direction={node.direction}
@@ -2244,7 +2251,7 @@ function SideGroupView({
 						document={shared.document}
 						defaultPaneDirection={shared.defaultPaneDirection}
 						attention={shared.attention}
-						selectionEpoch={shared.selectionEpoch}
+						selectionEpochRef={shared.selectionEpochRef}
 						location={location}
 						tabs={group.tabs}
 						selectedId={selected?.id}
@@ -2400,7 +2407,7 @@ function SideStack({
 	renderToolBody: WorkbenchProps["renderToolBody"];
 	onCommit: WorkbenchProps["onCommit"];
 }) {
-	const size = useElementSize();
+	const [sizeRef, size] = useElementSize();
 	const total = region.groups.reduce((sum, group) => sum + group.weight, 0) || 1;
 	const current = region.groups.map((group) => (group.weight / total) * 100);
 	const resize = useCommittedSizes(
@@ -2430,7 +2437,7 @@ function SideStack({
 	const foldedSpacerPercent = Math.max(0, 100 - foldedCount * foldedPercent);
 	return (
 		<aside
-			ref={size.ref}
+			ref={sizeRef}
 			aria-label={`${side} workbench`}
 			data-testid={side === "right" ? "right-stack" : "left-stack"}
 			className="relative h-full min-h-0 overflow-hidden"
@@ -2644,7 +2651,7 @@ function BottomGroupView({
 						document={shared.document}
 						defaultPaneDirection={shared.defaultPaneDirection}
 						attention={shared.attention}
-						selectionEpoch={shared.selectionEpoch}
+						selectionEpochRef={shared.selectionEpochRef}
 						location={location}
 						tabs={group.tabs}
 						selectedId={selected?.id}
@@ -2753,19 +2760,19 @@ function BottomFoldedGroup({
 	const restoreId = groupDomId(location);
 	const panelId = groupPanelId(location);
 	const dropEnabled = !!shared.draggingTab && canPlaceLayoutTab(shared.draggingTab, "bottom");
-	const drop = useDroppable({
+	const { setNodeRef, isOver } = useDroppable({
 		id: tupleKey("dnd-bottom-folded", group.id),
 		data: { target: { kind: "group", location } satisfies DropTarget },
 		disabled: !dropEnabled,
 	});
 	return (
 		<section
-			ref={drop.setNodeRef}
+			ref={setNodeRef}
 			data-testid="bottom-group"
 			data-group-id={group.id}
 			data-folded="true"
-			data-drop-active={drop.isOver || undefined}
-			data-drop-hint={(dropEnabled && !drop.isOver) || undefined}
+			data-drop-active={isOver || undefined}
+			data-drop-hint={(dropEnabled && !isOver) || undefined}
 			aria-label={
 				selectedName ? `Folded bottom group: ${selectedName}` : "Folded empty bottom group"
 			}
@@ -2810,7 +2817,7 @@ function BottomStack({
 	onCommit: WorkbenchProps["onCommit"];
 	onNewTerminal: WorkbenchProps["onNewTerminal"];
 }) {
-	const size = useElementSize();
+	const [sizeRef, size] = useElementSize();
 	const region = shared.document.bottom;
 	const alignmentMenuGroupId =
 		region.groups.find((group) => !group.folded)?.id ?? region.groups[0]?.id;
@@ -2848,7 +2855,7 @@ function BottomStack({
 	const foldedSpacerPercent = Math.max(0, 100 - foldedCount * foldedPercent);
 	return (
 		<aside
-			ref={size.ref}
+			ref={sizeRef}
 			aria-label="Bottom workbench"
 			data-testid="bottom-panel"
 			className="relative h-full min-h-0 min-w-0 overflow-hidden"
@@ -2960,7 +2967,7 @@ function BottomDropZone({
 	targetGroupId: string | undefined;
 	targetIndex: number;
 }) {
-	const drop = useDroppable({
+	const { setNodeRef, isOver } = useDroppable({
 		id: HIDDEN_BOTTOM_DROP_ID,
 		data: {
 			target: targetGroupId
@@ -2973,14 +2980,14 @@ function BottomDropZone({
 	});
 	return (
 		<div
-			ref={drop.setNodeRef}
+			ref={setNodeRef}
 			data-testid="bottom-drop-zone"
 			aria-hidden="true"
 			data-drop-label={
 				targetGroupId ? "Reveal hidden bottom group" : "Create group in hidden bottom region"
 			}
-			data-drop-active={drop.isOver || undefined}
-			data-drop-hint={!drop.isOver || undefined}
+			data-drop-active={isOver || undefined}
+			data-drop-hint={!isOver || undefined}
 			className="pointer-events-auto absolute inset-x-0 bottom-0 z-20 h-24 border-primary transition-colors data-[drop-hint]:border-t data-[drop-hint]:bg-primary-subtle data-[drop-active]:border-t-2 data-[drop-active]:bg-primary-soft"
 		/>
 	);
@@ -3035,7 +3042,7 @@ function HiddenSideRail({
 	showEnabled: boolean;
 	targetIndex: number;
 }) {
-	const drop = useDroppable({
+	const { setNodeRef, isOver } = useDroppable({
 		id: tupleKey("dnd-hidden-side-edge", side),
 		data: {
 			target: { kind: "auxiliary-edge", region: side, index: targetIndex } satisfies DropTarget,
@@ -3044,11 +3051,11 @@ function HiddenSideRail({
 	});
 	return (
 		<div
-			ref={drop.setNodeRef}
+			ref={setNodeRef}
 			data-testid={`${side}-layout-rail`}
 			data-drop-label={dropEnabled ? `Create ${side} group in hidden side` : undefined}
-			data-drop-active={drop.isOver || undefined}
-			data-drop-hint={(dropEnabled && !drop.isOver) || undefined}
+			data-drop-active={isOver || undefined}
+			data-drop-hint={(dropEnabled && !isOver) || undefined}
 			className="flex w-28 shrink-0 flex-col items-center border-border-default bg-container-sidebar-bg py-4 first:border-r last:border-l data-[drop-hint]:bg-primary-subtle data-[drop-hint]:ring-1 data-[drop-hint]:ring-inset data-[drop-hint]:ring-primary-soft data-[drop-active]:bg-primary-soft data-[drop-active]:ring-2 data-[drop-active]:ring-inset data-[drop-active]:ring-primary"
 		>
 			<IconTooltip
@@ -3108,20 +3115,20 @@ export function Workbench({
 	const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 	const [draggingTab, setDraggingTab] = useState<LayoutTab | null>(null);
 	const tabSelectionEpoch = useRef(0);
-	const selectionProjectionEpoch = useRef(projectionEpoch);
-	if (selectionProjectionEpoch.current !== projectionEpoch) {
-		selectionProjectionEpoch.current = projectionEpoch;
+	useInsertionEffect(() => {
 		tabSelectionEpoch.current += 1;
-	}
-	const { ref: workbenchRef, width: workbenchWidth, height: workbenchHeight } = useElementSize();
+	}, [projectionEpoch]);
+	const [workbenchRef, { width: workbenchWidth, height: workbenchHeight }] = useElementSize();
 	const [focusAfterClose, setFocusAfterClose] = useState<{
 		closedTab: LayoutTab;
 		fallbackDomId: string;
 	} | null>(null);
 	const documentRef = useRef(document);
 	const attentionRef = useRef(attention);
-	documentRef.current = document;
-	attentionRef.current = attention;
+	useInsertionEffect(() => {
+		documentRef.current = document;
+		attentionRef.current = attention;
+	});
 	const [localFocusRequest, setLocalFocusRequest] = useState<LayoutTabFocusRequest | null>(null);
 	const dragStartEpoch = useRef(projectionEpoch);
 	const canceled = useRef(false);
@@ -3210,7 +3217,8 @@ export function Workbench({
 				requestedTabElement?.parentElement?.contains(activeElement) ||
 					activeElement?.closest('[role="menu"]'),
 			);
-			onRequestClose(tab, (latestDocument = documentRef.current) => {
+			onRequestClose(tab, (latestDocumentInput) => {
+				const latestDocument = latestDocumentInput ?? documentRef.current;
 				const placed = findPlacedResource(latestDocument, tab);
 				const location = placed ? findTabLocation(latestDocument, placed.id) : null;
 				const result = closePlacedResource(latestDocument, tab);
@@ -3431,7 +3439,7 @@ export function Workbench({
 	});
 	const projectedAlignedWidth =
 		alignedProjection.topology === outerTopology ? alignedProjection.width : alignedWidthCurrent;
-	const activeSideResize = useRef<LayoutSide | null>(null);
+	const [activeSideResize, bindSideResize] = useSideResizeBinder();
 	const commitSideSizes = useCallback(
 		(entries: ReadonlyArray<readonly [LayoutSide, number]>) => {
 			let next = document;
@@ -3471,6 +3479,7 @@ export function Workbench({
 		},
 		onGestureCanceled,
 	);
+	const { onLayout: onOuterLayout } = outerResize;
 	const projectOuterLayout = useCallback(
 		(sizes: number[]) => {
 			const alignedIndex = leftOwnsBottomCorner ? 1 : 0;
@@ -3480,9 +3489,9 @@ export function Workbench({
 					? current
 					: { topology: outerTopology, width },
 			);
-			outerResize.onLayout(sizes);
+			onOuterLayout(sizes);
 		},
-		[alignedWidthCurrent, leftOwnsBottomCorner, outerResize.onLayout, outerTopology],
+		[alignedWidthCurrent, leftOwnsBottomCorner, onOuterLayout, outerTopology],
 	);
 	const alignedRowCurrent = useMemo(() => {
 		const widths = [
@@ -3525,10 +3534,10 @@ export function Workbench({
 		},
 		onGestureCanceled,
 	);
-	const outerLeftResize = bindSideResize("left", outerResize, activeSideResize);
-	const outerRightResize = bindSideResize("right", outerResize, activeSideResize);
-	const alignedLeftResize = bindSideResize("left", alignedRowResize, activeSideResize);
-	const alignedRightResize = bindSideResize("right", alignedRowResize, activeSideResize);
+	const outerLeftResize = bindSideResize("left", outerResize);
+	const outerRightResize = bindSideResize("right", outerResize);
+	const alignedLeftResize = bindSideResize("left", alignedRowResize);
+	const alignedRightResize = bindSideResize("right", alignedRowResize);
 	const bottomVisible = document.bottom.visible && document.bottom.groups.length > 0;
 	const hiddenBottomTargetGroupId =
 		document.bottom.groups.find((group) => group.id === attention.lastFocusedSideGroupId.bottom)
@@ -3646,7 +3655,7 @@ export function Workbench({
 			const result = revealTool(document, tool, maxSideGroups, maxBottomGroups, target, catalog);
 			if (!isLayoutUnavailable(result)) apply(result);
 		},
-		[apply, document, maxBottomGroups, maxSideGroups],
+		[apply, catalog, document, maxBottomGroups, maxSideGroups],
 	);
 	// Every centre group, including the halves of a pre-existing split. Falling back to horizontal strips
 	// there would flip the layout out from under the setting — the one thing this mode must never do — and
@@ -3664,7 +3673,7 @@ export function Workbench({
 	const shared: SharedGroupProps = {
 		document,
 		attention,
-		selectionEpoch: tabSelectionEpoch,
+		selectionEpochRef: tabSelectionEpoch,
 		defaultPaneDirection,
 		maxSideGroups,
 		maxBottomGroups,

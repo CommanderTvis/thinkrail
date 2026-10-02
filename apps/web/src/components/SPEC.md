@@ -81,7 +81,9 @@ plugin degrades every file row to the Remix fallback rather than losing the icon
   `@/components/FileTypeIcon`; `PiGlyph` via `@/components/PiGlyph`; `AttentionDot` via `@/components/AttentionDot`; `RunningIcon` via
   `@/components/RunningIcon`; `CustomIcon`, `CustomIconName` via
   `@/components/CustomIcon`; `QuietScrollArea`, `QuietScrollFrame`, and the `QuietScrollEdges` type via
-  `@/components/QuietScrollArea`. The `ui/` primitives are their own sub-module
+  `@/components/QuietScrollArea`; `useNow` via `@/components/useNow` supplies a shared wall-clock
+  snapshot through `useSyncExternalStore`, ticking every 30 seconds while subscribed. Relative-time
+  labels therefore refresh without relying on unrelated renders. The `ui/` primitives are their own sub-module
   ([components/ui/SPEC.md](ui/SPEC.md)).
 - **Allowed deps:** React, `@remixicon/react`, `lib` (`shallowEqualArrays` — the reset-keys comparison, shared
   rather than re-stated), and `plugins/registry` (`FileTypeIcon`'s `fileIcon` slot lookup only — the registry
