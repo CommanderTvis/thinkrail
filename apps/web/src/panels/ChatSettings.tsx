@@ -340,6 +340,7 @@ export function HiddenModelsSettings() {
 }
 
 export function ChatSettings() {
+	const restoreLatestChat = useAppStore((state) => state.restoreLatestChat);
 	const messageOrder = useAppStore((state) => state.chatMessageOrder);
 	const growthLimit = useAppStore((state) => state.composerGrowthLimit);
 	const streamingResponseMovement = useAppStore((state) => state.streamingResponseMovement);
@@ -373,6 +374,23 @@ export function ChatSettings() {
 
 	return (
 		<section data-testid="settings-chat" className="flex flex-col gap-16">
+			<div className="flex items-center justify-between gap-12">
+				<div className="flex flex-col gap-4">
+					<h3 className="tr-title-section text-text-default">Restore latest Pi chat</h3>
+					<p className="text-text-muted tr-text-metadata">
+						Open the latest Pi chat when a workspace has no chat tabs after reopening the app.
+						Applies to every workspace. Active chats and unfinished work still open automatically.
+					</p>
+				</div>
+				<SettingsSwitch
+					checked={restoreLatestChat}
+					label="Restore latest Pi chat"
+					testId="restore-latest-chat-toggle"
+					onChange={(enabled) =>
+						saveSetting({ restoreLatestChat: enabled }, "Could not change chat restoration")
+					}
+				/>
+			</div>
 			<HiddenModelsSettings />
 
 			<div className="flex flex-col gap-8 border-border-default border-t pt-16">

@@ -11,6 +11,8 @@ tags: [wire]
 
 ## Responsibility
 
+`AppConfig.restoreLatestChat` is a host-wide boolean, default true, carried through welcome and settings updates. It controls only automatic latest-chat fallback in empty workspaces.
+
 The browser↔host wire spine: the single source of truth for the protocol. Types-only, with the only
 runtime exports being the WS method/channel constants, protocol/feature versions, the small config default,
 and narrow cross-ring guards. The one package `apps/web` may depend on—which is what lets the UI ship independently

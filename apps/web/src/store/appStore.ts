@@ -974,6 +974,7 @@ interface AppState {
 	systemThemePair: SystemThemePair | undefined;
 	analyticsEnabled: boolean;
 	analyticsConsentConfirmed: boolean;
+	restoreLatestChat: boolean;
 	subagentsEnabled: boolean;
 	jbcentralQuotaEnabled: boolean;
 	jbcentralQuotaRefreshSeconds: number;
@@ -1254,6 +1255,7 @@ function configPatch(config: AppConfig) {
 			typeof config.analyticsConsentConfirmed === "boolean"
 				? config.analyticsConsentConfirmed
 				: DEFAULT_CONFIG.analyticsConsentConfirmed,
+		restoreLatestChat: config.restoreLatestChat ?? DEFAULT_CONFIG.restoreLatestChat,
 		subagentsEnabled: config.subagentsEnabled ?? DEFAULT_CONFIG.subagentsEnabled,
 		jbcentralQuotaEnabled: config.jbcentralQuotaEnabled ?? DEFAULT_CONFIG.jbcentralQuotaEnabled,
 		jbcentralQuotaRefreshSeconds:
@@ -2075,6 +2077,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	systemThemePair: DEFAULT_CONFIG.systemThemePair,
 	analyticsEnabled: DEFAULT_CONFIG.analyticsEnabled,
 	analyticsConsentConfirmed: DEFAULT_CONFIG.analyticsConsentConfirmed,
+	restoreLatestChat: DEFAULT_CONFIG.restoreLatestChat,
 	subagentsEnabled: DEFAULT_CONFIG.subagentsEnabled,
 	jbcentralQuotaEnabled: DEFAULT_CONFIG.jbcentralQuotaEnabled,
 	jbcentralQuotaRefreshSeconds: DEFAULT_CONFIG.jbcentralQuotaRefreshSeconds,

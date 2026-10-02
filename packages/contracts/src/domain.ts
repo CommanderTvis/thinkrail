@@ -655,6 +655,7 @@ export interface AppConfig extends ThemePreference {
 	reviewAutoFix: boolean;
 	/** When false, the worker's in-session `request_review` tool is withheld; the Review button still works. */
 	agentReviewEnabled: boolean;
+	restoreLatestChat: boolean;
 	subagentsEnabled: boolean;
 	jbcentralQuotaEnabled: boolean;
 	jbcentralQuotaRefreshSeconds: number;
@@ -782,6 +783,7 @@ export const DEFAULT_CONFIG: AppConfig = {
 	customLayoutPresets: [],
 	reviewAutoFix: false,
 	agentReviewEnabled: false,
+	restoreLatestChat: true,
 	subagentsEnabled: true,
 	jbcentralQuotaEnabled: true,
 	jbcentralQuotaRefreshSeconds: JBCENTRAL_QUOTA_REFRESH_SECONDS.default,

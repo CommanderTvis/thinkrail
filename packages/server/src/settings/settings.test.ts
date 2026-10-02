@@ -628,3 +628,21 @@ test("stored custom presets keep only complete current-schema entries", () => {
 	resetConfigCache();
 	expect(getConfig().customLayoutPresets).toEqual([preset("valid")]);
 });
+
+test("latest-chat restoration defaults on, persists off, and rejects invalid updates atomically", () => {
+	expect(DEFAULT_CONFIG.restoreLatestChat).toBe(true);
+	writeFileSync(join(dataDir, "config.json"), JSON.stringify({ theme: "dark" }));
+	resetConfigCache();
+	expect(getConfig().restoreLatestChat).toBe(true);
+	updateConfig({ restoreLatestChat: false });
+	resetConfigCache();
+	expect(getConfig().restoreLatestChat).toBe(false);
+	const before = readFileSync(join(dataDir, "config.json"), "utf8");
+	const invalid = { restoreLatestChat: "false" } as unknown as AppConfigUpdate;
+	expect(() => updateConfig(invalid)).toThrow("restoreLatestChat must be a boolean");
+	expect(getConfig().restoreLatestChat).toBe(false);
+	expect(readFileSync(join(dataDir, "config.json"), "utf8")).toBe(before);
+	writeFileSync(join(dataDir, "config.json"), JSON.stringify(invalid));
+	resetConfigCache();
+	expect(getConfig().restoreLatestChat).toBe(true);
+});
