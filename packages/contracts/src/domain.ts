@@ -857,6 +857,7 @@ export interface AppConfig extends ThemePreference {
 	reviewAutoFix: boolean;
 	/** When false, the worker's in-session `request_review` tool is withheld; the Review button still works. */
 	agentReviewEnabled: boolean;
+	restoreLatestChat: boolean;
 	subagentsEnabled: boolean;
 	/** How many subagents one chat may run at once; more spawns queue FIFO. */
 	subagentMaxConcurrent: number;
@@ -957,6 +958,7 @@ export const DEFAULT_CONFIG: AppConfig = {
 	recentModels: [],
 	reviewAutoFix: false,
 	agentReviewEnabled: false,
+	restoreLatestChat: true,
 	subagentsEnabled: true,
 	subagentMaxConcurrent: SUBAGENT_MAX_CONCURRENT.default,
 	jbcentralQuotaEnabled: true,

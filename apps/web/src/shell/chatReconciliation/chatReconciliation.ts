@@ -346,6 +346,7 @@ export function useWorkspaceChatCatalogReconciliation(
 				if (
 					handledRouteSessionId === null &&
 					!autoOpenAlreadyAttempted &&
+					useAppStore.getState().restoreLatestChat &&
 					placed.size === 0 &&
 					toOpen.length === 0
 				) {
