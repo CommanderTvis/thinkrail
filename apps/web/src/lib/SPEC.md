@@ -48,7 +48,7 @@ not this module; the theme-aware highlighter remains app-local.
   (plain-http remote access) or a denied permission has no clipboard, and every caller's answer is the same
   — do nothing loud, the text stays visible/selectable), **`randomId()`** (16 random bytes through
   `getRandomValues`, which remains available to a plain-HTTP remote client),
-  **`zoomGesture.ts`** — what a zoom *gesture* is and where it leaves the scale
+  **`@thinkrail/resource-renderers`' `zoomGesture.ts`** — what a zoom *gesture* is and where it leaves the scale
   (`isZoomGesture`, `zoomScaleForWheel`, `clampZoomScale`, and the min/max/step constants): macOS
   delivers a trackpad pinch as a ctrlKey wheel event, and the step has to follow the delta's *size* or a
   pinch leaps. Shared by the PDF preview and the diagram pan/zoom, since two surfaces disagreeing about

@@ -71,3 +71,9 @@ export {
 } from "./support/rendererMount";
 export { UnplacedReviewStrip } from "./support/UnplacedReviewStrip";
 export { useScrollViewState, viewStateScrollTop } from "./support/useScrollViewState";
+export {
+	clampZoomScale,
+	isZoomGesture,
+	ZOOM_SCALE_STEP,
+	zoomScaleForWheel,
+} from "./support/zoomGesture";

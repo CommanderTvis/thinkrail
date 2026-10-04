@@ -12,7 +12,9 @@ import {
 	isZoomGesture,
 	ZOOM_SCALE_STEP,
 	zoomScaleForWheel,
-} from "@/lib/zoomGesture";
+} from "@thinkrail/resource-renderers";
+import type * as React from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 export function installPanZoomGestures(
 	target: EventTarget,

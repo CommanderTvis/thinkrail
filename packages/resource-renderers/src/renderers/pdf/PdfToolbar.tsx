@@ -1,24 +1,29 @@
 import {
 	RiArrowRightSLine as Next,
 	RiArrowLeftSLine as Previous,
+	RiCursorLine as SelectText,
 	RiZoomInLine as ZoomIn,
 	RiZoomOutLine as ZoomOut,
 } from "@remixicon/react";
 import { useT } from "@thinkrail/locales/react";
-import { IconButton } from "@thinkrail/ui/button";
+import { Button, IconButton } from "@thinkrail/ui/button";
 
 export function PdfToolbar({
 	page,
 	pageCount,
 	zoom,
+	selectText,
 	onPage,
 	onZoom,
+	onSelectText,
 }: {
 	page: number;
 	pageCount: number;
 	zoom: number;
+	selectText?: boolean | undefined;
 	onPage: (page: number) => void;
 	onZoom: (zoom: number) => void;
+	onSelectText?: ((selectText: boolean) => void) | undefined;
 }) {
 	const t = useT();
 	return (
@@ -43,10 +48,28 @@ export function PdfToolbar({
 				label={t("viewer.pdf.zoomOut")}
 				onClick={() => onZoom(zoom / 1.2)}
 			/>
-			<span className="min-w-40 text-center tr-text-metadata text-text-muted">
+			<Button
+				variant="ghost"
+				size="s"
+				data-testid="pdf-zoom-level"
+				aria-label={t("viewer.pdf.resetZoom")}
+				onClick={() => onZoom(1)}
+			>
 				{Math.round(zoom * 100)}%
-			</span>
+			</Button>
 			<IconButton icon={ZoomIn} label={t("viewer.pdf.zoomIn")} onClick={() => onZoom(zoom * 1.2)} />
+			{/* A drag on a page draws a comment region; this hands the drag to the text instead. */}
+			{onSelectText ? (
+				<IconButton
+					icon={SelectText}
+					label={selectText ? t("viewer.pdf.commentRegions") : t("viewer.pdf.selectText")}
+					data-testid="pdf-select-text"
+					aria-pressed={selectText ?? false}
+					selected={selectText ?? false}
+					className="ml-auto"
+					onClick={() => onSelectText(!selectText)}
+				/>
+			) : null}
 		</div>
 	);
 }

@@ -61,6 +61,7 @@ export function RegionReviewSurface({
 	commentLabel,
 	draftForRegion = regionDraft,
 	additionalReviews = [],
+	passive = false,
 }: {
 	review?: SurfaceReview | undefined;
 	intrinsicSize: Size | null;
@@ -73,6 +74,7 @@ export function RegionReviewSurface({
 	testid?: string | undefined;
 	commentLabel?: string | undefined;
 	draftForRegion?: ((region: Region) => AnchorDraft) | undefined;
+	passive?: boolean | undefined;
 }) {
 	const t = useT();
 	const commentText = commentLabel ?? t("viewer.region.commentOnImage");
@@ -184,7 +186,11 @@ export function RegionReviewSurface({
 				{children}
 				{mappedProjections.length > 0 ? (
 					<div
-						className="absolute inset-0 z-10 touch-none select-none"
+						className={
+							passive
+								? "pointer-events-none absolute inset-0 z-10"
+								: "absolute inset-0 z-10 touch-none select-none"
+						}
 						onPointerDown={startDrag}
 						onPointerMove={moveDrag}
 						onPointerUp={finishDrag}

@@ -5,7 +5,7 @@ import {
 	ZOOM_MAX_SCALE,
 	ZOOM_MIN_SCALE,
 	zoomScaleForWheel,
-} from "@/lib/zoomGesture";
+} from "./zoomGesture";
 
 test("clamping keeps a scale inside the readable range", () => {
 	expect(clampZoomScale(1)).toBe(1);
