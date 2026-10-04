@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { isZoomGesture, zoomScaleForWheel } from "@/lib";
 import type { ResourceViewProps } from "@/resources";
 import type { Size } from "../regionReview";
 import { PdfPageCanvas } from "./PdfPageCanvas";
@@ -21,6 +22,9 @@ import { usePdfDocument } from "./usePdfDocument";
 const NO_THREADS: ReadonlySet<string> = new Set();
 const NO_PAGES: ReadonlySet<number> = new Set();
 
+/** How long the zoom has to hold still before the pages are drawn again at it. */
+const PDF_RASTER_SETTLE_MS = 120;
+
 export default function PdfView({
 	content,
 	review,
@@ -31,6 +35,10 @@ export default function PdfView({
 	const initial = pdfViewState(viewState);
 	const [page, setPage] = useState(initial.page);
 	const [zoom, setZoom] = useState(initial.zoom);
+	const [rasterZoom, setRasterZoom] = useState(initial.zoom);
+	const [selectText, setSelectText] = useState(false);
+	const scrollRef = useRef<HTMLDivElement>(null);
+	const zoomRef = useRef(initial.zoom);
 	const [visiblePages, setVisiblePages] = useState<ReadonlySet<number>>(NO_PAGES);
 	const [residentPages, setResidentPages] = useState<ReadonlySet<number>>(NO_PAGES);
 	const loaded = usePdfDocument(content);
@@ -68,7 +76,43 @@ export default function PdfView({
 
 	useEffect(() => {
 		setResidentPages(NO_PAGES);
-	}, [loaded.identity, zoom]);
+	}, [loaded.identity, rasterZoom]);
+
+	// The gesture is continuous; rasterizing is not. Redrawing on every wheel event is what makes a pinch
+	// stutter, so the pages are re-rendered once the zoom stops moving.
+	useEffect(() => {
+		if (zoom === rasterZoom) return;
+		const timer = setTimeout(() => setRasterZoom(zoom), PDF_RASTER_SETTLE_MS);
+		return () => clearTimeout(timer);
+	}, [zoom, rasterZoom]);
+
+	const changeZoom = useCallback((nextZoom: number) => {
+		const next = clampPdfZoom(nextZoom);
+		const previous = zoomRef.current;
+		if (next === previous) return;
+		zoomRef.current = next;
+		setZoom(next);
+		// Keep what the reader was looking at under the viewport instead of snapping to a page top.
+		const scroller = scrollRef.current;
+		if (!scroller) return;
+		scroller.scrollTop *= next / previous;
+		scroller.scrollLeft *= next / previous;
+	}, []);
+
+	const hasDocument = loaded.document !== null;
+	useEffect(() => {
+		const scroller = scrollRef.current;
+		if (!scroller || !hasDocument) return;
+		// macOS delivers a trackpad pinch as a wheel event with ctrlKey set; non-passive so the page zoom
+		// of the browser gives way to the document's.
+		const onWheel = (event: WheelEvent) => {
+			if (!isZoomGesture(event)) return;
+			event.preventDefault();
+			changeZoom(zoomScaleForWheel(zoomRef.current, event.deltaY, event.deltaMode));
+		};
+		scroller.addEventListener("wheel", onWheel, { passive: false });
+		return () => scroller.removeEventListener("wheel", onWheel);
+	}, [changeZoom, hasDocument]);
 
 	useEffect(() => {
 		setResidentPages((current) => pdfPageReleasePlan(current, renderWindow).retained);
@@ -107,7 +151,7 @@ export default function PdfView({
 		if (restoredPage !== page) setPage(restoredPage);
 		setVisiblePages(new Set([restoredPage]));
 		pageRefs.current.get(restoredPage)?.scrollIntoView({ block: "start" });
-	}, [loaded.document, page, requestedFocusPage, zoom]);
+	}, [loaded.document, page, requestedFocusPage]);
 
 	if (loaded.error) {
 		return (
@@ -130,21 +174,19 @@ export default function PdfView({
 		setVisiblePages(new Set([bounded]));
 		pageRefs.current.get(bounded)?.scrollIntoView({ block: "start" });
 	};
-	const changeZoom = (nextZoom: number) => {
-		setZoom(clampPdfZoom(nextZoom));
-	};
-
 	return (
 		<div data-testid="pdf-view" className="flex h-full min-h-0 flex-col bg-container-content-bg">
 			<PdfToolbar
 				page={currentPage}
 				pageCount={document.numPages}
 				zoom={zoom}
+				selectText={selectText}
 				onPage={goToPage}
 				onZoom={changeZoom}
+				onSelectText={setSelectText}
 			/>
-			<div data-pdf-scroll className="min-h-0 flex-1 overflow-auto p-12">
-				<div className="mx-auto flex max-w-[1200px] flex-col gap-16">
+			<div ref={scrollRef} data-pdf-scroll className="min-h-0 flex-1 overflow-auto p-12">
+				<div className="mx-auto flex w-max min-w-full flex-col gap-16">
 					{Array.from({ length: document.numPages }, (_value, index) => {
 						const pageNumber = index + 1;
 						return (
@@ -152,7 +194,9 @@ export default function PdfView({
 								key={pageNumber}
 								document={document}
 								page={pageNumber}
-								zoom={zoom}
+								zoom={rasterZoom}
+								liveZoom={zoom}
+								selectable={selectText}
 								queue={queue}
 								review={review}
 								stamp={loaded.identity}

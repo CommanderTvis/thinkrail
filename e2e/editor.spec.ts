@@ -180,6 +180,45 @@ test("opens an uncompressed PDF in the PDF renderer and its change in the PDF di
 	await expect(page.getByTestId("pdf-diff-page")).toHaveCount(1);
 });
 
+test("a PDF zooms under a pinch and its text can be selected", async ({ page }) => {
+	await openFixtureProject(page);
+	await createWorkspaceViaDialog(page);
+	await page.getByTestId("tab-files").click();
+	await page.getByTestId("file-node").filter({ hasText: "RENDERERS.pdf" }).dblclick();
+
+	const canvas = page.getByTestId("pdf-view").locator("canvas").first();
+	const rasterWidth = () => canvas.evaluate((element) => (element as HTMLCanvasElement).width);
+	await expect.poll(rasterWidth).toBeGreaterThan(0);
+	const before = await rasterWidth();
+	const level = page.getByTestId("pdf-zoom-level");
+	await expect(level).toHaveText("100%");
+
+	// A trackpad pinch reaches the page as a wheel event with ctrlKey set.
+	await page.getByTestId("pdf-view").locator("[data-pdf-scroll]").hover();
+	await page.keyboard.down("Control");
+	await page.mouse.wheel(0, -200);
+	await page.keyboard.up("Control");
+	await expect(level).not.toHaveText("100%");
+	await expect.poll(rasterWidth).toBeGreaterThan(before);
+	await level.click();
+	await expect(level).toHaveText("100%");
+
+	// The canvas is a picture of the page; the text a reader wants to copy is the layer over it.
+	const words = page.getByTestId("pdf-text-layer").first().locator("span");
+	await expect(words.filter({ hasText: "RENDERERS PDF" }).first()).toHaveCount(1);
+	await page.getByTestId("pdf-select-text").click();
+	await expect(page.getByTestId("pdf-select-text")).toHaveAttribute("aria-pressed", "true");
+	const selected = await words.first().evaluate((span) => {
+		const range = document.createRange();
+		range.selectNodeContents(span);
+		const selection = window.getSelection();
+		selection?.removeAllRanges();
+		selection?.addRange(range);
+		return selection?.toString() ?? "";
+	});
+	expect(selected).toContain("RENDERERS PDF");
+});
+
 test("a Git LFS pointer shows as a card in the view and per side in the diff, with Source one toggle away", async ({
 	page,
 }) => {
@@ -341,8 +380,8 @@ test("the markdown Split view edits and previews at once, and closes back to Sou
 	await page.getByTestId("view-toggle-split").click();
 	await expect(page.getByTestId("view-toggle-split")).toHaveAttribute("data-active", "true");
 	await expect(page.getByTestId("embedded-pane-title")).toHaveText("Preview");
-	await expect(page.getByTestId("markdown-preview")).toContainText("sample-project");
 	await expect(page.getByTestId("editor-pane")).toContainText("# sample-project");
+	await expect(page.getByTestId("markdown-preview")).toContainText("sample-project");
 
 	// Closing the preview half is a deliberate return to plain Source, not a hidden mode.
 	await page.getByTestId("embedded-pane-close").click();
