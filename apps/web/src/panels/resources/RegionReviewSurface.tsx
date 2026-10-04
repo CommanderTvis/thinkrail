@@ -58,6 +58,7 @@ export function RegionReviewSurface({
 	label = "image",
 	draftForRegion = regionDraft,
 	additionalReviews = [],
+	passive = false,
 }: {
 	review?: SurfaceReview | undefined;
 	intrinsicSize: Size | null;
@@ -69,6 +70,7 @@ export function RegionReviewSurface({
 	testid?: string | undefined;
 	label?: string | undefined;
 	draftForRegion?: ((region: Region) => AnchorDraft) | undefined;
+	passive?: boolean | undefined;
 }) {
 	const [drag, setDrag] = useState<DragState | null>(null);
 	const composer = useStampedComposer<Region>(contentStamp);
@@ -194,7 +196,11 @@ export function RegionReviewSurface({
 				{children}
 				{mappedProjections.length > 0 ? (
 					<div
-						className="absolute inset-0 z-10 touch-none select-none"
+						className={
+							passive
+								? "pointer-events-none absolute inset-0 z-10"
+								: "absolute inset-0 z-10 touch-none select-none"
+						}
 						onPointerDown={startDrag}
 						onPointerMove={moveDrag}
 						onPointerUp={finishDrag}

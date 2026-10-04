@@ -1,5 +1,6 @@
 import type { PDFDocumentProxy, RenderTask } from "pdfjs-dist";
 import type { Size } from "../regionReview";
+import { loadPdfModule } from "./pdfLoader";
 
 const PDF_CSS_SCALE = 4 / 3;
 
@@ -33,6 +34,25 @@ export async function renderPdfPageToCanvas(
 		size: { width: viewport.width, height: viewport.height },
 		task,
 	};
+}
+
+export async function renderPdfTextLayer(
+	document: PDFDocumentProxy,
+	pageNumber: number,
+	zoom: number,
+	container: HTMLElement,
+): Promise<{ cancel(): void }> {
+	const [pdfjs, page] = await Promise.all([loadPdfModule(), document.getPage(pageNumber)]);
+	const scale = PDF_CSS_SCALE * zoom;
+	container.replaceChildren();
+	container.style.setProperty("--total-scale-factor", String(scale));
+	const layer = new pdfjs.TextLayer({
+		textContentSource: page.streamTextContent(),
+		container,
+		viewport: page.getViewport({ scale }),
+	});
+	layer.render().catch(() => {});
+	return layer;
 }
 
 export async function canvasBlobUrl(canvas: HTMLCanvasElement): Promise<string> {

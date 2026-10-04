@@ -5,12 +5,15 @@ import { RegionReviewSurface } from "../RegionReviewSurface";
 import type { Size } from "../regionReview";
 import type { PdfRenderQueue } from "./pdfLoader";
 import { pdfPageContentStamp, pdfRegionDraft, pdfReviewForPage } from "./pdfModel";
-import { releasePdfCanvas, renderPdfPageToCanvas } from "./pdfRender";
+import { releasePdfCanvas, renderPdfPageToCanvas, renderPdfTextLayer } from "./pdfRender";
+import "./pdfTextLayer.css";
 
 export function PdfPageCanvas({
 	document,
 	page,
 	zoom,
+	liveZoom,
+	selectable,
 	queue,
 	review,
 	stamp,
@@ -22,6 +25,8 @@ export function PdfPageCanvas({
 	document: PDFDocumentProxy;
 	page: number;
 	zoom: number;
+	liveZoom: number;
+	selectable: boolean;
 	queue: PdfRenderQueue;
 	review?: SurfaceReview | undefined;
 	stamp: string;
@@ -32,6 +37,7 @@ export function PdfPageCanvas({
 }) {
 	const rootRef = useRef<HTMLElement | null>(null);
 	const canvasRef = useRef<HTMLCanvasElement>(null);
+	const textRef = useRef<HTMLDivElement>(null);
 	const [size, setSize] = useState<Size | null>(null);
 	const pageReview = useMemo(() => pdfReviewForPage(review, page), [page, review]);
 
@@ -58,13 +64,16 @@ export function PdfPageCanvas({
 		const canvas = canvasRef.current;
 		if (!active) {
 			if (canvas) releasePdfCanvas(canvas);
+			textRef.current?.replaceChildren();
 			setSize(null);
 			onRendered(page, null);
 			return;
 		}
 		const controller = new AbortController();
 		let task: RenderTask | null = null;
+		let text: { cancel(): void } | null = null;
 		if (canvas) releasePdfCanvas(canvas);
+		textRef.current?.replaceChildren();
 		setSize(null);
 		onRendered(page, null);
 		void queue
@@ -81,6 +90,10 @@ export function PdfPageCanvas({
 				if (controller.signal.aborted) return;
 				setSize(rendered.size);
 				onRendered(page, rendered.size);
+				const layer = textRef.current;
+				if (!layer) return;
+				text = await renderPdfTextLayer(document, page, zoom, layer);
+				if (controller.signal.aborted) text.cancel();
 			}, controller.signal)
 			.catch(() => {
 				if (!controller.signal.aborted) onRendered(page, null);
@@ -88,14 +101,18 @@ export function PdfPageCanvas({
 		return () => {
 			controller.abort();
 			task?.cancel();
+			text?.cancel();
 			const target = canvasRef.current;
 			if (target) releasePdfCanvas(target);
 			onRendered(page, null);
 		};
 	}, [active, document, onRendered, page, queue, zoom]);
 
+	// While a pinch is still moving the last raster is stretched to the live zoom; the sharp pixels
+	// arrive once the scale settles and the page is drawn again.
+	const stretch = liveZoom / zoom;
 	const geometry = size
-		? { aspectRatio: size.width / size.height, maxWidth: size.width }
+		? { aspectRatio: size.width / size.height, width: size.width * stretch }
 		: undefined;
 	return (
 		<section
@@ -112,12 +129,23 @@ export function PdfPageCanvas({
 				review={pageReview}
 				intrinsicSize={size}
 				contentStamp={pdfPageContentStamp(stamp, page)}
-				className={`${size ? "mx-auto w-full" : "h-[640px] w-full"} max-w-full border border-border-muted bg-container-workspace-bg`}
+				className={`${size ? "mx-auto max-w-none" : "h-[640px] w-full"} border border-border-muted bg-container-workspace-bg`}
 				{...(geometry ? { style: geometry } : {})}
 				label={`page ${page} region`}
 				draftForRegion={(region) => pdfRegionDraft(region, page)}
+				passive={selectable}
 			>
 				<canvas ref={canvasRef} className="block h-full w-full" aria-label={`PDF page ${page}`} />
+				<div
+					ref={textRef}
+					data-testid="pdf-text-layer"
+					className="pdf-text-layer"
+					style={
+						size
+							? { width: size.width, height: size.height, transform: `scale(${stretch})` }
+							: undefined
+					}
+				/>
 			</RegionReviewSurface>
 		</section>
 	);
