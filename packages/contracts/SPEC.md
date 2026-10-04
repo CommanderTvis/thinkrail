@@ -472,6 +472,16 @@ of the host.
   **`model.default`** (the host-resolved model and compatible effort: AppConfig's default model when
   available, otherwise the first model in the host's settled available list, otherwise `null`; effort is
   `defaultEffort ?? "medium"`, clamped with Pi's `clampThinkingLevel` when a model exists) /
+  **`model.contextSettings`** / **`model.setContextWindow`** (v76; both return
+  **`ModelContextSetting[]`** — the eligible OpenAI models' `provider`/`id`/`name`, pi's effective
+  `contextWindow`, and the explicit models.json `override` or `null` for pi's default. The mutation takes
+  `{target: "available" | {provider,id}, contextWindow: number | null}`: `null` removes the override;
+  a number must satisfy **`isModelContextWindow`** within **`MODEL_CONTEXT_WINDOW_LIMITS`**
+  (272,000–1,000,000), the app's editing policy rather than a verified provider capacity, enforced on
+  both sides. External values outside it are read without clamping, and the `available` target covers
+  only settings **`isSharedModelContextTarget`** accepts (no override, or one inside the range): an
+  override the app could not have written is changed only by naming its `{provider,id}`. Saves emit the
+  existing `provider.changed` invalidation; no AppConfig state or raw configuration crosses the wire) /
   **`model.clampThinking`** (pi's
   `clampThinkingLevel` for a `{model, level}` pair — the pre-session picker's effort adjustment, so no
   client re-derives pi's policy) / **`provider.status`**

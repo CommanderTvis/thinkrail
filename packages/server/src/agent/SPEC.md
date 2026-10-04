@@ -100,6 +100,27 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     credential or configured key is registered — config and native (`registerNativeProvider`) registrations
     alike, so a Central or delegation-mirrored provider is readable before its availability pass lands. Being
     the one read makes the picker, default, and model resolution agree within a generation.
+  - `modelContext` — a narrow settings adapter for the `contextWindow` override in pi's shared
+    `getAgentDir()/models.json`, not a second model registry. It lists the OpenAI Responses / Codex
+    Responses models from `settledAvailableModels` whose effective budget still equals the contracts'
+    272K editing minimum (the cap this setting exists to lift), plus any model that already carries an
+    override so it can always be reverted; each entry pairs pi's effective `contextWindow` with the
+    file's explicit `override` (`null` = pi default). Eligibility is derived from pi's catalog, never
+    from a model-id list, so catalog defaults above 1M stay untouched by a bulk save. A save validates
+    the contracts' 272K–1M range first, patches `providers.<p>.modelOverrides.<id>.contextWindow` for the
+    target — or, for `available`, every eligible pair the contracts' `isSharedModelContextTarget` admits, so
+    a shared save never rewrites an override outside the range that only a targeted save can touch — with
+    `jsonc-parser` so comments, BOM and unrelated
+    configuration survive, prunes override objects it empties (never `providers`), refuses invalid JSON
+    or a read-only file rather than patching it, then writes a temp file beside the resolved target with
+    the original's mode (`0o600` for a new file) and renames it into place — following a symlinked
+    `models.json` to its target, and creating a dangling link's target rather than replacing the link. Saves are serialized in-process; a changed file is followed by one
+    network-disabled `runtime.refresh` on the current generation and the host's `provider.changed`
+    signal; a no-op save does neither. Every read also refreshes locally first so external pi CLI edits
+    appear. Live sessions keep the model they were created with; new chats resolve the updated metadata.
+    pi owns schema validation and the effective value; error messages are generic and never carry file
+    contents. Accepted gap: a Central rebuild whose runtime loaded the file before a save and activated
+    after its refresh serves the old budget until the next read refreshes it.
   - `agentSessionManager` — sessions keyed by `session.sessionId` (each `Entry` also tracks its
     `workspaceId`), `createSession({ cwd, workspaceId, model?, thinkingLevel? })` → `createAgentSession(...)`
     with a per-session `SessionManager` **and a `buildSessionSettings(cwd)` settings manager** (the user's
@@ -676,7 +697,9 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
   `settleSessionsForShutdown`) + `CreateSessionInput`/`CreateSessionResult` + `SessionEventPayload`;
   the runtime-generation facade (`usePiRuntime`, candidate prepare/activate, current generation id, and the
   closed `load-failed` outcome—no manager internals) plus `configurePiRuntime`/factory test seams and the
-  pre-bootstrap `configurePiRuntimeGenerationInitializer` composition seam; `piLoginOptions` (pi login options
+  pre-bootstrap `configurePiRuntimeGenerationInitializer` composition seam; `listModelContextSettings` /
+  `setModelContextWindow` / `setModelContextPublisher` (the `modelContext` adapter and its
+  `provider.changed` seam); `piLoginOptions` (pi login options
   carrying the lazily created installation device id, for `auth`);
   `completeOnce`/`pickModel` +
   `OneShotRequest`/`OneShotResult`/`ModelTier`; the `webUiContext` seams; the `askUserQuestion` pure
@@ -706,7 +729,8 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
   `pi-thinkrail-workflow` + `pi-todos` (the bundled extension set — parent sessions load the set through
   resource-loader paths or launcher factories; delegated children value-import `pi-spec-graph` and receive
   the named `pi-web-access` factory through the bundled runtime seam, with source-mode Bun `require` as the
-  dev equivalent); `typebox` (the `ask_user_question` parameter schema); `trash` (reached only through the
+  dev equivalent); `typebox` (the `ask_user_question` parameter schema); `jsonc-parser` (targeted
+  `models.json` edits in `modelContext`); `trash` (reached only through the
   sibling **`trash` module** — see [[submodule-server-trash]]: one path, globbing disabled, allowed to
   throw, never degraded to `unlink`; the launcher's staged-helper and procfs-parser seams live there too,
   because `changes`' whole-file revert needs the same primitive);

@@ -6,6 +6,7 @@ import { useModelCatalog } from "@/chat/useModelCatalog";
 import { Button } from "@/components/ui/button";
 import { toast, useAppStore } from "@/store";
 import { getTransport } from "@/transport";
+import { ModelContextSettings } from "./ModelContextSettings";
 
 export function ModelsSettings() {
 	const defaultModel = useAppStore((s) => s.defaultModel);
@@ -99,6 +100,7 @@ export function ModelsSettings() {
 					/>
 				</div>
 			) : null}
+			<ModelContextSettings />
 		</section>
 	);
 }

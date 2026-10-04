@@ -17,6 +17,11 @@ export {
 	listSkillCommands,
 	registerBundledRuntime,
 } from "./extensions";
+export {
+	listModelContextSettings,
+	setModelContextPublisher,
+	setModelContextWindow,
+} from "./modelContext";
 export * from "./oneshot";
 export {
 	activatePiRuntimeGeneration,

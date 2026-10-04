@@ -21,6 +21,7 @@ import type {
 	TodoStatus,
 	WireModel,
 	Workspace,
+	WsMethodMap,
 } from "@thinkrail/contracts";
 import { isControlMessage } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
@@ -44,6 +45,7 @@ import {
 	isHostResourceId,
 	isPiSessionId,
 	listAvailableModels,
+	listModelContextSettings,
 	listProjectAliasSkillNames,
 	listSessionStates,
 	listSessions,
@@ -63,6 +65,7 @@ import {
 	renameSession,
 	resolveExtUi,
 	sendReviewFixToSession,
+	setModelContextWindow,
 	setSessionModel,
 	setSessionThinkingLevel,
 	steerSession,
@@ -1003,6 +1006,11 @@ const handlers: Record<string, Handler> = {
 				model_available: result.models.length > 0 ? "yes" : result.complete ? "no" : "unknown",
 			}),
 		);
+	},
+	"model.contextSettings": () => listModelContextSettings(),
+	"model.setContextWindow": (params) => {
+		const p = params as WsMethodMap["model.setContextWindow"]["params"];
+		return setModelContextWindow(p.target, p.contextWindow);
 	},
 	"model.default": () =>
 		observeSetupRead(

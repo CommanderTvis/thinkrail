@@ -5,6 +5,7 @@ import {
 	ANALYTICS_CONSENT_PROTOCOL_VERSION,
 	CHANGE_MUTATIONS_PROTOCOL_VERSION,
 	CHAT_RESOURCES_PROTOCOL_VERSION,
+	CONTEXT_WINDOW_SETTINGS_PROTOCOL_VERSION,
 	customMessageText,
 	DEFAULT_MODEL_PROTOCOL_VERSION,
 	HOST_UPDATE_RUN_PROTOCOL_VERSION,
@@ -130,11 +131,18 @@ test("rich review anchors advance the additive selector union to v74", () => {
 });
 
 test("change mutations name their two methods at v75", () => {
-	expect(PROTOCOL_VERSION).toBe(75);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(75);
 	expect(CHANGE_MUTATIONS_PROTOCOL_VERSION).toBe(75);
 	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(CHANGE_MUTATIONS_PROTOCOL_VERSION);
 	expect(WS_METHODS.changeRevert).toBe("change.revert");
 	expect(WS_METHODS.changeUndo).toBe("change.undo");
+});
+
+test("model context settings name their two methods at v76", () => {
+	expect(WS_METHODS.modelContextSettings).toBe("model.contextSettings");
+	expect(WS_METHODS.modelSetContextWindow).toBe("model.setContextWindow");
+	expect(CONTEXT_WINDOW_SETTINGS_PROTOCOL_VERSION).toBe(76);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(CONTEXT_WINDOW_SETTINGS_PROTOCOL_VERSION);
 });
 
 test("resource metadata rides the two content reads from v75", () => {
