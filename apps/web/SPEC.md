@@ -48,7 +48,8 @@ convention; their boundary is held by convention + spec. Sibling edges live here
 | `themes` | validated single-file manifests, bundled catalog + atomic token application | yes | [themes/SPEC.md](src/themes/SPEC.md) |
 | `lib` | `cn()` + the shared UI/path/array primitives + highlighting | yes | [lib/SPEC.md](src/lib/SPEC.md) |
 
-Leaf utilities without their own spec: `constants/` (branding), `clientPreferences.ts` (feature-neutral
+Leaf utilities without their own spec: `constants/` (branding — the product name, storage/event prefixes, and the one
+`BRAND_MARK_PATH` monogram outline that the shell logo and the components' working badge both draw), `clientPreferences.ts` (feature-neutral
 access to the optional native stable string adapter), and `styles/` — which holds the three
 design-system SOURCES (`typography.json`, `colors.json`, `spacing.json`), their generated CSS, and the
 structural token contract; per-theme palettes belong to `themes`. Each system is specced beside its source:
@@ -143,14 +144,14 @@ change. `dist/` therefore has no profiler timers (`actualStartTime` is absent fr
 - `shell/layout` → `contracts` (`LayoutPreset` + `GitDiffScope` types only), `lib` (attention/id primitives), and React / `react-resizable-panels` / `@dnd-kit/core`; `shell/layoutState` → `shell/layout`, `store`, `transport` (browser endpoint identity + error normalization), `clientPreferences` (native-stable persistence), `contracts` (`LayoutPreset` type only), `lib`, and React. The parent injects store state and feature renderers, so the pure layout child has no feature-module runtime edge
 - `updates` → `contracts` (native bridge + host notice types), `store` (host notice), `components/ui`, React, and Remix Icon; native snapshots remain shell-local
 - `panels` → `resources`, `store`, `transport`, `components/ui`, `components` (`ErrorBoundary` for feature bodies + quiet scroll surfaces for panel-owned lists/xterm), `lib`, `contracts`, `constants` (`WelcomePanel`'s wordmark), `prompt` (`NewWorkspaceDialog` consumes the shared slash/template behavior), `chat` (`NewWorkspaceDialog` eagerly reuses `chat/ModelEffortPicker`+`useModelCatalog`+`useModelPreferences`, `ReviewSettings`/`ModelsSettings` the older `ModelSelector`+`ThinkingSelector`, and `ProvidersSettings` the `chat/modelPicker` connection-kind vocabulary — all shiki-free, so the eager import stays split-safe; `TemplatesSettings` reuses `chat/TemplateEditorDialog` for its New/Edit flows — see `panels/SPEC.md`'s `TemplatesSettings` paragraph), `auth` (`ProvidersSettings` mounts `auth/LoginDialog`), `themes` (`AppearanceSettings` consumes the live catalog; code surfaces consume generic theme variables/syntax mapping), `@shikijs/monaco` (the desktop file renderer's TextMate adapter), `@pierre/diffs` (all source diffs + phone code files), `diff` (engine-neutral mutation blocks, CSV row alignment, and notebook cell similarity), `jsondiffpatch` (structural JSON deltas with move detection), `react-virtuoso` (CSV rows), and `pdfjs-dist` (PDF canvas rendering)
-- `chat` → `contracts` (pi message types, **type-only**), `components/ui`, `prompt` (shared slash/template behavior), `lib`, `clientPreferences`; `store` + `transport`
+- `chat` → `contracts` (pi message types, **type-only**), `components/ui`, `components` (`useNow`, and the `RunningIcon` badge in the stream footer), `prompt` (shared slash/template behavior), `lib`, `clientPreferences`; `store` + `transport`
   (**app-integration files only** — the renderers stay store-free; see `chat/SPEC.md` for the current set)
 - `prompt` → `contracts` (slash/template types only), `lib`, and React; it has no lifecycle integration dependency
 - `auth` → `components/ui` (the dialog is store/transport-free — the panel integrates it; the state types need no imports)
 - `store` → `transport` (**type-only** — `ConnectionStatus`), `chat` (**type-only** — `ChatTurn`/`ToolResultState`), `auth` (**type-only** — `LoginState`; the `foldLoginFrame` reducer lives in `store`, like `reduceExtUi`), `contracts` (domain + custom-preset types, never current-layout DTOs), `lib` (shared path/array primitives — a leaf, so no cycle), and `shell/layout` (**type-only** for web-local frame/view state)
 - `transport` → `contracts`, `store` (welcome routing; the `store → transport` back-edge is type-only, so
   the runtime graph is acyclic), `lib` (plain-HTTP-safe random page identity)
-- `components` (`ErrorBoundary`) → `lib` only (`shallowEqualArrays` for its reset keys — a leaf, so any region can still wrap in it); `components/ui` → `lib`
+- `components` → `lib` (`ErrorBoundary`'s `shallowEqualArrays` for its reset keys) and `constants` (`RunningIcon` draws the shared brand monogram) — both leaves, so any region can still wrap in it; `components/ui` → `lib`
 - `resources` → `contracts` (types only), `lib`; it owns no store, transport, shell, or renderer implementation
 - `lib` → `themes` (the lazy highlighter uses the one generic CSS-variable Shiki registration) and React (the phone-viewport hook only)
 - `themes` → `constants` (the branding storage prefix scopes the first-paint hint), `clientPreferences` (native-stable hint storage)
