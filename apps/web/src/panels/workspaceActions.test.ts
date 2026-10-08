@@ -1,6 +1,10 @@
 import { expect, test } from "bun:test";
 import { WORKSPACE_RENAME_PROTOCOL_VERSION, type Workspace } from "@thinkrail/contracts";
-import { canRenameWorkspace, workspaceRenameValue } from "./workspaceActions";
+import {
+	canRenameWorkspace,
+	createRenameController,
+	workspaceRenameValue,
+} from "./workspaceActions";
 
 const managed: Workspace = {
 	id: "w1",
@@ -25,4 +29,81 @@ test("inline rename submits only a changed nonblank label", () => {
 	expect(workspaceRenameValue("Current", "   ")).toBeNull();
 	expect(workspaceRenameValue("Current", " Current ")).toBeNull();
 	expect(workspaceRenameValue("Current", " Next name ")).toBe("Next name");
+});
+
+function controller(canRename: boolean) {
+	const renamed: Array<[string, string]> = [];
+	const editing: boolean[] = [];
+	const rename = createRenameController<string>({
+		canRename,
+		onRename: (target, name) => renamed.push([target, name]),
+		onEditingChange: (next) => editing.push(next),
+	});
+	return { rename, renamed, editing };
+}
+
+test("a changed commit dispatches once, to the edit-start target, and closes the editor", () => {
+	const { rename, renamed, editing } = controller(true);
+	rename.start("A", "Current");
+	rename.commit(" Next ");
+	expect(renamed).toEqual([["A", "Next"]]);
+	expect(editing).toEqual([true, false]);
+	rename.commit("Again");
+	expect(renamed).toEqual([["A", "Next"]]);
+});
+
+test("blank, unchanged, or cancelled edits close without a request", () => {
+	for (const input of ["   ", "Current"]) {
+		const { rename, renamed, editing } = controller(true);
+		rename.start("A", "Current");
+		rename.commit(input);
+		expect(renamed).toEqual([]);
+		expect(editing).toEqual([true, false]);
+	}
+	const { rename, renamed, editing } = controller(true);
+	rename.start("A", "Current");
+	rename.cancel();
+	rename.commit("Typed but escaped");
+	expect(renamed).toEqual([]);
+	expect(editing).toEqual([true, false]);
+});
+
+test("a commit while rename capability is unknown stays pending until a capable welcome arrives", () => {
+	const { rename, renamed, editing } = controller(true);
+	rename.start("A", "Current");
+	rename.setCanRename(false);
+	rename.commit("Offline edit");
+	expect(renamed).toEqual([]);
+	expect(editing).toEqual([true]);
+	rename.setCanRename(false);
+	expect(renamed).toEqual([]);
+	rename.setCanRename(true);
+	expect(renamed).toEqual([["A", "Offline edit"]]);
+	expect(editing).toEqual([true, false]);
+	rename.setCanRename(true);
+	expect(renamed).toEqual([["A", "Offline edit"]]);
+});
+
+test("escaping a pending edit drops it and a restored capability sends nothing", () => {
+	const { rename, renamed, editing } = controller(false);
+	rename.start("A", "Current");
+	rename.commit("Pending");
+	rename.cancel();
+	rename.commit("Pending");
+	expect(editing).toEqual([true, false]);
+	rename.setCanRename(true);
+	expect(renamed).toEqual([]);
+});
+
+test("reset abandons an open or pending edit so a later capable welcome renames nothing", () => {
+	const { rename, renamed, editing } = controller(false);
+	rename.start("A", "Current");
+	rename.commit("Pending for A");
+	rename.reset();
+	expect(editing).toEqual([true, false]);
+	rename.setCanRename(true);
+	rename.commit("Stale blur after reset");
+	expect(renamed).toEqual([]);
+	rename.reset();
+	expect(editing).toEqual([true, false]);
 });
