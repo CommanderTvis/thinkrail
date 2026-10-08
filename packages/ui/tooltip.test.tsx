@@ -3,8 +3,8 @@ import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { renderToStaticMarkup } from "react-dom/server";
-import { Popover, PopoverTrigger } from "@/components/ui/popover";
-import { IconTooltip, TooltipProvider } from "@/components/ui/tooltip";
+import { Popover, PopoverTrigger } from "./popover";
+import { IconTooltip, TooltipProvider } from "./tooltip";
 
 function renderTriggerPair(wrapTrigger: boolean): string {
 	return renderToStaticMarkup(

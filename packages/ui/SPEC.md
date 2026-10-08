@@ -54,5 +54,25 @@ The per-file surface is `button`, `switch`, `dialog`, `dropdown-menu`, `context-
   queue ownership and notification lifetimes stay in the app (`panels/Toaster` composes the primitives).
 - Primitives use only the host's token utilities, never shadcn's default oklch palette.
 
-Code highlighting is deliberately absent: `CodeBlock` and shiki depend on the app's theme registration
-and remain app-local until a second extension requires that seam.
+## Plugin kit
+
+The plugin API's UI kit lives here too, under the same per-file subpaths, so the app, extension web halves
+and plugin web halves draw with one set of components:
+
+- `Outline` + `outlineTree`, `ToggleSegment`, `chips` (the `CHIP*` class sets), `ScopedSetting`,
+  `SettingValueDialog`, `TerminalFacts` (attach button, cwd label, fact chips), `tokenUsage`, `Account`
+  (account rows, usage windows, reading timestamps), `ToolFileLink`, `SvgAsset` (fetch-once inline SVG),
+  `pathUtils`, `useThemeSwap`, and `zoomGesture` (the wheel/pinch zoom math the diagram view and the PDF
+  preview share).
+- `./markdown` — `Markdown`, `CodeBlock`, the frontmatter parser and `FrontmatterProperties`, GitHub
+  alerts, heading ids, source-line stamping, and a self-contained shiki highlighter with the ThinkRail
+  theme. `Markdown` renders a ```` ```mermaid ```` fence through the caller's `renderMermaid`; without
+  one the fence stays highlighted source, which keeps this package free of an edge to the visualize
+  extension. The app's own chat renderer (`apps/web/src/chat/Markdown.tsx`) is separate and stays app-local.
+- `./editor` — the Monaco editor and its setup. It is review-agnostic: a host attaches behaviour through
+  `onEditorMount` and `children`.
+- `./tokens.css` — the token-name contract a plugin stylesheet compiles against.
+
+These add shiki, react-markdown/remark, and Monaco to the external dependencies above. Runtime-loaded
+(external) plugins do not bundle this package: the app exposes the root-level modules as one namespace on
+`window.__thinkrailPluginRuntime.pluginUi` (`apps/web/src/plugins/loader/pluginUi.ts`).
