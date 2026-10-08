@@ -1528,17 +1528,14 @@ async function openDiskSession(
 	const settingsManager = buildSessionSettings(cwd);
 	const sessionManager = SessionManager.open(info.path);
 	const persistedModel = persistedSessionModelRef(sessionManager.buildSessionContext().model);
-	const availableModels = settledAvailableModels(generation.runtime);
 	let exactModel: Model<string> | undefined;
 	if (persistedModel) {
 		try {
 			exactModel = resolvePersistedModel(generation.runtime, persistedModel);
-		} catch {
-			
-		}
+		} catch {}
 	}
 	repairDanglingToolCalls(sessionManager);
-	const created = await createParentSession(
+	await createParentSession(
 		{
 			cwd,
 			sessionManager,
@@ -1549,17 +1546,6 @@ async function openDiskSession(
 		generation,
 		lifecycleToken,
 	);
-	const selectedModel = created.model;
-	if (
-		persistedModel &&
-		!exactModel &&
-		selectedModel &&
-		availableModels.some(
-			(model) => model.provider === selectedModel.provider && model.id === selectedModel.id,
-		)
-	) {
-		sessionManager.appendModelChange(selectedModel.provider, selectedModel.id);
-	}
 }
 
 async function ensureSessionAttachedInternal(
