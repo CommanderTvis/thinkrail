@@ -68,8 +68,8 @@ async function runtimeWithFaux(includeModel = true): Promise<ModelRuntime> {
 	return runtime;
 }
 
-async function runtimeWithReplacement(): Promise<ModelRuntime> {
-	const runtime = await runtimeWithFaux(false);
+async function runtimeWithReplacement(includeOriginal = false): Promise<ModelRuntime> {
+	const runtime = await runtimeWithFaux(includeOriginal);
 	runtime.registerProvider("replacement-faux", {
 		api: replacementFaux.api,
 		baseUrl: "http://replacement-faux.test",
@@ -193,7 +193,7 @@ describe("PI runtime generations", () => {
 		await turn;
 	});
 
-	test("a disk reattach uses the current provider and persists the replacement model", async () => {
+	test("a disk reattach uses the current provider and persists its model after a message", async () => {
 		setSessionManagerFactory((sessionCwd) => SessionManager.create(sessionCwd));
 		const session = await liveSession();
 		disposeAllSessions();
@@ -209,13 +209,6 @@ describe("PI runtime generations", () => {
 			provider: "replacement-faux",
 			id: "replacement-model",
 		});
-		const info = (await SessionManager.list(cwd)).find((item) => item.id === session.sessionId);
-		if (!info) throw new Error("session was not persisted");
-		expect(SessionManager.open(info.path).buildSessionContext().model).toEqual({
-			provider: "replacement-faux",
-			modelId: "replacement-model",
-		});
-
 		replacementFaux.setResponses([fauxAssistantMessage("AFTER_PROVIDER_SWAP")]);
 		await promptSession(session.sessionId, "continue on the new provider");
 		expect(
@@ -229,6 +222,23 @@ describe("PI runtime generations", () => {
 		).toMatchObject({
 			provider: "replacement-faux",
 			id: "replacement-model",
+		});
+	});
+
+	test("opening a chat without sending preserves its model when the original provider returns", async () => {
+		setSessionManagerFactory((sessionCwd) => SessionManager.create(sessionCwd));
+		const session = await liveSession();
+		disposeAllSessions();
+		configurePiRuntime(await runtimeWithReplacement());
+		const reopened = await getSessionMessages(session.sessionId, "workspace-generation", cwd);
+		expect(reopened.summary.model?.provider).toBe("replacement-faux");
+		disposeAllSessions();
+		configurePiRuntime(await runtimeWithReplacement(true));
+		expect(
+			(await reopenAfterTeardown(session.sessionId, "workspace-generation", cwd)).summary.model,
+		).toMatchObject({
+			provider: "generation-faux",
+			id: "generation-model",
 		});
 	});
 

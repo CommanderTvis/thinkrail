@@ -88,8 +88,9 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     reads. Activation changes the current pointer for pre-session reads and future session creation; it never
     mutates, drains, or recreates existing sessions. A live session keeps its original runtime generation. A disk session
     attached after activation keeps its saved model when that model is available in the current runtime.
-    If it is unavailable, PI chooses the current default; the host records the replacement in the
-    transcript so later restarts restore the model the reopened chat actually uses. With no available
+    If it is unavailable, PI chooses the current default without changing the saved model on open.
+    PI records the replacement when the user sends a message, so later restarts restore that model.
+    Merely opening a chat preserves its original model for when that provider returns. With no available
     model, the transcript remains readable and no placeholder model is persisted as a replacement.
 
     Every models **read** goes through **`settledAvailableModels(runtime)`** — pi's
@@ -262,9 +263,9 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     so treating the transient physical state as a detached corrupt chat would blank every chat on reload) +
     `getSessionMessages(sessionId, workspaceId, cwd)` (re-opens a disk session into the manager if
     not live, first resolving any model named by the transcript in the active process runtime; when
-    that model is unavailable, PI selects the current default and the host persists the change after
-    successful PI session creation. Legacy transcripts with no persisted model reference also use PI's model
-    resolver—then returns `{ summary, messages }` —
+    that model is unavailable, PI selects the current default without persisting a model change on open;
+    PI records the replacement when the user sends a message. Legacy transcripts with no persisted model
+    reference also use PI's model resolver—then returns `{ summary, messages }` —
     `TranscriptMessage[]`: the pi-canonical subset **plus
     `custom` messages**, which carry the `ask-user-answers` replies the questionnaire card pairs by tool
     call id, **plus `compactionSummary`**, pi's durable marker for the messages compaction summarized away —
