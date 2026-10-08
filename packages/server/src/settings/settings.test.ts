@@ -264,6 +264,68 @@ test("an older host preserves unknown top-level config extensions when updating 
 	expect(onDisk.futureSetting).toEqual({ mode: "new" });
 });
 
+test("an unknown update key rejects the whole update before persistence or broadcast", () => {
+	writeFileSync(join(dataDir, "config.json"), JSON.stringify(DEFAULT_CONFIG));
+	resetConfigCache();
+	const before = getConfig();
+	const published: AppConfig[] = [];
+	setSettingsPublisher((config) => published.push(config));
+
+	expect(() => updateConfig({ futureSetting: true } as unknown as AppConfigUpdate)).toThrow(
+		"Unknown setting: futureSetting",
+	);
+	expect(() =>
+		updateConfig({ theme: "acme.dark", futureSetting: 1 } as unknown as AppConfigUpdate),
+	).toThrow("Unknown setting: futureSetting");
+	expect(() => updateConfig(JSON.parse('{"__proto__":{"theme":"x"}}') as AppConfigUpdate)).toThrow(
+		"Unknown setting: __proto__",
+	);
+	expect(() => updateConfig({ toString: "x" } as unknown as AppConfigUpdate)).toThrow(
+		"Unknown setting: toString",
+	);
+
+	expect(getConfig()).toEqual(before);
+	expect(JSON.parse(readFileSync(join(dataDir, "config.json"), "utf8"))).toEqual(before);
+	expect(published).toEqual([]);
+});
+
+test.each([
+	["a string", "theme"],
+	["an array", ["theme"]],
+	["null", null],
+	["undefined", undefined],
+])("a non-object update (%s) is rejected", (_label, update) => {
+	const published: AppConfig[] = [];
+	setSettingsPublisher((config) => published.push(config));
+	expect(() => updateConfig(update as unknown as AppConfigUpdate)).toThrow(
+		"settings update must be an object",
+	);
+	expect(existsSync(join(dataDir, "config.json"))).toBe(false);
+	expect(published).toEqual([]);
+});
+
+test("empty and multi-key valid updates persist and publish", () => {
+	const published: AppConfig[] = [];
+	setSettingsPublisher((config) => published.push(config));
+	expect(updateConfig({})).toEqual(DEFAULT_CONFIG);
+	const next = updateConfig({
+		theme: "acme.dark",
+		chatLineWidth: 100,
+		reviewAutoFix: false,
+		defaultEffort: "high",
+		subagentsEnabled: false,
+	});
+	expect(next).toMatchObject({
+		theme: "acme.dark",
+		chatLineWidth: 100,
+		reviewAutoFix: false,
+		defaultEffort: "high",
+		subagentsEnabled: false,
+	});
+	expect(JSON.parse(readFileSync(join(dataDir, "config.json"), "utf8"))).toEqual(next);
+	expect(published).toEqual([DEFAULT_CONFIG, next]);
+});
+
 test("loadConfig replaces an invalid composer growth preset with the default", () => {
 	writeFileSync(
 		join(dataDir, "config.json"),
@@ -345,6 +407,34 @@ test("Windows shell updates reject unknown values before persistence or broadcas
 		"terminalWindowsShell",
 		"cmd",
 	);
+});
+
+test("replay budget and composer growth updates reject malformed values before persistence or broadcast", () => {
+	const published: AppConfig[] = [];
+	setSettingsPublisher((config) => published.push(config));
+	const before = getConfig();
+
+	for (const terminalReplayKb of ["64", Number.NaN, Number.POSITIVE_INFINITY, null, true]) {
+		expect(() => updateConfig({ terminalReplayKb } as unknown as AppConfigUpdate)).toThrow(
+			"terminalReplayKb must be a finite number",
+		);
+	}
+	for (const composerGrowthLimit of ["enormous", 3, { kind: "roomy" }, null]) {
+		expect(() => updateConfig({ composerGrowthLimit } as unknown as AppConfigUpdate)).toThrow(
+			"composerGrowthLimit must be one of compact, roomy, half-chat",
+		);
+	}
+	expect(getConfig()).toEqual(before);
+	expect(published).toEqual([]);
+	expect(existsSync(join(dataDir, "config.json"))).toBe(false);
+
+	const next = updateConfig({ terminalReplayKb: 0, composerGrowthLimit: "compact" });
+	expect(next).toMatchObject({ terminalReplayKb: 0, composerGrowthLimit: "compact" });
+	expect(published).toEqual([next]);
+	expect(JSON.parse(readFileSync(join(dataDir, "config.json"), "utf8"))).toMatchObject({
+		terminalReplayKb: 0,
+		composerGrowthLimit: "compact",
+	});
 });
 
 test("JetBrains quota preferences default, persist, and survive an old partial config", () => {
@@ -541,6 +631,23 @@ test("a null reviewModel/reviewEffort clears the override back to unset, and it 
 	resetConfigCache();
 	expect(getConfig().reviewModel).toBeUndefined();
 	expect(getConfig().reviewEffort).toBeUndefined();
+});
+
+test("a malformed defaultModel or reviewModel rejects the whole update before persistence or broadcast", () => {
+	const published: AppConfig[] = [];
+	setSettingsPublisher((config) => published.push(config));
+	const before = getConfig();
+	for (const model of ["p/m", { provider: "p" }, { provider: "p", id: "m" }, [], 1]) {
+		expect(() => updateConfig({ defaultModel: model } as unknown as AppConfigUpdate)).toThrow(
+			"defaultModel must be a model or null",
+		);
+		expect(() => updateConfig({ reviewModel: model } as unknown as AppConfigUpdate)).toThrow(
+			"reviewModel must be a model or null",
+		);
+	}
+	expect(getConfig()).toEqual(before);
+	expect(published).toEqual([]);
+	expect(existsSync(join(dataDir, "config.json"))).toBe(false);
 });
 
 test("loadConfig ignores the old layout settings object", () => {
