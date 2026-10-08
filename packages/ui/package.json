@@ -17,13 +17,29 @@
 		"./toast": "./toast.tsx",
 		"./tooltip": "./tooltip.tsx",
 		"./utils": "./utils.ts",
-		"./theme": "./theme.ts"
+		"./theme": "./theme.ts",
+		"./Outline": "./Outline.tsx",
+		"./ScopedSetting": "./ScopedSetting.tsx",
+		"./SettingValueDialog": "./SettingValueDialog.tsx",
+		"./SvgAsset": "./SvgAsset.tsx",
+		"./TerminalFacts": "./TerminalFacts.tsx",
+		"./ToggleSegment": "./ToggleSegment.tsx",
+		"./ToolFileLink": "./ToolFileLink.tsx",
+		"./chips": "./chips.ts",
+		"./outlineTree": "./outlineTree.ts",
+		"./pathUtils": "./pathUtils.ts",
+		"./useThemeSwap": "./useThemeSwap.ts",
+		"./zoomGesture": "./zoomGesture.ts",
+		"./editor": "./editor/index.ts",
+		"./markdown": "./markdown/index.ts",
+		"./tokens.css": "./tokens.css"
 	},
 	"scripts": {
 		"typecheck": "tsc --noEmit",
 		"test": "bun test"
 	},
 	"dependencies": {
+		"@monaco-editor/react": "4.7.0",
 		"@radix-ui/react-context-menu": "2.3.7",
 		"@radix-ui/react-dialog": "1.1.17",
 		"@radix-ui/react-dropdown-menu": "2.1.18",
@@ -31,18 +47,26 @@
 		"@radix-ui/react-toast": "1.2.19",
 		"@radix-ui/react-tooltip": "1.2.10",
 		"@remixicon/react": "catalog:",
+		"@shikijs/langs": "4.2.0",
+		"@shikijs/monaco": "4.2.0",
 		"class-variance-authority": "0.7.1",
 		"clsx": "2.1.1",
 		"cmdk": "1.1.1",
+		"mermaid": "catalog:",
+		"monaco-editor": "0.55.1",
 		"react": "catalog:",
 		"react-dom": "catalog:",
+		"react-markdown": "10.1.0",
 		"react-resizable-panels": "2.1.9",
+		"remark-gfm": "4.0.1",
+		"shiki": "4.2.0",
 		"tailwind-merge": "3.6.0"
 	},
 	"devDependencies": {
 		"@types/bun": "catalog:",
 		"@types/react": "catalog:",
 		"@types/react-dom": "catalog:",
-		"typescript": "catalog:"
+		"typescript": "catalog:",
+		"vite": "8.0.16"
 	}
 }
