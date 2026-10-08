@@ -150,5 +150,24 @@ moved here from the app when the resource renderers became a package, because bo
   usable. There is no grip variant.
 - Primitives use only the host's token utilities, never shadcn's default oklch palette.
 
-Code highlighting is deliberately absent: `CodeBlock` and shiki depend on the app's theme registration
-and remain app-local until a second extension requires that seam.
+## Plugin kit
+
+The plugin API's UI kit lives here too, under the same per-file subpaths, so the app, extension web halves
+and plugin web halves draw with one set of components:
+
+- `Outline` + `outlineTree`, `ToggleSegment`, `chips` (the `CHIP*` class sets), `ScopedSetting`,
+  `SettingValueDialog`, `TerminalFacts` (attach button, cwd label, fact chips), `tokenUsage`, `Account`
+  (account rows, usage windows, reading timestamps), `ToolFileLink`, `SvgAsset` (fetch-once inline SVG),
+  `pathUtils`, `useThemeSwap`, and `zoomGesture` (the wheel/pinch zoom math the diagram view and the PDF
+  preview share).
+- `./markdown` — `Markdown`, `CodeBlock`, the frontmatter parser and `FrontmatterProperties`, GitHub
+  alerts, heading ids, source-line stamping, and a self-contained shiki highlighter with the ThinkRail
+  theme. `Markdown` renders a ```` ```mermaid ```` fence through the caller's `renderMermaid`; without
+  one the fence stays highlighted source, which keeps this package free of an edge to the visualize
+  extension. The app's own chat renderer (`apps/web/src/chat/Markdown.tsx`) is separate and stays app-local.
+- `./tokens.css` — the token-name contract a plugin stylesheet compiles against.
+
+These add shiki and react-markdown/remark to the external dependencies above. The Monaco editor is not part
+of the kit: it lives in `@thinkrail/resource-renderers`, which the app hosts. Runtime-loaded
+(external) plugins do not bundle this package: the app exposes the root-level modules as one namespace on
+`window.__thinkrailPluginRuntime.pluginUi` (`apps/web/src/plugins/loader/pluginUi.ts`).
