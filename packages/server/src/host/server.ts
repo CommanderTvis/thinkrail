@@ -216,18 +216,6 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	let requestHostUpdate = (): void => {
 		throw new Error("Host update is unavailable.");
 	};
-	const backpressureReconciler = setInterval(() => {
-		const drained = drainedClientKeys(terminalBackpressured, (clientKey) =>
-			sockets.get(clientKey)?.getBufferedAmount(),
-		);
-		for (const clientKey of drained) {
-			log.warn(
-				`terminal backpressure latch lifted by reconciler, drain never arrived (${clientKey})`,
-			);
-			terminalBackpressured.delete(clientKey);
-			resumeClientTerminals(clientKey);
-		}
-	}, BACKPRESSURE_RECONCILE_MS);
 	let stopping = false;
 	let shutdownPromise: Promise<void> | undefined;
 
@@ -414,6 +402,19 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 			},
 		},
 	});
+
+	const backpressureReconciler = setInterval(() => {
+		const drained = drainedClientKeys(terminalBackpressured, (clientKey) =>
+			sockets.get(clientKey)?.getBufferedAmount(),
+		);
+		for (const clientKey of drained) {
+			log.warn(
+				`terminal backpressure latch lifted by reconciler, drain never arrived (${clientKey})`,
+			);
+			terminalBackpressured.delete(clientKey);
+			resumeClientTerminals(clientKey);
+		}
+	}, BACKPRESSURE_RECONCILE_MS);
 
 	const publishHostUpdate = (notice: HostUpdateNotice): void => {
 		if (!hostUpdateActive) return;
