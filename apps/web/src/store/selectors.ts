@@ -14,14 +14,17 @@ import {
 	type SubagentResourceSummary,
 	sameModel,
 	type WireModel,
+	WORKSPACE_SETTLE_PROTOCOL_VERSION,
 	type Workspace,
 } from "@thinkrail/contracts";
 import {
+	compactAge,
 	isAbsolutePath,
 	type LayoutAttention,
 	layoutResourceIdentity,
 	normalizePath,
 	readLayoutSelection,
+	relativeTime,
 } from "../lib";
 import type {
 	LayoutAuxiliaryRegion,
@@ -219,6 +222,154 @@ export function selectSessionState(
 	sessionId: string,
 ): SessionState | null {
 	return state.sessionStateByWorkspace[workspaceId]?.[sessionId]?.state ?? null;
+}
+
+export type WorkspaceSort = "recent" | "created" | "name";
+
+export function supportsWorkspaceSettling(protocolVersion: number | null): boolean {
+	return protocolVersion !== null && protocolVersion >= WORKSPACE_SETTLE_PROTOCOL_VERSION;
+}
+
+export const SETTLED_SHELF_PAGE = 10;
+export const SETTLED_SHELF_MORE = 25;
+const DAY_MS = 24 * 60 * 60_000;
+
+export type SettledReason =
+	| { kind: "override"; since?: number }
+	| { kind: "review"; state: "merged" | "closed" }
+	| { kind: "idle"; since: number };
+
+/** Chip text; `settledReasonTitle` is the long form. */
+export function settledReasonLabel(reason: SettledReason, now: number): string {
+	switch (reason.kind) {
+		case "override":
+			return "by you";
+		case "review":
+			return reason.state;
+		case "idle":
+			return `idle ${compactAge(reason.since, now)}`;
+	}
+}
+
+export function settledReasonTitle(reason: SettledReason, now: number): string {
+	switch (reason.kind) {
+		case "override":
+			return reason.since === undefined
+				? "Settled by you"
+				: `Settled by you ${relativeTime(reason.since, now)}`;
+		case "review":
+			return reason.state === "merged" ? "Pull request merged" : "Pull request closed";
+		case "idle":
+			return `Idle for ${compactAge(reason.since, now)}`;
+	}
+}
+
+export interface SettledRow {
+	workspace: Workspace;
+	reason: SettledReason;
+}
+
+export interface WorkspacePartition {
+	live: Workspace[];
+	settled: SettledRow[];
+}
+
+interface PartitionState extends SessionStateProjection {
+	workspaceSettlingSupported: boolean;
+	activeWorkspaceId: string | null;
+	activeWorkspaceLiveLatch: boolean;
+	settleIdleDays: number | null;
+}
+
+/** Why a workspace sits on its project's Settled shelf, or `null` while it is live. */
+export function selectWorkspaceSettledReason(
+	state: PartitionState,
+	workspace: Workspace,
+	now: number,
+): SettledReason | null {
+	if (!state.workspaceSettlingSupported || isDefaultWorkspace(workspace)) return null;
+	if (
+		selectWorkspaceIsRunning(state, workspace.id) ||
+		selectWorkspaceNeedsAttention(state, workspace.id)
+	) {
+		return null;
+	}
+	if (workspace.settledOverride === "settled") {
+		return workspace.settledAt === undefined
+			? { kind: "override" }
+			: { kind: "override", since: workspace.settledAt };
+	}
+	if (workspace.settledOverride === "active") return null;
+	if (state.activeWorkspaceId === workspace.id && state.activeWorkspaceLiveLatch) return null;
+	const review = workspace.review;
+	if (review?.state === "merged" || review?.state === "closed") {
+		if (review.changedAt === undefined) return null;
+		const workedSince =
+			workspace.lastActiveAt !== undefined && workspace.lastActiveAt > review.changedAt;
+		if (!workedSince) return { kind: "review", state: review.state };
+	} else if (review && (review.state === undefined || review.state === "open")) {
+		return null;
+	}
+	if (state.settleIdleDays === null || workspace.lastActiveAt === undefined) return null;
+	if (now - workspace.lastActiveAt > state.settleIdleDays * DAY_MS) {
+		return { kind: "idle", since: workspace.lastActiveAt };
+	}
+	return null;
+}
+
+function compareWorkspaces(
+	sort: WorkspaceSort,
+	creationIndex: ReadonlyMap<string, number>,
+): (a: Workspace, b: Workspace) => number {
+	const created = (w: Workspace) => creationIndex.get(w.id) ?? 0;
+	switch (sort) {
+		case "recent":
+			return (a, b) => (b.lastActiveAt ?? 0) - (a.lastActiveAt ?? 0) || created(b) - created(a);
+		case "created":
+			return (a, b) => created(b) - created(a);
+		case "name":
+			return (a, b) => a.name.localeCompare(b.name) || created(b) - created(a);
+	}
+}
+
+/** The Default row stays first; every other row sorts by `sort` and splits into live and settled. */
+export function selectWorkspacePartition(
+	state: PartitionState & { workspaces: Record<string, Workspace[]>; workspaceSort: WorkspaceSort },
+	projectId: string,
+	now: number,
+): WorkspacePartition {
+	const rows = state.workspaces[projectId] ?? [];
+	if (!state.workspaceSettlingSupported) return { live: rows, settled: [] };
+	const creationIndex = new Map(rows.map((row, index) => [row.id, index]));
+	const compare = compareWorkspaces(state.workspaceSort, creationIndex);
+	const live: Workspace[] = [];
+	const settled: SettledRow[] = [];
+	for (const workspace of rows) {
+		if (isDefaultWorkspace(workspace)) continue;
+		const reason = selectWorkspaceSettledReason(state, workspace, now);
+		if (reason) settled.push({ workspace, reason });
+		else live.push(workspace);
+	}
+	live.sort(compare);
+	settled.sort((a, b) => compare(a.workspace, b.workspace));
+	const defaults = rows.filter(isDefaultWorkspace);
+	return { live: [...defaults, ...live], settled };
+}
+
+/** Per loaded project, the rows the shelf took on its own (PR merged/closed or idle), never ones parked by hand. */
+export function selectAutoSettledCounts(
+	state: PartitionState & { workspaces: Record<string, Workspace[]> },
+	now: number,
+): { projectId: string; count: number }[] {
+	const counts: { projectId: string; count: number }[] = [];
+	for (const [projectId, rows] of Object.entries(state.workspaces)) {
+		const count = rows.filter((workspace) => {
+			const reason = selectWorkspaceSettledReason(state, workspace, now);
+			return reason !== null && reason.kind !== "override";
+		}).length;
+		if (count > 0) counts.push({ projectId, count });
+	}
+	return counts;
 }
 
 export function selectWorkspaceNeedsAttention(

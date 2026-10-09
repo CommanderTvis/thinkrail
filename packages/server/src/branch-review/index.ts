@@ -1,5 +1,6 @@
 export {
-	findOpenBranchReview,
+	type BranchReviewOutcome,
+	findBranchReviewOutcome,
 	forgetOpenBranchReview,
 	providerFromRemoteUrl,
 	reviewNumber,

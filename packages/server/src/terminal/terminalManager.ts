@@ -331,14 +331,15 @@ function announceDisplaced(id: string, caller: string): void {
 	pushToClient(caller, WS_CHANNELS.terminalDetached, push);
 }
 
-export function writeTerminal(id: string, data: string, caller: string): void {
+export function writeTerminal(id: string, data: string, caller: string): string | null {
 	assertTerminalData(data);
 	const entry = attachedEntry(id, caller);
 	if (!entry) {
 		announceDisplaced(id, caller);
-		return;
+		return null;
 	}
 	entry.pty.write(data);
+	return entry.workspaceId;
 }
 
 export function resizeTerminal(id: string, cols: number, rows: number, caller: string): void {

@@ -1,5 +1,5 @@
-import type { OpenBranchReview } from "@thinkrail/contracts";
-import { git, nonInteractiveGitEnv } from "../git";
+import type { BranchReviewState, OpenBranchReview } from "@thinkrail/contracts";
+import { gitAsync, nonInteractiveGitEnv } from "../git";
 import { runBounded } from "../subprocess";
 
 const LOOKUP_TIMEOUT_MS = 8_000;
@@ -11,17 +11,29 @@ type CommandResult = { ok: boolean; out: string };
 type CommandRunner = (cwd: string, command: string[]) => Promise<CommandResult>;
 type LookupResult = { value: OpenBranchReview | null; cacheable: boolean };
 type LookupOptions = { fresh?: boolean; now?: () => number };
-type ReviewRow = { number: number; url?: string };
-type ParsedReviewRow = { valid: true; value: ReviewRow | null } | { valid: false };
+type ReviewRow = {
+	number: number;
+	url?: string;
+	state?: BranchReviewState;
+	changedAt?: number;
+	createdAt?: number;
+};
+type ParsedReviewRows = { valid: true; rows: ReviewRow[] } | { valid: false };
+const SETTLED_REVIEW_ROW_LIMIT = "5";
 
-function detectReviewProviderResult(cwd: string, branch: string): ProviderDetection {
-	const configured = [
-		git(cwd, ["config", "--get", `branch.${branch}.pushRemote`]).out,
-		git(cwd, ["config", "--get", "remote.pushDefault"]).out,
-		git(cwd, ["config", "--get", `branch.${branch}.remote`]).out,
-	];
-	const listed = git(cwd, ["remote"]);
+function inspect(cwd: string, args: string[]) {
+	return gitAsync(cwd, args, { timeoutMs: LOOKUP_TIMEOUT_MS });
+}
+
+async function detectReviewProviderResult(cwd: string, branch: string): Promise<ProviderDetection> {
+	const [pushRemote, pushDefault, branchRemote, listed] = await Promise.all([
+		inspect(cwd, ["config", "--get", `branch.${branch}.pushRemote`]),
+		inspect(cwd, ["config", "--get", "remote.pushDefault"]),
+		inspect(cwd, ["config", "--get", `branch.${branch}.remote`]),
+		inspect(cwd, ["remote"]),
+	]);
 	if (!listed.ok) return { provider: null, cacheable: false };
+	const configured = [pushRemote.out, pushDefault.out, branchRemote.out];
 	const listedNames = new Set(listed.out.split("\n").filter(Boolean));
 	const names = [...new Set([...configured, "origin", ...listedNames])];
 	let failedListedRemote = false;
@@ -33,7 +45,7 @@ function detectReviewProviderResult(cwd: string, branch: string): ProviderDetect
 			["remote", "get-url", "--push", name],
 			["remote", "get-url", name],
 		]) {
-			const remote = git(cwd, args);
+			const remote = await inspect(cwd, args);
 			if (!remote.ok) continue;
 			resolved = true;
 			const provider = providerFromRemoteUrl(remote.out);
@@ -44,8 +56,11 @@ function detectReviewProviderResult(cwd: string, branch: string): ProviderDetect
 	return { provider: null, cacheable: !failedListedRemote };
 }
 
-export function detectReviewProvider(cwd: string, branch: string): ReviewProvider | null {
-	return detectReviewProviderResult(cwd, branch).provider;
+export async function detectReviewProvider(
+	cwd: string,
+	branch: string,
+): Promise<ReviewProvider | null> {
+	return (await detectReviewProviderResult(cwd, branch)).provider;
 }
 
 export function providerFromRemoteUrl(remoteUrl: string): ReviewProvider | null {
@@ -63,17 +78,20 @@ function remoteHost(remoteUrl: string): string | null {
 	return /^(?:[^@/:\s]+@)?([^/:\s]+):/.exec(remoteUrl)?.[1]?.toLowerCase() ?? null;
 }
 
+/** `reliable` = the provider answered (a `null` then truly means "no review"); unreliable nulls are failures. */
+export type BranchReviewOutcome = { value: OpenBranchReview | null; reliable: boolean };
+
 const cached = new Map<string, { at: number; value: OpenBranchReview | null }>();
-const inFlight = new Map<string, Promise<OpenBranchReview | null>>();
+const inFlight = new Map<string, Promise<BranchReviewOutcome>>();
 
 const cacheKey = (cwd: string, branch: string) => `${cwd}\u0000${branch}`;
 
-export function findOpenBranchReview(
+export function findBranchReviewOutcome(
 	cwd: string,
 	branch: string,
 	options: { fresh?: boolean } = {},
-): Promise<OpenBranchReview | null> {
-	return findOpenBranchReviewWithRunner(cwd, branch, runProviderCommand, options);
+): Promise<BranchReviewOutcome> {
+	return findBranchReviewOutcomeWithRunner(cwd, branch, runProviderCommand, options);
 }
 
 export function forgetOpenBranchReview(cwd: string): void {
@@ -95,6 +113,17 @@ export function findOpenBranchReviewWithRunner(
 	run: CommandRunner,
 	options: LookupOptions = {},
 ): Promise<OpenBranchReview | null> {
+	return findBranchReviewOutcomeWithRunner(cwd, branch, run, options).then(
+		(outcome) => outcome.value,
+	);
+}
+
+export function findBranchReviewOutcomeWithRunner(
+	cwd: string,
+	branch: string,
+	run: CommandRunner,
+	options: LookupOptions = {},
+): Promise<BranchReviewOutcome> {
 	const now = options.now ?? Date.now;
 	const key = cacheKey(cwd, branch);
 	pruneCached(now());
@@ -102,64 +131,105 @@ export function findOpenBranchReviewWithRunner(
 	if (running) return running;
 	if (!options.fresh) {
 		const hit = cached.get(key);
-		if (hit) return Promise.resolve(hit.value);
+		if (hit) return Promise.resolve({ value: hit.value, reliable: true });
 	} else {
 		cached.delete(key);
 	}
-	const lookup: Promise<OpenBranchReview | null> = lookupOpenBranchReview(cwd, branch, run).then(
+	const lookup: Promise<BranchReviewOutcome> = lookupOpenBranchReview(cwd, branch, run).then(
 		(result) => {
 			if (inFlight.get(key) !== lookup) {
-				return findOpenBranchReviewWithRunner(cwd, branch, run, { now });
+				return findBranchReviewOutcomeWithRunner(cwd, branch, run, { now });
 			}
 			inFlight.delete(key);
 			if (result.cacheable) cached.set(key, { at: now(), value: result.value });
 			else cached.delete(key);
-			return result.value;
+			return { value: result.value, reliable: result.cacheable };
 		},
 	);
 	inFlight.set(key, lookup);
 	return lookup;
 }
 
+function reviewListCommand(
+	provider: ReviewProvider,
+	branch: string,
+	scope: "open" | "settled",
+): string[] {
+	if (provider === "github") {
+		return [
+			"gh",
+			"pr",
+			"list",
+			"--head",
+			branch,
+			"--state",
+			scope === "open" ? "open" : "all",
+			"--json",
+			"number,url,state,mergedAt,closedAt,createdAt",
+			"--limit",
+			scope === "open" ? "1" : SETTLED_REVIEW_ROW_LIMIT,
+		];
+	}
+	return [
+		"glab",
+		"mr",
+		"list",
+		"--source-branch",
+		branch,
+		...(scope === "open" ? [] : ["--all"]),
+		"--output",
+		"json",
+		"--per-page",
+		scope === "open" ? "1" : SETTLED_REVIEW_ROW_LIMIT,
+	];
+}
+
+async function listReviewRows(
+	cwd: string,
+	provider: ReviewProvider,
+	branch: string,
+	scope: "open" | "settled",
+	run: CommandRunner,
+): Promise<ReviewRow[] | null> {
+	const result = await run(cwd, reviewListCommand(provider, branch, scope));
+	if (!result.ok) return null;
+	const parsed = parseReviewRows(result.out, provider === "github" ? "number" : "iid");
+	return parsed.valid ? parsed.rows : null;
+}
+
+/**
+ * Open reviews are asked for on their own and win outright; only when there is none does the lookup
+ * page through the newest merged/closed rows — a bounded combined page could bury an older open review
+ * under newer settled ones.
+ */
 async function lookupOpenBranchReview(
 	cwd: string,
 	branch: string,
 	run: CommandRunner,
 ): Promise<LookupResult> {
 	try {
-		const detection = detectReviewProviderResult(cwd, branch);
+		const detection = await detectReviewProviderResult(cwd, branch);
 		const provider = detection.provider;
 		if (!provider) return { value: null, cacheable: detection.cacheable };
 
-		const command =
-			provider === "github"
-				? [
-						"gh",
-						"pr",
-						"list",
-						"--head",
-						branch,
-						"--state",
-						"open",
-						"--json",
-						"number,url",
-						"--limit",
-						"1",
-					]
-				: ["glab", "mr", "list", "--source-branch", branch, "--output", "json", "--per-page", "1"];
-		const result = await run(cwd, command);
-		if (!result.ok) return { value: null, cacheable: false };
-
-		const parsed = parseReviewRow(result.out, provider === "github" ? "number" : "iid");
-		if (!parsed.valid) return { value: null, cacheable: false };
+		const open = await listReviewRows(cwd, provider, branch, "open", run);
+		if (open === null) return { value: null, cacheable: false };
+		let row = pickReviewRow(open);
+		if (row === null) {
+			const settled = await listReviewRows(cwd, provider, branch, "settled", run);
+			if (settled === null) return { value: null, cacheable: false };
+			row = pickReviewRow(settled);
+		}
 		return {
 			value:
-				parsed.value === null
+				row === null
 					? null
 					: {
 							kind: provider === "github" ? "pull-request" : "merge-request",
-							number: parsed.value.number,
-							...(parsed.value.url ? { url: parsed.value.url } : {}),
+							number: row.number,
+							...(row.url ? { url: row.url } : {}),
+							...(row.state ? { state: row.state } : {}),
+							...(row.changedAt !== undefined ? { changedAt: row.changedAt } : {}),
 						},
 			cacheable: true,
 		};
@@ -176,27 +246,85 @@ function reviewRowUrl(row: Record<string, unknown>): string | undefined {
 	return undefined;
 }
 
-function parseReviewRow(output: string, field: "number" | "iid"): ParsedReviewRow {
+function reviewRowState(row: Record<string, unknown>): BranchReviewState | undefined {
+	const raw = row.state;
+	if (typeof raw !== "string") return undefined;
+	switch (raw.toLowerCase()) {
+		case "open":
+		case "opened":
+		case "locked":
+			return "open";
+		case "merged":
+			return "merged";
+		case "closed":
+			return "closed";
+		default:
+			return undefined;
+	}
+}
+
+function reviewRowTime(row: Record<string, unknown>, keys: string[]): number | undefined {
+	for (const key of keys) {
+		const value = row[key];
+		if (typeof value !== "string") continue;
+		const parsed = Date.parse(value);
+		if (Number.isFinite(parsed)) return parsed;
+	}
+	return undefined;
+}
+
+function parseReviewRows(output: string, field: "number" | "iid"): ParsedReviewRows {
 	try {
 		const rows: unknown = JSON.parse(output);
 		if (!Array.isArray(rows)) return { valid: false };
-		if (rows.length === 0) return { valid: true, value: null };
-		const first: unknown = rows[0];
-		if (typeof first !== "object" || first === null) return { valid: false };
-		const row = first as Record<string, unknown>;
-		const value = row[field];
-		if (typeof value !== "number" || !Number.isSafeInteger(value) || value <= 0)
-			return { valid: false };
-		const url = reviewRowUrl(row);
-		return { valid: true, value: { number: value, ...(url ? { url } : {}) } };
+		const parsed: ReviewRow[] = [];
+		for (const item of rows) {
+			if (typeof item !== "object" || item === null) return { valid: false };
+			const row = item as Record<string, unknown>;
+			const value = row[field];
+			if (typeof value !== "number" || !Number.isSafeInteger(value) || value <= 0)
+				return { valid: false };
+			const url = reviewRowUrl(row);
+			const state = reviewRowState(row);
+			const changedAt =
+				state === "merged"
+					? reviewRowTime(row, ["mergedAt", "merged_at"])
+					: state === "closed"
+						? reviewRowTime(row, ["closedAt", "closed_at"])
+						: undefined;
+			if ((state === "merged" || state === "closed") && changedAt === undefined) {
+				return { valid: false };
+			}
+			const createdAt = reviewRowTime(row, ["createdAt", "created_at"]);
+			parsed.push({
+				number: value,
+				...(url ? { url } : {}),
+				...(state ? { state } : {}),
+				...(changedAt !== undefined ? { changedAt } : {}),
+				...(createdAt !== undefined ? { createdAt } : {}),
+			});
+		}
+		return { valid: true, rows: parsed };
 	} catch {
 		return { valid: false };
 	}
 }
 
+/** An open review wins; otherwise the most recently merged/closed one (newest-created on a tie). */
+export function pickReviewRow(rows: readonly ReviewRow[]): ReviewRow | null {
+	if (rows.length === 0) return null;
+	const open = rows.find((row) => row.state === "open" || row.state === undefined);
+	if (open) return open;
+	return rows.reduce((best, row) => {
+		const bestAt = best.changedAt ?? best.createdAt ?? 0;
+		const rowAt = row.changedAt ?? row.createdAt ?? 0;
+		return rowAt > bestAt ? row : best;
+	});
+}
+
 export function reviewNumber(output: string, field: "number" | "iid"): number | null {
-	const parsed = parseReviewRow(output, field);
-	return parsed.valid ? (parsed.value?.number ?? null) : null;
+	const parsed = parseReviewRows(output, field);
+	return parsed.valid ? (parsed.rows[0]?.number ?? null) : null;
 }
 
 export async function runProviderCommand(

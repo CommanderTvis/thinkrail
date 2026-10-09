@@ -79,9 +79,16 @@ import {
 	setRepoMetaPublisher,
 	setSkillPathClassifier,
 	setWatchPublisher,
+	setWatchStartedPublisher,
 	stopAllWatches,
 } from "../watch";
-import { getWorkspace, refreshUserOwnedWorkspace, setWorkspacePublisher } from "../workspaces";
+import {
+	getWorkspace,
+	recordWorkspaceHead,
+	refreshUserOwnedWorkspace,
+	seedWorkspaceHead,
+	setWorkspacePublisher,
+} from "../workspaces";
 import { BLOB_PREFIX, FILES_PREFIX, serveBlob, serveWorktreeFile } from "./fileRoutes";
 import { setFsNudgePublisher } from "./fsNudge";
 import { handleRequest, requestMethodDiagnostic } from "./handlers";
@@ -102,6 +109,11 @@ import {
 	setReviewFailedPublisher,
 } from "./requestReview";
 import { runObservation } from "./runAnalytics";
+import {
+	REVIEW_REFRESH_INTERVAL_MS,
+	refreshOpenProjectReviews,
+	stampSessionActivity,
+} from "./settledLifecycle";
 import { resolveSubagentsEnabled } from "./subagentPolicy";
 import { taskObservation } from "./taskAnalytics";
 import {
@@ -211,6 +223,14 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	const terminalBackpressured = new Set<string>();
 	let hostUpdateNotice: HostUpdateNotice | undefined;
 	let hostUpdateTimer: ReturnType<typeof setInterval> | undefined;
+	const reviewRefreshTimer = setInterval(
+		() =>
+			void refreshOpenProjectReviews().catch(() =>
+				log.warn("periodic settled lifecycle refresh failed"),
+			),
+		REVIEW_REFRESH_INTERVAL_MS,
+	);
+	reviewRefreshTimer.unref?.();
 	let hostUpdateActive = hostUpdate !== undefined;
 	let hostUpdateChecking = false;
 	let requestHostUpdate = (): void => {
@@ -363,6 +383,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 							try {
 								const result = await handleRequest(method, params, {
 									clientKey: ws.data.clientKey,
+									protocolVersion: ws.data.protocolVersion,
 									...(hostUpdate ? { runHostUpdate: requestHostUpdate } : {}),
 								});
 								return JSON.stringify({ id: requestId, ok: true, result });
@@ -579,7 +600,9 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	setSkillPathClassifier(isProjectSkillPath);
 	setFsNudgePublisher(publishFsChanged);
 
+	setWatchStartedPublisher(seedWorkspaceHead);
 	setRepoMetaPublisher((workspaceId) => {
+		recordWorkspaceHead(workspaceId);
 		refreshUserOwnedWorkspace(workspaceId);
 		const workspace = loadWorkspaces().find((w) => w.id === workspaceId);
 		if (workspace) forgetOpenBranchReview(workspace.worktreePath);
@@ -641,6 +664,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	});
 
 	setSessionStatePublisher((record: SessionStateRecord) => {
+		stampSessionActivity(record);
 		server.publish(
 			WS_CHANNELS.sessionState,
 			JSON.stringify({ channel: WS_CHANNELS.sessionState, data: record }),
@@ -735,6 +759,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	const stop = (): void => {
 		if (stopping) return;
 		stopping = true;
+		clearInterval(reviewRefreshTimer);
 		setupObservation.clear();
 		runObservation.reset();
 		taskObservation.clear();

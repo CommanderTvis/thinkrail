@@ -81,8 +81,10 @@ channel fan-out, and the process-boot wrapper both launchers share.
   before a web skill-loading flow
   captures its baseline and reports whether the watcher was already known ready (the client's replay-safe
   conservative fallback; its optional `prewarm` flag is forwarded into `watch`'s bounded prewarm-only tier,
-  so pre-selection warm-ups never grow the watcher registry unboundedly); plus the **repo-metadata** callback (`setRepoMetaPublisher`) fanned out to **two**
-  convergences for a git-metadata write in a watched worktree:
+  so pre-selection warm-ups never grow the watcher registry unboundedly); plus the **repo-metadata** callback (`setRepoMetaPublisher`) fanned out to **three**
+  convergences for a git-metadata write in a watched worktree: `recordWorkspaceHead` (the settled
+  lifecycle's commit proxy — stamps activity only when the sha actually moved, see
+  [[submodule-server-workspaces]]),
   `refreshUserOwnedWorkspace` (**re-sync a user-owned workspace's folder-truth branch** — host-mediated,
   since `watch` has no `workspaces` edge, and self-publishing through the workspace-lifecycle tee) **and** a
   pathless, skill-neutral `fsChanged` frame (`paths: []`, `truncated: false`, `skillChange: "none"`) so the
@@ -488,6 +490,42 @@ enabled/confirmed choice before entering analytics attribution.
   `resolveWorktreeFile`/`resourceMeta` and `git`'s `readBlobStreamAtAsync` for the `/files` + `/blob`
   routes); Bun/Node.
 - **Forbidden:** being imported by any feature module; importing `web`/`cli`/`desktop`.
+
+- **Settled-lifecycle wiring (`settledLifecycle.ts`).** The host is where the three activity sources meet the
+  `workspaces` writers: the normalized session-state publisher stamps `recordWorkspaceActivity(record.workspaceId)`
+  whenever a record reports `execution: "running"` (a user prompt flips it, so both user and agent turns
+  count — and the writer's one-per-minute coalescing makes a streaming agent cheap), an accepted
+  `terminal.write` stamps the owning workspace (a displaced/no-op write does not), and the repo-metadata
+  callback calls `recordWorkspaceHead`, with `watch`'s watch-started nudge wired to `seedWorkspaceHead` so
+  first admission seeds and watcher recreation detects a HEAD move made while unwatched. Reading a result, selecting a workspace, or opening
+  files never stamps — "looking is not working" is the user-visible rule. `workspace.settle` /
+  `workspace.unsettle` are thin handlers over the module; settling never touches disk, and
+  `workspace.remove` stays the only teardown. Starting `pr.open` itself stamps activity before its first
+  await (opening a PR is work, so it reactivates a parked row) and persists any returned PR against the
+  exact post-dirty-read branch reported by `openPr` (then strips that host-only context from the wire), so
+  an external checkout switch during the mutation can neither drop nor misattach the created PR; accepting
+  a button/auto plan review stamps activity synchronously too. **Review refresh:** after a
+  `workspace.list` reply and on a five-minute timer the host refreshes the `review` snapshot of the rows
+  whose PR state can still change the partition — live rows on every pass, **idle-settled rows at most
+  every 30 minutes** (a PR opened for a dormant branch from outside ThinkRail must still bring it back,
+  but dormant branches are the long tail and must stay cheap), and never rows parked by the user (the
+  override wins regardless) or a merged/closed snapshot with a valid terminal time (an incomplete settled
+  answer remains live and refreshable; a reopened complete review is caught on activation) — bounded to a
+  few concurrent provider calls and riding the module's 60 s cache. Idle refresh pacing is branch-aware,
+  so switching branches never inherits the old branch's 30-minute delay; a fresh
+  `workspace.openReview` for the active workspace also writes the snapshot, so the active row is always
+  current. Both writers pass the branch the lookup was made for, and `workspaces` drops an answer whose
+  branch has moved underneath it. **Protocol skew:** `RequestContext.protocolVersion` is the socket's
+  advertised protocol (absent for in-process callers, who speak the current one); `workspace.openReview`
+  answers a client older than `WORKSPACE_SETTLE_PROTOCOL_VERSION` with `null` for a merged or closed
+  review, because such a client reads any review as an open PR and its plan pane would offer *Push
+  updates* that creates a new PR — the host snapshot itself still records the true state. **Backfill:**
+  the same post-list pass gives records without `lastActiveAt` their
+  stamp from the newest chat's `updatedAt` (`listSessions`), else the worktree's `.git` gitfile mtime
+  (managed and external worktrees alike — only the Default row, whose `.git` is the repository itself,
+  skips to now), through `backfillWorkspaceActivity` — once per record, since the stamp then exists.
+  Per-row backfill/review failures are logged and detached list/timer passes always catch their terminal
+  rejection; lifecycle maintenance may degrade, but can never become an unhandled host-fatal promise.
 
 ## Get right
 

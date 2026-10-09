@@ -4,6 +4,7 @@ import { basename, dirname, join, resolve } from "node:path";
 import type {
 	DiffStats,
 	ExistingWorktreeCandidate,
+	OpenBranchReview,
 	Project,
 	SubagentOverride,
 	Workspace,
@@ -16,6 +17,7 @@ import {
 	currentBranch,
 	git,
 	gitAsync,
+	gitHeadSha,
 	listRemotes,
 	remoteNameOf,
 	remoteRefOid,
@@ -188,6 +190,7 @@ export async function openExistingWorktree(
 		baseBranch,
 		renamed: true,
 		initialTerminalPending: true,
+		lastActiveAt: Date.now(),
 	};
 	all.push(workspace);
 	saveWorkspaces(all);
@@ -201,6 +204,7 @@ function folderTruth(repoPath: string): { branch: string; baseBranch: string } {
 
 function applyFolderTruth(ws: Workspace, truth: { branch: string; baseBranch: string }): boolean {
 	if (ws.branch === truth.branch && ws.baseBranch === truth.baseBranch) return false;
+	if (ws.branch !== truth.branch) delete ws.review;
 	ws.branch = truth.branch;
 	ws.baseBranch = truth.baseBranch;
 	return true;
@@ -285,6 +289,7 @@ export async function createWorkspace(
 		worktreePath,
 		baseBranch,
 		initialTerminalPending: true,
+		lastActiveAt: Date.now(),
 		...(displayName ? { renamed: true } : {}),
 	};
 	ensureWorkspaceScratchDir(workspace);
@@ -380,8 +385,8 @@ export function refreshUserOwnedWorkspace(workspaceId: string): void {
 	if (truth.kind === "default") {
 		if (!applyFolderTruth(workspace, truth)) return;
 	} else {
-		if (workspace.branch === truth.branch) return;
-		workspace.branch = truth.branch;
+		if (!applyFolderTruth(workspace, { branch: truth.branch, baseBranch: workspace.baseBranch }))
+			return;
 	}
 	saveWorkspaces(all);
 	emit({ kind: "updated", workspace });
@@ -426,6 +431,7 @@ export function renameWorkspace(
 		if (target.diffBase === ws.branch) target.diffBase = branch;
 	}
 	target.name = displayName;
+	if (branchChanged) delete target.review;
 	target.branch = branch;
 	target.renamed = true;
 	saveWorkspaces(all);
@@ -483,6 +489,119 @@ export function setWorkspaceDiffBase(id: string, ref: string | null): Workspace 
 	return ws;
 }
 
+const ACTIVITY_COALESCE_MS = 60_000;
+const observedActivityAt = new Map<string, number>();
+const observedHeadSha = new Map<string, string>();
+
+export function recordWorkspaceActivity(id: string, at: number = Date.now()): Workspace | null {
+	const all = loadWorkspaces();
+	const ws = all.find((workspace) => workspace.id === id);
+	if (!ws) return null;
+	const previous = ws.lastActiveAt ?? 0;
+	const observed = Math.max(observedActivityAt.get(id) ?? 0, at);
+	observedActivityAt.set(id, observed);
+	const overridden = ws.settledOverride !== undefined;
+	const changedAt =
+		ws.review?.state === "merged" || ws.review?.state === "closed"
+			? ws.review.changedAt
+			: undefined;
+	const reviewSettles = changedAt !== undefined && previous <= changedAt;
+	if (!overridden && !reviewSettles && observed - previous < ACTIVITY_COALESCE_MS) return ws;
+	if (observed > previous) ws.lastActiveAt = observed;
+	if (overridden) {
+		delete ws.settledOverride;
+		delete ws.settledAt;
+	}
+	saveWorkspaces(all);
+	emit({ kind: "updated", workspace: ws });
+	return ws;
+}
+
+export function backfillWorkspaceActivity(id: string, at: number): Workspace | null {
+	const all = loadWorkspaces();
+	const ws = all.find((workspace) => workspace.id === id);
+	if (!ws) return null;
+	if (ws.lastActiveAt !== undefined) return ws;
+	ws.lastActiveAt = at;
+	saveWorkspaces(all);
+	emit({ kind: "updated", workspace: ws });
+	return ws;
+}
+
+export function recordWorkspaceHead(id: string): void {
+	if (!loadWorkspaces().some((workspace) => workspace.id === id)) return;
+	const sha = gitHeadSha(id);
+	if (!sha) return;
+	const previous = observedHeadSha.get(id);
+	observedHeadSha.set(id, sha);
+	if (previous !== undefined && previous !== sha) recordWorkspaceActivity(id);
+}
+
+export function seedWorkspaceHead(id: string): void {
+	recordWorkspaceHead(id);
+}
+
+function setSettledOverride(id: string, override: "settled" | "active"): Workspace {
+	const all = loadWorkspaces();
+	const ws = all.find((workspace) => workspace.id === id);
+	if (!ws) throw new Error(`Unknown workspace: ${id}`);
+	if (ws.kind === "default") throw new Error("The Default workspace cannot be settled");
+	ws.settledOverride = override;
+	ws.settledAt = Date.now();
+	saveWorkspaces(all);
+	emit({ kind: "updated", workspace: ws });
+	return ws;
+}
+
+export function settleWorkspace(id: string): Workspace {
+	return setSettledOverride(id, "settled");
+}
+
+export function unsettleWorkspace(id: string): Workspace {
+	return setSettledOverride(id, "active");
+}
+
+function reviewSnapshot(review: OpenBranchReview): OpenBranchReview {
+	return {
+		kind: review.kind,
+		number: review.number,
+		...(review.url ? { url: review.url } : {}),
+		...(review.state ? { state: review.state } : {}),
+		...(review.changedAt !== undefined ? { changedAt: review.changedAt } : {}),
+	};
+}
+
+function sameReview(a: OpenBranchReview | undefined, b: OpenBranchReview | undefined): boolean {
+	if (!a || !b) return a === b;
+	return (
+		a.kind === b.kind &&
+		a.number === b.number &&
+		a.url === b.url &&
+		a.state === b.state &&
+		a.changedAt === b.changedAt
+	);
+}
+
+export function setWorkspaceReview(
+	id: string,
+	review: OpenBranchReview | null,
+	branch: string,
+): Workspace | null {
+	const all = loadWorkspaces();
+	const ws = all.find((workspace) => workspace.id === id);
+	if (!ws || ws.branch !== branch) return null;
+	const next = review ? reviewSnapshot(review) : undefined;
+	const observed = observedActivityAt.get(id) ?? 0;
+	const activityChanged = observed > (ws.lastActiveAt ?? 0);
+	if (sameReview(ws.review, next) && !activityChanged) return ws;
+	if (activityChanged) ws.lastActiveAt = observed;
+	if (next) ws.review = next;
+	else delete ws.review;
+	saveWorkspaces(all);
+	emit({ kind: "updated", workspace: ws });
+	return ws;
+}
+
 export async function listWorkspaces(
 	projectId: string,
 	opts: { includeDiffStats?: boolean } = {},
@@ -531,6 +650,8 @@ export function forgetWorkspace(id: string): Workspace | null {
 	if (!ws) return null;
 	if (ws.kind === "default") throw new Error("The Default workspace cannot be removed");
 	saveWorkspaces(all.filter((w) => w.id !== id));
+	observedActivityAt.delete(id);
+	observedHeadSha.delete(id);
 	emit({ kind: "removed", projectId: ws.projectId, id: ws.id });
 	return ws;
 }

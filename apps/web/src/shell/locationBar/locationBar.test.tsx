@@ -4,7 +4,13 @@ import type { OpenBranchReview, Project, Workspace } from "@thinkrail/contracts"
 import { TooltipProvider } from "@thinkrail/ui/tooltip";
 import { renderToStaticMarkup } from "react-dom/server";
 import { LocationBar } from "./LocationBar";
-import { pluralCommits, projectInitial, remoteCounts } from "./locationModel";
+import {
+	pluralCommits,
+	projectInitial,
+	remoteCounts,
+	reviewChipLabel,
+	reviewTone,
+} from "./locationModel";
 import { chipClass, pillClass } from "./Segment";
 
 const project: Project = { id: "p1", name: "thinkrail-copy", path: "/repo" } as Project;
@@ -159,9 +165,39 @@ test("the location bar never hard-codes typography or colour outside the token s
 	}
 });
 
-test("remote counts collapse to null when nothing is ahead or behind", () => {
+test("a merged review turns the PULL REQUEST chip info and drops the REMOTE segment", () => {
+	const merged: OpenBranchReview = { ...review, state: "merged", changedAt: 1 };
+	const html = render(worktree, merged);
+	expect(html).toContain("Merged #648");
+	expect(html).toMatch(/data-testid="scope-review"[^>]*data-state-tone="info"/);
+	expect(testids(html)).not.toContain("scope-remote-segment");
+	expect(reviewTone({ ...review, state: "closed" })).toBe("neutral");
+	expect(reviewChipLabel({ ...review, state: "closed" })).toBe("Closed #648");
+	expect(reviewChipLabel({ kind: "merge-request", number: 7, state: "merged" })).toBe("Merged !7");
+	expect(reviewChipLabel({ kind: "merge-request", number: 7 })).toBe("MR !7");
+	expect(remoteCounts(merged)).toBeNull();
+});
+
+test("host-kept review fields stay hidden until the host advertises snapshot support", () => {
+	const workspace: Workspace = {
+		...worktree,
+		review: { kind: "pull-request", number: 618, state: "merged", changedAt: 1 },
+	};
+	const html = render(workspace, null);
+	expect(html).not.toContain("Merged #618");
+	expect(testids(html)).not.toContain("scope-review-segment");
+});
+
+test("settled facts stay hidden until the host advertises support", () => {
+	const DAY = 24 * 60 * 60_000;
+	const settled: Workspace = { ...worktree, lastActiveAt: Date.now() - 10 * DAY };
+	expect(testids(render(settled))).not.toContain("scope-workspace-settled");
+});
+
+test("remote counts distinguish an unknown fallback from a known in-sync review", () => {
 	expect(remoteCounts(null)).toBeNull();
-	expect(remoteCounts({ kind: "pull-request", number: 1 })).toBeNull();
+	expect(remoteCounts({ kind: "pull-request", number: 1 }, false)).toBe("unknown");
+	expect(remoteCounts({ kind: "pull-request", number: 1 }, true)).toBeNull();
 	expect(
 		remoteCounts({ kind: "pull-request", number: 1, unpushedCommits: 0, behindCommits: 0 }),
 	).toBeNull();

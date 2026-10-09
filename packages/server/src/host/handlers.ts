@@ -1,4 +1,5 @@
 import type {
+	OpenBranchReview,
 	ReviewComment,
 	ReviewFixDetails,
 	ReviewSendResult,
@@ -10,7 +11,7 @@ import type {
 	WsParams,
 	WsResult,
 } from "@thinkrail/contracts";
-import { isControlMessage } from "@thinkrail/contracts";
+import { isControlMessage, WORKSPACE_SETTLE_PROTOCOL_VERSION } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
 import {
 	abortSession,
@@ -74,7 +75,7 @@ import {
 	startProxyJbcentral,
 	updateJbcentral,
 } from "../auth";
-import { findOpenBranchReview } from "../branch-review";
+import { findBranchReviewOutcome } from "../branch-review";
 import { forgetWorkspaceChanges, revertChange, undoChange } from "../changes";
 import { selectDirectory } from "../dialog";
 import { listAvailableEditors, openEditor, revealInFileManager } from "../editors";
@@ -164,10 +165,15 @@ import {
 	listWorkspaces,
 	openExistingWorktree,
 	reclaimWorktree,
+	recordWorkspaceActivity,
+	refreshUserOwnedWorkspace,
 	renameWorkspace,
+	settleWorkspace,
 	setWorkspaceDiffBase,
+	setWorkspaceReview,
 	setWorkspaceSkillOverride,
 	setWorkspaceSubagentsOverride,
+	unsettleWorkspace,
 	workspaceDiffStats,
 } from "../workspaces";
 import { ackSend } from "./ackSend";
@@ -194,6 +200,7 @@ import {
 import { startPlanReview } from "./requestReview";
 import { withChangeLock, withReviewLock } from "./reviewLock";
 import { runObservation } from "./runAnalytics";
+import { scheduleLifecyclePass } from "./settledLifecycle";
 import { taskObservation } from "./taskAnalytics";
 import {
 	claimItemFix,
@@ -208,6 +215,8 @@ const log = logger("host");
 
 export interface RequestContext {
 	clientKey: string;
+	/** The socket's advertised protocol; absent for in-process callers, who speak the current one. */
+	protocolVersion?: number;
 	runHostUpdate?: () => void;
 }
 
@@ -433,18 +442,24 @@ const handlers: WsHandlers = {
 		return renameWorkspace(p.id, p.name);
 	},
 	"workspace.list": async (p) => {
-		return (
+		const rows = (
 			await listWorkspaces(p.projectId, { includeDiffStats: p.includeDiffStats ?? true })
 		).map((workspace) => ({ ...workspace, ...provisionInitialTerminal(workspace) }));
+		void scheduleLifecyclePass(p.projectId).catch(() =>
+			log.warn(`settled lifecycle pass failed for project ${p.projectId}`),
+		);
+		return rows;
 	},
-	"workspace.openReview": async (p) => {
+	"workspace.openReview": async (p, ctx) => {
 		const ws = getWorkspace(p.workspaceId);
 		const fresh = shouldRefreshOpenReview(p.allowCached);
-		const [review, divergence] = await Promise.all([
-			findOpenBranchReview(ws.worktreePath, ws.branch, { fresh }),
+		const [outcome, divergence] = await Promise.all([
+			findBranchReviewOutcome(ws.worktreePath, ws.branch, { fresh }),
 			// Only pay the network fetch on a fresh lookup (focus / explicit refresh), not a cached activation.
 			countPushDivergence(ws.worktreePath, ws.branch, { fetch: fresh }),
 		]);
+		if (outcome.reliable) setWorkspaceReview(ws.id, outcome.value, ws.branch);
+		const review = openReviewForClient(outcome.value, ctx.protocolVersion);
 		if (!review) return review;
 		return {
 			...review,
@@ -452,6 +467,8 @@ const handlers: WsHandlers = {
 			...(divergence && divergence.behind > 0 ? { behindCommits: divergence.behind } : {}),
 		};
 	},
+	"workspace.settle": (params) => settleWorkspace(params.id),
+	"workspace.unsettle": (params) => unsettleWorkspace(params.id),
 	"workspace.remove": (params) => {
 		const id = params.id;
 		const ws = forgetWorkspace(id);
@@ -484,7 +501,23 @@ const handlers: WsHandlers = {
 	"github.authStatus": () => githubAuthStatus(),
 	"github.refresh": () => githubRefresh(),
 	"pr.preview": (params) => previewPr(params),
-	"pr.open": (params) => observePrAction(() => openPr(params), params.source ?? "other"),
+	"pr.open": async (p) => {
+		refreshUserOwnedWorkspace(p.workspaceId);
+		recordWorkspaceActivity(p.workspaceId);
+		const { branch, ...result } = await observePrAction(() => openPr(p), p.source ?? "other");
+		if (result.review) {
+			setWorkspaceReview(
+				p.workspaceId,
+				{
+					...result.review,
+					state: "open",
+					...(result.url ? { url: result.url } : {}),
+				},
+				branch,
+			);
+		}
+		return result;
+	},
 	"dialog.selectDirectory": () =>
 		observeSetupAction("directory_pick", selectDirectory, directoryPickOutcome),
 	"fs.readDir": (p) => {
@@ -655,7 +688,8 @@ const handlers: WsHandlers = {
 		tabs: listTerminals(params.workspaceId),
 	}),
 	"terminal.write": (p, ctx) => {
-		writeTerminal(p.id, p.data, ctx.clientKey);
+		const workspaceId = writeTerminal(p.id, p.data, ctx.clientKey);
+		if (workspaceId) recordWorkspaceActivity(workspaceId);
 		return { ok: true } as const;
 	},
 	"terminal.resize": (p, ctx) => {
@@ -1129,6 +1163,19 @@ export function requestMethodDiagnostic(method: string): string {
 
 export function shouldRefreshOpenReview(allowCached: boolean | undefined): boolean {
 	return allowCached !== true;
+}
+
+export function openReviewForClient(
+	review: OpenBranchReview | null,
+	protocolVersion: number | undefined,
+): OpenBranchReview | null {
+	if (
+		!review ||
+		protocolVersion === undefined ||
+		protocolVersion >= WORKSPACE_SETTLE_PROTOCOL_VERSION
+	)
+		return review;
+	return review.state === undefined || review.state === "open" ? review : null;
 }
 
 export async function handleRequest(

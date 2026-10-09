@@ -11,17 +11,40 @@ tags: [github, gitlab, pull-request]
 
 ## Responsibility
 
-Best-effort lookup of the open code review associated with a workspace branch: GitHub.com PR via the local `gh` CLI or GitLab.com MR via `glab`.
+Best-effort lookup of the code review associated with a workspace branch — open, merged, or closed —
+GitHub.com PR via the local `gh` CLI or GitLab.com MR via `glab`. The lookup asks for **an open review
+first** (`gh pr list --state open --limit 1`, `glab mr list --per-page 1`; one call, the same as before
+settled states existed) and **only when there is none pages the newest merged/closed rows** (`--state
+all` / `--all`, five rows, the most recently merged or closed one wins). Two bounded calls rather than
+one combined page because a combined page is ordered by creation: a branch with an older still-open
+review and several newer settled ones would present only the settled ones, and a host trusting that
+answer would shelve a workspace whose PR is still open. The answer carries `state` and `changedAt`
+(merge or close time) on the `OpenBranchReview`: one lookup serves the topbar chip (open = success,
+merged = info, closed = neutral) and the Settled shelf's "PR merged/closed" rule, instead of two polls
+disagreeing. A merged/closed row is reliable only with its matching merge/close timestamp; without that
+ordering fact the host cannot prove whether later work should stay live, so it rejects the answer rather
+than persisting incomplete shelf authority. A pre-v78
+consumer that only understood open reviews reads a merged/closed row as a live PR, which is why the
+contracts spec pins `state` to `WORKSPACE_SETTLE_PROTOCOL_VERSION` and the host answers such a client's
+`workspace.openReview` with `null` for a merged or closed review.
 
 ## Boundary
 
 - **Owns:** remote-host detection and bounded, asynchronous CLI lookup returning an `OpenBranchReview` or `null`, plus the short-lived memory of successful lookup answers.
+- **Remote-host detection is asynchronous too.** Its `git config` / `git remote` reads run through
+  `gitAsync` under `LOOKUP_TIMEOUT_MS`, never a synchronous spawn: the host's settled-lifecycle pass runs
+  this lookup for every candidate row every five minutes, and the synchronous reads blocked the whole host
+  (every chat, agent, and terminal) for ~45 ms per row.
 - **The lookup asks the provider for the review's `url` alongside its number** (`gh … --json number,url`;
   GitLab's row carries `web_url`) and puts it on the `OpenBranchReview`. It is not decoration: the client's
   `PR #N` chip is a link only when a url is known, and before this the url existed ONLY in the session that
   had just run `pr.open` — every reload, second window, and reconnect rendered the number as dead text. A
   row whose url is absent or not `https:` yields a review with no url rather than a bad link.
-- **Public surface:** `findOpenBranchReview(cwd, branch, { fresh? })`, `forgetOpenBranchReview(cwd)`; plus the read primitives the `pr` action module reuses — `providerFromRemoteUrl`, `reviewNumber`, and `runProviderCommand` (the bounded prompt-disabled CLI runner).
+- **Public surface:** `findBranchReviewOutcome(cwd, branch, { fresh? })` → `{ value, reliable }` — `reliable`
+  is the cacheable bit surfaced, so a host that *persists* the answer can tell "the provider says there is
+  no review" from "the provider did not answer" and keep its last-known snapshot through a `gh` outage;
+  `forgetOpenBranchReview(cwd)`; plus the read primitives the `pr` action module reuses —
+  `providerFromRemoteUrl`, `reviewNumber`, and `runProviderCommand` (the bounded prompt-disabled CLI runner).
 - **Successful answers are cached per `(worktree, branch)` for 60 seconds from settlement and lookups are
   single-flighted.** A syntactically valid empty provider response is a successful `null` and is cached —
   "no PR" is the common case and the expensive one to re-derive. A provider-CLI failure, failed mandatory

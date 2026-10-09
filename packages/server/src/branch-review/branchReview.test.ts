@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
 	detectReviewProvider,
+	findBranchReviewOutcomeWithRunner,
 	findOpenBranchReviewWithRunner,
 	forgetOpenBranchReview,
 	OPEN_BRANCH_REVIEW_CACHE_TTL_MS,
@@ -66,6 +67,12 @@ function repo(remote: string): string {
 	return cwd;
 }
 
+/** Remote inspection is asynchronous, so a provider call starts some ticks after the lookup does. */
+async function until(condition: () => boolean): Promise<void> {
+	for (let attempt = 0; attempt < 1_000 && !condition(); attempt++) await Bun.sleep(5);
+	if (!condition()) throw new Error("the provider was never asked");
+}
+
 test("recognizes hosted GitHub and GitLab remote URL forms only", () => {
 	expect(providerFromRemoteUrl("https://github.com/acme/app.git")).toBe("github");
 	expect(providerFromRemoteUrl("git@github.com:acme/app.git")).toBe("github");
@@ -74,57 +81,179 @@ test("recognizes hosted GitHub and GitLab remote URL forms only", () => {
 	expect(providerFromRemoteUrl("/tmp/app.git")).toBeNull();
 });
 
-test("prefers the branch push remote", () => {
+test("prefers the branch push remote", async () => {
 	const cwd = repo("https://github.com/acme/app.git");
 	runGit(cwd, "remote", "add", "mirror", "https://gitlab.com/acme/app.git");
 	runGit(cwd, "config", "branch.feature.pushRemote", "mirror");
-	expect(detectReviewProvider(cwd, "feature")).toBe("gitlab");
+	expect(await detectReviewProvider(cwd, "feature")).toBe("gitlab");
 });
 
-test("queries an open GitHub PR for the explicit branch", async () => {
+test("remote inspection yields to the event loop before the provider is asked", async () => {
 	const cwd = repo("git@github.com:acme/app.git");
-	let command: string[] = [];
+	let ticked = false;
+	let tickedBeforeProvider = false;
+	setTimeout(() => {
+		ticked = true;
+	}, 0);
+	await findBranchReviewOutcomeWithRunner(
+		cwd,
+		"feature",
+		async () => {
+			tickedBeforeProvider = ticked;
+			return { ok: true, out: "[]" };
+		},
+		{ fresh: true },
+	);
+	expect(tickedBeforeProvider).toBe(true);
+});
+
+test("queries an open GitHub PR for the explicit branch, and only that when one exists", async () => {
+	const cwd = repo("git@github.com:acme/app.git");
+	const commands: string[][] = [];
 	const review = await findOpenBranchReviewWithRunner(cwd, "feature", async (_cwd, args) => {
-		command = args;
+		commands.push(args);
 		return { ok: true, out: '[{"number":214}]' };
 	});
 
-	expect(command).toEqual([
-		"gh",
-		"pr",
-		"list",
-		"--head",
-		"feature",
-		"--state",
-		"open",
-		"--json",
-		"number,url",
-		"--limit",
-		"1",
+	expect(commands).toEqual([
+		[
+			"gh",
+			"pr",
+			"list",
+			"--head",
+			"feature",
+			"--state",
+			"open",
+			"--json",
+			"number,url,state,mergedAt,closedAt,createdAt",
+			"--limit",
+			"1",
+		],
 	]);
 	expect(review).toEqual({ kind: "pull-request", number: 214 });
 });
 
-test("queries an open GitLab MR for the explicit branch", async () => {
-	const cwd = repo("https://gitlab.com/acme/app.git");
-	let command: string[] = [];
+test("an older open PR is found even when newer settled ones would fill a combined page", async () => {
+	const cwd = repo("git@github.com:acme/app.git");
 	const review = await findOpenBranchReviewWithRunner(cwd, "feature", async (_cwd, args) => {
-		command = args;
+		if (args.includes("open")) {
+			return {
+				ok: true,
+				out: '[{"number":100,"state":"OPEN","createdAt":"2026-01-01T00:00:00Z"}]',
+			};
+		}
+		throw new Error("a found open review must not trigger the settled page");
+	});
+	expect(review).toEqual({ kind: "pull-request", number: 100, state: "open" });
+});
+
+test("an open row on the settled page still wins over newer merged or closed ones", async () => {
+	const cwd = repo("git@github.com:acme/app.git");
+	const commands: string[][] = [];
+	const review = await findOpenBranchReviewWithRunner(cwd, "feature", async (_cwd, args) => {
+		commands.push(args);
+		if (args.includes("open")) return { ok: true, out: "[]" };
+		return {
+			ok: true,
+			out: JSON.stringify([
+				{
+					number: 300,
+					state: "CLOSED",
+					closedAt: "2026-10-05T10:00:00Z",
+					createdAt: "2026-10-04T00:00:00Z",
+				},
+				{ number: 299, state: "OPEN", createdAt: "2026-10-01T00:00:00Z" },
+			]),
+		};
+	});
+	expect(commands.map((args) => args[args.indexOf("--state") + 1])).toEqual(["open", "all"]);
+	expect(commands[1]?.slice(-2)).toEqual(["--limit", "5"]);
+	expect(review).toEqual({ kind: "pull-request", number: 299, state: "open" });
+});
+
+test("without an open review the most recently merged or closed one is reported with its time", async () => {
+	const cwd = repo("git@github.com:acme/app.git");
+	const review = await findOpenBranchReviewWithRunner(cwd, "feature", async (_cwd, args) => ({
+		ok: true,
+		out: args.includes("open")
+			? "[]"
+			: JSON.stringify([
+					{
+						number: 301,
+						state: "CLOSED",
+						closedAt: "2026-10-02T10:00:00Z",
+						createdAt: "2026-10-02T00:00:00Z",
+					},
+					{
+						number: 298,
+						state: "MERGED",
+						mergedAt: "2026-10-03T12:00:00Z",
+						createdAt: "2026-09-30T00:00:00Z",
+					},
+				]),
+	}));
+	expect(review).toEqual({
+		kind: "pull-request",
+		number: 298,
+		state: "merged",
+		changedAt: Date.parse("2026-10-03T12:00:00Z"),
+	});
+});
+
+test("queries an open GitLab MR for the explicit branch, paging settled ones only without it", async () => {
+	const cwd = repo("https://gitlab.com/acme/app.git");
+	const commands: string[][] = [];
+	const review = await findOpenBranchReviewWithRunner(cwd, "feature", async (_cwd, args) => {
+		commands.push(args);
 		return { ok: true, out: '[{"iid":73}]' };
 	});
+	expect(commands).toEqual([
+		["glab", "mr", "list", "--source-branch", "feature", "--output", "json", "--per-page", "1"],
+	]);
+	expect(review).toEqual({ kind: "merge-request", number: 73 });
 
-	expect(command).toEqual([
+	const other = repo("https://gitlab.com/acme/other.git");
+	commands.length = 0;
+	await findOpenBranchReviewWithRunner(other, "feature", async (_cwd, args) => {
+		commands.push(args);
+		return { ok: true, out: "[]" };
+	});
+	expect(commands[1]).toEqual([
 		"glab",
 		"mr",
 		"list",
 		"--source-branch",
 		"feature",
+		"--all",
 		"--output",
 		"json",
 		"--per-page",
-		"1",
+		"5",
 	]);
-	expect(review).toEqual({ kind: "merge-request", number: 73 });
+});
+
+test("GitLab's opened/merged/closed vocabulary and snake_case times normalize to the wire state", async () => {
+	const cwd = repo("https://gitlab.com/acme/app.git");
+	const review = await findOpenBranchReviewWithRunner(cwd, "feature", async (_cwd, args) => ({
+		ok: true,
+		out: args.includes("--all")
+			? JSON.stringify([
+					{
+						iid: 74,
+						state: "merged",
+						merged_at: "2026-10-01T08:00:00Z",
+						web_url: "https://gitlab.com/acme/app/-/merge_requests/74",
+					},
+				])
+			: "[]",
+	}));
+	expect(review).toEqual({
+		kind: "merge-request",
+		number: 74,
+		url: "https://gitlab.com/acme/app/-/merge_requests/74",
+		state: "merged",
+		changedAt: Date.parse("2026-10-01T08:00:00Z"),
+	});
 });
 
 test("failed and malformed lookups degrade to null without being cached", async () => {
@@ -180,14 +309,16 @@ test("a failed repository inspection is retried after the worktree recovers", as
 test("a valid empty answer is cached while a fresh read bypasses it", async () => {
 	const cwd = repo("git@github.com:acme/app.git");
 	let calls = 0;
+	let opened = false;
 	const run = async () => {
 		calls += 1;
-		return { ok: true, out: calls === 1 ? "[]" : '[{"number":7}]' };
+		return { ok: true, out: opened ? '[{"number":7}]' : "[]" };
 	};
 
 	expect(await findOpenBranchReviewWithRunner(cwd, "feature", run)).toBeNull();
 	expect(await findOpenBranchReviewWithRunner(cwd, "feature", run)).toBeNull();
-	expect(calls).toBe(1);
+	expect(calls).toBe(2);
+	opened = true;
 	expect(await findOpenBranchReviewWithRunner(cwd, "feature", run, { fresh: true })).toEqual({
 		kind: "pull-request",
 		number: 7,
@@ -196,7 +327,7 @@ test("a valid empty answer is cached while a fresh read bypasses it", async () =
 		kind: "pull-request",
 		number: 7,
 	});
-	expect(calls).toBe(2);
+	expect(calls).toBe(3);
 });
 
 test("concurrent and repeated lookups share one provider call", async () => {
@@ -213,6 +344,7 @@ test("concurrent and repeated lookups share one provider call", async () => {
 
 	const first = findOpenBranchReviewWithRunner(cwd, "feature", run);
 	const concurrent = findOpenBranchReviewWithRunner(cwd, "feature", run, { fresh: true });
+	await until(() => release !== undefined);
 	expect(calls).toBe(1);
 	release?.();
 	expect(await first).toEqual({ kind: "pull-request", number: 7 });
@@ -264,6 +396,7 @@ test("settled answers expire exactly one TTL after settlement", async () => {
 
 	const pending = findOpenBranchReviewWithRunner(cwd, "feature", run, options);
 	time += OPEN_BRANCH_REVIEW_CACHE_TTL_MS * 2;
+	await until(() => release !== undefined);
 	release?.({ ok: true, out: '[{"number":1}]' });
 	expect((await pending)?.number).toBe(1);
 	time += OPEN_BRANCH_REVIEW_CACHE_TTL_MS - 1;
@@ -283,8 +416,10 @@ test("a superseded lookup cannot overwrite a newer settled answer", async () => 
 	};
 
 	const stale = findOpenBranchReviewWithRunner(cwd, "feature", run);
+	await until(() => releases.length === 1);
 	forgetOpenBranchReview(cwd);
 	const fresh = findOpenBranchReviewWithRunner(cwd, "feature", run);
+	await until(() => releases.length === 2);
 	releases[1]?.({ ok: true, out: '[{"number":2}]' });
 	expect(await fresh).toEqual({ kind: "pull-request", number: 2 });
 	releases[0]?.({ ok: true, out: '[{"number":1}]' });
@@ -302,8 +437,10 @@ test("a superseded lookup joins the newer in-flight generation", async () => {
 	const run = () => new Promise<{ ok: boolean; out: string }>((resolve) => releases.push(resolve));
 
 	const stale = findOpenBranchReviewWithRunner(cwd, "feature", run);
+	await until(() => releases.length === 1);
 	forgetOpenBranchReview(cwd);
 	const fresh = findOpenBranchReviewWithRunner(cwd, "feature", run);
+	await until(() => releases.length === 2);
 	let staleSettled = false;
 	void stale.then(() => {
 		staleSettled = true;
@@ -351,4 +488,46 @@ test("a GitLab row's web_url is the same url, and a row with none stays a plain 
 		kind: "pull-request",
 		number: 7,
 	});
+});
+
+test("a settled review without its terminal timestamp is unreliable, never shelf authority", async () => {
+	const cwd = repo("git@github.com:acme/app.git");
+	const outcome = await findBranchReviewOutcomeWithRunner(
+		cwd,
+		"missing-time",
+		async (_cwd, args) => ({
+			ok: true,
+			out: args.includes("open")
+				? "[]"
+				: JSON.stringify([{ number: 8, state: "MERGED", mergedAt: null }]),
+		}),
+	);
+	expect(outcome).toEqual({ value: null, reliable: false });
+});
+
+test("the outcome form tells a provider's 'no review' apart from a failed lookup", async () => {
+	const cwd = repo("git@github.com:acme/app.git");
+	const empty = await findBranchReviewOutcomeWithRunner(cwd, "feature", async () => ({
+		ok: true,
+		out: "[]",
+	}));
+	expect(empty).toEqual({ value: null, reliable: true });
+	const failed = await findBranchReviewOutcomeWithRunner(cwd, "other", async () => ({
+		ok: false,
+		out: "",
+	}));
+	expect(failed).toEqual({ value: null, reliable: false });
+
+	let calls = 0;
+	const settledPageDown = async (_cwd: string, args: string[]) => {
+		calls += 1;
+		return args.includes("open") ? { ok: true, out: "[]" } : { ok: false, out: "" };
+	};
+	expect(await findBranchReviewOutcomeWithRunner(cwd, "third", settledPageDown)).toEqual({
+		value: null,
+		reliable: false,
+	});
+	expect(calls).toBe(2);
+	await findBranchReviewOutcomeWithRunner(cwd, "third", settledPageDown);
+	expect(calls).toBe(4);
 });

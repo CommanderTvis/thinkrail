@@ -67,7 +67,35 @@ treatment.
   `workspaceActions.ts` so the shell's topbar workspace menu ([[submodule-web-shell-location-bar]]) offers
   the same actions — including the capability-aware pending rename — without a second implementation. The
   controller dispatches to the workspace captured when the edit started and resets when the hook's
-  workspace identity changes, so a consumer that is not keyed per workspace cannot misdirect a pending name.
+  workspace identity changes, so a consumer that is not keyed per workspace cannot misdirect a pending
+  name. **Settle** / **Keep active** (`workspace.settle` / `workspace.unsettle`, gated on
+  `WORKSPACE_SETTLE_PROTOCOL_VERSION`) ride the same file.
+  **The Settled shelf.** It renders only when the host advertises
+  `WORKSPACE_SETTLE_PROTOCOL_VERSION`; an older host retains the raw flat list and order, with no sort,
+  shelf, or settle controls even if rollback persistence carries stale newer fields. On a
+  capable host, an expanded project renders a **sort row** (`↕` + a native select: Recent activity
+  · Created · Name, the store's `workspaceSort`) above its rows, then the **live** rows from
+  `selectWorkspacePartition`, then a **`Settled · N`** disclosure header (collapsed by default, store-held
+  per browser) whose body lists the settled rows **slim** — single line, name only, a small **reason chip**
+  (`merged` / `closed` / `idle 2w` / `by you`, long form in its tooltip), a hover **↩ Keep active** beside the kebab — ten at
+  a time with a *Show 25 more* row. Live rows gain a hover **✓ Settle** beside the kebab (also in the menu
+  and on right-click); it is disabled while the row's agent works or a result is unread, absent on Default.
+  The partition re-evaluates on the shared 30-second `useNow` clock so idle rows cross the window without
+  a click and the rail stays in lockstep with the topbar, and
+  selecting a settled row expands the shelf and pages far enough to show it. **The first automatic move
+  is announced once per browser** (`settledShelfNotice`, a host-qualified localStorage flag like the
+  sibling persistence modules): when `selectAutoSettledCounts` first reports rows the shelf took on its
+  own — a merged/closed PR or the idle window, never a row parked by hand — and the count has held still
+  for two seconds (the upgrade backfill lands as a burst of pushes, and the notice should count the
+  burst, not its first row), an info toast reads *Moved N quiet workspaces to Settled*, names the rules,
+  and offers **Show**, which expands those projects and their shelves. Without it, the first launch after
+  an upgrade empties most of a long rail at once with no explanation. Nothing about settling touches
+  disk: the shelf is a list state, and each row's own *Remove* stays the only teardown — there is no bulk
+  removal yet, because a safe one needs a non-blocking, crash-safe host teardown first (#688). Why this
+  shape (recorded once): an explicit-archive-only rail left
+  the housekeeping to the user (48 rows on the author's machine), a pure recency fold had no way to say
+  "done", and a hidden Archived tier made rows disappear without a visible home — the shelf keeps every
+  automatic move one disclosure away, with the reason spelled out.
   Rename replaces the row's name span in place with a chrome-less single-line input carrying the same
   typography, colour, and geometry; it is prefilled, focused, and selected. Enter or blur commits, Escape
   cancels, and blank or text unchanged from the edit-start label exits without a request, so an incoming
@@ -124,7 +152,8 @@ treatment.
   (`store.expandedProjectIds`), not component state: it survives the Project-Home/workspace remount
   boundary and, via the `projectExpansion` persistence module (localStorage under a host-qualified key,
   hydrated at boot from `main.tsx`, best-effort writes, untrusted reads), a page reload — the rail
-  looks the same after reloading. Rows whose persisted expansion outlives this client's fetched lists
+  looks the same after reloading; the sibling `workspaceSort` module persists the sort row's choice the
+  same way (the shelf's disclosure is deliberately not persisted — collapsed is the right default). Rows whose persisted expansion outlives this client's fetched lists
   (a fresh reload) fetch their missing `workspace.list` lazily; an already-fetched list is refreshed on
   an explicit expand gesture and by transport after a new welcome/reconnect generation, never refetched in
   a loop. The active workspace must
@@ -501,6 +530,16 @@ a project picker, the prompt hero, and the reused
   (the Settings shell includes its row only when content is provided; `panels` neither discovers native nor
   host update capabilities. If a later welcome removes injected content while Updates is selected, Appearance
   is rendered and highlighted rather than leaving no active row);
+  **`WorkspacesSettings`** (the **Workspaces** section, listed only at
+  `protocolVersion >= WORKSPACE_SETTLE_PROTOCOL_VERSION`) — one `SettingsRadioCards` group, **Settle idle
+  workspaces after**: 1 / 3 / 7 (default) / 14 days / Never, written as `settings.update { settleIdleDays }`
+  (`null` for Never) and converging through `settings.changed`; a valid host-configured non-preset value
+  leaves the preset cards unselected rather than falsely displaying the default. The default is a week, not
+  a long weekend: merged/closed PRs already settle at once, so the idle rule only catches dormant work and
+  errs toward keeping a paused workspace live (a Thursday's work on the shelf by Monday reads as loss, not
+  tidying). The copy names the three things
+  that count as activity and the three things that never settle, because the setting is only legible
+  together with those rules;
   **`TerminalSettings`** — a **Replayed output** size picker (`store.terminalReplayKb`, five presets from
   Off to 1 MB, `settings.update { terminalReplayKb }`, applies to terminals opened from now on) and, on
   Windows hosts at `protocolVersion >= WINDOWS_SHELL_SETTINGS_PROTOCOL_VERSION`, a **Windows shell** picker
@@ -832,15 +871,17 @@ own section. The kebab menu (`plan-menu`, a
   on a generic failure (edits survive the toast), and hands off to `PrSetupDialog` on
   `PUSH_AUTH_FAILED` — whose Try again re-submits the LAST edited title/body (kept in a ref), never
   a re-rendered draft. The header button is primary-filled when the plan is
-  *ready* (all done + all reviews settled) and quiet otherwise; once an open PR exists (the same
-  `workspace.openReview` lookup the shell's scope label uses, via `useOpenBranchReview` — the hook
-  lives in `panels` because nothing may import `shell`) the label flips to **Push updates**
+  *ready* (all done + all reviews settled) and quiet otherwise; once an open PR exists (on v78 the
+  host-kept snapshot owns identity/state and a matching `workspace.openReview` answer overlays live details;
+  older hosts use the lookup alone, all through panels-owned `resolveBranchReview` so shell and Plan cannot
+  disagree) the label flips to
+  **Push updates**
   and the button **bypasses the compose dialog entirely** — pressing it (or the next-action `push`
   arm) calls `pr.open` directly with no `title`/`body`, so the host pushes to the SAME branch/PR and
   silently refreshes its body from the plan (`renderPrBody`) while leaving the PR title untouched
   (no `titleEdited`). Re-editing a PR's description each push read as "set up the PR again"; the modal
-  is only the creation affordance. When the lookup reports
-  **`unpushedCommits`** the label appends the count (`Push updates (N)`), the button turns
+  is only the creation affordance. When the lookup reports **`unpushedCommits`** the label appends the
+  count (`Push updates (N)`), the button turns
   primary-filled, and the next-action banner grows a `push` arm ("N new commits aren't in PR #N
   yet" + Push updates) so new work after the PR never sits silently local — a successful push
   re-reads the authoritative state and clears both when the remote-tracking branch caught up. When the

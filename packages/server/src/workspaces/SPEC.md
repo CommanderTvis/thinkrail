@@ -177,6 +177,40 @@ place as `kind: "external"` — outside the data dir, never created or mutated h
   `kind: "default"` — forget would hand the archive teardown's `rm -rf` fallback the project folder,
   rename would `git branch -m` the user's real branch; the record carries `renamed: true` so
   `set_title` stays away as belt-and-suspenders.
+- **Settled lifecycle facts (host-owned, never the partition itself).** The record carries `lastActiveAt`,
+  `settledOverride` / `settledAt`, and the `review` snapshot described in [[module-contracts]]; which rows
+  are live and which sit on the shelf is a *client* derivation over these facts plus session state, so
+  this module never stores a "settled" boolean that could disagree with the rules. Writers:
+  `recordWorkspaceActivity(id, at = now)` — stamps `lastActiveAt`, **clears any `settledOverride`** (an
+  explicit park or pin is a statement about a quiet workspace; real work in it supersedes both), and
+  **coalesces** writes to at most one per minute per workspace so a streaming agent does not rewrite
+  `workspaces.json` per token — coalescing is only ever allowed when the skipped stamp could not change
+  the partition: the clearing of an override is never coalesced away, and neither is a stamp on a row
+  whose merged/closed review currently settles it (its previous stamp is not newer than the review's
+  `changedAt`). Every observation also advances an in-memory high-water mark: if work lands while the
+  stored review is still open and a later refresh first reveals that it had already merged, the review
+  writer flushes that coalesced stamp in the same save, so learning the merge cannot put newer work on the
+  shelf; `backfillWorkspaceActivity(id, at)` — sets the stamp only when the record has none and touches
+  no override (the upgrade path for records that predate the field); `recordWorkspaceHead(id)` — reads the
+  worktree's `HEAD` sha and calls `recordWorkspaceActivity` when it differs from the last sha observed in
+  this host lifetime (a HEAD move is the commit/pull/checkout proxy; the raw git-dir watcher fires on
+  index refreshes too, which is why the sha, not the event, is the signal), with `seedWorkspaceHead(id)`
+  observing HEAD **whenever a worktree watcher starts**: the first observation in a host lifetime seeds,
+  while watcher recreation compares against the retained baseline and counts work performed while the
+  watcher was absent. `settleWorkspace(id)` / `unsettleWorkspace(id)` — set `"settled"` / `"active"` with `settledAt`,
+  **throw on `kind: "default"`** (the project folder is never shelved); `setWorkspaceReview(id, review |
+  null, branch)` — persists the snapshot and emits `updated` only when it actually changed, so the periodic
+  provider refresh is silent while nothing moves, and **only while the record is still on the branch the
+  lookup was made for** — a provider answer is a fact about a branch, and an external worktree can be
+  switched during the seconds a lookup takes; for the same reason every persisted branch transition drops
+  the `review` snapshot — both user-owned folder-truth refresh and the managed workspace's one-time branch
+  rename — since a merged snapshot that outlived its branch would shelve the new branch and, being merged,
+  never be refreshed passively. Every writer emits
+  the full-snapshot `updated`.
+  `createWorkspace` and `openExistingWorktree` stamp `lastActiveAt` at creation so a brand-new row is
+  live by construction. **Migration:** the host backfills records without a stamp from the newest chat's
+  file time, else the worktree's `.git` gitfile mtime (≈ `worktree add` time), else now — so after the
+  upgrade a dormant backlog settles itself while anything with recent chats or an open PR stays live.
 - **Initial-terminal provisioning is a durable host handshake.** Every workspace record first persisted by
   `createWorkspace`, `openExistingWorktree`, or Default ensure carries optional literal
   `initialTerminalPending: true`. `host` idempotently reserves the deterministic process-free terminal tab,
@@ -211,7 +245,8 @@ place as `kind: "external"` — outside the data dir, never created or mutated h
   `workspaceDiffStats`, `workspaceDiffKey`, `getWorkspace`, `renameWorkspace`, `refreshUserOwnedWorkspace`,
   `completeInitialTerminalReservation`, `ensureWorkspaceScratchDir`, `setWorkspacePublisher`,
   `WorkspaceLifecycleEvent`, `setWorkspaceDiffBase`, `setWorkspaceSkillOverride`,
-  `setWorkspaceSubagentsOverride`.
+  `setWorkspaceSubagentsOverride`, `recordWorkspaceActivity`, `backfillWorkspaceActivity`,
+  `recordWorkspaceHead`, `seedWorkspaceHead`, `settleWorkspace`, `unsettleWorkspace`, `setWorkspaceReview`.
 - **Allowed deps:** `projects` (repo lookup), `git` (the runner), `persistence`, `log`; `contracts`;
   `@thinkrail/shared/paths` (the scratch-dir path convention); Node.
 - **Forbidden:** `host`; reaching into another feature's internals (use its barrel).

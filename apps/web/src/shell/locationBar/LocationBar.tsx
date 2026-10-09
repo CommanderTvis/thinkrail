@@ -1,4 +1,6 @@
 import type { OpenBranchReview, Project, Workspace } from "@thinkrail/contracts";
+import { resolveBranchReview } from "../../panels/useOpenBranchReview";
+import { useAppStore } from "../../store";
 import { BranchSegment, ReviewSegment } from "./BranchSegment";
 import { ProjectSegment } from "./ProjectSegment";
 import { WorkspaceSegment } from "./WorkspaceSegment";
@@ -14,6 +16,9 @@ export function LocationBar({
 	review: OpenBranchReview | null;
 	onNewWorkspace: () => void;
 }) {
+	const workspaceSettlingSupported = useAppStore((state) => state.workspaceSettlingSupported);
+	const resolvedReview = resolveBranchReview(review, workspace?.review, workspaceSettlingSupported);
+	const shownReview = resolvedReview.review;
 	return (
 		<div
 			data-testid="scope-context"
@@ -22,8 +27,14 @@ export function LocationBar({
 		>
 			<ProjectSegment project={project} atHome={workspace === null} />
 			<WorkspaceSegment project={project} workspace={workspace} onNewWorkspace={onNewWorkspace} />
-			{workspace ? <BranchSegment workspace={workspace} review={review} /> : null}
-			{workspace && review ? <ReviewSegment review={review} /> : null}
+			{workspace ? (
+				<BranchSegment
+					workspace={workspace}
+					review={shownReview}
+					reviewDetailsKnown={resolvedReview.detailsKnown}
+				/>
+			) : null}
+			{workspace && shownReview ? <ReviewSegment review={shownReview} /> : null}
 		</div>
 	);
 }

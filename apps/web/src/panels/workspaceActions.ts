@@ -12,7 +12,7 @@ import {
 	useRef,
 	useState,
 } from "react";
-import { toast, useAppStore } from "../store";
+import { supportsWorkspaceSettling, toast, useAppStore } from "../store";
 import { errorText, getTransport, prewarmWorkspaceSkillLoad } from "../transport";
 
 const PREWARM_WORKSPACE_LIMIT = 8;
@@ -36,6 +36,22 @@ export function canRenameWorkspace(protocolVersion: number | null, workspace: Wo
 		workspace.kind !== "default" &&
 		workspace.kind !== "external"
 	);
+}
+
+export function canSettleWorkspace(protocolVersion: number | null, workspace: Workspace): boolean {
+	return supportsWorkspaceSettling(protocolVersion) && workspace.kind !== "default";
+}
+
+export function settleWorkspace(workspaceId: string): void {
+	void getTransport()
+		.request("workspace.settle", { id: workspaceId })
+		.catch((err) => toast.error(errorText(err, "Couldn't settle the workspace")));
+}
+
+export function unsettleWorkspace(workspaceId: string): void {
+	void getTransport()
+		.request("workspace.unsettle", { id: workspaceId })
+		.catch((err) => toast.error(errorText(err, "Couldn't keep the workspace active")));
 }
 
 export function workspaceRenameValue(currentName: string, input: string): string | null {
