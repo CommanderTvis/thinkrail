@@ -110,8 +110,9 @@ AppIndicator, and librsvg dependencies. CEF and additional installer formats are
 The release controller supplies an explicit public `source_sha`. The public recipe stamps only
 `packages/shared/src/version.ts` with `{ version, channel, commit, posthogProjectKey }`; CLI, desktop
 configuration, analytics, and `server.welcome.appVersion` consume that same identity. The action's
-required `posthog-project-key` input is the only source of the app's analytics key — the repository
-carries none — and stamping fails closed when it is empty or the channel is not `nightly|stable`. It
+optional `posthog-project-key` input is the only source of the app's analytics key — the repository
+carries none. Omitting it stamps an empty key and disables both analytics tiers, including installation
+tracking and attribution. Stamping rejects malformed nonempty keys and channels other than `nightly|stable`. It
 is a public ingestion key, not a service credential, so hosted native jobs may receive it; the private
 workflow passes it from its secret store and the stamp step never echoes it. The private workflow's own commit
 is never product identity.

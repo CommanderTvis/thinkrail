@@ -187,8 +187,13 @@ test("release stamping bakes the CI-supplied analytics key without echoing it", 
 	expect(`${result.stdout}${result.stderr}`).not.toContain("phc_release");
 });
 
+test.each(["stable", "nightly"])("unkeyed %s releases disable analytics", (channel) => {
+	const { result, stamped } = stampIdentity(channel, "");
+	expect(result.exitCode).toBe(0);
+	expect(stamped).toContain('export const posthogProjectKey = "";');
+});
+
 test.each([
-	{ channel: "stable", key: "" },
 	{ channel: "nightly", key: "not-a-key" },
 	{ channel: "dev", key: "phc_release" },
 ])("release stamping fails closed for %j", ({ channel, key }) => {
