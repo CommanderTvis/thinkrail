@@ -24,7 +24,9 @@ The shell-owned, headless workbench engine: the normalized frontend-local frame 
 One `WorkbenchFrame` belongs to a frontend surface, not a workspace. It carries stable group/split ids, center topology, left/right/bottom groups and geometry, auxiliary visibility/folds, bottom alignment, singleton-tool placement/order, and restore targets. It carries no workspace resource identity, preview, selected tab, navigation clock, pointer draft, or viewport compression.
 
 A `WorkspaceViewState` is keyed by workspace and references frame group ids. It carries
-file/diff/chat/document/terminal membership and order plus center preview identity. The separate
+file/diff/changes/chat/document/terminal membership and order plus center preview identity (a `changes`
+tab is the per-scope review surface defined in the store spec; its layout record is kind + id + name +
+scope, nothing cached, and it is preview-eligible like file and diff tabs). The separate
 `LayoutAttention` overlay carries selection per group, last focus for center/each auxiliary region, and
 per-group navigation clocks. Attention is keyed per workspace, but a selected singleton tool is shared
 across the window's views (a resource selection is not); the pure adoption rule lives here and its
@@ -189,7 +191,7 @@ Pointer is never the sole arrangement path. Keyboard controls and shadcn menus c
 Center resource strips and auxiliary terminal-session strips have bounded readable tab widths and no fixed previous/next controls: wheel, trackpad, touch,
 roving-keyboard navigation, active reveal, and the searchable keyboard overflow list scroll the same list.
 Native scrollbars stay hidden; pointer-transparent edge fades appear only where clipped and update without
-changing the fixed 32 px strip. Full-height strip actions share that width. A control renders only when it can
+changing the fixed 28 px strip. Full-height strip actions share that width. A control renders only when it can
 act: overflow search only while clipped; every expanded auxiliary pane has a Hide action because its rail
 remains available for restoration. Singleton tool icons have no inline close glyph; explicit Remove tool
 from group stays in their menu and on Delete, separate from pane visibility. Terminals and center
@@ -232,7 +234,7 @@ The workbench is a mounted-body host, so the renderer protects injected feature 
 The singular `attention` object is not threaded into leaves. Only the region wrappers that enumerate groups (center node/split, the side and bottom stacks) receive it and project each group's `selectedId` as a primitive; leaf group views receive that primitive, never the whole overlay. Leaf group views, the tab strip, the tab, and the stacks are memoized. Two isolation guarantees follow and are the renderer's contract:
 
 - A resize or drag gesture mutates only root-local projection state; because document, attention, and the shared callbacks are all unchanged, the memoized group subtree does not re-render and no feature body re-renders during the gesture. The pointer-up commit that actually changes the document is the only re-render.
-- A selection or focus change in one group re-renders that group's chrome only; sibling groups keep their `selectedId` and skip. Every mounted tab body sits behind the memoized `GroupTabBody` boundary keyed by selected-tab identity and depending only on the stable body renderers, so a body re-renders only when its own selected tab changes — never because a sibling, a resize, or a drag re-rendered.
+- A selection or focus change in one group re-renders that group's chrome only; sibling groups keep their `selectedId` and skip. Every mounted tab body sits behind the memoized `GroupTabBody` boundary keyed by selected-tab identity and depending only on the stable body renderers, so a body re-renders only when its own selected tab changes — never because a sibling, a resize, or a drag re-rendered. The shell host keeps that true for editor-tab cache writes too: a file/diff/changes body resolves its own cache tab inside the body (`EditorResourceBody`), never through the renderer's closure, so a review tab's keystroke-rate writes re-render that body alone (`e2e/perf/editorTabIsolation.perf.ts`).
 
 The memoization assumes the injected render callbacks are referentially stable: the shell host passes `renderTabBody`/`renderToolBody`/`renderTabAdornment`/`renderEmptyCenter`/`renderCenterActions` as memoized identities, so a parent re-render (such as an attention change) does not break a sibling group's chrome memo by prop identity alone.
 

@@ -124,9 +124,8 @@ compilation of the chat/shell hot paths does not imply coverage of every file/di
   image diff's `ImageContent`, `ImageView`, `PdfView`, `usePdfDocument`.
 - try/finally: `PlanPane` (also a throw inside try), `PlanComposer`, `ReviewPanel`, `SendButtonBase`,
   `NewWorkspaceDialog`, `SkillsDialog`, `TemplateEditorDialog`, `JetBrainsAiCard`, `ProvidersSettings`,
-  `ModelsSettings`, `GithubSettings`, `LayoutSettings`, `ProjectSkillsNotice`, `StarterTemplatesOffer`.
+  `ModelsSettings`, `GithubSettings`, `LayoutSettings`, `ProjectTrustNotice`, `StarterTemplatesOffer`.
 - try without catch: `usePromptImages`, `LineWidthControl`.
-- Throw inside try: `DiffPane`.
 - Manual memo dependencies cannot be preserved: `CsvDiff`, `JsonDiff`, `NotebookDiffSurface`, `PdfDiff`.
 - Other: `useLiveTabContent` (`??=`), `useAnalyticsConsent` (a callback that calls itself), `TemplateRow`
   (a conditional inside try/catch), `HistoryOverlay`'s `Highlight` (mutates a closure counter).
@@ -148,7 +147,7 @@ change. `dist/` therefore has no profiler timers (`actualStartTime` is absent fr
 - `shell/layout` → `contracts` (`LayoutPreset` + `GitDiffScope` types only), `lib` (attention/id primitives), `ui` (including `@thinkrail/ui/resizable`), and React / `@dnd-kit/core`; `shell/layoutState` → `shell/layout`, `store`, `transport` (browser endpoint identity + error normalization), `clientPreferences` (native-stable persistence), `contracts` (`LayoutPreset` type only), `lib`, and React. The parent injects store state and feature renderers, so the pure layout child has no feature-module runtime edge
 - `updates` → `contracts` (native bridge + host notice types), `store` (host notice), `ui`, React, and Remix Icon; native snapshots remain shell-local
 - `notifications` → `store` (session-state reads, prompt + `activateWorkspaceFromRoute` / `openSessionSwitcher` actions), `ui` (the permission preface dialog), `contracts` (type-only — `SessionState`/`SessionCompletion`/`NativeNotificationBridge`), React, and Remix Icon; the master-toggle Settings panel lives in `panels`, and `shell` mounts the observer/preface. It emits through a capability-selected channel: the page Notifications API, or the native desktop channel when the optional `__THINKRAIL_NATIVE_NOTIFICATIONS__` bridge is present (capability detection only, no `desktop` branch). No Service Worker: a closed app has no live client to notify
-- `panels` → `resources`, `store`, `transport`, `ui`, `components` (`ErrorBoundary` for feature bodies + quiet scroll surfaces for panel-owned lists/xterm), `lib`, `contracts`, `constants` (`WelcomePanel`'s wordmark), `prompt` (`NewWorkspaceDialog` consumes the shared slash/template behavior), `chat` (`NewWorkspaceDialog` eagerly reuses `chat/ModelEffortPicker`+`useModelCatalog`+`useModelPreferences`, `ReviewSettings`/`ModelsSettings` the older `ModelSelector`+`ThinkingSelector`, and `ProvidersSettings` the `chat/modelPicker` connection-kind vocabulary — all shiki-free, so the eager import stays split-safe; `TemplatesSettings` reuses `chat/TemplateEditorDialog` for its New/Edit flows — see `panels/SPEC.md`'s `TemplatesSettings` paragraph), `auth` (`ProvidersSettings` mounts `auth/LoginDialog`), `notifications` (`NotificationsSettings` requests browser permission on enable via the barrel), `themes` (`AppearanceSettings` consumes the live catalog; code surfaces consume generic theme variables/syntax mapping), `@shikijs/monaco` (the desktop file renderer's TextMate adapter), `@pierre/diffs` (all source diffs + phone code files), `diff` (engine-neutral mutation blocks, CSV row alignment, and notebook cell similarity), `jsondiffpatch` (structural JSON deltas with move detection), `react-virtuoso` (CSV rows), and `pdfjs-dist` (PDF canvas rendering)
+- `panels` → `resources`, `store`, `transport`, `ui`, `components` (`ErrorBoundary` for feature bodies + quiet scroll surfaces for panel-owned lists/xterm), `lib`, `contracts`, `constants` (`WelcomePanel`'s wordmark), `prompt` (`NewWorkspaceDialog` consumes the shared slash/template behavior), `chat` (`NewWorkspaceDialog` eagerly reuses `chat/ModelEffortPicker`+`useModelCatalog`+`useModelPreferences`, `ReviewSettings`/`ModelsSettings` the older `ModelSelector`+`ThinkingSelector`, and `ProvidersSettings` the `chat/modelPicker` connection-kind vocabulary — all shiki-free, so the eager import stays split-safe; `TemplatesSettings` reuses `chat/TemplateEditorDialog` for its New/Edit flows — see `panels/SPEC.md`'s `TemplatesSettings` paragraph; `ProjectTrustNotice` and `NewWorkspaceDialog` share `chat/projectTrust` + `chat/useProjectTrustSummary` with the Skills dialog's trust banner), `auth` (`ProvidersSettings` mounts `auth/LoginDialog`), `notifications` (`NotificationsSettings` requests browser permission on enable via the barrel), `themes` (`AppearanceSettings` consumes the live catalog; code surfaces consume generic theme variables/syntax mapping), `@shikijs/monaco` (the desktop file renderer's TextMate adapter), `@pierre/diffs` (all source diffs + phone code files), `diff` (engine-neutral mutation blocks, CSV row alignment, and notebook cell similarity), `jsondiffpatch` (structural JSON deltas with move detection), `react-virtuoso` (CSV rows and the lazily loaded Changes review list), and `pdfjs-dist` (PDF canvas rendering)
 - `chat` → `contracts` (pi message types, **type-only**), `ui`, `extension-api/web`, `ext-visualize/web`, `extensions` (registration only), `components` (`useNow`, and the `RunningIcon` badge in the stream footer), `prompt` (shared slash/template behavior), `lib`, `clientPreferences`; `store` + `transport`  (**app-integration files only** — the renderers stay store-free; see `chat/SPEC.md` for the current set)
 - `prompt` → `contracts` (slash/template types only), `@thinkrail/ui/utils` (`cn`), and React; it has no lifecycle integration dependency
 - `extensions` → `ext-*/web`, `extension-api/web`, `chat/toolRegistry` (registration only; no ChatView import)
@@ -190,7 +189,8 @@ themselves.
   `px-12`) and a **generated semantic typography class** for type (`tr-text-ui`, `tr-title-dialog`,
   `tr-code-text`, …) — **never inline `style` objects except renderer-measured geometry, and never raw
   hex.** The bounded geometry exception covers values such as intrinsic media bounds, normalized overlays,
-  zoom, swipe position, and portal placement; colour, spacing, and control skin remain token utilities.
+  zoom, swipe position, portal placement, and virtual-list geometry (a loading section's reserved height,
+  a measured tail spacer); colour, spacing, and control skin remain token utilities.
   Responsive (`md:` …) and states (`hover:` / `focus-visible:`) come from Tailwind (inline styles can't
   express them, and the responsive shell needs them).
 - **Chrome geometry lives in `index.css`, host geometry arrives as CSS custom properties.** Beside the
@@ -210,7 +210,7 @@ themselves.
   `bg-[var(--elevated)]`; and a tint is a token on the four-step alpha scale, not a `/40` modifier.
   `src/styles/COLOR.md` is the system; `src/styles/colorUsage.test.ts` is the adoption guard (Tailwind
   drops an unknown utility silently, so an unpublished token renders as nothing at all).
-- **Ordinary radius and rhythm-spacing values come from their scales, never raw pixel lengths** — `rounded-[var(--radius-md)]`
+- **Ordinary radius and rhythm-spacing values come from their scales, never raw pixel lengths** — `rounded-md`
   and `p-8` / `gap-12`, not `rounded-[7px]` or `py-[3px]`. Radius is the project t-shirt family
   (`--radius-xs/sm/md/lg` — a small primitive geometry capped at 8px: `sm` (4px) is the default corner,
   `md` (6px) the outer corner for surfaces nesting 4px children, `lg` (8px) the exception for large
@@ -218,7 +218,8 @@ themselves.
   scale** — `0 / 2 / 4 / 8 / 12 / 16 / 24 / 32 / 40 / 64` — where the step name *is* its pixel value, so
   `p-8` / `gap-12` / `py-4` resolve to exactly that many pixels; it is generated from a single JSON source
   (`src/styles/spacing.json` → `src/styles/generated/spacing.css`), so each canonical length is written
-  once in the JSON rather than re-declared at call sites.
+  once in the JSON rather than re-declared at call sites. A value several surfaces must move together is a
+  named **layout role** aliasing a step (`p-panel-inset`, `h-panel-row`), never a repeated literal.
   `src/styles/SPACING.md` (`web-spacing`) is the authoritative system; `src/styles/spacingUsage.test.ts`
   is that adoption guard, and it exists because this class of drift is **invisible**: unlike a colour
   utility, an arbitrary length always renders, so an off-scale value looks correct in review and passes
@@ -283,8 +284,13 @@ themselves.
   strict consumers still pass through `lib.cssColorToHex`. Data-driven tests enforce the existing
   contrast floor (body/muted ≥ 4.5:1 and hint ≥ 3:1 on the primary declared surfaces) for every discovered
   manifest.
-- Token names that collide with a Tailwind namespace (`--radius-*`) are used as token arbitrary values
-  (`rounded-[var(--radius-md)]`), not `@theme` mappings.
+- Radius tokens **are** Tailwind's radius namespace: `tokens.css` declares `--radius-xs/sm/md/lg` in an
+  `@theme static` block that first resets Tailwind's default scale (`--radius-*: initial`). So
+  `rounded-<step>` and its side variants resolve to the live tokens, an undeclared step such as
+  `rounded-xl` is never generated, and `static` keeps every variable emitted for hand-written CSS. This
+  replaces the earlier rule of spelling the colliding tokens as arbitrary values
+  (`rounded-[var(--radius-md)]`): the collision is removed at its source instead of worked around at ~300
+  call sites, and the guard rejects any arbitrary radius value.
 - **Typography comes from `styles/typography.json` via generated semantic classes — nothing else.**
   `styles/generated/typography.css` (committed, regenerated by `bun run typography:generate`, drift-gated
   by `typography:check`) emits the primitive `--tr-*` custom properties, the `<body>` base, and one class

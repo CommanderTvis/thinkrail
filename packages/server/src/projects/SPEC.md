@@ -49,10 +49,23 @@ bootstrap it into one so it can be opened.
   trust is granted explicitly and revocably; the grant snapshots the currently discovered project aliases
   as acknowledged so later arrivals remain pending; and disabled skill/group sets form the project baseline
   beneath any workspace override. The host composes discovery with these mutation operations; this module
-  stores no skill catalog and imports no agent code.
+  stores no skill catalog and imports no agent code. Project records also carry the pi-level trust state
+  `piResourceTrust` (trust for the project's native `.pi/` resources — settings, extensions, skills,
+  prompts, themes, `SYSTEM.md`, subagent definitions — distinct from the alias-skill grant). A newly added
+  project starts `untrusted`, or `granted` when pi itself already trusts its path; that answer arrives
+  through the host-injected `setPiTrustSeed` (this module imports no pi code). There is **no
+  grandfathering**: a record that predates the field is left as stored and reads as untrusted, so a project
+  added before pi-level trust existed asks once through the trust notice instead of keeping code-running
+  resources nobody consented to (user decision, PR #690 review). `setProjectTrust(id, trusted, acknowledged?,
+  { resources? })` keeps the two grants separate because they consent to different things: pi-level
+  resources include code (extensions, settings packages), so only a surface that names them asks for them.
+  `trusted: true` sets the alias grant and sets `piResourceTrust: "granted"` only with `resources: true`,
+  leaving it untouched otherwise; `trusted: false` revokes both. A trust change persists and publishes the
+  record, so every client shows the persisted trust even when the host request that made it then fails
+  (an open chat could not reload).
 - **Public surface (barrel):** `openProject`, `listProjects`, `listRecentProjects`, `closeProject`,
   `getProjects`, `setProjectPublisher`, `inspectProjectPath`, `initProject`, `setProjectTrust`,
-  `setProjectSkillEnabled`, `setProjectGroupEnabled`, `acknowledgeProjectSkills`.
+  `setProjectSkillEnabled`, `setProjectGroupEnabled`, `acknowledgeProjectSkills`, `setPiTrustSeed`.
 - **Allowed deps:** `persistence`; the `git` sub-module (shared `git()` runner, which now owns the
   environment its children spawn under — this module passes none); `contracts` (`Project`, `ProjectPathStatus`);
   `shared/codedError` (the two named open failures); Node/Bun.

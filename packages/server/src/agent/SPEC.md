@@ -126,7 +126,7 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     after its refresh serves the old budget until the next read refreshes it.
   - `agentSessionManager` — sessions keyed by `session.sessionId` (each `Entry` also tracks its
     `workspaceId`), `createSession({ cwd, workspaceId, model?, thinkingLevel? })` → `createAgentSession(...)`
-    with a per-session `SessionManager` **and a `buildSessionSettings(cwd)` settings manager** (the user's
+    with a per-session `SessionManager` **and `buildSessionSettings(cwd, projectTrusted)`** (the user's
     real settings + an in-memory `images.autoResize:false` override — never persisted — so the `read` tool
     sends image files **raw**, bypassing pi's photon/WASM resizer that the single-file binary can't bundle;
     the web UI downsizes user-attached images itself at attach time — `apps/web`'s `chat/imageAttachment`
@@ -137,7 +137,8 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     pi 0.87 the same setting also governs prompt-attached and tool-result images, so the override is what keeps
     pi from rewriting user text with `[Image omitted…]` hints (which would defeat the client's optimistic-echo
     dedup). Delegated children run on the same settings: `delegation` binds `buildSessionSettings` as the
-    core's `buildChildSettings` (pi-delegation decision #31, issue #604). A shared `registerSession`
+    core's `buildChildSettings`, which receives the trust the parent context's `isProjectTrusted`
+    answers (`liveParentContext`; pi-delegation decision #31, issue #604). A shared `registerSession`
     publishes each event
     tagged with its id + `bindExtensions({ mode:'rpc', uiContext })`. The event projection retains the
     final `agent_end` assistant's reported terminal metadata and attaches it to `agent_settled`, so the
@@ -624,8 +625,8 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     arbitrary Central factory/errors/UI cannot reach `pi.extensionUi`. The Central identity is always excluded
     from session discovery—even if the global artifact changes—so a session cannot mutate its generation.
     That explicit path set is **not frozen at construction**: the loader's public `reload()` is wrapped so
-    every reload first re-resolves the set through the host's own `DefaultPackageManager` (current settings,
-    `builtin:*` entries by name so `-builtin:*` is honoured) and mutates the host-owned array pi
+    every reload first re-resolves the set through the host's own `DefaultPackageManager` (current settings
+    and trust, `builtin:*` entries by name so `-builtin:*` is honoured) and mutates the host-owned array pi
     reads in place, then relabels discovered-path provenance after the load — pi's `extensionsOverride` is
     not used because it runs after factories have executed. All other user extensions
     retain normal discovery. The loader then adds
@@ -666,8 +667,11 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     context (`getCtx`) **and** the live compatibility source set (fresh discovery) on every `loader.reload()`, so
     `session.reloadResources` picks up a mid-session trust grant, skill/group toggle, **or a newly-appeared alias
     dir** — and a late-appearing project alias is still classified + trust-gated, never slipping through as an
-    unclassified load. Personal / bundled / pi-native resources are never trust-gated (only the enable/disable layer);
-    the gate is scoped to the compatibility aliases (pi-native `.pi` / `.agents` project trust is unchanged).
+    unclassified load. Personal and bundled resources are never trust-gated (only the enable/disable layer), and
+    this gate is scoped to the compatibility aliases. pi-native project resources (`.pi/` settings, extensions,
+    skills, prompts and themes, `SYSTEM.md`, ancestor `.agents/skills`) follow pi-level trust instead: pi gates
+    them on the project-trusted flag ThinkRail derives from `Project.piResourceTrust` and re-applies before
+    every load (Project trust and session lifecycle › Trust).
     `listSkillCommands(cwd, admission)` reuses the same gated inputs through a short-lived skills-only
     `DefaultResourceLoader` (no model/session/transcript, no extension factories) for pre-workspace
     autocomplete, cached briefly per `(cwd, admission)`; **`listSkillCatalog(cwd, admission)`** is the Skills
@@ -753,7 +757,16 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
   `reloadSessionResources(sessionId)` (active-chat reload; throws while the reload gate is blocked) +
   `requestSessionReload(sessionId)` (the deferring variant: `"reloaded"` now or `"deferred"` until the gate
   opens — settlement, the release of an admitted prompt, or a compaction's end; requests coalesce); the **`setSkillAdmissionResolver`** seam (host
-  wires `workspaceId` → the admission context); the subagent-policy seams
+  wires `workspaceId` → the admission context, derived once by `admissionContextFor(project, overrides)`);
+  the pi-level trust surface — `applyPiResourceTrust(workspaceIds)`
+  (gated reload of every live session whose trust is stale), `piTrustsProjectPath(path)` (whether pi already
+  trusts a path: its `trust.json` decision by nearest ancestor, else its global `defaultProjectTrust` is
+  `always`; an unreadable store answers `false` — the host's seed for a newly added project) and
+  `projectTrustSummary(cwd)` (the trust notice's facts: alias names and the `ProjectResourceKind`s present —
+  the `.pi/` entries pi's `hasTrustRequiringProjectResources` gates, ancestor `.agents/skills`, and project
+  definitions from `pi-subagents`' `discoverAgentDefinitions`; the entry list mirrors pi's private one, minus
+  `mcp.json`, which no ThinkRail session loads yet, so a pi upgrade that gates a new entry must extend it);
+  the subagent-policy seams
   **`setSubagentsEnabledResolver`** + **`refreshSubagentTools`** (host resolves the effective global default
   plus workspace override; manager owns live-session activation timing) and the concurrency seams
   **`setSubagentConcurrencyResolver`** + **`refreshSubagentConcurrency`** (same split; `delegation` owns
@@ -859,7 +872,7 @@ flushes both owners, as do registration, resource reload and deletion rollback. 
 the subagent owner before child cancellation or any await, including preparation failures. Permanent
 closure survives shutdown-budget expiry and suppresses late outcomes; Pi disposal does not emit extension
 shutdown, so the cascade emits `session_shutdown` itself after the synchronous owner disposal (see
-[Session lifecycle](#session-lifecycle)). The existing cached resource
+[Project trust and session lifecycle](#project-trust-and-session-lifecycle)). The existing cached resource
 cascade remains the sole teardown owner. Both
 SDK creation and entry preparation failures close the owners. A failure after registration also
 removes that exact entry through the normal teardown path, rather than leaving a disposed session
@@ -871,8 +884,39 @@ A restarted host has no control handles or retained command output to reconstruc
 Its only new external dependency is `pi-background-commands`; there is no `agent` → `terminal`, `subprocess`,
 settings or workspaces edge. The owning parent graph records this package dependency.
 
-## Session lifecycle
+## Project trust and session lifecycle
 
+- **Trust.** Every `SettingsManager` the host builds for a project passes its real pi-level trust
+  (`Project.piResourceTrust`, [[submodule-server-projects]]) instead of a forced `true`.
+  - **Sites.** Sessions (`buildSessionSettings`), pre-session loaders and child sessions. The alias-name
+    listing alone passes `false`: alias roots are explicit paths, so it never needs project settings.
+  - **Every load.** The session loader's `reload()` applies the admission context's current trust
+    (`setProjectTrusted`) before every load, so any reload — a grant or a manual reload — loads exactly
+    what the record allows. A grant or revoke therefore only asks the gate to reload the sessions whose
+    trust is stale (`applyPiResourceTrust`: idle now, busy at settlement). A session still opening when
+    trust changes is not in that scan, so registration re-checks its loaded trust against the record and
+    reloads it before `createSession` returns.
+  - **Children.** A child's trust comes from its parent context: `liveParentContext.isProjectTrusted`
+    answers the parent's *loaded* trust AND the current record. A child therefore never holds more than
+    its parent (a grant deferred on a busy parent does not reach its new children before the parent
+    reloads) nor more than the record (a revoke reaches new children at once).
+  - **Revoke.** A child captures its trust at creation and `pi-subagents` retains children across a
+    parent reload, so a revoke also stops every live child of a stale parent (`stopSessionChildren`,
+    reason `"user"`: the revoke is the user's own action, and the parent is told without being woken). It
+    waits until those runs have actually ended — a child whose abort fails is disposed — before the
+    parent's reload is requested. A **busy** parent is not interrupted: its current turn finishes with the
+    resources it already loaded and it reloads at settlement (`"deferred"`), which the Stop-trusting
+    confirmation discloses ("open chats reload when idle"). So when `project.setTrust` returns, no child
+    and no idle chat runs under the revoked trust, and a busy chat stops at the end of its turn.
+  - **Failures.** A reload that fails is reported as `"failed"` in the returned dispositions, and
+    `project.setTrust` then fails after persisting and publishing the record, naming the chats still on
+    the previous trust. A deferred reload that fails later reaches the user as an `error` notify on that
+    chat asking to close or reload it. A grant leaves running children alone, since they merely lack the
+    project's resources.
+  - **Consent.** The pi-level grant is its own consent, separate from alias trust: only
+    `project.setTrust` with `resources: true`, sent by a surface that names what it loads, grants it
+    ([[submodule-server-projects]]). The trust notice is shown for alias skills, pi's own
+    trust-requiring resources, and project subagent definitions alike.
 - **Lifecycle.** `AgentSession.dispose()` never emits `session_shutdown`, so the resource cascade
   (`closeSessionResources`) runs `session.extensionRunner.emit({ type: "session_shutdown", reason: "quit" })`
   itself — synchronously, after the synchronous owner disposal, so handlers have started before the

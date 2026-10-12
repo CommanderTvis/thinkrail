@@ -40,6 +40,13 @@ import { cn } from "@thinkrail/ui/utils";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { type DefaultPairOption, ModelEffortPicker } from "@/chat/ModelEffortPicker";
 import {
+	deriveProjectTrustNotice,
+	type ProjectTrustNotice,
+	trustEnablesText,
+	trustGrantParams,
+	untrustedNoticeText,
+} from "@/chat/projectTrust";
+import {
 	imagePasteDropHandlers,
 	PROMPT_IMAGE_CHIPS_PADDING,
 	PromptImageChips,
@@ -49,6 +56,7 @@ import { SkillsButton } from "@/chat/SkillsButton";
 import { SkillsDialog } from "@/chat/SkillsDialog";
 import { useModelCatalog } from "@/chat/useModelCatalog";
 import { useModelPreferences } from "@/chat/useModelPreferences";
+import { useProjectTrustSummary } from "@/chat/useProjectTrustSummary";
 import {
 	applyTemplateSlotEdit,
 	beginTemplateSlotSession,
@@ -86,7 +94,7 @@ export function reconcileModel(
 }
 
 const PILL =
-	"flex h-32 min-w-0 items-center gap-8 rounded-[var(--radius-sm)] border border-control-border-default bg-clip-padding bg-control-bg px-8 tr-text-ui text-text-default outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary data-[open=true]:border-control-border-active data-[open=true]:bg-control-bg-selected";
+	"flex h-32 min-w-0 items-center gap-8 rounded-sm border border-control-border-default bg-clip-padding bg-control-bg px-8 tr-text-ui text-text-default outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary data-[open=true]:border-control-border-active data-[open=true]:bg-control-bg-selected";
 
 async function refreshProjectWorkspaces(projectId: string): Promise<void> {
 	useAppStore.getState().expandProject(projectId);
@@ -117,7 +125,6 @@ export function NewWorkspaceDialog({
 	const [skillCommands, setSkillCommands] = useState<SlashCommandInfo[]>([]);
 	const [templates, setTemplates] = useState<TemplateInfo[]>([]);
 	const [slotSession, setSlotSession] = useState<TemplateSlotSessionState | null>(null);
-	const [aliasSkills, setAliasSkills] = useState<string[]>([]);
 	const [model, setModel] = useState<WireModel | null>(null);
 	const [thinkingLevel, setThinkingLevel] = useState<ThinkingLevel>("medium");
 	const [hostDefault, setHostDefault] = useState<ModelDefault | null>(null);
@@ -245,20 +252,7 @@ export function NewWorkspaceDialog({
 		};
 	}, [open, selectedProjectId, slashActive, supportsProjectTemplatePreview]);
 
-	useEffect(() => {
-		if (!open) return;
-		let cancelled = false;
-		setAliasSkills([]);
-		getTransport()
-			.request("project.aliasSkills", { projectId: selectedProjectId })
-			.then((names) => {
-				if (!cancelled) setAliasSkills(names);
-			})
-			.catch(() => {});
-		return () => {
-			cancelled = true;
-		};
-	}, [open, selectedProjectId]);
+	const trustSummary = useProjectTrustSummary(selectedProjectId, open);
 
 	const {
 		models,
@@ -425,14 +419,14 @@ export function NewWorkspaceDialog({
 		}
 	};
 
-	const trustProject = async () => {
+	const trustProject = async (notice: Extract<ProjectTrustNotice, { kind: "untrusted" }>) => {
 		if (trusting) return;
 		setTrusting(true);
 		try {
-			const updated = await getTransport().request("project.setTrust", {
-				id: selectedProjectId,
-				trusted: true,
-			});
+			const updated = await getTransport().request(
+				"project.setTrust",
+				trustGrantParams(selectedProjectId, notice),
+			);
 			useAppStore.getState().applyProjectUpdated(updated);
 			const commands = await slashCommandCatalogOrEmpty(() =>
 				getTransport().request("skill.list", { projectId: selectedProjectId }),
@@ -446,6 +440,8 @@ export function NewWorkspaceDialog({
 	};
 
 	const selectedProject = projects.find((p) => p.id === selectedProjectId);
+	const trustNotice = deriveProjectTrustNotice(selectedProject, trustSummary);
+	const trustEnables = trustNotice.kind === "untrusted" ? trustEnablesText(trustNotice) : null;
 	const isolated = target === "worktree";
 
 	return (
@@ -481,7 +477,7 @@ export function NewWorkspaceDialog({
 
 				<fieldset
 					data-testid="ws-target"
-					className="flex w-fit items-center gap-2 rounded-[var(--radius-md)] border border-control-border-default bg-control-bg p-2"
+					className="flex w-fit items-center gap-2 rounded-md border border-control-border-default bg-control-bg p-2"
 				>
 					<legend className="sr-only">Where the work runs</legend>
 					<TargetOption
@@ -529,21 +525,24 @@ export function NewWorkspaceDialog({
 					/>
 				</div>
 
-				{selectedProject && selectedProject.trusted !== true && aliasSkills.length > 0 ? (
+				{trustNotice.kind === "untrusted" ? (
 					<div
 						data-testid="ws-trust-notice"
-						className="flex w-full items-center gap-8 rounded-[var(--radius-sm)] border border-border-default border-l-[3px] border-l-feedback-warning bg-feedback-warning-subtle px-12 py-8 text-left"
+						className="flex w-full items-center gap-8 rounded-sm border border-border-default border-l-[3px] border-l-feedback-warning bg-feedback-warning-subtle px-12 py-8 text-left"
 					>
 						<TriangleAlert className="size-16 shrink-0 text-feedback-warning" />
 						<span className="min-w-0 flex-1 tr-text-ui text-text-default">
-							This project ships {aliasSkills.length} skill{aliasSkills.length === 1 ? "" : "s"} —
-							off until you trust it. Your personal and ThinkRail's built-in skills are unaffected.
+							{untrustedNoticeText(trustNotice)} Your personal and ThinkRail's built-in skills are
+							unaffected.
+							{trustEnables ? (
+								<span className="block text-text-muted tr-text-metadata">{trustEnables}</span>
+							) : null}
 						</span>
 						<Button
 							size="sm"
 							data-testid="ws-trust-project"
 							disabled={trusting}
-							onClick={() => void trustProject()}
+							onClick={() => void trustProject(trustNotice)}
 							className="shrink-0"
 						>
 							Trust project
@@ -555,7 +554,7 @@ export function NewWorkspaceDialog({
 					{promptNote ? (
 						<p
 							data-testid="ws-prompt-note"
-							className="mb-4 flex items-start gap-8 rounded-[var(--radius-sm)] border border-primary-muted bg-clip-padding bg-primary-subtle px-12 py-8 text-left text-text-muted tr-text-metadata leading-snug"
+							className="mb-4 flex items-start gap-8 rounded-sm border border-primary-muted bg-clip-padding bg-primary-subtle px-12 py-8 text-left text-text-muted tr-text-metadata leading-snug"
 						>
 							<Sparkles className="mt-2 size-14 shrink-0 text-primary" />
 							<span>{promptNote}</span>
@@ -663,7 +662,7 @@ export function NewWorkspaceDialog({
 						data-testid="create-workspace"
 						disabled={!submitEnabled}
 						onClick={() => void create()}
-						className="flex h-32 shrink-0 items-center gap-8 rounded-[var(--radius-sm)] bg-control-primary-bg px-12 tr-text-action text-control-primary-text outline-none transition-colors hover:bg-control-primary-bg-hovered focus-visible:ring-2 focus-visible:ring-primary disabled:bg-control-primary-disabled-bg disabled:text-control-primary-disabled-text"
+						className="flex h-32 shrink-0 items-center gap-8 rounded-sm bg-control-primary-bg px-12 tr-text-action text-control-primary-text outline-none transition-colors hover:bg-control-primary-bg-hovered focus-visible:ring-2 focus-visible:ring-primary disabled:bg-control-primary-disabled-bg disabled:text-control-primary-disabled-text"
 					>
 						{creating ? (
 							<>
@@ -673,7 +672,7 @@ export function NewWorkspaceDialog({
 						) : (
 							<>
 								{isolated ? "Create" : "Start"}
-								<span className="inline-flex h-16 min-w-16 items-center justify-center rounded-[var(--radius-sm)] bg-on-primary-soft px-4 tr-code-text">
+								<span className="inline-flex h-16 min-w-16 items-center justify-center rounded-sm bg-on-primary-soft px-4 tr-code-text">
 									↵
 								</span>
 							</>
@@ -710,7 +709,7 @@ function TargetOption({
 			data-testid={testid}
 			data-active={active}
 			className={cn(
-				"flex h-28 cursor-pointer items-center gap-8 rounded-[var(--radius-sm)] px-12 tr-text-ui transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-primary",
+				"flex h-28 cursor-pointer items-center gap-8 rounded-sm px-12 tr-text-ui transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-primary",
 				active ? "bg-primary-subtle text-primary" : "text-text-muted hover:text-text-default",
 			)}
 		>
@@ -740,7 +739,7 @@ function ProjectPicker({
 				data-open={open}
 				className={`${PILL} max-w-[180px]`}
 			>
-				<span className="flex size-[18px] shrink-0 items-center justify-center rounded-[var(--radius-sm)] bg-primary">
+				<span className="flex size-[18px] shrink-0 items-center justify-center rounded-sm bg-primary">
 					<Box className="size-12 text-text-on-primary" />
 				</span>
 				<span className="truncate">{current}</span>

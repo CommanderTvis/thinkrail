@@ -22,7 +22,7 @@ channel fan-out, and the process-boot wrapper both launchers share.
   after classifying only its bounded 8 KiB head (via `fs`'s `resolveWorktreeFile` — path-contained; bad
   id/escape/miss → 404; `Cache-Control: no-store`, because the worktree moves under the URL) so the
   markdown viewer's relative `<img>`s resolve, the sibling
-  **`GET /blob/<workspaceId>/<oid>/<relpath>`** route serving that path's bytes **at one commit**
+  **`GET /blob/<workspaceId>/<oid>/<relpath>`** route serving that path's bytes **at one commit or tree**
   (`git.readBlobStreamAtAsync` behind a 40/64-hex `oid` — a diff range's `resolvedOriginalOid`, so the URL
   names immutable content and answers `Cache-Control: public, max-age=31536000, immutable`; the Git
   primitive requires a blob, so trees/commits/gitlinks are 404 alongside a bad id/oid/escape/absent
@@ -154,7 +154,8 @@ channel fan-out, and the process-boot wrapper both launchers share.
   retain a grant's capture before asynchronous work and never replay across revocation.
   `stop()` → immediate agent-session cleanup, then `persistTerminalSessions()` **before**
   `closeAllTerminals()`, then watcher/socket disposal; `shutdown()` memoizes one asynchronous graceful
-  path: bounded `settleSessionsForShutdown()` + awaited `shutdownAnalytics()` first, then `stop()`). The
+  path: bounded `settleSessionsForShutdown()` + awaited `shutdownAnalytics()` first, then
+  `turnTracker.drain()` for the receipts those settlements started, then `stop()`). The
   bounded settle includes hidden delegation children even when their parent is
   idle, plus child cascades already started by a concurrent removal, so graceful quit does not let a
   background child lose its terminal abort/tool result; `crashLog.ts` (`installCrashLog` — the `uncaughtException`/`unhandledRejection` report
@@ -313,9 +314,15 @@ channel fan-out, and the process-boot wrapper both launchers share.
   `PlanReviewResult.blockedByOpenFindings` so the card cannot claim the step is done. `resolve_comment`
   stays the WORKER'S tool — `reviews.applyAgentResolution` only resolves a `sent` comment, and only when
   the calling session equals the chat `markCommentsSent` recorded it as delivered to;
+  `project.trustSummary` answers the trust notice from agent's `projectTrustSummary(project.path)`;
   `project.setTrust`
-  acknowledges the aliases present at grant via agent's
-  `listProjectAliasSkillNames`; `project.acknowledgeSkills` / `project.setSkillEnabled` /
+  acknowledges the aliases present when it grants alias trust (agent's `listProjectAliasSkillNames`; a grant
+  on an already alias-trusted project — the pi-level grant — keeps the acknowledged set, so aliases that
+  arrived since stay pending review), sets the alias grant, grants pi-level trust only when the request carries
+  `resources: true` (a revoke clears both; an older client's grant is alias-only), and hands the project's
+  workspaces to agent's `applyPiResourceTrust` so live chats reload into the new trust (idle now, busy at
+  settlement); `createServer` injects agent's `piTrustsProjectPath` as the projects trust seed
+  (`setPiTrustSeed`), so a newly added project starts from pi's own decision; `project.acknowledgeSkills` / `project.setSkillEnabled` /
   `project.setGroupEnabled` / `project.aliasSkills` / `workspace.setSkillOverride` mutate/read the persisted
   toggles; `session.reloadResources` re-scans a running session — the composition stays here; `agent` never
   imports its sibling. `createServer` also wires **`setSkillAdmissionResolver`**, mapping a session's
@@ -404,8 +411,10 @@ channel fan-out, and the process-boot wrapper both launchers share.
   happens after it.
   The package prompt is fired **detached** after the mark, so the lock only ever holds session
   creation, and a failed operation releases it rather than poisoning the queue. The plan-review verdict
-  path joins the same lock: `deliverFixToWorker`'s file→record→select→render→mark pass stays under it, so
-  a Clear or an interleaved send cannot replace or grab the candidate ids between those stages. Deliberately unlocked: `review.get` (its load → re-anchor → persist is one synchronous pass,
+  path joins the same lock: accepted guide persistence and `deliverFixToWorker`'s
+  file→record→select→render→mark pass stay under it, so a Clear cannot separate the guide from its
+  findings and an interleaved send cannot grab the candidate ids between those stages. Approvals check
+  open findings and record under that same lock; blocked or failed verdicts do not replace the guide. Deliberately unlocked: `review.get` (its load → re-anchor → persist is one synchronous pass,
   and hydration must not queue behind a send) — plus the two mutations that remain fully synchronous,
   `reviews.resolveCommentFromAgent` (the worker tool seam) and `reanchorWorkspace` (the fs-watch tee):
   both re-read the snapshot from disk before writing, and neither removes a comment nor closes the
@@ -564,7 +573,7 @@ enabled/confirmed choice before entering analytics attribution.
   but each owns independent in-memory sessions, terminals, watchers, and connected clients; persistence
   conflicts are accepted rather than serialized by the host.
 - `shutdown()` is safe under concurrent signal/native-quit calls: callers receive one promise, lifecycle
-  work runs once, and resource disposal remains ordered after session settling.
+  work runs once, and resource disposal remains ordered after session settling and turn-receipt draining.
 - **A send (prompt/steer/followUp/answerQuestion) is acked when ACCEPTED, not when the turn ends**
   (`ackSend`): pi's send methods resolve only at turn end, and a turn can outlive the client's request
   timeout (long tool rounds and multi-minute reasoning turns are routine) — awaiting completion would

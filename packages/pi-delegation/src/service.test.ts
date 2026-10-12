@@ -1260,19 +1260,24 @@ function pngHeaderOnly(width: number, height: number): Buffer {
 	return Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), ihdr]);
 }
 
-test("buildChildSettings supplies the settings a child's tools run on", async () => {
-	const calls: string[] = [];
+test("buildChildSettings supplies the settings a child's tools run on, with the parent's trust", async () => {
+	const calls: [string, boolean][] = [];
 	const scoped = createDelegationService({
 		resolveParent: (id) =>
 			id === parent.sessionId
-				? { cwd: parentCwd, model: parent.model, thinkingLevel: parent.thinkingLevel }
+				? {
+						cwd: parentCwd,
+						model: parent.model,
+						thinkingLevel: parent.thinkingLevel,
+						isProjectTrusted: () => false,
+					}
 				: undefined,
 		delegationRoot,
 		scope: "ws-settings",
 		modelRuntime: runtime,
-		buildChildSettings: (cwd) => {
-			calls.push(cwd);
-			return SettingsManager.inMemory({ images: { autoResize: false } });
+		buildChildSettings: (cwd, projectTrusted) => {
+			calls.push([cwd, projectTrusted]);
+			return SettingsManager.inMemory({ images: { autoResize: false } }, { projectTrusted });
 		},
 	});
 	writeFileSync(join(parentCwd, "settings-raw.png"), pngHeaderOnly(9000, 10));
@@ -1288,7 +1293,7 @@ test("buildChildSettings supplies the settings a child's tools run on", async ()
 		subagentSpec({ session: { systemPrompt: "read it", tools: ["read"] } }),
 	);
 	try {
-		expect(calls).toEqual([parentCwd]);
+		expect(calls).toEqual([[parentCwd, false]]);
 		expect((await child.runQueued("Read settings-raw.png.")).finalText).toBe("READ");
 		expect(toolResult).toMatchObject({
 			role: "toolResult",
@@ -1334,6 +1339,80 @@ test("the base set loads for every child, opted into extensions or not, ahead of
 	} finally {
 		await scoped.disposeChildrenOf(parent.sessionId);
 	}
+});
+
+test("a child's pi-level project trust is its parent context's, trusted when the parent states none", async () => {
+	const seen: boolean[] = [];
+	const trustedService = (trusted: boolean | undefined) =>
+		createDelegationService({
+			resolveParent: (id) =>
+				id === parent.sessionId
+					? {
+							cwd: parentCwd,
+							model: parent.model,
+							thinkingLevel: parent.thinkingLevel,
+							...(trusted === undefined ? {} : { isProjectTrusted: () => trusted }),
+						}
+					: undefined,
+			delegationRoot,
+			scope: `ws-trust-${trusted}`,
+			modelRuntime: runtime,
+			childExtensionFactories: [
+				(pi) => {
+					pi.registerTool({
+						name: "trust_probe",
+						label: "Trust probe",
+						description: "Reports project trust",
+						parameters: Type.Object({}),
+						execute: async (_id, _params, _signal, _update, ctx) => {
+							seen.push(ctx.isProjectTrusted());
+							return { content: [{ type: "text", text: "OK" }], details: {} };
+						},
+					});
+				},
+			],
+		});
+	for (const trusted of [false, true, undefined]) {
+		const scoped = trustedService(trusted);
+		faux.setResponses([
+			fauxAssistantMessage(fauxToolCall("trust_probe", {})),
+			fauxAssistantMessage("DONE"),
+		]);
+		const child = await scoped.createChild(
+			subagentSpec({
+				session: { systemPrompt: "probe", tools: ["trust_probe"], extensions: true },
+			}),
+		);
+		try {
+			expect((await child.runQueued("Probe.")).status).toBe("completed");
+		} finally {
+			await scoped.disposeChildrenOf(parent.sessionId);
+		}
+	}
+	expect(seen).toEqual([false, true, true]);
+});
+
+test("a child whose project trust changed while it was being prepared is disposed, not registered", async () => {
+	const answers = [true, false];
+	const flipping = createDelegationService({
+		resolveParent: (sessionId) =>
+			sessionId === parent.sessionId
+				? {
+						cwd: parentCwd,
+						model: parent.model,
+						thinkingLevel: parent.thinkingLevel,
+						isProjectTrusted: () => answers.shift() ?? false,
+					}
+				: undefined,
+		delegationRoot,
+		scope: "ws-trust-flip",
+		modelRuntime: runtime,
+	});
+	await expect(flipping.createChild(subagentSpec())).rejects.toMatchObject({
+		code: "unknown-parent",
+		message: expect.stringContaining("trust changed"),
+	});
+	expect(flipping.childrenOf(parent.sessionId)).toHaveLength(0);
 });
 
 test("extensions opt-in is inert when the embedder binds no child factories", async () => {

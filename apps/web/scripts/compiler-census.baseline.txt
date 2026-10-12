@@ -1,11 +1,10 @@
-src/chat/ChatView.tsx useVirtualRows
+src/chat/ChatTranscript.tsx useVirtualRows
 src/chat/HistoryOverlay.tsx Highlight
 src/chat/SkillsDialog.tsx SkillsDialog
 src/chat/TemplateEditorDialog.tsx TemplateEditorDialog
 src/chat/promptImages.tsx usePromptImages
 src/chat/resources/ResourcesInspector.tsx ResourcesInspector
 src/chat/tools/AskUserQuestionCard.tsx AskUserQuestionCard
-src/panels/DiffPane.tsx DiffPane
 src/panels/GithubSettings.tsx GithubSettings
 src/panels/JetBrainsAiCard.tsx JetBrainsAiCard
 src/panels/LineWidthSettings.tsx LineWidthControl
@@ -14,7 +13,7 @@ src/panels/MonacoEditor.tsx MonacoEditor
 src/panels/NewWorkspaceDialog.tsx NewWorkspaceDialog
 src/panels/PlanPane.tsx PlanComposer
 src/panels/PlanPane.tsx PlanPane
-src/panels/ProjectSkillsNotice.tsx ProjectSkillsNotice
+src/panels/ProjectTrustNotice.tsx ProjectTrustNotice
 src/panels/ProvidersSettings.tsx ProvidersSettings
 src/panels/ReviewPanel.tsx ReviewPanel
 src/panels/SendReviewButton.tsx SendButtonBase

@@ -12,12 +12,14 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
 	closeProject,
+	getProjects,
 	initProject,
 	inspectProjectPath,
 	isProjectTrusted,
 	listProjects,
 	listRecentProjects,
 	openProject,
+	setPiTrustSeed,
 	setProjectPublisher,
 	setProjectTrust,
 } from "./projects";
@@ -68,6 +70,7 @@ beforeEach(() => {
 
 afterEach(() => {
 	setProjectPublisher(null);
+	setPiTrustSeed(null);
 	rmSync(dataDir, { recursive: true, force: true });
 	if (savedDataDir === undefined) delete process.env.THINKRAIL_DATA_DIR;
 	else process.env.THINKRAIL_DATA_DIR = savedDataDir;
@@ -290,7 +293,82 @@ test("setProjectTrust: persists a revocable, fail-closed trust decision", () => 
 	expect(isProjectTrusted(project.id)).toBe(true);
 	expect(listProjects().find((p) => p.id === project.id)?.trusted).toBe(true);
 
-	setProjectTrust(project.id, false);
+	const revoked = setProjectTrust(project.id, false);
+	expect(revoked.piResourceTrust).toBe("untrusted");
 	expect(isProjectTrusted(project.id)).toBe(false);
 	expect(() => setProjectTrust("nope", true)).toThrow();
+});
+
+test("setProjectTrust: pi-level resource trust needs its own explicit grant, and a revoke clears both", () => {
+	const repo = join(dataDir, "repo");
+	makeRepo(repo);
+	const project = initProject(repo);
+	const published: Array<{ trusted: boolean | undefined; piResourceTrust: string | undefined }> =
+		[];
+	setProjectPublisher(({ trusted, piResourceTrust }) =>
+		published.push({ trusted, piResourceTrust }),
+	);
+	expect(project.piResourceTrust).toBe("untrusted");
+
+	const aliasOnly = setProjectTrust(project.id, true, ["a"]);
+	expect(aliasOnly).toMatchObject({
+		trusted: true,
+		piResourceTrust: "untrusted",
+		acknowledgedSkills: ["a"],
+	});
+
+	const both = setProjectTrust(project.id, true, ["a"], { resources: true });
+	expect(both).toMatchObject({ trusted: true, piResourceTrust: "granted" });
+	expect(setProjectTrust(project.id, true).piResourceTrust).toBe("granted");
+
+	const revoked = setProjectTrust(project.id, false, undefined, { resources: true });
+	expect(revoked).toMatchObject({ trusted: false, piResourceTrust: "untrusted" });
+	expect(storedProjects().find((stored) => stored.id === project.id)).toMatchObject({
+		trusted: false,
+		piResourceTrust: "untrusted",
+	});
+	expect(published).toEqual([
+		{ trusted: true, piResourceTrust: "untrusted" },
+		{ trusted: true, piResourceTrust: "granted" },
+		{ trusted: true, piResourceTrust: "granted" },
+		{ trusted: false, piResourceTrust: "untrusted" },
+	]);
+});
+
+function writeProjects(records: object[]): void {
+	writeFileSync(join(dataDir, "projects.json"), JSON.stringify(records));
+}
+
+function storedProjects(): Array<{ id: string; piResourceTrust?: string; trusted?: boolean }> {
+	return JSON.parse(readFileSync(join(dataDir, "projects.json"), "utf8"));
+}
+
+test("a record that predates pi-level trust is not grandfathered: it stays as stored and reads untrusted", () => {
+	const repo = join(dataDir, "legacy");
+	makeRepo(repo);
+	const root = realpathSync(repo);
+	writeProjects([{ id: "legacy", name: "legacy", path: root, slug: "legacy", lastOpened: 1 }]);
+	const asked: string[] = [];
+	setPiTrustSeed((path) => {
+		asked.push(path);
+		return true;
+	});
+	expect(getProjects()[0]?.piResourceTrust).toBeUndefined();
+	expect(storedProjects()[0]?.piResourceTrust).toBeUndefined();
+	expect(openProject(repo)).toMatchObject({ id: "legacy" });
+	expect(storedProjects()[0]?.piResourceTrust).toBeUndefined();
+	expect(asked).toEqual([]);
+});
+
+test("a newly added project starts untrusted unless pi already trusts its path", () => {
+	const plain = join(dataDir, "plain");
+	const piTrusted = join(dataDir, "pi-trusted");
+	makeRepo(plain);
+	makeRepo(piTrusted);
+	const trustedRoot = realpathSync(piTrusted);
+	setPiTrustSeed((path) => realpathSync(path) === trustedRoot);
+
+	expect(openProject(plain).piResourceTrust).toBe("untrusted");
+	expect(openProject(piTrusted).piResourceTrust).toBe("granted");
+	expect(initProject(plain).piResourceTrust).toBe("untrusted");
 });

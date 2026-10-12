@@ -13,7 +13,7 @@ import { getTransport } from "../transport";
 import { AddProjectMenu } from "./AddProjectMenu";
 import { enterDefaultWorkspace } from "./defaultWorkspace";
 import { NewWorkspaceDialog } from "./NewWorkspaceDialog";
-import { ProjectSkillsNotice } from "./ProjectSkillsNotice";
+import { ProjectTrustNotice } from "./ProjectTrustNotice";
 import { ProviderWarningBanner } from "./ProviderWarningBanner";
 import { useOpenProject } from "./useOpenProject";
 
@@ -102,7 +102,7 @@ export function WelcomePanel() {
 			</h1>
 
 			<ProviderWarningBanner />
-			{project ? <ProjectSkillsNotice projectId={project.id} /> : null}
+			{project ? <ProjectTrustNotice projectId={project.id} /> : null}
 
 			<div className="mt-24 flex flex-wrap justify-center gap-12">
 				{noProjects ? (
@@ -177,12 +177,12 @@ function CardSkeleton() {
 			role="status"
 			aria-label="Loading"
 			aria-busy="true"
-			className="flex h-[150px] w-[220px] flex-col items-start justify-between rounded-[var(--radius-sm)] border border-border-default bg-container-workspace-bg p-16"
+			className="flex h-[150px] w-[220px] flex-col items-start justify-between rounded-sm border border-border-default bg-container-workspace-bg p-16"
 		>
 			<span className="size-24 shrink-0 animate-pulse rounded-full bg-control-bg-hovered" />
 			<span className="flex w-full flex-col gap-8">
-				<span className="h-3 w-3/4 animate-pulse rounded-[var(--radius-sm)] bg-control-bg-hovered" />
-				<span className="h-3 w-full animate-pulse rounded-[var(--radius-sm)] bg-control-bg-hovered" />
+				<span className="h-3 w-3/4 animate-pulse rounded-sm bg-control-bg-hovered" />
+				<span className="h-3 w-full animate-pulse rounded-sm bg-control-bg-hovered" />
 			</span>
 		</div>
 	);
@@ -208,7 +208,7 @@ const Card = forwardRef<HTMLButtonElement, CardProps>(function Card(
 			data-testid={cta ? "welcome-cta" : "welcome-action"}
 			{...rest}
 			className={cn(
-				"relative flex h-[150px] w-[220px] flex-col items-start justify-between rounded-[var(--radius-sm)] border bg-clip-padding p-16 text-left transition-colors",
+				"relative flex h-[150px] w-[220px] flex-col items-start justify-between rounded-sm border bg-clip-padding p-16 text-left transition-colors",
 				primary
 					? "border-primary-muted bg-primary-subtle hover:bg-primary-soft"
 					: "border-border-default bg-container-workspace-bg hover:border-primary-muted hover:bg-container-elevated-bg",

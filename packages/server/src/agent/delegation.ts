@@ -9,6 +9,7 @@ import {
 } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
 import {
+	type ChildHandle,
 	createDelegationService,
 	type DelegationService,
 	deriveChildSessionFile,
@@ -84,6 +85,28 @@ export function subagentsFor(
 		isEnabled,
 		canDeliverCompletion,
 	});
+}
+
+function liveSessionChildren(workspaceId: string, parentSessionId: string): ChildHandle[] {
+	return (services.get(workspaceId)?.childrenOf(parentSessionId) ?? []).filter(
+		(child) =>
+			child.record.scope === workspaceId &&
+			child.record.parentSessionId === parentSessionId &&
+			(child.snapshot?.status === "queued" || child.snapshot?.status === "running"),
+	);
+}
+
+/** Cancellation lands synchronously; `settled` resolves once every child's run has actually ended. */
+export function stopSessionChildren(
+	workspaceId: string,
+	parentSessionId: string,
+	reason: string,
+): { stopped: number; settled: Promise<void> } {
+	const children = liveSessionChildren(workspaceId, parentSessionId);
+	const settled = Promise.allSettled(
+		children.map((child) => child.abort(reason).catch(() => child.dispose())),
+	).then(() => {});
+	return { stopped: children.length, settled };
 }
 
 export async function disposeSessionChildren(
