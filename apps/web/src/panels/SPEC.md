@@ -627,7 +627,9 @@ a project picker, the prompt hero, and the reused
   selected) and any source whose `selectionId` came back `null` (an unlabeled **"Switch in a terminal"**
   hint with a tooltip instead). The current host derives every source id from the authenticated access
   options response and fails the list read if an enabled source is malformed. Fewer than two sources
-  renders nothing: there is nothing to switch to. A click calls `provider.jbcentralAccessSwitch`, reloads the
+  renders nothing: there is nothing to switch to. Before the source choices, a persistent notice explains
+  that switching affects all apps using the host OS user's Central, so its scope is visible before acting.
+  A click calls `provider.jbcentralAccessSwitch`, reloads the
   list on success, and shows a **warning, not an error,** when the switch itself succeeded but Central's own
   required proxy restart did not (the org selection already changed; only the running proxy is stale). A
   failed switch surfaces a plain inline error and changes nothing. Older hosts show no section at all rather

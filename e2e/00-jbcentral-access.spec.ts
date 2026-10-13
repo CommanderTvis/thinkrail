@@ -25,6 +25,11 @@ test("@dev-seam switching the AI access source restarts the proxy and re-lists t
 	await waitForCentralState(page, "configured");
 
 	await expect(sources(page)).toBeVisible();
+	await expect(
+		sources(page).getByText(
+			"Switching affects all apps that use central under this OS user account on the host.",
+		),
+	).toBeVisible();
 	await expect(rows(page)).toHaveCount(2);
 	const alumniRow = rows(page).filter({ hasText: "JB Alumni" });
 	const teamRow = rows(page).filter({ hasText: "JetBrains Team" });

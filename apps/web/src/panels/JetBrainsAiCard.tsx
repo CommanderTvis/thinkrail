@@ -194,6 +194,10 @@ function JbcentralAccessSection({ enabled }: { enabled: boolean }) {
 			className="flex flex-col gap-8 border-border-muted border-t pt-12"
 		>
 			<p className="text-text-default tr-text-ui">AI access source</p>
+			<p className="text-text-muted tr-text-metadata">
+				Switching affects all apps that use <code className="tr-code-text">central</code> under this
+				OS user account on the host.
+			</p>
 			<div className="flex flex-col gap-4">
 				{sources.map((source) => (
 					<div
