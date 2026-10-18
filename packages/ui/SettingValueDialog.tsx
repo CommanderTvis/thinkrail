@@ -67,7 +67,7 @@ function ListEntries({
 							grow(event.currentTarget);
 							onChange(items.map((existing, at) => (at === index ? event.target.value : existing)));
 						}}
-						className="min-w-0 flex-1 resize-none overflow-hidden rounded-[var(--radius-sm)] border border-border-default bg-control-bg px-8 py-4 tr-code-text text-text-default outline-none focus:border-primary"
+						className="min-w-0 flex-1 resize-none overflow-hidden rounded-sm border border-border-default bg-control-bg px-8 py-4 tr-code-text text-text-default outline-none focus:border-primary"
 					/>
 					<button
 						type="button"
@@ -77,7 +77,7 @@ function ListEntries({
 							onChange(items.filter((_, at) => at !== index));
 							setIds((current) => current.filter((_, at) => at !== index));
 						}}
-						className="mt-4 shrink-0 rounded-[var(--radius-sm)] p-2 text-text-subtle hover:bg-control-bg-hovered hover:text-text-default"
+						className="mt-4 shrink-0 rounded-sm p-2 text-text-subtle hover:bg-control-bg-hovered hover:text-text-default"
 					>
 						<X className="size-14" />
 					</button>
@@ -90,7 +90,7 @@ function ListEntries({
 					onChange([...items, ""]);
 					setIds((current) => [...current, nextId.current++]);
 				}}
-				className="flex w-fit items-center gap-4 rounded-[var(--radius-sm)] px-4 py-2 tr-text-metadata text-text-subtle hover:bg-control-bg-hovered hover:text-text-default"
+				className="flex w-fit items-center gap-4 rounded-sm px-4 py-2 tr-text-metadata text-text-subtle hover:bg-control-bg-hovered hover:text-text-default"
 			>
 				<Plus className="size-14" />
 				Add entry
@@ -179,7 +179,7 @@ export function SettingValueDialog({
 					<div className="flex flex-col gap-4">
 						<span className="tr-text-metadata text-text-muted">Key</span>
 						<Command
-							className="rounded-[var(--radius-sm)] border border-border-default"
+							className="rounded-sm border border-border-default"
 							data-testid={`${prefix}-value-key-picker`}
 						>
 							<CommandInput
@@ -225,7 +225,7 @@ export function SettingValueDialog({
 							aria-label="Setting key"
 							data-testid={`${prefix}-value-key`}
 							placeholder={keyPlaceholder}
-							className="rounded-[var(--radius-sm)] border border-border-default bg-control-bg px-8 py-4 tr-code-text text-text-default outline-none placeholder:text-text-subtle focus:border-primary"
+							className="rounded-sm border border-border-default bg-control-bg px-8 py-4 tr-code-text text-text-default outline-none placeholder:text-text-subtle focus:border-primary"
 						/>
 						<datalist id={datalistId}>
 							{knownKeys.map((known) => (
@@ -277,7 +277,7 @@ export function SettingValueDialog({
 									data-testid={`${prefix}-value-switch`}
 									data-active={on}
 									onClick={() => setOn(!on)}
-									className={`self-start rounded-[var(--radius-sm)] border px-12 py-4 tr-text-ui ${
+									className={`self-start rounded-sm border px-12 py-4 tr-text-ui ${
 										on
 											? "border-primary-muted bg-primary-subtle text-text-default"
 											: "border-border-default text-text-muted"
@@ -298,7 +298,7 @@ export function SettingValueDialog({
 									ref={adding ? undefined : (input) => input?.focus()}
 									aria-label="Value"
 									data-testid={`${prefix}-value-text`}
-									className="rounded-[var(--radius-sm)] border border-border-default bg-control-bg px-8 py-4 tr-code-text text-text-default outline-none focus:border-primary"
+									className="rounded-sm border border-border-default bg-control-bg px-8 py-4 tr-code-text text-text-default outline-none focus:border-primary"
 								/>
 							)}
 						</>
@@ -318,7 +318,7 @@ export function SettingValueDialog({
 					<button
 						type="button"
 						onClick={onClose}
-						className="rounded-[var(--radius-sm)] border border-border-default px-12 py-4 tr-text-ui text-text-default hover:bg-control-bg-hovered"
+						className="rounded-sm border border-border-default px-12 py-4 tr-text-ui text-text-default hover:bg-control-bg-hovered"
 					>
 						Cancel
 					</button>
@@ -327,7 +327,7 @@ export function SettingValueDialog({
 						data-testid={`${prefix}-value-continue`}
 						disabled={problem !== null}
 						onClick={submit}
-						className="rounded-[var(--radius-sm)] bg-control-primary-bg px-12 py-4 tr-text-ui text-control-primary-text hover:bg-control-primary-bg-hovered disabled:bg-control-primary-disabled-bg disabled:text-control-primary-disabled-text"
+						className="rounded-sm bg-control-primary-bg px-12 py-4 tr-text-ui text-control-primary-text hover:bg-control-primary-bg-hovered disabled:bg-control-primary-disabled-bg disabled:text-control-primary-disabled-text"
 					>
 						{submitLabel}
 					</button>

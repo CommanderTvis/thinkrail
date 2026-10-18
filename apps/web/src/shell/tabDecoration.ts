@@ -12,6 +12,8 @@ export function toTabRef(tab: LayoutTab, workspaceId: string): TabRef | null {
 		case "external-file":
 		case "diff":
 			return { kind: tab.kind, workspaceId, path: tab.path };
+		case "changes":
+			return null;
 		case "chat":
 			return { kind: "chat", workspaceId, sessionId: tab.sessionId };
 		case "document":

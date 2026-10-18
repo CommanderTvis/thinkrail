@@ -27,6 +27,7 @@ import {
 	type LayoutGroupLocation,
 	type LayoutMutationResult,
 	type LayoutSide,
+	type LayoutToolCatalog,
 	layoutTabName,
 } from "./model";
 import type {
@@ -52,6 +53,17 @@ export interface PreparedLayoutClose {
 
 export interface WorkbenchProps {
 	workspaceId: string;
+	worktreePath?: string;
+	catalog?: LayoutToolCatalog;
+	unofferedTools?: readonly LayoutToolId[];
+	verticalCenterTabs?: boolean;
+	verticalCenterTabsWidth?: number;
+	verticalTabsInProjects?: boolean;
+	defaultPaneDirection?: "horizontal" | "vertical";
+	onVerticalCenterTabsWidthChange?: (width: number) => void;
+	renderTabIcon?: (tab: LayoutTab, active: boolean) => ReactNode | null;
+	renderSideMenuActions?: (side: LayoutSide, groupId: string) => ReactNode;
+	onDirectTabActivation?: (tab: LayoutTab) => void;
 	document: WorkspaceLayoutDocument;
 	attention: LayoutAttention;
 	maxSideGroups: number;
@@ -353,6 +365,7 @@ export function tabSearchKeywords(tab: LayoutTab): string[] {
 	const name = layoutTabName(tab);
 	switch (tab.kind) {
 		case "file":
+		case "external-file":
 		case "diff":
 			return [name, tab.kind, tab.path];
 		case "changes":
@@ -558,6 +571,7 @@ export function findLayoutGroupTabs(
 
 export interface SharedGroupProps {
 	workspaceId: string;
+	catalog: LayoutToolCatalog;
 	document: WorkspaceLayoutDocument;
 	readAttention: () => LayoutAttention;
 	selectionEpochRef: React.MutableRefObject<number>;
@@ -566,6 +580,7 @@ export interface SharedGroupProps {
 	draggingTab: LayoutTab | null;
 	renderTabBody: WorkbenchProps["renderTabBody"];
 	renderTabAdornment: WorkbenchProps["renderTabAdornment"];
+	renderTabIcon: WorkbenchProps["renderTabIcon"];
 	renderToolBody: WorkbenchProps["renderToolBody"];
 	onNewTerminal: WorkbenchProps["onNewTerminal"];
 	onUserNavigation: WorkbenchProps["onUserNavigation"];

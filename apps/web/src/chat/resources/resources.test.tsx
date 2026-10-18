@@ -66,7 +66,8 @@ test("resource primitives keep their props-only import boundary", () => {
 				/^(?:@thinkrail\/contracts|react|@remixicon\/react|@thinkrail\/ui\/|@\/lib$|\.\/)/,
 			);
 		}
-		expect(source).not.toMatch(/store|transport|xterm|dangerouslySetInnerHTML|Markdown/);
+		expect(source).not.toMatch(/from\s+["'][^"']*(?:store|transport|xterm)/);
+		expect(source).not.toMatch(/dangerouslySetInnerHTML|from\s+["'][^"']*Markdown/);
 	}
 });
 

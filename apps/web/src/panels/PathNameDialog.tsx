@@ -72,7 +72,7 @@ export function PathNameDialog({
 				<DialogHeader>
 					<DialogTitle>{title}</DialogTitle>
 				</DialogHeader>
-				<label className="flex items-center gap-8 rounded-[var(--radius-sm)] border border-control-border-default bg-control-bg px-8 py-4 focus-within:border-control-border-active">
+				<label className="flex items-center gap-8 rounded-sm border border-control-border-default bg-control-bg px-8 py-4 focus-within:border-control-border-active">
 					<FileTypeIcon
 						path={name || (kind === "dir" ? "folder" : "file")}
 						kind={kind === "dir" ? "directory" : "file"}

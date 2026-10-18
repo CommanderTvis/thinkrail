@@ -19,6 +19,7 @@ import { readLayoutNavigationClock, readLayoutSelection, tupleKey } from "../../
 import { projectWorkbenchRatio, restoreWorkbenchRatio } from "./auxiliaryPresentation";
 import { closeRequestTarget } from "./closeRequest";
 import {
+	BUILTIN_LAYOUT_TOOL_CATALOG,
 	canCreateAuxiliaryGroup,
 	canJoinAuxiliaryGroup,
 	canPlaceLayoutTab,
@@ -86,6 +87,7 @@ export type { LayoutTabFocusRequest, WorkbenchProps } from "./workbenchShared";
 
 export function Workbench({
 	workspaceId,
+	catalog,
 	document,
 	attention,
 	maxSideGroups,
@@ -95,6 +97,7 @@ export function Workbench({
 	subscribeCloseRequest,
 	renderTabBody,
 	renderTabAdornment,
+	renderTabIcon,
 	renderToolBody,
 	renderEmptyCenter,
 	renderCenterActions,
@@ -754,6 +757,7 @@ export function Workbench({
 	);
 	const shared: SharedGroupProps = {
 		workspaceId,
+		catalog: catalog ?? BUILTIN_LAYOUT_TOOL_CATALOG,
 		document,
 		readAttention,
 		selectionEpochRef: tabSelectionEpoch,
@@ -762,6 +766,7 @@ export function Workbench({
 		draggingTab,
 		renderTabBody,
 		renderTabAdornment,
+		renderTabIcon,
 		renderToolBody,
 		onNewTerminal,
 		onUserNavigation,

@@ -90,10 +90,10 @@ export function initModelVisibilityPersistence(
 	const key = stablePreferences ? HIDDEN_MODELS_PREFERENCE_KEY : (browser?.key ?? "");
 	const initial = storage ? readHiddenModels(storage, key) : [];
 	useAppStore.getState().hydrateHiddenModels(initial);
-	let previous = useAppStore.getState().hiddenModels;
+	let previous = useAppStore.getState().hiddenModelRefs;
 	const unsubscribe = useAppStore.subscribe((state) => {
-		if (state.hiddenModels === previous) return;
-		previous = state.hiddenModels;
+		if (state.hiddenModelRefs === previous) return;
+		previous = state.hiddenModelRefs;
 		if (storage) writeHiddenModels(storage, key, previous);
 	});
 	const onStorage = (event: StorageEvent) => {

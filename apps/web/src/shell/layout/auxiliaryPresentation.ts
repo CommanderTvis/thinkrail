@@ -1,5 +1,7 @@
 import { type LayoutAttention, readLayoutSelection, tupleKey } from "../../lib";
+import type { LayoutToolCatalog } from "./model";
 import {
+	BUILTIN_LAYOUT_TOOL_CATALOG,
 	findAuxiliaryGroup,
 	findPlacedResource,
 	findTabLocation,
@@ -123,6 +125,7 @@ export function projectAuxiliaryRail(
 	document: WorkspaceLayoutDocument,
 	attention: LayoutAttention,
 	region: LayoutAuxiliaryRegion,
+	catalog: LayoutToolCatalog = BUILTIN_LAYOUT_TOOL_CATALOG,
 ): readonly AuxiliaryRailEntry[] {
 	const entries: AuxiliaryRailEntry[] = [];
 	for (const group of document[region].groups) {
@@ -166,7 +169,7 @@ export function projectAuxiliaryRail(
 				expanded,
 			});
 	}
-	for (const tool of unplacedToolsForRegion(document, region)) {
+	for (const tool of unplacedToolsForRegion(document, region, catalog)) {
 		entries.push({
 			kind: "tool",
 			key: tupleKey("rail-tool", region, tool),

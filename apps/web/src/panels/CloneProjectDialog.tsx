@@ -14,7 +14,7 @@ import { FolderField } from "./FolderField";
 const CLONE_TIMEOUT_MS = 10 * 60_000;
 
 const FIELD_CLASS =
-	"w-full rounded-[var(--radius-sm)] border border-control-border-default bg-control-bg px-12 py-8 text-text-default outline-none focus:border-control-border-active";
+	"w-full rounded-sm border border-control-border-default bg-control-bg px-12 py-8 text-text-default outline-none focus:border-control-border-active";
 
 export function repoNameFromUrl(url: string): string {
 	const tail =

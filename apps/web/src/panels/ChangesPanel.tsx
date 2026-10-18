@@ -91,9 +91,14 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 	};
 
 	const openDiff = useCallback(
-		(path: string, intent: TabIntent, navigation?: CenterNavigationStamp | null) => {
+		(
+			path: string,
+			intent: TabIntent,
+			navigation?: CenterNavigationStamp | null,
+			claimPreview = false,
+		) => {
 			setHighlighted(path);
-			void openDiffInTab(workspaceId, scope, path, intent, navigation);
+			void openDiffInTab(workspaceId, scope, path, intent, navigation, { claimPreview });
 		},
 		[workspaceId, scope],
 	);
@@ -112,7 +117,7 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 		if (!status || changesRequest?.workspaceId !== workspaceId) return;
 		if (useAppStore.getState().changesRequest !== changesRequest) return;
 		const want = changesRequest.path;
-		const match = status.changes.find((c) => matchesWorktreePath(want, c.path));
+		const match = want ? status.changes.find((c) => matchesWorktreePath(want, c.path)) : null;
 		const currentState = useAppStore.getState();
 		const overtaken = changesRequest.navigation
 			? !isCenterNavigationCurrent(currentState, workspaceId, changesRequest.navigation)
@@ -153,7 +158,7 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 							refreshing={branchesRefreshing}
 							label="vs"
 							testid="changes-target-picker"
-							triggerClassName="hidden h-24 min-w-0 max-w-[200px] items-center @min-[16rem]:flex gap-4 rounded-[var(--radius-sm)] px-4 outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary data-[open=true]:bg-control-bg-selected"
+							triggerClassName="hidden h-24 min-w-0 max-w-[200px] items-center @min-[16rem]:flex gap-4 rounded-sm px-4 outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary data-[open=true]:bg-control-bg-selected"
 							onSelect={(ref) => void pointAt(ref)}
 							onRefresh={refreshBranches}
 						/>
@@ -182,7 +187,7 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 							type="button"
 							data-testid="changes-retry"
 							onClick={reload}
-							className="rounded-[var(--radius-sm)] px-4 py-2 tr-text-metadata text-text-muted transition-colors hover:bg-control-bg-hovered hover:text-text-default"
+							className="rounded-sm px-4 py-2 tr-text-metadata text-text-muted transition-colors hover:bg-control-bg-hovered hover:text-text-default"
 						>
 							Retry
 						</button>
@@ -196,9 +201,10 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 				) : changesView === "tree" ? (
 					<ChangesTree
 						changes={status.changes}
-						onOpen={openDiff}
+						onOpen={(path, intent, claimPreview) => openDiff(path, intent, undefined, claimPreview)}
 						onJumpToSource={jumpToSource}
 						isActive={isActive}
+						isViewed={() => false}
 					/>
 				) : (
 					<ul className="motion-safe:animate-reveal">
@@ -210,6 +216,7 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 										path={change.path}
 										active={isActive(change.path)}
 										onView={() => openDiff(change.path, "preview")}
+										onOpenTab={() => openDiff(change.path, "keep")}
 										onJumpToSource={() => jumpToSource(change.path)}
 									>
 										{({ onContextMenu }) => (

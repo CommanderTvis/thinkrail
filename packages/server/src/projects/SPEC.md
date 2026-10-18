@@ -69,7 +69,7 @@ bootstrap it into one so it can be opened.
   leaving it untouched otherwise; `trusted: false` revokes both. A trust change persists and publishes the
   record, so every client shows the persisted trust even when the host request that made it then fails
   (an open chat could not reload).
-- **Public surface (barrel):** `openProject`, `listProjects`, `listRecentProjects`, `closeProject`,
+- **Public surface (barrel):** `openProject`, `listProjects`, `listRecentProjects`, `closeProject`, `cloneProject`, `createProject`,
   `getProjects`, `setProjectPublisher`, `inspectProjectPath`, `initProject`, `setProjectTrust`,
   `setProjectSkillEnabled`, `setProjectGroupEnabled`, `acknowledgeProjectSkills`,
   `approveProjectMcpServer`, `setProjectMcpOverride`, `setPiTrustSeed`.

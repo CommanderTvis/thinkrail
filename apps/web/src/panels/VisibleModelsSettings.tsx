@@ -1,5 +1,5 @@
 import { RiArrowDownSLine, RiArrowRightSLine, RiSearchLine } from "@remixicon/react";
-import { sameModel, type WireModel } from "@thinkrail/contracts";
+import { matchesModelPattern, sameModel, type WireModel } from "@thinkrail/contracts";
 import { cn } from "@thinkrail/ui/utils";
 import { useId, useMemo, useState } from "react";
 import { formatContext } from "@/chat/modelPicker";
@@ -15,9 +15,12 @@ export function VisibleModelsSettings({ models }: Props) {
 	const [expanded, setExpanded] = useState(false);
 	const [search, setSearch] = useState("");
 	const listId = useId();
-	const hiddenModels = useAppStore((s) => s.hiddenModels);
+	const hiddenModels = useAppStore((s) => s.hiddenModelRefs);
+	const hiddenPatterns = useAppStore((s) => s.hiddenModels);
 	const toggleModelVisibility = useAppStore((s) => s.toggleModelVisibility);
-	const isHidden = (model: WireModel) => hiddenModels.some((hidden) => sameModel(hidden, model));
+	const isHidden = (model: WireModel) =>
+		hiddenModels.some((hidden) => sameModel(hidden, model)) ||
+		hiddenPatterns.some((pattern) => matchesModelPattern(model, pattern));
 
 	const filteredModels = useMemo(() => {
 		if (!search.trim()) return models;

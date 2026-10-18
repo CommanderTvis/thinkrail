@@ -1,4 +1,4 @@
-import { type VisualizeParams, VisualizeSchema, validateShape } from "@thinkrail.ai/pi-visualize";
+import { type VisualizeParams, VisualizeSchema, validateShape } from "@thinkrail/pi-visualize";
 import type { TerminalVisualization, VisualizationsChangedPayload } from "../contracts";
 
 export { VisualizeSchema };

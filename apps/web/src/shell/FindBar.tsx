@@ -101,7 +101,7 @@ export function FindBar({
 		<search
 			ref={barRef}
 			data-testid="find-bar"
-			className={`${anchor ? "absolute" : "fixed"} top-[calc(var(--panel-header-row-height)+16px)] right-16 z-50 flex items-center gap-4 rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg p-4 shadow-[var(--shadow-md)]`}
+			className={`${anchor ? "absolute" : "fixed"} top-[calc(var(--panel-header-row-height)+16px)] right-16 z-50 flex items-center gap-4 rounded-sm border border-border-default bg-container-elevated-bg p-4 shadow-[var(--shadow-md)]`}
 		>
 			<input
 				ref={inputRef}
@@ -120,7 +120,7 @@ export function FindBar({
 						onClose();
 					}
 				}}
-				className={`w-[220px] rounded-[var(--radius-sm)] border bg-control-bg px-8 py-4 tr-text-ui outline-none focus:border-control-border-active ${
+				className={`w-[220px] rounded-sm border bg-control-bg px-8 py-4 tr-text-ui outline-none focus:border-control-border-active ${
 					missed ? "border-feedback-error" : "border-control-border-default"
 				}`}
 			/>

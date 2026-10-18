@@ -2,7 +2,24 @@ import { describe, expect, it } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { normalizeEol } from "../../scripts/generatedFiles";
-import { allStyles, GENERATED_PATH, isCodeStyleId, isRef, loadTypography, PROSE_SELECTORS, proseRootClassName, rawStyle, renderCss, resolveFamily, resolveStyle, type Style, styleClassName, type StyleRef, type Typography, validate } from "../../scripts/typography";
+import {
+	allStyles,
+	GENERATED_PATH,
+	isCodeStyleId,
+	isRef,
+	loadTypography,
+	PROSE_SELECTORS,
+	proseRootClassName,
+	rawStyle,
+	renderCss,
+	resolveFamily,
+	resolveStyle,
+	type Style,
+	type StyleRef,
+	styleClassName,
+	type Typography,
+	validate,
+} from "../../scripts/typography";
 
 const typography = loadTypography();
 const SRC = new URL("..", import.meta.url).pathname;
@@ -416,9 +433,10 @@ describe("generated CSS", () => {
 		expect(GENERATED).toContain("--tr-font-size-s13: 13px;");
 		expect(GENERATED).toContain("--tr-line-height-default: 1.3;");
 		expect(GENERATED).toContain("--tr-code-row-height: 14px;");
-		const monaco = read(join(SRC, "panels/monacoSetup.ts"));
+		const monaco = read(join(SRC, "../../../packages/ui/editor/monacoSetup.ts"));
+		const editorFont = read(join(SRC, "../../../packages/ui/editor/editorFont.ts"));
 		const xterm = read(join(SRC, "panels/TerminalInstance.tsx"));
-		expect(monaco).toContain('cssVar("--tr-font-size-s11")');
+		expect(editorFont).toContain('cssVar("--tr-font-size-s11")');
 		expect(xterm).toContain('cssVar("--tr-font-size-s13")');
 		for (const file of [monaco, xterm]) {
 			expect(file).toContain('cssVar("--tr-font-family-code")');

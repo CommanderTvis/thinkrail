@@ -44,7 +44,7 @@ export function FolderField({
 			type="button"
 			data-testid={testId}
 			onClick={() => void pick()}
-			className="flex w-full items-center gap-8 rounded-[var(--radius-sm)] border border-control-border-default bg-control-bg px-12 py-8 text-left hover:bg-control-bg-hovered"
+			className="flex w-full items-center gap-8 rounded-sm border border-control-border-default bg-control-bg px-12 py-8 text-left hover:bg-control-bg-hovered"
 		>
 			<Folder className="size-16 shrink-0 text-text-muted" />
 			<span className="min-w-0 flex-1 truncate">{value ?? placeholder}</span>

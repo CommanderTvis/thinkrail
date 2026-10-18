@@ -76,7 +76,7 @@ export function AccountUsageWindow({
 				aria-label={`${label} usage`}
 				value={used}
 				max={100}
-				className={`h-4 w-full overflow-hidden rounded-[var(--radius-sm)] border-0 bg-control-bg appearance-none [&::-webkit-progress-bar]:bg-control-bg ${TONES[severity]}`}
+				className={`h-4 w-full overflow-hidden rounded-sm border-0 bg-control-bg appearance-none [&::-webkit-progress-bar]:bg-control-bg ${TONES[severity]}`}
 			/>
 			{reset ? <span className="tr-text-metadata text-text-subtle">{reset}</span> : null}
 		</div>

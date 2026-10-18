@@ -115,7 +115,7 @@ export const SideGroupView = memo(function SideGroupView({
 			tabIndex={-1}
 			aria-label={`${side} pane: ${selected ? layoutTabName(selected) : "Tools"}`}
 			data-testid={
-				group.tabs.some((tab) => tab.kind === "tool" && tab.tool === "specs")
+				group.tabs.some((tab) => tab.kind === "tool" && tab.tool === "plugin:spec-dialect:specs")
 					? "right-panel"
 					: "side-group"
 			}
@@ -300,6 +300,7 @@ export function AuxiliaryGroupHeader({
 				onRenameChat={shared.onRenameChat}
 				canFocusAdjacentGroup={shared.canFocusAdjacentGroup}
 				renderTabAdornment={shared.renderTabAdornment}
+				renderTabIcon={shared.renderTabIcon}
 				trailing={actions}
 			/>
 		);

@@ -49,6 +49,7 @@ import {
 	ungroupTab,
 	unplacedTools,
 	unplacedToolsForRegion,
+	unplacedToolsForSide,
 	validateLayoutDocument,
 	withAvailablePlacementId,
 } from "./model";

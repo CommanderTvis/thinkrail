@@ -605,7 +605,7 @@ export function LayoutSettings() {
 										defaultPaneDirection: option.direction,
 									})
 								}
-								className="rounded-[var(--radius-sm)] border border-border-default px-12 py-4 tr-text-ui text-text-muted data-[active=true]:border-primary-muted data-[active=true]:bg-primary-subtle data-[active=true]:text-text-default hover:bg-control-bg-hovered disabled:border-control-disabled-border disabled:bg-control-disabled-bg disabled:text-control-disabled-text"
+								className="rounded-sm border border-border-default px-12 py-4 tr-text-ui text-text-muted data-[active=true]:border-primary-muted data-[active=true]:bg-primary-subtle data-[active=true]:text-text-default hover:bg-control-bg-hovered disabled:border-control-disabled-border disabled:bg-control-disabled-bg disabled:text-control-disabled-text"
 							>
 								{option.label}
 							</button>

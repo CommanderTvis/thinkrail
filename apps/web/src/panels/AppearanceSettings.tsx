@@ -474,7 +474,7 @@ export function AppearanceSettings() {
 							onBlur={(event) => {
 								if (event.target.value !== codeFont) setCodeFont(event.target.value);
 							}}
-							className="w-full rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg px-8 py-4 tr-code-text text-text-default outline-none focus-visible:ring-2 focus-visible:ring-primary"
+							className="w-full rounded-sm border border-border-default bg-container-elevated-bg px-8 py-4 tr-code-text text-text-default outline-none focus-visible:ring-2 focus-visible:ring-primary"
 						/>
 					}
 				/>
@@ -492,7 +492,11 @@ export function AppearanceSettings() {
 				/>
 				<SettingsRow
 					label="Draw the editor on the GPU"
-					description={gpuUsable ? "Experimental graphics-card rendering for large files." : "This machine cannot run the editor's graphics-card rendering."}
+					description={
+						gpuUsable
+							? "Experimental graphics-card rendering for large files."
+							: "This machine cannot run the editor's graphics-card rendering."
+					}
 					control={
 						<input
 							type="checkbox"

@@ -4,10 +4,10 @@ function canvasNormalize(color: string): string {
 	if (typeof document === "undefined") return "";
 	colorCanvas ??= document.createElement("canvas").getContext("2d");
 	if (!colorCanvas) return "";
-	colorCanvas.fillStyle = "#000000";
+	colorCanvas.fillStyle = "black";
 	colorCanvas.fillStyle = color;
 	const first = colorCanvas.fillStyle;
-	colorCanvas.fillStyle = "#ffffff";
+	colorCanvas.fillStyle = "white";
 	colorCanvas.fillStyle = color;
 	return first === colorCanvas.fillStyle ? first : "";
 }

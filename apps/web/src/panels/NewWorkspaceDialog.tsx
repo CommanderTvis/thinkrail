@@ -106,13 +106,17 @@ export function NewWorkspaceDialog({
 	open,
 	projectId,
 	initialPrompt,
+	initialBaseRef,
 	promptNote,
+	onCreated,
 	onOpenChange,
 }: {
 	open: boolean;
 	projectId: string;
 	initialPrompt?: string;
+	initialBaseRef?: string;
 	promptNote?: string;
+	onCreated?: (workspace: Workspace) => void;
 	onOpenChange: (open: boolean) => void;
 }) {
 	const projects = useAppStore((s) => s.projects);
@@ -204,12 +208,18 @@ export function NewWorkspaceDialog({
 		if (!open) return;
 		setSelectedProjectId(projectId);
 		updatePromptDraft(initialPrompt ?? "", null);
+		if (initialBaseRef) {
+			setBaseRef(initialBaseRef);
+			void getTransport()
+				.request("git.prefetch", { projectId, ref: initialBaseRef })
+				.catch(() => {});
+		}
 		setTarget("worktree");
 		setCreating(false);
 		attachedImages.reset();
 		hostDefaultAsked.current = false;
 		setExplicitPair(false);
-	}, [open, projectId, initialPrompt, updatePromptDraft, attachedImages.reset]);
+	}, [open, projectId, initialPrompt, initialBaseRef, updatePromptDraft, attachedImages.reset]);
 
 	useEffect(() => {
 		if (!open) return;
@@ -260,14 +270,15 @@ export function NewWorkspaceDialog({
 		refresh: onRefreshModels,
 		fresh: catalogFresh,
 	} = useModelCatalog(open);
-	const hiddenModels = useAppStore((s) => s.hiddenModels);
+	const hiddenModels = useAppStore((s) => s.hiddenModelRefs);
+	const hiddenPatterns = useAppStore((s) => s.hiddenModels);
 	const visibleModels = useMemo(
-		() => selectPickerModels(allModels, hiddenModels, []),
-		[allModels, hiddenModels],
+		() => selectPickerModels(allModels, hiddenModels, [], hiddenPatterns),
+		[allModels, hiddenModels, hiddenPatterns],
 	);
 	const models = useMemo(
-		() => selectPickerModels(allModels, hiddenModels, [model]),
-		[allModels, hiddenModels, model],
+		() => selectPickerModels(allModels, hiddenModels, [model], hiddenPatterns),
+		[allModels, hiddenModels, hiddenPatterns, model],
 	);
 	const modelPreferences = useModelPreferences(visibleModels);
 
@@ -354,6 +365,7 @@ export function NewWorkspaceDialog({
 		refreshing,
 		refresh: refreshBranches,
 	} = useBranchList(open ? selectedProjectId : null, (list) => {
+		if (initialBaseRef) return;
 		setBaseRef(list.defaultBranch);
 		prefetchBase(list.defaultBranch);
 	});
@@ -391,6 +403,7 @@ export function NewWorkspaceDialog({
 		const store = useAppStore.getState();
 		if (target === "worktree") {
 			void refreshProjectWorkspaces(workspace.projectId).catch(() => {});
+			onCreated?.(workspace);
 			store.activateWorkspace(workspace);
 		}
 		onOpenChange(false);

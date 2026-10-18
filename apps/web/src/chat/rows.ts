@@ -109,7 +109,7 @@ export function deriveRows(
 	turns: ChatTurn[],
 	toolResults: Record<string, ToolResultState>,
 	isStreaming: boolean,
-	isSpec?: (path: string) => boolean,
+	groupFor?: WrittenPathGroupResolver | LegacySpecPathMatcher,
 	agentTurns: readonly TurnChangeSet[] = [],
 	workspaceRoot?: string,
 ): ChatRow[] {
@@ -218,7 +218,7 @@ export function deriveRows(
 			(turns[i + 1]?.kind === "user" || (i === turns.length - 1 && !isStreaming));
 		if (roundEnded) {
 			flushRun();
-			const data = turnDivider(turns, i, isSpec, agentTurns, workspaceRoot);
+			const data = turnDivider(turns, i, groupFor, agentTurns, workspaceRoot);
 			if (data) rows.push({ kind: "divider", id: `${turn.id}:divider`, data });
 		}
 	}
@@ -234,10 +234,34 @@ export interface TurnReceipt {
 export interface TurnDividerData {
 	elapsedMs: number | null;
 	toolCount: number;
+	groups: WrittenPathGroup[];
 	specs: string[];
 	changedFiles: string[];
 	receipt: TurnReceipt | null;
 }
+
+export interface WrittenPathGroup {
+	id: string;
+	label: (count: number) => string;
+	tool: string;
+	paths: string[];
+}
+
+type WrittenPathGroupOwner = Omit<WrittenPathGroup, "paths">;
+type WrittenPathGroupResolver = (toolName: string, path: string) => WrittenPathGroupOwner | null;
+type LegacySpecPathMatcher = (path: string) => boolean;
+
+const SPEC_FALLBACK_GROUP: WrittenPathGroupOwner = {
+	id: "specs",
+	label: (count) => `${count} ${count === 1 ? "spec" : "specs"}`,
+	tool: "specs",
+};
+
+const CHANGED_FILES_GROUP: WrittenPathGroupOwner = {
+	id: "files",
+	label: (count) => `${count} ${count === 1 ? "file changed" : "files changed"}`,
+	tool: "changes",
+};
 
 export function matchTurnReceipt(
 	agentTurns: readonly TurnChangeSet[],
@@ -272,7 +296,7 @@ const FILE_WRITER_TOOLS = new Set(["write", "edit"]);
 export function turnDivider(
 	turns: ChatTurn[],
 	endIndex: number,
-	isSpec: (path: string) => boolean = () => false,
+	groupFor: WrittenPathGroupResolver | LegacySpecPathMatcher = () => null,
 	agentTurns: readonly TurnChangeSet[] = [],
 	workspaceRoot?: string,
 ): TurnDividerData | null {
@@ -284,9 +308,15 @@ export function turnDivider(
 		}
 	}
 	if (userIdx < 0) return null;
+	const resolveGroup: WrittenPathGroupResolver = (toolName, path) => {
+		if (groupFor.length < 2) {
+			return (groupFor as LegacySpecPathMatcher)(path) ? SPEC_FALLBACK_GROUP : null;
+		}
+		return (groupFor as WrittenPathGroupResolver)(toolName, path);
+	};
 
 	let toolCount = 0;
-	const written = new Map<string, boolean>();
+	const written = new Map<string, WrittenPathGroupOwner>();
 	let endMs: number | null = null;
 	for (let i = userIdx + 1; i <= endIndex; i++) {
 		const turn = turns[i];
@@ -300,8 +330,8 @@ export function turnDivider(
 				const reportedPath = strArg(block.arguments, "path");
 				if (!reportedPath) continue;
 				const path = projectRelativePath(reportedPath, workspaceRoot);
-				if (specWrite || isSpec(path)) written.set(path, true);
-				else if (!written.has(path)) written.set(path, false);
+				const owner = resolveGroup(block.name, path) ?? (specWrite ? SPEC_FALLBACK_GROUP : null);
+				if (owner || !written.has(path)) written.set(path, owner ?? CHANGED_FILES_GROUP);
 			}
 		} else if (turn?.kind === "system" && turn.endedAt != null) {
 			endMs = turn.endedAt;
@@ -315,18 +345,32 @@ export function turnDivider(
 	const nextUser = turns[endIndex + 1];
 	const nextStartMs = nextUser?.kind === "user" ? (nextUser.message.timestamp ?? null) : null;
 	const receipt = matchTurnReceipt(agentTurns, startMs ?? null, nextStartMs);
-	const specs: string[] = [];
-	const changedFiles: string[] = [];
-	for (const [path, isSpecPath] of written) (isSpecPath ? specs : changedFiles).push(path);
+	const pathsByGroup = new Map<string, WrittenPathGroup>();
+	for (const [path, group] of written) {
+		let existing = pathsByGroup.get(group.id);
+		if (!existing) {
+			existing = { ...group, paths: [] };
+			pathsByGroup.set(group.id, existing);
+		}
+		if (!existing.paths.includes(path)) existing.paths.push(path);
+	}
 	if (receipt) {
-		changedFiles.length = 0;
+		for (const group of pathsByGroup.values()) group.paths = [];
 		for (const change of receipt.changes) {
-			if (written.get(change.path) === true || isSpec(change.path)) {
-				if (!specs.includes(change.path)) specs.push(change.path);
-			} else changedFiles.push(change.path);
+			const group =
+				written.get(change.path) ?? resolveGroup("receipt", change.path) ?? CHANGED_FILES_GROUP;
+			let target = pathsByGroup.get(group.id);
+			if (!target) {
+				target = { ...group, paths: [] };
+				pathsByGroup.set(group.id, target);
+			}
+			target.paths.push(change.path);
 		}
 	}
-	return { elapsedMs, toolCount, specs, changedFiles, receipt };
+	const groups = [...pathsByGroup.values()].filter((group) => group.paths.length > 0);
+	const specs = groups.find((group) => group.id === "specs")?.paths ?? [];
+	const changedFiles = groups.find((group) => group.id === "files")?.paths ?? [];
+	return { elapsedMs, toolCount, groups, specs, changedFiles, receipt };
 }
 
 export function rowIndexForTurn(rows: ChatRow[], turnId: string): number {

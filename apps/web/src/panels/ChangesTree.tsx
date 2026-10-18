@@ -12,11 +12,13 @@ export function ChangesTree({
 	onOpen,
 	isActive,
 	isViewed,
+	onJumpToSource,
 }: {
 	changes: readonly GitFileChange[];
 	onOpen: (path: string, intent: TabIntent, claimPreview?: boolean) => void;
 	isActive: (path: string) => boolean;
 	isViewed: (path: string) => boolean;
+	onJumpToSource: (path: string) => void;
 }) {
 	return (
 		<ul className="flex flex-col motion-safe:animate-reveal">
@@ -27,6 +29,7 @@ export function ChangesTree({
 					onOpen={onOpen}
 					isActive={isActive}
 					isViewed={isViewed}
+					onJumpToSource={onJumpToSource}
 				/>
 			))}
 		</ul>
@@ -38,11 +41,13 @@ function ChangeNodeRow({
 	onOpen,
 	isActive,
 	isViewed,
+	onJumpToSource,
 }: {
 	node: ChangeTreeNode;
 	onOpen: (path: string, intent: TabIntent, claimPreview?: boolean) => void;
 	isActive: (path: string) => boolean;
 	isViewed: (path: string) => boolean;
+	onJumpToSource: (path: string) => void;
 }) {
 	const [expanded, setExpanded] = useState(true);
 
@@ -54,6 +59,7 @@ function ChangeNodeRow({
 					active={isActive(node.path)}
 					onView={() => onOpen(node.path, "preview")}
 					onOpenTab={() => onOpen(node.path, "keep")}
+					onJumpToSource={() => onJumpToSource(node.path)}
 				>
 					{({ onContextMenu }) => (
 						<TreeRow
@@ -103,6 +109,7 @@ function ChangeNodeRow({
 							onOpen={onOpen}
 							isActive={isActive}
 							isViewed={isViewed}
+							onJumpToSource={onJumpToSource}
 						/>
 					))}
 				</ul>

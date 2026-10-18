@@ -21,9 +21,39 @@ export interface Project {
 	/** `false` for a plain folder ThinkRail opened without a git repo; absent/`true` otherwise. */
 	hasGit?: boolean;
 	dismissedWorktrees?: string[];
+	/**
+	 * pi-level trust for the project's native `.pi/` resources, separate from the alias-skill `trusted`
+	 * grant; absent (a record that predates pi-level trust) reads as untrusted. Never enables MCP servers by itself.
+	 */
+	piResourceTrust?: "granted" | "untrusted";
+	/** Approved repo-defined MCP entries: server name → fingerprint of the original project-file entry. */
+	mcpApprovals?: Record<string, string>;
+	/** Per-project enablement/exposure of user-level MCP servers (never written to `.pi/mcp.json`). */
+	mcpOverrides?: Record<string, McpProjectOverride>;
 }
 
 export type ProjectPathStatus = { kind: "repo" | "initable" | "missing" | "notDirectory" };
+
+/** A kind of the project's own pi resources; `extensions` and `settings` run code on the host. */
+export type ProjectResourceKind =
+	| "extensions"
+	| "settings"
+	| "skills"
+	| "prompts"
+	| "themes"
+	| "systemPrompt"
+	| "subagents";
+
+/**
+ * What a project's trust grant would load, for the trust notice; alias skill names show only after trust.
+ * `mcpServers` counts the entries of the project's `.pi/mcp.json`, each approved separately.
+ */
+export interface ProjectTrustSummary {
+	aliasSkills: string[];
+	/** The kinds of the project's own pi resources a pi-level grant would load; empty when none. */
+	piResources: ProjectResourceKind[];
+	mcpServers?: number;
+}
 
 export interface DiffStats {
 	added: number;
@@ -31,6 +61,9 @@ export interface DiffStats {
 }
 
 export type SubagentOverride = "on" | "off";
+
+/** `"settled"` = the user parked the workspace on the shelf; `"active"` = the user pinned it live. */
+export type SettledOverride = "settled" | "active";
 
 export interface Workspace {
 	id: string;
@@ -51,13 +84,27 @@ export interface Workspace {
 	vcs?: "none" | "unborn";
 	skillOverrides?: Record<string, "on" | "off">;
 	subagentsOverride?: SubagentOverride;
+	/** Per-chat concurrent-subagent limit for this workspace; absent = the global `subagentMaxConcurrent`. */
+	subagentMaxConcurrentOverride?: number;
+	/** Newest real activity (chat/agent turn, terminal input, HEAD move) in ms; viewing never counts. */
+	lastActiveAt?: number;
+	settledOverride?: SettledOverride;
+	settledAt?: number;
+	/** The host's last-known review for the branch; refreshed host-side so every client sees one state. */
+	review?: OpenBranchReview;
 }
+
+export type BranchReviewState = "open" | "merged" | "closed";
 
 export interface OpenBranchReview {
 	kind: "pull-request" | "merge-request";
 	number: number;
 	/** The review's web page, when the provider reported one — what makes the `PR #N` chip a link. */
 	url?: string;
+	/** Absent on a pre-v78 host, which only ever reported open reviews. */
+	state?: BranchReviewState;
+	/** When the provider merged or closed the review, in ms. */
+	changedAt?: number;
 	/** `workspace.openReview` only: local commits origin/<branch> doesn't have yet. */
 	unpushedCommits?: number;
 	/**
@@ -309,6 +356,151 @@ export interface SessionResources {
 	sessionId: string;
 	commands: BackgroundCommandSummary[];
 	subagents: SubagentResourceSummary[];
+	/** Absent on hosts without MCP support (`MCP_PROTOCOL_VERSION`). */
+	mcpServers?: McpServerResourceSummary[];
+}
+
+export type McpServerScope = "user" | "project";
+
+/** Configured exposure; `codemode` is accepted from files and treated as `deferred` while codemode is not shipped. */
+export type McpExposure = "deferred" | "direct" | "hidden" | "codemode";
+
+export type McpTransportKind = "stdio" | "http";
+
+export interface McpProjectOverride {
+	enabled?: boolean;
+	exposure?: Exclude<McpExposure, "codemode">;
+}
+
+/** The session-independent view of one configured server; secret literal values are masked. */
+export interface McpServerSummary {
+	name: string;
+	scope: McpServerScope;
+	/** Defining `mcp.json` path. */
+	source: string;
+	/** Fingerprint of the defining file's entry as rendered; `mcp.update` / `mcp.remove` name their target with it. */
+	fingerprint: string;
+	transport: McpTransportKind;
+	/** Command + args, or URL, with literal credential values masked. */
+	endpoint: string;
+	exposure: McpExposure;
+	effectiveExposure: Exclude<McpExposure, "codemode">;
+	effective?: boolean;
+	enabled: boolean;
+	description?: string;
+	/** HTTP server without an `Authorization` header: sign-in applies. */
+	oauth: boolean;
+	/** Project entry that shadows a user-level server of the same name. */
+	replacesGlobal?: boolean;
+	projectOverride?: McpProjectOverride;
+	/** Repository content only: the project entry, or the repo override folded into a user row. */
+	approval?: { state: "approved" | "pending" | "changed"; fingerprint: string };
+	/** pi-equivalent validation message when the entry is rejected; credential-looking values are masked by the host. */
+	configError?: string;
+}
+
+export type McpServerState =
+	| "starting"
+	| "connected"
+	| "needs-sign-in"
+	| "failed"
+	| "disconnected"
+	| "disabled"
+	| "disabled-in-project"
+	| "disabled-in-chat"
+	| "pending-approval"
+	| "invalid-config"
+	| "pending-reload"
+	| "not-running"
+	| "handled-elsewhere"
+	| "unknown";
+
+export interface McpServerStatus {
+	name: string;
+	state: McpServerState;
+	/** Server-reported count from pi's status text; absent when not connected. */
+	toolCount?: number;
+	/**
+	 * pi's status line(s) for this server. pi does not redact them (connection errors, a stdio server's
+	 * stderr tail), so the host masks credential-looking values before they leave it.
+	 */
+	detail?: string;
+	updatedAt: number;
+}
+
+export interface McpStatusSnapshot {
+	workspaceId: string;
+	sessionId: string;
+	/** Monotonic per session; a stale snapshot never overwrites a newer one. */
+	generation: number;
+	servers: McpServerStatus[];
+}
+
+export interface McpServerResourceSummary {
+	name: string;
+	state: McpServerState;
+	toolCount?: number;
+	transport: McpTransportKind;
+	/** Registered by an extension (`pi.registerMcpServer()`), not an `mcp.json` entry: it cannot be disabled per chat. */
+	registered?: true;
+}
+
+/** Mirror of pi's `McpToolDetails` as it arrives in `mcp__*` and the three MCP resource tools' results. */
+export interface McpToolDetails {
+	server: string;
+	tool: string;
+	fullOutputPath?: string;
+}
+
+export type McpContentBlockSummary =
+	| { kind: "text"; chars: number }
+	| { kind: "image"; mimeType: string }
+	| { kind: "audio"; mimeType: string }
+	| { kind: "resource_link"; uri: string; name?: string; mimeType?: string }
+	| { kind: "resource"; uri: string; mimeType?: string; chars?: number };
+
+/**
+ * Bounded, base64-free presentation summary written into a tool result's `details.thinkrail` by the
+ * host so cards render the same live, after reload, and on another client.
+ */
+export interface McpResultSummary {
+	blocks: McpContentBlockSummary[];
+	/** Blocks dropped from the end of `blocks` once the summary's byte budget was spent. */
+	omittedBlocks?: number;
+	structuredContent?: unknown;
+	structuredContentTruncated?: boolean;
+	isError?: boolean;
+}
+
+export type McpReadOutputResult =
+	| { available: true; text: string; truncated: boolean }
+	| { available: false; reason: "expired" | "unavailable" };
+
+/** One server's lines from pi's shared MCP log (the messages servers send it), masked by the host. */
+export interface McpServerLog {
+	/** The file pi appends to: `mcp.log` in pi's agent directory. */
+	path: string;
+	/** The server's latest lines, oldest first and at most 200; empty when it logged nothing there. */
+	text: string;
+}
+
+/** One raw `mcpServers` entry as written in a config file; validated by the host with pi-equivalent rules. */
+export type McpServerEntryInput = Record<string, unknown>;
+
+/** A problem with a whole `mcp.json` (unparsable JSON, `mcpServers` not an object, a mistyped top-level key), masked by the host. */
+export interface McpConfigFileError {
+	/** The file's path. */
+	source: string;
+	message: string;
+}
+
+export interface McpListResult {
+	servers: McpServerSummary[];
+	statuses: McpStatusSnapshot[];
+	/** File-level problems of the files `servers` came from; absent when there are none or the host predates them. */
+	configErrors?: McpConfigFileError[];
+	/** MCP is provided by a user-installed extension or disabled through pi settings; management is read-only. */
+	handledElsewhere?: { by: string };
 }
 
 export type BackgroundCommandOutputResult =
@@ -337,7 +529,19 @@ export type GitDiffScope =
 	| { kind: "branch" }
 	| { kind: "uncommitted" }
 	| { kind: "commit"; sha: string }
-	| { kind: "pinned"; baseRef: string };
+	| { kind: "pinned"; baseRef: string }
+	| { kind: "turn"; id: string; baseTree: string; headTree: string; startedAt: number };
+
+export interface TurnChangeSet {
+	id: string;
+	workspaceId: string;
+	sessionId: string;
+	startedAt: number;
+	settledAt: number;
+	baseTree: string;
+	headTree: string;
+	changes: GitFileChange[];
+}
 
 export interface GitCommit {
 	sha: string;
@@ -530,6 +734,8 @@ export interface LoginPush {
 	loginId: string;
 	providerId: string;
 	frame: LoginFrame;
+	/** Present for MCP server sign-ins; such pushes reach only the connection that started the login. */
+	target?: { kind: "mcp"; workspaceId: string; serverName: string };
 }
 
 export interface LoginReply {
@@ -748,6 +954,8 @@ export interface AppConfig extends ThemePreference {
 	agentReviewEnabled: boolean;
 	restoreLatestChat: boolean;
 	subagentsEnabled: boolean;
+	/** How many subagents one chat may run at once; more spawns queue FIFO. */
+	subagentMaxConcurrent: number;
 	jbcentralQuotaEnabled: boolean;
 	jbcentralQuotaRefreshSeconds: number;
 	/** Which shell new workspace terminals start on Windows; ignored on other platforms. */
@@ -764,6 +972,18 @@ export interface AppConfig extends ThemePreference {
 	plugins: Record<string, PluginSettingsNamespace>;
 	/** Absolute directories scanned for external plugins, beyond the builtin ones. */
 	pluginPaths: string[];
+	/** Idle days after which a quiet workspace settles onto its project's shelf; `null` = never. */
+	settleIdleDays: number | null;
+	disabledExtensions: string[];
+}
+
+export interface ExtensionCatalogEntry {
+	name: string;
+	title: string;
+	description?: string;
+	enabled: boolean;
+	tools: string[];
+	hasChildExtensions: boolean;
 }
 
 /** How many recently chosen models the host remembers. */
@@ -793,6 +1013,29 @@ export type TerminalWindowsShell = (typeof TERMINAL_WINDOWS_SHELLS)[number];
 
 export function isTerminalWindowsShell(value: unknown): value is TerminalWindowsShell {
 	return TERMINAL_WINDOWS_SHELLS.some((shell) => shell === value);
+}
+
+export const SETTLE_IDLE_DAYS = { min: 1, max: 365, default: 7 } as const;
+
+export function isSettleIdleDays(value: unknown): value is number | null {
+	return (
+		value === null ||
+		(typeof value === "number" &&
+			Number.isInteger(value) &&
+			value >= SETTLE_IDLE_DAYS.min &&
+			value <= SETTLE_IDLE_DAYS.max)
+	);
+}
+
+export const SUBAGENT_MAX_CONCURRENT = { min: 1, max: 16, default: 4 } as const;
+
+export function isSubagentMaxConcurrent(value: unknown): value is number {
+	return (
+		typeof value === "number" &&
+		Number.isInteger(value) &&
+		value >= SUBAGENT_MAX_CONCURRENT.min &&
+		value <= SUBAGENT_MAX_CONCURRENT.max
+	);
 }
 
 export const JBCENTRAL_QUOTA_REFRESH_SECONDS = { min: 1, max: 3600, default: 30 } as const;
@@ -890,11 +1133,14 @@ export const DEFAULT_CONFIG: AppConfig = {
 	agentReviewEnabled: false,
 	restoreLatestChat: true,
 	subagentsEnabled: true,
+	subagentMaxConcurrent: SUBAGENT_MAX_CONCURRENT.default,
 	jbcentralQuotaEnabled: true,
 	jbcentralQuotaRefreshSeconds: JBCENTRAL_QUOTA_REFRESH_SECONDS.default,
 	hiddenModels: [],
 	plugins: {},
 	pluginPaths: [],
+	settleIdleDays: SETTLE_IDLE_DAYS.default,
+	disabledExtensions: [],
 };
 
 export function normalizeThemePreference(value: unknown): ThemePreference {
@@ -1043,6 +1289,24 @@ export interface ReviewComment {
 	resolvedAt?: number;
 }
 
+export interface ReviewReadingStep {
+	path: string;
+	why: string;
+}
+
+/** The newest reviewer verdict's narrative for the workspace: its one-paragraph summary and the order it
+ * suggests reading the change set in. Written by the host when a plan-step verdict lands; the Changes
+ * review tab walks it. */
+export interface ReviewGuide {
+	summary: string;
+	readingOrder: ReviewReadingStep[];
+	verdict: PlanReviewVerdict;
+	todoId: string;
+	sessionId: string;
+	reviewedSha: string;
+	at: number;
+}
+
 export interface Review {
 	id: string;
 	workspaceId: string;
@@ -1050,6 +1314,7 @@ export interface Review {
 	baseSha: string;
 	fileSessions?: Record<string, string>;
 	doneFiles?: string[];
+	guide?: ReviewGuide;
 	createdAt: number;
 	closedAt?: number;
 }
@@ -1106,6 +1371,8 @@ export interface PlanReviewResult {
 	reviewedSha?: string;
 	/** The reviewer's one-paragraph rationale (shown on the card). */
 	summary?: string;
+	/** The reviewer's suggested order for reading the change set, one line of why per file. */
+	readingOrder?: ReviewReadingStep[];
 	findings: ReviewFixComment[];
 	/** Host-set on an `approve` it refused to settle: findings from an earlier round are still open, so
 	 * the step stays unreviewed until the worker resolves them. */
@@ -1113,6 +1380,18 @@ export interface PlanReviewResult {
 }
 
 export const PLAN_REVIEW_VERDICTS: readonly PlanReviewVerdict[] = ["approve", "request_changes"];
+export const REVIEW_READING_ORDER_LIMIT = 12;
+
+function isReadingStep(value: unknown): value is ReviewReadingStep {
+	if (!value || typeof value !== "object") return false;
+	const step = value as Partial<ReviewReadingStep>;
+	return (
+		typeof step.path === "string" &&
+		step.path.length > 0 &&
+		typeof step.why === "string" &&
+		step.why.length > 0
+	);
+}
 
 const REVIEW_COMMENT_KINDS: readonly ReviewCommentKind[] = ["inline", "diff", "file", "review"];
 
@@ -1146,6 +1425,14 @@ export function isPlanReviewResult(value: unknown): value is PlanReviewResult {
 	if (typeof r.itemId !== "string" || typeof r.itemTitle !== "string") return false;
 	if (typeof r.verdict !== "string" || !PLAN_REVIEW_VERDICTS.includes(r.verdict)) return false;
 	if (r.summary !== undefined && typeof r.summary !== "string") return false;
+	if (
+		r.readingOrder !== undefined &&
+		(!Array.isArray(r.readingOrder) ||
+			r.readingOrder.length > REVIEW_READING_ORDER_LIMIT ||
+			!r.readingOrder.every(isReadingStep))
+	) {
+		return false;
+	}
 	if (r.blockedByOpenFindings !== undefined && typeof r.blockedByOpenFindings !== "number")
 		return false;
 	if (!Array.isArray(r.findings)) return false;

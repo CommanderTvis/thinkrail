@@ -36,7 +36,7 @@ export function OutlineToggle({
 				aria-pressed={active}
 				aria-label={active ? "Hide outline" : "Show outline"}
 				onClick={onClick}
-				className={`flex size-24 items-center justify-center rounded-[var(--radius-sm)] outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary ${
+				className={`flex size-24 items-center justify-center rounded-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary ${
 					active
 						? "bg-container-elevated-bg text-text-default"
 						: "text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
@@ -99,7 +99,7 @@ function OutlineRow({
 					title={node.entry.text}
 					onClick={() => onSelect(node.entry)}
 					className={cn(
-						"min-w-0 flex-1 truncate rounded-[var(--radius-sm)] py-2 pr-4 text-left tr-text-ui outline-none transition-colors hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset",
+						"min-w-0 flex-1 truncate rounded-sm py-2 pr-4 text-left tr-text-ui outline-none transition-colors hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset",
 						node.entry.level <= 1 ? "text-text-default" : "text-text-muted",
 					)}
 				>

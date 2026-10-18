@@ -191,7 +191,7 @@ function ChatResourceBody({
 			<button
 				type="button"
 				onClick={retry}
-				className="rounded-[var(--radius-sm)] border border-border-default px-8 py-4 tr-text-ui hover:bg-control-bg-hovered"
+				className="rounded-sm border border-border-default px-8 py-4 tr-text-ui hover:bg-control-bg-hovered"
 			>
 				Retry
 			</button>
@@ -798,6 +798,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 	return (
 		<div data-testid="workspace-workbench" data-layout-status="settled" className="contents">
 			<Workbench
+				workspaceId={workspaceId}
 				document={rendered.document}
 				worktreePath={workspace?.worktreePath ?? ""}
 				catalog={catalog}
@@ -926,7 +927,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 							data-starting={chatStarting || undefined}
 							disabled={chatStarting}
 							onClick={() => startChat(groupId)}
-							className="mt-4 flex items-center gap-4 rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg px-12 py-4 tr-text-ui text-text-default hover:bg-control-bg-hovered disabled:text-text-muted disabled:hover:bg-container-elevated-bg"
+							className="mt-4 flex items-center gap-4 rounded-sm border border-border-default bg-container-elevated-bg px-12 py-4 tr-text-ui text-text-default hover:bg-control-bg-hovered disabled:text-text-muted disabled:hover:bg-container-elevated-bg"
 						>
 							{chatStarting ? (
 								<>

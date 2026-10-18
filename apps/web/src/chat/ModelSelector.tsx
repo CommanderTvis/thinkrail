@@ -2,17 +2,15 @@ import {
 	RiCheckLine as Check,
 	RiArrowDownSLine as ChevronDown,
 	RiArrowRightSLine as ChevronRight,
-	RiPushpin2Line as Pin,
 	RiEyeLine as Eye,
 	RiEyeOffLine as EyeOff,
+	RiOpenaiLine as Openai,
+	RiPushpin2Line as Pin,
 	RiRefreshLine as RefreshCw,
 	RiStarFill as StarFill,
 	RiStarLine as StarLine,
 } from "@remixicon/react";
-import {
-	sameModel,
-	type WireModel,
-} from "@thinkrail/contracts";
+import { sameModel, type WireModel } from "@thinkrail/contracts";
 import {
 	Command,
 	CommandEmpty,
@@ -90,15 +88,14 @@ export function ModelSelector({
 	const [query, setQuery] = useState("");
 	const [expansion, setExpansion] = useState<GroupExpansion>(() => initialGroupExpansion(null, []));
 	const [showHidden, setShowHidden] = useState(false);
-	const storeHiddenModels = useAppStore((state) => state.hiddenModels);
+	const storeHiddenModels = useAppStore((state) => state.hiddenModelRefs);
 	const toggleModelVisibility = useAppStore((state) => state.toggleModelVisibility);
-	const isHidden = (model: WireModel) => storeHiddenModels.some((hidden) => sameModel(hidden, model));
+	const isHidden = (model: WireModel) =>
+		storeHiddenModels.some((hidden) => sameModel(hidden, model));
 	const hiddenCount = models.filter(isHidden).length;
 	const visibleModels = showHidden
 		? models
-		: models.filter(
-				(model) => !isHidden(model) || sameModel(current, model),
-			);
+		: models.filter((model) => !isHidden(model) || sameModel(current, model));
 
 	const pinnedModels = preferences?.favorites ?? [];
 	const searching = query !== "";
@@ -228,7 +225,14 @@ export function ModelSelector({
 				)}
 			>
 				{showLabel ? <span className="tr-text-eyebrow text-text-muted">Model</span> : null}
-				<span className="truncate text-text-muted tr-text-metadata">
+				<span className="flex min-w-0 items-center gap-4 truncate text-text-muted tr-text-metadata">
+					{current?.provider.startsWith("openai") ? (
+						<Openai
+							data-testid="model-provider-mark"
+							className="size-14 shrink-0"
+							aria-hidden="true"
+						/>
+					) : null}
 					{current?.name ?? (placeholder || "Select model")}
 				</span>
 				<ChevronDown className="size-16 shrink-0 text-text-muted" />
@@ -288,7 +292,9 @@ export function ModelSelector({
 						className="flex w-full items-center gap-8 border-border-default border-t px-8 py-4 tr-text-metadata text-text-muted outline-none transition-colors hover:bg-control-bg-hovered hover:text-text-default"
 					>
 						{showHidden ? <EyeOff className="size-14" /> : <Eye className="size-14" />}
-						{showHidden ? "Hide filtered models" : `Show ${hiddenCount} hidden model${hiddenCount === 1 ? "" : "s"}`}
+						{showHidden
+							? "Hide filtered models"
+							: `Show ${hiddenCount} hidden model${hiddenCount === 1 ? "" : "s"}`}
 					</button>
 				) : null}
 				<div className="pointer-events-none relative -mt-24 flex items-end justify-end bg-[linear-gradient(to_top,var(--container-elevated-bg),transparent)] px-8 pt-24 pb-8">

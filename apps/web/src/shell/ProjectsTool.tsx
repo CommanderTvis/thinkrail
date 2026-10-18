@@ -7,17 +7,17 @@ import {
 	collectCenterGroups,
 	type LayoutCenterTab,
 	type LayoutTab,
-	layoutTabIcon,
 	layoutTabName,
 	paneForTab,
 	selectTab,
 	TabPathContextMenu,
-	useCenterTabsInProjects,
 } from "./layout";
+import { tabIcon } from "./layout/tabIcon";
 import { decorateTab } from "./tabDecoration";
 
-function WorkspaceTabsPreview({ workspace }: { workspace: Workspace }) {
+function WorkspaceTabsPreview({ workspace, active }: { workspace: Workspace; active: boolean }) {
 	const document = useAppStore((state) => state.layoutDocumentsByWorkspace[workspace.id]);
+	const attention = useAppStore((state) => state.layoutAttentionByWorkspace[workspace.id]);
 	const decorators = usePluginRegistry(selectTabDecorators);
 	// Decorators read the terminal catalog synchronously; subscribing keeps the Claude mark current here.
 	useAppStore((state) => state.terminalsByWorkspace[workspace.id]);
@@ -39,20 +39,24 @@ function WorkspaceTabsPreview({ workspace }: { workspace: Workspace }) {
 		}
 		state.activateWorkspace(workspace);
 	};
-	const renderTab = (groupId: string, tab: LayoutCenterTab, grouped = false) => (
-		<TabPathContextMenu key={tab.id} tab={tab} worktreePath={workspace.worktreePath}>
-			<button
-				type="button"
-				data-testid="workspace-tab-preview"
-				onClick={() => open(groupId, tab)}
-				className={`flex h-28 w-full min-w-0 items-center gap-4 pl-8 text-left tr-text-ui text-text-muted ${grouped ? "group-hover/pane:text-text-default" : "rounded-[var(--radius-sm)] hover:bg-control-bg-hovered hover:text-text-default"}`}
-			>
-				{layoutTabIcon(tab, renderTabIcon)}
-				<span className="truncate">{layoutTabName(tab)}</span>
-				{decorateTab(decorators, tab, workspace.id)?.adornment}
-			</button>
-		</TabPathContextMenu>
-	);
+	const renderTab = (groupId: string, tab: LayoutCenterTab, grouped = false) => {
+		const selected = active && attention?.selectedByGroup[groupId] === tab.id;
+		return (
+			<TabPathContextMenu key={tab.id} tab={tab} worktreePath={workspace.worktreePath}>
+				<button
+					type="button"
+					data-testid="workspace-tab-preview"
+					data-active={selected || undefined}
+					onClick={() => open(groupId, tab)}
+					className={`flex h-28 w-full min-w-0 items-center gap-4 pl-8 text-left tr-text-ui ${selected ? "text-text-default" : "text-text-muted"} ${grouped ? "group-hover/pane:text-text-default" : "rounded-sm hover:bg-control-bg-hovered hover:text-text-default"}`}
+				>
+					{renderTabIcon(tab) ?? tabIcon(tab)}
+					<span className="truncate">{layoutTabName(tab)}</span>
+					{decorateTab(decorators, tab, workspace.id)?.adornment}
+				</button>
+			</TabPathContextMenu>
+		);
+	};
 	return (
 		<ul data-testid="workspace-tabs-preview" className="flex flex-col">
 			{groups.flatMap((group) =>
@@ -65,7 +69,7 @@ function WorkspaceTabsPreview({ workspace }: { workspace: Workspace }) {
 						<li
 							key={pane.id}
 							data-testid="tab-pane-group"
-							className="group/pane flex w-full flex-col divide-y divide-border-default rounded-[var(--radius-md)] border border-transparent border-l-2 border-l-primary transition-colors hover:bg-control-bg-hovered"
+							className="group/pane flex w-full flex-col divide-y divide-border-default rounded-md border border-transparent border-l-2 border-l-primary transition-colors hover:bg-control-bg-hovered"
 						>
 							{members.map((member) => renderTab(group.id, member, true))}
 						</li>
@@ -104,19 +108,18 @@ export function ProjectsTool({ activeWorkspaceId }: { activeWorkspaceId: string 
 			state.localLayoutPreferences.verticalCenterTabs &&
 			state.localLayoutPreferences.verticalTabsInProjects,
 	);
-	const activeStrips = useCenterTabsInProjects();
 	const anchor = useProjectsScrollMemory();
 	return (
 		<div ref={anchor} className="contents">
 			<ProjectTree
 				{...(inProjects
 					? {
-							renderWorkspaceTabs: (workspace: Workspace) =>
-								workspace.id === activeWorkspaceId && activeStrips ? (
-									activeStrips
-								) : (
-									<WorkspaceTabsPreview workspace={workspace} />
-								),
+							renderWorkspaceTabs: (workspace: Workspace) => (
+								<WorkspaceTabsPreview
+									workspace={workspace}
+									active={workspace.id === activeWorkspaceId}
+								/>
+							),
 						}
 					: {})}
 			/>

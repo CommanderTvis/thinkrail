@@ -210,6 +210,7 @@ export function openDiffInTab(
 	path: string,
 	intent: TabIntent,
 	requestedNavigation?: CenterNavigationStamp | null,
+	options?: { claimPreview?: boolean },
 ): Promise<void> {
 	const canonicalPath = projectRelativePath(
 		path,
@@ -244,5 +245,6 @@ export function openDiffInTab(
 			loadedTarget: target,
 		}),
 		requestedNavigation,
+		options,
 	);
 }

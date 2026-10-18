@@ -30,16 +30,18 @@ function IconTooltip({
 	side,
 	align,
 	wrapTrigger,
+	delayDuration,
 	children,
 }: {
 	label: React.ReactNode;
 	side?: React.ComponentProps<typeof TooltipPrimitive.Content>["side"];
 	align?: React.ComponentProps<typeof TooltipPrimitive.Content>["align"];
 	wrapTrigger?: boolean;
+	delayDuration?: number;
 	children: React.ReactNode;
 }) {
 	return (
-		<Tooltip>
+		<Tooltip {...(delayDuration === undefined ? {} : { delayDuration })}>
 			{wrapTrigger ? (
 				<TooltipTrigger asChild>
 					<span className="flex">{children}</span>

@@ -183,7 +183,7 @@ function FileNodeRow({
 							kind={isDir ? "dir" : "file"}
 							expanded={expanded}
 							label={label}
-							muted={node.gitignored ? "Ignored by git" : undefined}
+							{...(node.gitignored ? { muted: "Ignored by git" } : {})}
 							onDragStart={(event) =>
 								startFileDrag(event.dataTransfer, {
 									path: directory?.path ?? node.path,

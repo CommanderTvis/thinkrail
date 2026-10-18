@@ -41,7 +41,7 @@ export function attachPath(
 }
 
 const CHIP =
-	"flex max-w-[16rem] shrink-0 items-center gap-4 truncate rounded-[var(--radius-sm)] bg-container-elevated-bg px-4 tr-text-label-pill text-text-muted";
+	"flex max-w-[16rem] shrink-0 items-center gap-4 truncate rounded-sm bg-container-elevated-bg px-4 tr-text-label-pill text-text-muted";
 
 export function TerminalFactChip({
 	kind,
@@ -156,7 +156,7 @@ export function TerminalPlan({ agent, todos }: { agent: string; todos: readonly 
 					data-testid="terminal-plan-toggle"
 					aria-expanded={open}
 					onClick={() => setOpen((current) => !current)}
-					className="flex shrink-0 cursor-pointer items-center gap-2 rounded-[var(--radius-sm)] bg-container-elevated-bg px-4 tr-text-label-pill text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
+					className="flex shrink-0 cursor-pointer items-center gap-2 rounded-sm bg-container-elevated-bg px-4 tr-text-label-pill text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
 				>
 					<PlanIcon className="size-12 shrink-0" />
 					<span>
@@ -167,7 +167,7 @@ export function TerminalPlan({ agent, todos }: { agent: string; todos: readonly 
 			{open ? (
 				<div
 					data-testid="terminal-plan"
-					className="absolute bottom-full left-0 z-20 mb-4 max-h-[40vh] w-[28rem] max-w-[80vw] overflow-auto rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg p-8"
+					className="absolute bottom-full left-0 z-20 mb-4 max-h-[40vh] w-[28rem] max-w-[80vw] overflow-auto rounded-sm border border-border-default bg-container-elevated-bg p-8"
 				>
 					<ul className="flex flex-col gap-4">
 						{todos

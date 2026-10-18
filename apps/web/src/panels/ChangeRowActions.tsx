@@ -21,12 +21,14 @@ export function ChangeRowActions({
 	active = false,
 	onView,
 	onOpenTab,
+	onJumpToSource,
 	children,
 }: {
 	path: string;
 	active?: boolean;
 	onView: () => void;
 	onOpenTab: () => void;
+	onJumpToSource?: () => void;
 	children: (rowProps: { onContextMenu: (event: MouseEvent) => void }) => ReactNode;
 }) {
 	const [open, setOpen] = useState(false);
@@ -61,6 +63,12 @@ export function ChangeRowActions({
 					<OpenAsTab />
 					Open as tab
 				</DropdownMenuItem>
+				{onJumpToSource ? (
+					<DropdownMenuItem data-testid="change-action-jump-to-source" onSelect={onJumpToSource}>
+						<OpenAsTab />
+						Jump to source
+					</DropdownMenuItem>
+				) : null}
 				<DropdownMenuItem
 					data-testid="change-action-copy-path"
 					onSelect={() => {

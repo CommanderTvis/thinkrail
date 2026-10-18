@@ -109,6 +109,10 @@ function openProjectById(projectId: string): Project {
 	return project;
 }
 
+export function suggestWorkspaceName(projectId: string): string {
+	return nextAutoBranch(openProjectById(projectId));
+}
+
 interface GitWorktreeEntry {
 	path: string;
 	branch?: string;
@@ -368,23 +372,23 @@ export async function createWorkspace(
 		]);
 		if (!added.ok) throw new Error(`git worktree add failed: ${added.err}`);
 
-	const workspace: Workspace = {
-		id: randomUUID(),
-		projectId,
-		name: wsName,
-		branch,
-		worktreePath,
-		baseBranch,
-		initialTerminalPending: true,
-		lastActiveAt: Date.now(),
-		...(displayName ? { renamed: true } : {}),
-	};
-	ensureWorkspaceScratchDir(workspace);
-	const all = loadWorkspaces();
-	all.push(workspace);
-	saveWorkspaces(all);
-	emit({ kind: "created", workspace });
-	return workspace;
+		const workspace: Workspace = {
+			id: randomUUID(),
+			projectId,
+			name: wsName,
+			branch,
+			worktreePath,
+			baseBranch,
+			initialTerminalPending: true,
+			lastActiveAt: Date.now(),
+			...(displayName ? { renamed: true } : {}),
+		};
+		ensureWorkspaceScratchDir(workspace);
+		const all = loadWorkspaces();
+		all.push(workspace);
+		saveWorkspaces(all);
+		emit({ kind: "created", workspace });
+		return workspace;
 	} finally {
 		worktreesBeingCreated.delete(claimed);
 	}

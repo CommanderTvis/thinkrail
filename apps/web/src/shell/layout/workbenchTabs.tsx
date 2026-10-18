@@ -85,6 +85,7 @@ export interface TabStripProps {
 	onRenameChat: WorkbenchProps["onRenameChat"];
 	canFocusAdjacentGroup: boolean;
 	renderTabAdornment: WorkbenchProps["renderTabAdornment"];
+	renderTabIcon: WorkbenchProps["renderTabIcon"];
 	splitGeometry?: { horizontal: boolean; vertical: boolean };
 	trailing?: ReactNode;
 }
@@ -109,6 +110,7 @@ export const TabStrip = memo(function TabStrip({
 	onRenameChat,
 	canFocusAdjacentGroup,
 	renderTabAdornment,
+	renderTabIcon,
 	splitGeometry,
 	trailing,
 }: TabStripProps) {
@@ -215,6 +217,7 @@ export const TabStrip = memo(function TabStrip({
 							onRenameChat={onRenameChat}
 							canFocusAdjacentGroup={canFocusAdjacentGroup}
 							renderTabAdornment={renderTabAdornment}
+							renderTabIcon={renderTabIcon}
 							draggingTab={draggingTab}
 							panelId={panelId}
 							{...(splitGeometry ? { splitGeometry } : {})}
@@ -317,7 +320,7 @@ export const TabStrip = memo(function TabStrip({
 											setOverflowOpen(false);
 										}}
 									>
-										{tabIcon(tab)}
+										{renderTabIcon?.(tab, tab.id === selectedId) ?? tabIcon(tab)}
 										<span className="truncate">{layoutTabName(tab)}</span>
 									</CommandItem>
 								))}
@@ -360,6 +363,7 @@ export interface WorkbenchTabProps {
 	onRenameChat: WorkbenchProps["onRenameChat"];
 	canFocusAdjacentGroup: boolean;
 	renderTabAdornment: WorkbenchProps["renderTabAdornment"];
+	renderTabIcon: WorkbenchProps["renderTabIcon"];
 	draggingTab: LayoutTab | null;
 	panelId: string;
 	splitGeometry?: { horizontal: boolean; vertical: boolean };
@@ -389,6 +393,7 @@ export const WorkbenchTab = memo(function WorkbenchTab({
 	onRenameChat,
 	canFocusAdjacentGroup,
 	renderTabAdornment,
+	renderTabIcon,
 	draggingTab,
 	panelId,
 	splitGeometry,
@@ -585,7 +590,7 @@ export const WorkbenchTab = memo(function WorkbenchTab({
 						)
 			}
 		>
-			{tabIcon(tab, active)}
+			{renderTabIcon?.(tab, active) ?? tabIcon(tab, active)}
 			{rail ? null : <span className={`truncate ${preview ? "italic" : ""}`}>{name}</span>}
 			{rail ? (
 				<span className="pointer-events-none absolute top-0 right-0 flex">
@@ -650,7 +655,7 @@ export const WorkbenchTab = memo(function WorkbenchTab({
 					) : null}
 					{editingName && tab.kind === "chat" ? (
 						<div ref={register} className="flex min-w-0 flex-1 items-center gap-4 py-4 pl-8">
-							{tabIcon(tab, active)}
+							{renderTabIcon?.(tab, active) ?? tabIcon(tab, active)}
 							<input
 								ref={nameInputRef}
 								data-testid="chat-tab-name-input"

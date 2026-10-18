@@ -90,6 +90,7 @@ export const CenterGroupView = memo(function CenterGroupView({
 				onRenameChat={shared.onRenameChat}
 				canFocusAdjacentGroup={shared.canFocusAdjacentGroup}
 				renderTabAdornment={shared.renderTabAdornment}
+				renderTabIcon={shared.renderTabIcon}
 				trailing={
 					<>
 						{renderCenterActions(group.id)}

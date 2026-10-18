@@ -113,7 +113,7 @@ function PluginRow({ entry }: { entry: PluginRosterEntry }) {
 			data-testid="settings-plugins-row"
 			data-plugin-id={entry.id}
 			data-status={entry.status}
-			className="flex items-start gap-12 rounded-[var(--radius-sm)] border border-border-default bg-control-bg px-12 py-8"
+			className="flex items-start gap-12 rounded-sm border border-border-default bg-control-bg px-12 py-8"
 		>
 			<Icon className="mt-2 size-16 shrink-0 text-text-muted" />
 			<div className="flex min-w-0 flex-1 flex-col gap-2">
@@ -226,14 +226,14 @@ function PluginPathsEditor() {
 				{pluginPaths.map((path) => (
 					<div
 						key={path}
-						className="flex items-center gap-8 rounded-[var(--radius-sm)] border border-border-default bg-control-bg px-12 py-4"
+						className="flex items-center gap-8 rounded-sm border border-border-default bg-control-bg px-12 py-4"
 					>
 						<span className="min-w-0 flex-1 truncate tr-code-text text-text-default">{path}</span>
 						<button
 							type="button"
 							aria-label={`Remove ${path}`}
 							onClick={() => save(pluginPaths.filter((candidate) => candidate !== path))}
-							className="flex size-24 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-muted transition hover:bg-control-bg-hovered hover:text-feedback-error"
+							className="flex size-24 shrink-0 items-center justify-center rounded-sm text-text-muted transition hover:bg-control-bg-hovered hover:text-feedback-error"
 						>
 							<Trash2 className="size-14" />
 						</button>
@@ -249,7 +249,7 @@ function PluginPathsEditor() {
 					}}
 					placeholder="/absolute/path/to/plugins"
 					spellCheck={false}
-					className="min-w-0 flex-1 rounded-[var(--radius-sm)] border border-border-default bg-control-bg px-8 py-4 tr-code-text text-text-default outline-none placeholder:text-text-subtle focus:border-primary"
+					className="min-w-0 flex-1 rounded-sm border border-border-default bg-control-bg px-8 py-4 tr-code-text text-text-default outline-none placeholder:text-text-subtle focus:border-primary"
 				/>
 				<Button size="sm" variant="outline" data-testid="settings-plugin-path-add" onClick={add}>
 					<Plus className="size-14" />

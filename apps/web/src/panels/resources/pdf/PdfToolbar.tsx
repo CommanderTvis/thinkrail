@@ -61,7 +61,7 @@ export function PdfToolbar({
 				data-testid="pdf-zoom-level"
 				aria-label="Reset PDF zoom"
 				onClick={() => onZoom(1)}
-				className="min-w-40 rounded-[var(--radius-sm)] text-center tr-text-metadata text-text-muted outline-none hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
+				className="min-w-40 rounded-sm text-center tr-text-metadata text-text-muted outline-none hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
 			>
 				{Math.round(zoom * 100)}%
 			</button>

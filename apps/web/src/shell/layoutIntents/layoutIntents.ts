@@ -32,6 +32,7 @@ import {
 	type LayoutTerminalTab,
 	moveTabToGroup,
 	openCenterTab,
+	openCenterTabBeside,
 	primaryCenterGroupId,
 	reconcileAttention,
 	removeSessionLayoutTabs,
@@ -154,6 +155,8 @@ export function placeTerminalForIntent(
 export function toLayoutTab(tab: EditorTab): LayoutCenterTab | null {
 	switch (tab.kind) {
 		case "file":
+			return { kind: "file", id: tab.id, name: tab.name, path: tab.path };
+		case "external-file":
 			return { kind: "file", id: tab.id, name: tab.name, path: tab.path };
 		case "diff":
 			return { kind: "diff", id: tab.id, name: tab.name, path: tab.path, scope: tab.scope };

@@ -2,9 +2,13 @@ import { isAbsolute } from "node:path";
 import {
 	type AppConfig,
 	type AppConfigUpdate,
+	COMPOSER_GROWTH_LIMITS,
 	isCodeFontFamily,
+	isComposerGrowthLimit,
 	isJbcentralQuotaRefreshSeconds,
 	isLineWidth,
+	isSettleIdleDays,
+	isSubagentMaxConcurrent,
 	isSystemThemePair,
 	isTerminalWindowsShell,
 	isThemeMode,
@@ -24,6 +28,54 @@ type RuntimeAppConfigUpdate = AppConfigUpdate & {
 	recentModels?: unknown;
 };
 
+const ACCEPTED_UPDATE_KEYS = {
+	theme: true,
+	themeMode: true,
+	systemThemePair: true,
+	analyticsEnabled: true,
+	analyticsConsentConfirmed: true,
+	notificationsEnabled: true,
+	terminalReplayKb: true,
+	terminalWindowsShell: true,
+	composerGrowthLimit: true,
+	chatLineWidth: true,
+	fileLineWidth: true,
+	chatLineWidthBounded: true,
+	fileLineWidthBounded: true,
+	customLayoutPresets: true,
+	favoriteModels: true,
+	defaultModel: true,
+	defaultEffort: true,
+	reviewModel: true,
+	reviewEffort: true,
+	reviewAutoFix: true,
+	agentReviewEnabled: true,
+	subagentsEnabled: true,
+	subagentMaxConcurrent: true,
+	jbcentralQuotaEnabled: true,
+	jbcentralQuotaRefreshSeconds: true,
+	settleIdleDays: true,
+	disabledExtensions: true,
+	chatMessageOrder: true,
+	layout: true,
+	recentModels: true,
+	restoreLatestChat: true,
+	editorGpuRendering: true,
+	codeFontFamily: true,
+	codeFontLigatures: true,
+	hiddenModels: true,
+	plugins: true,
+	pluginPaths: true,
+} satisfies Record<keyof RuntimeAppConfigUpdate, true>;
+
+function assertUpdateShape(update: unknown): asserts update is AppConfigUpdate {
+	if (typeof update !== "object" || update === null || Array.isArray(update)) {
+		throw new Error("settings update must be an object");
+	}
+	const unknownKey = Object.keys(update).find((key) => !Object.hasOwn(ACCEPTED_UPDATE_KEYS, key));
+	if (unknownKey !== undefined) throw new Error(`Unknown setting: ${unknownKey}`);
+}
+
 function isWireModelRef(value: unknown): value is WireModel {
 	if (!value || typeof value !== "object" || Array.isArray(value)) return false;
 	const record = value as Record<string, unknown>;
@@ -42,6 +94,16 @@ function validateFavoriteModels(value: unknown): WireModel[] {
 		throw new Error("favoriteModels must be a list of models");
 	}
 	return value.filter((model, index) => value.findIndex((m) => sameModel(m, model)) === index);
+}
+
+function validateDisabledExtensions(value: unknown): string[] {
+	if (
+		!Array.isArray(value) ||
+		!value.every((name) => typeof name === "string" && name.trim().length > 0)
+	) {
+		throw new Error("disabledExtensions must be a list of extension names");
+	}
+	return [...new Set(value as string[])];
 }
 
 let publishSettings: SettingsPublisher | null = null;
@@ -88,6 +150,7 @@ export function getConfig(): AppConfig {
 }
 
 export function updateConfig(partial: AppConfigUpdate): AppConfig {
+	assertUpdateShape(partial);
 	const runtimeUpdate: RuntimeAppConfigUpdate = { ...partial };
 	delete runtimeUpdate.chatMessageOrder;
 	delete runtimeUpdate.layout;
@@ -136,11 +199,28 @@ export function updateConfig(partial: AppConfigUpdate): AppConfig {
 		jbcentralQuotaEnabled,
 		jbcentralQuotaRefreshSeconds,
 		hiddenModels,
+		disabledExtensions,
 		plugins,
 		...rest
 	} = runtimeUpdate;
+	const nextDisabledExtensions =
+		disabledExtensions === undefined ? undefined : validateDisabledExtensions(disabledExtensions);
+	for (const [name, value] of [
+		["defaultModel", defaultModel],
+		["reviewModel", reviewModel],
+	] as const) {
+		if (value !== undefined && value !== null && !isWireModelRef(value)) {
+			throw new Error(`${name} must be a model or null`);
+		}
+	}
 	if (subagentsEnabled !== undefined && typeof subagentsEnabled !== "boolean") {
 		throw new Error("subagentsEnabled must be a boolean");
+	}
+	if (
+		runtimeUpdate.subagentMaxConcurrent !== undefined &&
+		!isSubagentMaxConcurrent(runtimeUpdate.subagentMaxConcurrent)
+	) {
+		throw new Error("subagentMaxConcurrent must be a whole number from 1 to 16");
 	}
 	if (jbcentralQuotaEnabled !== undefined && typeof jbcentralQuotaEnabled !== "boolean") {
 		throw new Error("jbcentralQuotaEnabled must be a boolean");
@@ -177,6 +257,18 @@ export function updateConfig(partial: AppConfigUpdate): AppConfig {
 		throw new Error("terminalWindowsShell must be auto, pwsh, powershell, or cmd");
 	}
 	if (
+		runtimeUpdate.terminalReplayKb !== undefined &&
+		!Number.isFinite(runtimeUpdate.terminalReplayKb)
+	) {
+		throw new Error("terminalReplayKb must be a finite number");
+	}
+	if (
+		runtimeUpdate.composerGrowthLimit !== undefined &&
+		!isComposerGrowthLimit(runtimeUpdate.composerGrowthLimit)
+	) {
+		throw new Error(`composerGrowthLimit must be one of ${COMPOSER_GROWTH_LIMITS.join(", ")}`);
+	}
+	if (
 		jbcentralQuotaRefreshSeconds !== undefined &&
 		!isJbcentralQuotaRefreshSeconds(jbcentralQuotaRefreshSeconds)
 	) {
@@ -186,8 +278,15 @@ export function updateConfig(partial: AppConfigUpdate): AppConfig {
 		throw new Error("themeMode must be fixed or system");
 	}
 	if (
+		runtimeUpdate.settleIdleDays !== undefined &&
+		!isSettleIdleDays(runtimeUpdate.settleIdleDays)
+	) {
+		throw new Error("settleIdleDays must be a whole number of days from 1 to 365, or null");
+	}
+	if (
 		runtimeUpdate.pluginPaths !== undefined &&
-		!runtimeUpdate.pluginPaths.every((path) => isAbsolute(path))
+		(!Array.isArray(runtimeUpdate.pluginPaths) ||
+			!runtimeUpdate.pluginPaths.every((path) => typeof path === "string" && isAbsolute(path)))
 	) {
 		throw new Error("pluginPaths must be absolute paths");
 	}
@@ -220,6 +319,7 @@ export function updateConfig(partial: AppConfigUpdate): AppConfig {
 		...(subagentsEnabled === undefined ? {} : { subagentsEnabled }),
 		...(jbcentralQuotaEnabled === undefined ? {} : { jbcentralQuotaEnabled }),
 		...(jbcentralQuotaRefreshSeconds === undefined ? {} : { jbcentralQuotaRefreshSeconds }),
+		...(nextDisabledExtensions === undefined ? {} : { disabledExtensions: nextDisabledExtensions }),
 		...(hiddenModels === undefined
 			? {}
 			: {

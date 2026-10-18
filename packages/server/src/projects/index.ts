@@ -1,7 +1,9 @@
 export {
 	acknowledgeProjectSkills,
 	approveProjectMcpServer,
+	cloneProject,
 	closeProject,
+	createProject,
 	getProjects,
 	initProject,
 	inspectProjectPath,

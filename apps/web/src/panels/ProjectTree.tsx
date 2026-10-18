@@ -438,7 +438,7 @@ function ProjectRow({
 			data-menu-open={menuOpen}
 			data-attention={needsAttention || undefined}
 			data-running={isRunning || undefined}
-			className={`group flex h-28 items-center gap-4 rounded-[var(--radius-sm)] pr-4 pl-4 transition-colors ${
+			className={`group flex h-28 items-center gap-4 rounded-sm pr-4 pl-4 transition-colors ${
 				menuOpen ? "bg-control-bg-selected" : "hover:bg-control-bg-hovered"
 			}`}
 		>
@@ -447,7 +447,7 @@ function ProjectRow({
 				data-testid="project-expand"
 				aria-label={isExpanded ? "Collapse project" : "Expand project"}
 				onClick={onToggle}
-				className="flex size-16 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-muted transition-colors hover:text-text-default focus-visible:text-text-default"
+				className="flex size-16 shrink-0 items-center justify-center rounded-sm text-text-muted transition-colors hover:text-text-default focus-visible:text-text-default"
 				data-expanded={isExpanded}
 			>
 				<Chevron className="size-16" />
@@ -727,7 +727,7 @@ function WorkspaceRow({
 				data-attention={needsAttention || undefined}
 				data-running={isRunning || undefined}
 				onContextMenu={openMenuFromContext}
-				className={`group flex min-h-28 min-w-0 items-center gap-8 rounded-[var(--radius-sm)] border-0 py-4 pr-4 pl-24 transition-colors ${
+				className={`group flex min-h-28 min-w-0 items-center gap-8 rounded-sm border-0 py-4 pr-4 pl-24 transition-colors ${
 					isActive || menuOpen ? "bg-control-bg-selected" : "hover:bg-control-bg-hovered"
 				}`}
 			>
@@ -769,7 +769,7 @@ function WorkspaceRow({
 					<DropdownMenuTrigger
 						data-testid="workspace-menu"
 						aria-label={`Actions for ${workspace.name}`}
-						className="flex size-20 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-muted opacity-100 outline-none transition hover:bg-container-elevated-bg hover:text-text-default [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-primary data-[state=open]:opacity-100"
+						className="flex size-20 shrink-0 items-center justify-center rounded-sm text-text-muted opacity-100 outline-none transition hover:bg-container-elevated-bg hover:text-text-default [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-primary data-[state=open]:opacity-100"
 					>
 						<MoreVertical className="size-14" />
 					</DropdownMenuTrigger>

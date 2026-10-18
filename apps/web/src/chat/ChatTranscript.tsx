@@ -16,11 +16,12 @@ import {
 } from "react";
 import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
 import { useShallow } from "zustand/react/shallow";
+import { openFileInTab } from "@/panels/openTabs";
+import { selectSlot, usePluginRegistry } from "@/plugins/registry";
 import {
 	EMPTY_RUNTIME,
 	selectChatAttended,
 	selectReadyCompletionAck,
-	specPathMatcher,
 	toast,
 	useAppStore,
 } from "@/store";
@@ -33,7 +34,14 @@ import { FoldGeometryProvider } from "./foldState";
 import { deriveMessageActions } from "./messageActions";
 import { turnAnchorText } from "./recentPrompts";
 import { estimateChatRowHeights } from "./rowHeightEstimates";
-import { type ChatRow, deriveRows, projectRows, rowIndexForTurn, stabilizeRows } from "./rows";
+import {
+	type ChatRow,
+	deriveRows,
+	projectRows,
+	rowIndexForTurn,
+	stabilizeRows,
+	type WrittenPathGroup,
+} from "./rows";
 import { type StreamStatus, StreamStatusSlot, streamStatus } from "./StreamIndicator";
 import { ChatTurnView } from "./turns";
 import { useChatScroll } from "./useChatScroll";
@@ -215,8 +223,23 @@ const ChatTranscript = forwardRef<
 	const chatLineWidthBounded = useAppStore((state) => state.chatLineWidthBounded);
 	const chatMessageOrder = useAppStore((state) => state.chatMessageOrder);
 	const streamingResponseMovement = useAppStore((state) => state.streamingResponseMovement);
-	const specNodes = useAppStore((s) => s.specsByWorkspace[workspaceId]);
-	const isSpec = useMemo(() => specPathMatcher(specNodes ?? []), [specNodes]);
+	const writtenPathGroups = usePluginRegistry((state) => selectSlot(state, "writtenPathGroup"));
+	const groupForWrittenPath = useCallback(
+		(toolName: string, path: string): Omit<WrittenPathGroup, "paths"> | null => {
+			const pluginGroup = writtenPathGroups
+				.map((resolve) => resolve(workspaceId, path))
+				.find((group) => group !== null);
+			if (pluginGroup) return pluginGroup;
+			return toolName === "spec_create"
+				? {
+						id: "specs",
+						label: (count) => `${count} ${count === 1 ? "spec" : "specs"}`,
+						tool: "specs",
+					}
+				: null;
+		},
+		[workspaceId, writtenPathGroups],
+	);
 
 	const { turns, toolResults, isStreaming, settlementTick, currentAssistantId } = runtime;
 
@@ -226,8 +249,9 @@ const ChatTranscript = forwardRef<
 		[sessionId, workspaceTurns],
 	);
 	const derivedRows = useMemo(
-		() => deriveRows(turns, toolResults, isStreaming, isSpec, agentTurns, workspaceRoot),
-		[turns, toolResults, isStreaming, isSpec, agentTurns, workspaceRoot],
+		() =>
+			deriveRows(turns, toolResults, isStreaming, groupForWrittenPath, agentTurns, workspaceRoot),
+		[turns, toolResults, isStreaming, groupForWrittenPath, agentTurns, workspaceRoot],
 	);
 	// Keep the stabilized rows in state (never a ref written during render): a render-written ref both
 	// violates apps/web/SPEC.md and makes the React Compiler skip memoizing this component.
@@ -478,13 +502,29 @@ const ChatTranscript = forwardRef<
 	);
 	const onOpenSpec = useCallback(
 		(path: string) => {
-			useAppStore.getState().requestSpecView(workspaceId, path);
+			const group = selectSlot(usePluginRegistry.getState(), "writtenPathGroup")
+				.map((resolve) => resolve(workspaceId, path))
+				.find((candidate) => candidate !== null);
+			if (group) useAppStore.getState().requestToolView(workspaceId, group.tool);
+			void openFileInTab(workspaceId, path, "keep");
 		},
 		[workspaceId],
 	);
 	const onReveal = useCallback(
-		(tool: "specs" | "changes") => {
-			useAppStore.getState().requestToolView(workspaceId, tool);
+		(tool: string, path?: string) => {
+			if (tool === "specs" && path) {
+				const group = selectSlot(usePluginRegistry.getState(), "writtenPathGroup")
+					.map((resolve) => resolve(workspaceId, path))
+					.find((candidate) => candidate !== null);
+				if (group) {
+					useAppStore.getState().requestToolView(workspaceId, group.tool);
+					return;
+				}
+			}
+			if (tool !== "specs")
+				useAppStore
+					.getState()
+					.requestToolView(workspaceId, tool as import("../shell/layout").LayoutToolId);
 		},
 		[workspaceId],
 	);

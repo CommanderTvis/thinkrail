@@ -73,7 +73,7 @@ export function EmbeddedSplit({
 									data-testid="embedded-pane-close"
 									aria-label={`Close ${companion.title}`}
 									onClick={companion.onClose}
-									className="rounded-[var(--radius-sm)] p-2 text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
+									className="rounded-sm p-2 text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
 								>
 									<RiCloseLine className="size-14" />
 								</button>

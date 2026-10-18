@@ -399,11 +399,7 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 					</span>
 				) : null}
 				<span className="ml-auto flex shrink-0 items-center gap-4">
-					<SendAllReviewsButton
-						workspaceId={workspaceId}
-						testid="changes-review-send"
-						verb="Send review"
-					/>
+					<SendAllReviewsButton workspaceId={workspaceId} testid="changes-review-send" />
 					{layout === "stacked" && files.length > 0 ? (
 						<>
 							<HeaderIconButton

@@ -168,7 +168,7 @@ function Row({
 								data-testid="branch-delete"
 								aria-label={`Delete ${detail.branch}`}
 								disabled={reason !== null}
-								className="flex size-20 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-muted hover:bg-control-bg-hovered hover:text-feedback-error disabled:cursor-not-allowed disabled:text-control-disabled-text"
+								className="flex size-20 shrink-0 items-center justify-center rounded-sm text-text-muted hover:bg-control-bg-hovered hover:text-feedback-error disabled:cursor-not-allowed disabled:text-control-disabled-text"
 							>
 								<Trash className="size-14" />
 							</button>
@@ -322,7 +322,7 @@ export function BranchList({ projectId, label }: { projectId: string; label: str
 						data-testid="scope-branch"
 						data-open={open}
 						aria-label={`Branch ${label} — show this project's branches`}
-						className="flex h-24 min-w-0 items-center gap-2 rounded-[var(--radius-sm)] px-4 text-text-muted outline-none transition-colors hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary data-[open=true]:bg-control-bg-selected data-[open=true]:text-text-default"
+						className="flex h-24 min-w-0 items-center gap-2 rounded-sm px-4 text-text-muted outline-none transition-colors hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary data-[open=true]:bg-control-bg-selected data-[open=true]:text-text-default"
 					>
 						<GitBranch className="size-14 shrink-0" />
 						<span className="min-w-0 truncate">{label}</span>
@@ -339,7 +339,7 @@ export function BranchList({ projectId, label }: { projectId: string; label: str
 								aria-label="Fetch"
 								disabled={fetching}
 								onClick={fetch}
-								className="flex size-20 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-muted hover:bg-control-bg-hovered hover:text-text-default disabled:cursor-progress disabled:text-control-disabled-text"
+								className="flex size-20 shrink-0 items-center justify-center rounded-sm text-text-muted hover:bg-control-bg-hovered hover:text-text-default disabled:cursor-progress disabled:text-control-disabled-text"
 							>
 								<Fetch className="size-14" />
 							</button>

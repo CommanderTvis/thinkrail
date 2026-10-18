@@ -118,7 +118,7 @@ export function PanZoomView({
 	};
 
 	const btn =
-		"rounded-[var(--radius-sm)] p-4 text-text-muted outline-none transition-colors hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary";
+		"rounded-sm p-4 text-text-muted outline-none transition-colors hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary";
 
 	return (
 		<div className={capped ? "relative" : "relative min-h-0 flex-1"}>
@@ -136,7 +136,7 @@ export function PanZoomView({
 			>
 				<div className="contents" dangerouslySetInnerHTML={{ __html: svg }} />
 			</div>
-			<div className="absolute right-8 bottom-8 flex items-center gap-4 rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg p-4 tr-text-metadata shadow-[var(--shadow-lg)]">
+			<div className="absolute right-8 bottom-8 flex items-center gap-4 rounded-sm border border-border-default bg-container-elevated-bg p-4 tr-text-metadata shadow-[var(--shadow-lg)]">
 				<button
 					type="button"
 					aria-label="Zoom out"

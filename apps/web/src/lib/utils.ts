@@ -9,21 +9,38 @@ export function tupleKey(namespace: string, ...parts: string[]): string {
 	return `${namespace}:${parts.map((part) => `${part.length}:${part}`).join("")}`;
 }
 
+type LayoutDiffScopeInput =
+	| { kind: "branch" | "uncommitted" }
+	| { kind: "commit"; sha: string }
+	| { kind: "pinned"; baseRef: string }
+	| { kind: "turn"; id: string };
+
 type LayoutResourceIdentityInput =
 	| { kind: "file"; path: string }
+	| { kind: "diff"; path: string; scope: LayoutDiffScopeInput }
+	| { kind: "changes"; scope: LayoutDiffScopeInput }
 	| { kind: "external-file"; path: string }
-	| {
-			kind: "diff";
-			path: string;
-			scope:
-				| { kind: "branch" | "uncommitted" }
-				| { kind: "commit"; sha: string }
-				| { kind: "pinned"; baseRef: string };
-	  }
 	| { kind: "chat"; sessionId: string }
 	| { kind: "document"; documentKind: string; sourceId: string }
 	| { kind: "terminal"; tabKey: string }
 	| { kind: "tool"; tool: string };
+
+function layoutScopeReference(scope: LayoutDiffScopeInput): string {
+	switch (scope.kind) {
+		case "commit":
+			return scope.sha;
+		case "pinned":
+			return scope.baseRef;
+		case "turn":
+			return scope.id;
+		default:
+			return "";
+	}
+}
+
+export function isPreviewCompatibleTabKind(kind: string): boolean {
+	return kind === "file" || kind === "diff" || kind === "changes";
+}
 
 export function layoutResourceIdentity<T extends LayoutResourceIdentityInput>(tab: T): string {
 	switch (tab.kind) {
@@ -31,15 +48,21 @@ export function layoutResourceIdentity<T extends LayoutResourceIdentityInput>(ta
 			return tupleKey("layout-resource", "file", tab.path);
 		case "external-file":
 			return tupleKey("layout-resource", "external-file", tab.path);
-		case "diff": {
-			const reference =
-				tab.scope.kind === "commit"
-					? tab.scope.sha
-					: tab.scope.kind === "pinned"
-						? tab.scope.baseRef
-						: "";
-			return tupleKey("layout-resource", "diff", tab.path, tab.scope.kind, reference);
-		}
+		case "diff":
+			return tupleKey(
+				"layout-resource",
+				"diff",
+				tab.path,
+				tab.scope.kind,
+				layoutScopeReference(tab.scope),
+			);
+		case "changes":
+			return tupleKey(
+				"layout-resource",
+				"changes",
+				tab.scope.kind,
+				layoutScopeReference(tab.scope),
+			);
 		case "chat":
 			return tupleKey("layout-resource", "chat", tab.sessionId);
 		case "document":
@@ -286,6 +309,18 @@ export function relativeTime(ms: number, now: number): string {
 	return `${Math.floor(h / 24)}d ago`;
 }
 
+/** Compact elapsed label for dense rows: `3h`, `12d`, `3w`, `4mo`. */
+export function compactAge(ms: number, now: number): string {
+	const hours = Math.max(0, Math.floor((now - ms) / 3_600_000));
+	if (hours < 1) return "<1h";
+	if (hours < 24) return `${hours}h`;
+	const days = Math.floor(hours / 24);
+	if (days < 14) return `${days}d`;
+	const weeks = Math.floor(days / 7);
+	if (weeks < 10) return `${weeks}w`;
+	return `${Math.floor(days / 30)}mo`;
+}
+
 export function isShellInert(value: string): boolean {
 	return /^[A-Za-z0-9][A-Za-z0-9._/-]*$/.test(value);
 }
@@ -297,6 +332,32 @@ export async function copyText(text: string): Promise<boolean> {
 	} catch {
 		return false;
 	}
+}
+
+export const MODAL_LAYER_SELECTOR = [
+	'[aria-modal="true"]',
+	'[role="dialog"][data-state="open"]',
+	'[role="alertdialog"][data-state="open"]',
+].join(", ");
+
+export function hasLayer(root: Pick<Document, "querySelector">, selector: string): boolean {
+	return root.querySelector(selector) !== null;
+}
+
+const TEXT_ENTRY_ROOT_SELECTOR = ".monaco-editor, .xterm";
+
+export function isTextEntryTarget(target: EventTarget | null): boolean {
+	const element = target as {
+		isContentEditable?: boolean;
+		tagName?: string;
+		closest?: (selector: string) => Element | null;
+	} | null;
+	return (
+		element !== null &&
+		(element.isContentEditable === true ||
+			/^(INPUT|TEXTAREA|SELECT)$/.test(element.tagName ?? "") ||
+			(typeof element.closest === "function" && element.closest(TEXT_ENTRY_ROOT_SELECTOR) !== null))
+	);
 }
 
 /**

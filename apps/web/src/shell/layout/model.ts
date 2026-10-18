@@ -1,4 +1,16 @@
 import {
+	RiDiscussFill,
+	RiDiscussLine,
+	RiFileFill,
+	RiFileLine,
+	RiFolder2Fill,
+	RiFolder2Line,
+	RiLayout2Fill,
+	RiLayout2Line,
+} from "@remixicon/react";
+import type { ComponentType } from "react";
+import { CustomIcon } from "../../components/CustomIcon";
+import {
 	isPreviewCompatibleTabKind,
 	type LayoutAttention,
 	layoutResourceIdentity,
@@ -18,10 +30,12 @@ import type {
 	LayoutSideRegion,
 	LayoutSideTab,
 	LayoutTab,
+	LayoutTabPane,
 	LayoutToolId,
 	LayoutToolTab,
 	WorkspaceLayoutDocument,
 } from "./types";
+import { LAYOUT_PANE_LIMITS } from "./types";
 
 export const LAYOUT_LIMITS = {
 	maxCenterGroups: 4,
@@ -67,39 +81,119 @@ export function createLayoutId(prefix: string): string {
 	return randomId(prefix);
 }
 
-export const LAYOUT_TOOLS: readonly LayoutToolId[] = [
-	"projects",
-	"specs",
-	"files",
-	"changes",
-	"review",
-	"plan",
-];
-
-export const LAYOUT_TOOL_DEFAULT_SIDES: Record<LayoutToolId, LayoutSide> = {
-	projects: "left",
-	specs: "right",
-	files: "right",
-	changes: "right",
-	review: "right",
-	plan: "right",
-};
-
-const LAYOUT_TOOL_NAMES: Record<LayoutToolId, string> = {
-	projects: "Projects",
-	specs: "Specs",
-	files: "Files",
-	changes: "Changes",
-	review: "Review",
-	plan: "TODO List",
-};
-
-export function layoutTabName(tab: LayoutTab): string {
-	return tab.kind === "tool" ? LAYOUT_TOOL_NAMES[tab.tool] : tab.name;
+export interface LayoutToolCatalogEntry {
+	id: LayoutToolId;
+	label: string;
+	icon: ComponentType<{ className?: string | undefined }>;
+	activeIcon?: ComponentType<{ className?: string | undefined }>;
+	defaultSide: LayoutSide;
+	dormant: boolean;
+	requiresGit?: true;
 }
 
-export function toolTab(tool: LayoutToolId): LayoutToolTab {
-	return { kind: "tool", id: `tool:${tool}`, name: LAYOUT_TOOL_NAMES[tool], tool };
+/** Tool name, default side, restore order and icon, keyed by tool id. Insertion order is restore order. */
+export type LayoutToolCatalog = ReadonlyMap<LayoutToolId, LayoutToolCatalogEntry>;
+
+function ChangesIcon(props: { className?: string | undefined }): ReturnType<typeof CustomIcon> {
+	return CustomIcon({ name: "file-diff-line", ...props });
+}
+
+function ChangesIconActive(props: {
+	className?: string | undefined;
+}): ReturnType<typeof CustomIcon> {
+	return CustomIcon({ name: "file-diff-fill", ...props });
+}
+
+// Append-only: inserting mid-map shifts every later tool's stored restore index.
+export const BUILTIN_LAYOUT_TOOL_CATALOG: LayoutToolCatalog = new Map<
+	LayoutToolId,
+	LayoutToolCatalogEntry
+>([
+	[
+		"projects",
+		{
+			id: "projects",
+			label: "Projects",
+			icon: RiFolder2Line,
+			activeIcon: RiFolder2Fill,
+			defaultSide: "left",
+			dormant: false,
+		},
+	],
+	[
+		"files",
+		{
+			id: "files",
+			label: "Files",
+			icon: RiFileLine,
+			activeIcon: RiFileFill,
+			defaultSide: "right",
+			dormant: false,
+		},
+	],
+	[
+		"changes",
+		{
+			id: "changes",
+			label: "Changes",
+			icon: ChangesIcon,
+			activeIcon: ChangesIconActive,
+			defaultSide: "right",
+			dormant: false,
+		},
+	],
+	[
+		"review",
+		{
+			id: "review",
+			label: "Review",
+			icon: RiDiscussLine,
+			activeIcon: RiDiscussFill,
+			defaultSide: "right",
+			dormant: false,
+		},
+	],
+]);
+
+export function buildLayoutToolCatalog(
+	extra: readonly LayoutToolCatalogEntry[] = [],
+): LayoutToolCatalog {
+	const catalog = new Map(BUILTIN_LAYOUT_TOOL_CATALOG);
+	for (const entry of extra) catalog.set(entry.id, entry);
+	return catalog;
+}
+
+function dormantLayoutToolEntry(tool: LayoutToolId): LayoutToolCatalogEntry {
+	return {
+		id: tool,
+		label: tool,
+		icon: RiLayout2Line,
+		activeIcon: RiLayout2Fill,
+		defaultSide: "right",
+		dormant: true,
+	};
+}
+
+/** Never undefined: an id absent from the catalog resolves to a dormant placeholder built from the id. */
+export function resolveLayoutTool(
+	catalog: LayoutToolCatalog,
+	tool: LayoutToolId,
+): LayoutToolCatalogEntry {
+	return catalog.get(tool) ?? dormantLayoutToolEntry(tool);
+}
+
+export function layoutTabName(
+	tab: LayoutTab,
+	catalog: LayoutToolCatalog = BUILTIN_LAYOUT_TOOL_CATALOG,
+): string {
+	return tab.kind === "tool" ? resolveLayoutTool(catalog, tab.tool).label : tab.name;
+}
+
+export function toolTab(
+	tool: LayoutToolId,
+	catalog: LayoutToolCatalog = BUILTIN_LAYOUT_TOOL_CATALOG,
+): LayoutToolTab {
+	return { kind: "tool", id: `tool:${tool}`, name: resolveLayoutTool(catalog, tool).label, tool };
 }
 
 export function collectCenterGroups(node: LayoutCenterNode): LayoutCenterGroup[] {
@@ -186,6 +280,24 @@ export function findSideGroup(
 	return findAuxiliaryGroup(document, side, groupId);
 }
 
+/** Whether a tool's body is on screen: in a visible region, an unfolded group, and that group's shown tab. */
+export function isToolShowing(
+	document: WorkspaceLayoutDocument,
+	attention: LayoutAttention,
+	tool: LayoutToolId,
+): boolean {
+	for (const region of ["left", "right", "bottom"] as const) {
+		if (!document[region].visible) continue;
+		for (const group of document[region].groups) {
+			if (group.folded) continue;
+			const selectedId = readLayoutSelection(attention, group.id);
+			const shown = group.tabs.find((tab) => tab.id === selectedId) ?? group.tabs[0];
+			if (shown?.kind === "tool" && shown.tool === tool) return true;
+		}
+	}
+	return false;
+}
+
 export function primaryCenterGroupId(document: WorkspaceLayoutDocument): string {
 	let node = document.center;
 	while (node.kind === "split") node = node.children[0];
@@ -235,13 +347,159 @@ function normalizeWeights(weights: [number, number]): [number, number] {
 	return Number.isFinite(total) ? [first / total, second / total] : [0.5, 0.5];
 }
 
+/**
+ * Panes name tabs of their own group, so every rebuild has to re-derive them from the tabs that remain:
+ * a tab closed or dragged away must leave no membership behind, and a pane that falls below two members
+ * is not a pane any more. Centralized here because every group mutation goes through this function —
+ * a caller that rebuilt a group by hand would silently drop or orphan them. See SPEC.md.
+ */
+function prunePanes(
+	panes: LayoutTabPane[] | undefined,
+	tabs: LayoutCenterTab[],
+): LayoutTabPane[] | undefined {
+	if (!panes || panes.length === 0) return undefined;
+	const present = new Set(tabs.map((tab) => tab.id));
+	const kept: LayoutTabPane[] = [];
+	for (const pane of panes) {
+		const members = pane.tabIds.filter((id) => present.has(id));
+		if (members.length < LAYOUT_PANE_LIMITS.minMembers) continue;
+		kept.push(
+			members.length === pane.tabIds.length
+				? pane
+				: { ...pane, tabIds: members, weights: evenWeights(members.length) },
+		);
+	}
+	return kept.length > 0 ? kept : undefined;
+}
+
+/**
+ * A pane draws its members as one entry in the strip, so they have to *be* one run in `group.tabs`. The
+ * model never reordered on grouping, and dragging a tab within a group bypassed this rebuild entirely,
+ * so a pane could end up with an unrelated tab sitting between its members. The block is anchored where
+ * the pane's first member already was, and members follow `tabIds` order — the same order the panes and
+ * their weights render in. See SPEC.md.
+ */
+function orderTabsForPanes(
+	tabs: LayoutCenterTab[],
+	panes: LayoutTabPane[] | undefined,
+): LayoutCenterTab[] {
+	if (!panes || panes.length === 0) return tabs;
+	const byId = new Map(tabs.map((tab) => [tab.id, tab]));
+	const paneByTab = new Map<string, LayoutTabPane>();
+	for (const pane of panes) for (const id of pane.tabIds) paneByTab.set(id, pane);
+
+	const ordered: LayoutCenterTab[] = [];
+	const taken = new Set<string>();
+	for (const tab of tabs) {
+		if (taken.has(tab.id)) continue;
+		const pane = paneByTab.get(tab.id);
+		if (!pane) {
+			ordered.push(tab);
+			taken.add(tab.id);
+			continue;
+		}
+		for (const id of pane.tabIds) {
+			const member = byId.get(id);
+			if (!member || taken.has(id)) continue;
+			ordered.push(member);
+			taken.add(id);
+		}
+	}
+	return ordered.every((tab, index) => tab === tabs[index]) ? tabs : ordered;
+}
+
+function evenWeights(count: number): number[] {
+	return Array.from({ length: count }, () => 1 / count);
+}
+
+/** The newcomer takes an equal share; the members already there keep their proportions to each other. */
+function weightsWithNewMember(previous: number[], count: number): number[] {
+	const share = 1 / count;
+	const total = previous.reduce((sum, weight) => sum + weight, 0);
+	if (total <= 0) return evenWeights(count);
+	return [...previous.map((weight) => (weight / total) * (1 - share)), share];
+}
+
+function withPaneMember(
+	group: LayoutCenterGroup,
+	replaced: string,
+	tabId: string,
+): LayoutCenterGroup {
+	if (!group.panes?.some((pane) => pane.tabIds.includes(replaced))) return group;
+	return {
+		...group,
+		panes: group.panes.map((pane) =>
+			pane.tabIds.includes(replaced)
+				? { ...pane, tabIds: pane.tabIds.map((id) => (id === replaced ? tabId : id)) }
+				: pane,
+		),
+	};
+}
+
 function withGroupTabs(
 	group: LayoutCenterGroup,
 	tabs: LayoutCenterTab[],
 	previewTabId?: string,
 ): LayoutCenterGroup {
-	const base: LayoutCenterGroup = { kind: "group", id: group.id, tabs };
-	return previewTabId ? { ...base, previewTabId } : base;
+	const panes = prunePanes(group.panes, tabs);
+	const base: LayoutCenterGroup = {
+		kind: "group",
+		id: group.id,
+		tabs: orderTabsForPanes(tabs, panes),
+	};
+	const withPanes = panes ? { ...base, panes } : base;
+	return previewTabId ? { ...withPanes, previewTabId } : withPanes;
+}
+
+/**
+ * The drop position decides what a member's drag means: landing inside its own pane's run reorders the
+ * pane, landing anywhere else takes the member out of it. See SPEC.md.
+ */
+function paneAfterMemberDrop(
+	panes: LayoutTabPane[] | undefined,
+	tabId: string,
+	stripWithoutTab: readonly LayoutCenterTab[],
+	insertion: number,
+	stripAfterInsert: readonly LayoutCenterTab[],
+): LayoutTabPane[] | undefined {
+	const pane = panes?.find((candidate) => candidate.tabIds.includes(tabId));
+	if (!panes || !pane) return panes;
+	const memberPositions = stripWithoutTab.flatMap((tab, position) =>
+		pane.tabIds.includes(tab.id) ? [position] : [],
+	);
+	const start = Math.min(...memberPositions);
+	const end = Math.max(...memberPositions);
+	if (insertion < start || insertion > end + 1) return withoutPaneMember(panes, tabId);
+	const position = new Map(stripAfterInsert.map((tab, index) => [tab.id, index]));
+	const tabIds = [...pane.tabIds].sort(
+		(left, right) => (position.get(left) ?? 0) - (position.get(right) ?? 0),
+	);
+	const weightByTab = new Map(pane.tabIds.map((id, index) => [id, pane.weights[index] ?? 0]));
+	return panes.map((candidate) =>
+		candidate === pane
+			? { ...candidate, tabIds, weights: tabIds.map((id) => weightByTab.get(id) ?? 0) }
+			: candidate,
+	);
+}
+
+function withoutPaneMember(
+	panes: LayoutTabPane[] | undefined,
+	tabId: string,
+): LayoutTabPane[] | undefined {
+	if (!panes?.some((pane) => pane.tabIds.includes(tabId))) return panes;
+	const remaining = panes
+		.map((pane) =>
+			pane.tabIds.includes(tabId)
+				? { ...pane, tabIds: pane.tabIds.filter((id) => id !== tabId) }
+				: pane,
+		)
+		.filter((pane) => pane.tabIds.length >= LAYOUT_PANE_LIMITS.minMembers)
+		.map((pane) =>
+			pane.weights.length === pane.tabIds.length
+				? pane
+				: { ...pane, weights: evenWeights(pane.tabIds.length) },
+		);
+	return remaining.length > 0 ? remaining : undefined;
 }
 
 function removeTabFromCenter(
@@ -427,18 +685,35 @@ export function findPlacedResource(
 	);
 }
 
-export function unplacedTools(document: WorkspaceLayoutDocument): readonly LayoutToolId[] {
-	return LAYOUT_TOOLS.filter((tool) => findPlacedResource(document, toolTab(tool)) === null);
+export function unplacedTools(
+	document: WorkspaceLayoutDocument,
+	catalog: LayoutToolCatalog = BUILTIN_LAYOUT_TOOL_CATALOG,
+): readonly LayoutToolId[] {
+	return [...catalog.keys()].filter(
+		(tool) =>
+			!resolveLayoutTool(catalog, tool).dormant &&
+			findPlacedResource(document, toolTab(tool, catalog)) === null,
+	);
 }
 
 export function unplacedToolsForRegion(
 	document: WorkspaceLayoutDocument,
 	region: LayoutAuxiliaryRegion,
+	catalog: LayoutToolCatalog = BUILTIN_LAYOUT_TOOL_CATALOG,
 ): readonly LayoutToolId[] {
-	return unplacedTools(document).filter(
+	return unplacedTools(document, catalog).filter(
 		(tool) =>
-			(document.toolRestoreTargets[tool]?.region ?? LAYOUT_TOOL_DEFAULT_SIDES[tool]) === region,
+			(document.toolRestoreTargets[tool]?.region ??
+				resolveLayoutTool(catalog, tool).defaultSide) === region,
 	);
+}
+
+export function unplacedToolsForSide(
+	document: WorkspaceLayoutDocument,
+	side: LayoutSide,
+	catalog: LayoutToolCatalog = BUILTIN_LAYOUT_TOOL_CATALOG,
+): readonly LayoutToolId[] {
+	return unplacedToolsForRegion(document, side, catalog);
 }
 
 function resolvePlacedResource(
@@ -484,20 +759,222 @@ export function openCenterTab(
 	if (!target) return { reason: "The destination group no longer exists." };
 	let tabs = target.tabs;
 	let previewTabId = target.previewTabId;
+	let replaced: string | null = null;
 	const claimsPreviewSlot = previewCompatible && (effectiveIntent === "preview" || claimPreview);
 	if (claimsPreviewSlot && previewTabId) {
 		const slot = tabs.findIndex((candidate) => candidate.id === previewTabId);
-		if (slot >= 0) tabs = tabs.map((candidate, index) => (index === slot ? tab : candidate));
-		else tabs = [...tabs, tab];
+		if (slot >= 0) {
+			tabs = tabs.map((candidate, index) => (index === slot ? tab : candidate));
+			replaced = previewTabId;
+		} else {
+			tabs = [...tabs, tab];
+		}
 	} else {
 		tabs = [...tabs, tab];
 	}
 	if (effectiveIntent === "preview") previewTabId = tab.id;
 	else if (previewCompatible && claimPreview) previewTabId = undefined;
 	const center = updateCenterGroup(document.center, groupId, (group) =>
-		withGroupTabs(group, tabs, previewTabId),
+		// The preview slot can be a pane's, and then the newcomer takes that member's place rather than
+		// leaving the pane a member short — which is how a split silently collapsed. See SPEC.md.
+		withGroupTabs(replaced ? withPaneMember(group, replaced, tab.id) : group, tabs, previewTabId),
 	);
 	return { document: { ...document, center }, focusGroupId: groupId, focusTabId: tab.id };
+}
+
+/** The pane a tab belongs to, if any — the unit the vertical strip shows as one entry. */
+export function paneForTab(group: LayoutCenterGroup, tabId: string): LayoutTabPane | undefined {
+	return group.panes?.find((pane) => pane.tabIds.includes(tabId));
+}
+
+/**
+ * Put `tabId` in the same pane as `targetId`, creating one if the target is still on its own.
+ *
+ * Both must be tabs of the same group, which is what makes this expressible as group metadata at all.
+ * A tab already in another pane leaves it first, so membership stays exclusive; the vacated pane is
+ * pruned if that drops it below two members.
+ */
+export function groupTabs(
+	document: WorkspaceLayoutDocument,
+	groupId: string,
+	tabId: string,
+	targetId: string,
+	direction: LayoutTabPane["direction"],
+): LayoutOperationResult {
+	if (tabId === targetId) return { reason: "A tab cannot be grouped with itself." };
+	const group = findCenterGroup(document.center, groupId);
+	if (!group) return { reason: "That group no longer exists." };
+	const holds = (id: string) => group.tabs.some((tab) => tab.id === id);
+	if (!holds(tabId) || !holds(targetId)) return { reason: "Both tabs must be in the same group." };
+
+	const existing = paneForTab(group, targetId);
+	const members = existing ? [...existing.tabIds] : [targetId];
+	if (members.includes(tabId)) return { document, focusGroupId: groupId, focusTabId: tabId };
+	if (members.length + 1 > LAYOUT_PANE_LIMITS.maxMembers) {
+		return { reason: `A group holds at most ${LAYOUT_PANE_LIMITS.maxMembers} panes.` };
+	}
+	members.push(tabId);
+
+	const others = (group.panes ?? [])
+		.filter((pane) => pane !== existing)
+		.map((pane) =>
+			pane.tabIds.includes(tabId)
+				? { ...pane, tabIds: pane.tabIds.filter((id) => id !== tabId) }
+				: pane,
+		)
+		.filter((pane) => pane.tabIds.length >= LAYOUT_PANE_LIMITS.minMembers)
+		.map((pane) =>
+			pane.weights.length === pane.tabIds.length
+				? pane
+				: { ...pane, weights: evenWeights(pane.tabIds.length) },
+		);
+
+	// A pane that already exists is an arrangement being joined, not one being redrawn: its direction and
+	// the proportions its members were dragged to survive the newcomer. See SPEC.md.
+	const pane: LayoutTabPane = {
+		id: existing?.id ?? randomId("pane"),
+		tabIds: members,
+		direction: existing?.direction ?? direction,
+		weights: existing
+			? weightsWithNewMember(existing.weights, members.length)
+			: evenWeights(members.length),
+	};
+	return {
+		document: {
+			...document,
+			center: updateCenterGroup(document.center, groupId, (current) =>
+				withGroupTabs({ ...current, panes: [...others, pane] }, current.tabs, current.previewTabId),
+			),
+		},
+		focusGroupId: groupId,
+		focusTabId: tabId,
+	};
+}
+
+/** Take one tab out of its pane; the pane dissolves when too few members remain to be one. */
+/**
+ * Move a member one place inside its own pane: the strip order and the split order are one order, so this
+ * is what changes which column a tab renders in. Weights travel with their member. See SPEC.md.
+ */
+export function reorderPaneMember(
+	document: WorkspaceLayoutDocument,
+	groupId: string,
+	tabId: string,
+	delta: -1 | 1,
+): LayoutOperationResult {
+	const group = findCenterGroup(document.center, groupId);
+	const pane = group ? paneForTab(group, tabId) : undefined;
+	if (!group || !pane) return { reason: "That tab is not in a pane." };
+	const from = pane.tabIds.indexOf(tabId);
+	const to = from + delta;
+	if (to < 0 || to >= pane.tabIds.length)
+		return { reason: "That tab is already at this position." };
+	const tabIds = [...pane.tabIds];
+	const weights = [...pane.weights];
+	[tabIds[from], tabIds[to]] = [tabIds[to] as string, tabIds[from] as string];
+	[weights[from], weights[to]] = [weights[to] as number, weights[from] as number];
+	const panes = (group.panes ?? []).map((candidate) =>
+		candidate === pane ? { ...candidate, tabIds, weights } : candidate,
+	);
+	return {
+		document: {
+			...document,
+			center: updateCenterGroup(document.center, groupId, (current) =>
+				withGroupTabs({ ...current, panes }, [...current.tabs], current.previewTabId),
+			),
+		},
+		focusGroupId: groupId,
+		focusTabId: tabId,
+	};
+}
+
+export function ungroupTab(
+	document: WorkspaceLayoutDocument,
+	groupId: string,
+	tabId: string,
+): LayoutOperationResult {
+	const group = findCenterGroup(document.center, groupId);
+	const pane = group ? paneForTab(group, tabId) : undefined;
+	if (!group || !pane) return { reason: "That tab is not in a pane." };
+	const remaining = (group.panes ?? [])
+		.map((candidate) =>
+			candidate === pane
+				? { ...candidate, tabIds: candidate.tabIds.filter((id) => id !== tabId) }
+				: candidate,
+		)
+		.filter((candidate) => candidate.tabIds.length >= LAYOUT_PANE_LIMITS.minMembers)
+		.map((candidate) =>
+			candidate.weights.length === candidate.tabIds.length
+				? candidate
+				: { ...candidate, weights: evenWeights(candidate.tabIds.length) },
+		);
+	return {
+		document: {
+			...document,
+			center: updateCenterGroup(document.center, groupId, (current) => {
+				const next: LayoutCenterGroup = { ...current };
+				if (remaining.length > 0) next.panes = remaining;
+				else delete next.panes;
+				return next;
+			}),
+		},
+		focusGroupId: groupId,
+		focusTabId: tabId,
+	};
+}
+
+/** Flip a pane between columns and rows; the split it renders as is the only thing that changes. */
+export function setPaneDirection(
+	document: WorkspaceLayoutDocument,
+	groupId: string,
+	paneId: string,
+	direction: LayoutTabPane["direction"],
+): LayoutOperationResult {
+	const group = findCenterGroup(document.center, groupId);
+	const pane = group?.panes?.find((candidate) => candidate.id === paneId);
+	if (!group || !pane) return { reason: "That pane no longer exists." };
+	if (pane.direction === direction) return { document, focusGroupId: groupId };
+	return {
+		document: {
+			...document,
+			center: updateCenterGroup(document.center, groupId, (current) => ({
+				...current,
+				panes: (current.panes ?? []).map((candidate) =>
+					candidate.id === paneId ? { ...candidate, direction } : candidate,
+				),
+			})),
+		},
+		focusGroupId: groupId,
+	};
+}
+
+/** Persist a drag on a pane's divider. Ignored unless the weights still describe the same members. */
+export function setPaneWeights(
+	document: WorkspaceLayoutDocument,
+	groupId: string,
+	paneId: string,
+	weights: number[],
+): LayoutOperationResult {
+	const group = findCenterGroup(document.center, groupId);
+	const pane = group?.panes?.find((candidate) => candidate.id === paneId);
+	if (!group || !pane || pane.tabIds.length !== weights.length) {
+		return { reason: "That pane no longer exists." };
+	}
+	if (!weights.every((weight) => weight > 0 && weight < 1)) {
+		return { reason: "A pane weight must leave room for its siblings." };
+	}
+	return {
+		document: {
+			...document,
+			center: updateCenterGroup(document.center, groupId, (current) => ({
+				...current,
+				panes: (current.panes ?? []).map((candidate) =>
+					candidate.id === paneId ? { ...candidate, weights } : candidate,
+				),
+			})),
+		},
+		focusGroupId: groupId,
+	};
 }
 
 export function keepPreview(
@@ -588,25 +1065,39 @@ export function moveTabToGroup(
 				? findCenterGroup(document.center, target.groupId)
 				: findAuxiliaryGroup(document, target.area, target.groupId);
 		if (!current) return { reason: "The destination group no longer exists." };
-		const tabs = current.tabs.filter((candidate) => candidate.id !== movingTab.id);
-		const insertion = Math.max(0, Math.min(index ?? tabs.length, tabs.length));
+		const without = current.tabs.filter((candidate) => candidate.id !== movingTab.id);
+		const insertion = Math.max(0, Math.min(index ?? without.length, without.length));
+		const tabs = [...without];
 		tabs.splice(insertion, 0, movingTab);
-		if (current.tabs.every((candidate, position) => candidate.id === tabs[position]?.id)) {
-			return { reason: "That tab is already at this position." };
-		}
 		if (target.area === "center") {
+			const centerGroup = current as LayoutCenterGroup;
+			const panes = paneAfterMemberDrop(
+				centerGroup.panes,
+				movingTab.id,
+				without as LayoutCenterTab[],
+				insertion,
+				tabs as LayoutCenterTab[],
+			);
+			const detached: LayoutCenterGroup = { ...centerGroup };
+			if (panes) detached.panes = panes;
+			else delete detached.panes;
+			const rebuilt = withGroupTabs(detached, tabs as LayoutCenterTab[], centerGroup.previewTabId);
+			if (
+				centerGroup.tabs.every((candidate, position) => candidate.id === rebuilt.tabs[position]?.id)
+			) {
+				return { reason: "That tab is already at this position." };
+			}
 			return {
 				document: {
 					...document,
-					center: updateCenterGroup(
-						document.center,
-						target.groupId,
-						(group) => ({ ...group, tabs }) as LayoutCenterGroup,
-					),
+					center: updateCenterGroup(document.center, target.groupId, () => rebuilt),
 				},
 				focusGroupId: target.groupId,
 				focusTabId: movingTab.id,
 			};
+		}
+		if (current.tabs.every((candidate, position) => candidate.id === tabs[position]?.id)) {
+			return { reason: "That tab is already at this position." };
 		}
 		return {
 			document: {
@@ -644,6 +1135,7 @@ export function moveTabToGroup(
 	if (
 		groupIndex < 0 ||
 		movingTab.kind === "file" ||
+		movingTab.kind === "external-file" ||
 		movingTab.kind === "diff" ||
 		movingTab.kind === "changes" ||
 		movingTab.kind === "chat" ||
@@ -668,6 +1160,38 @@ export function moveTabToGroup(
 		focusGroupId: group.id,
 		focusTabId: movingTab.id,
 	};
+}
+
+/**
+ * A file opened over a group whose selected tab runs an agent goes beside that group instead: the next
+ * center group in reading order, or a new column split off to the right. See SPEC.md.
+ */
+export function openCenterTabBeside(
+	document: WorkspaceLayoutDocument,
+	attention: LayoutAttention,
+	tab: LayoutCenterTab,
+	groupId: string,
+	intent: "preview" | "keep",
+	claimPreview: boolean,
+	runsAgent: (selected: LayoutTab) => boolean,
+): LayoutOperationResult {
+	const fileLike = tab.kind === "file" || tab.kind === "external-file" || tab.kind === "diff";
+	const plain = () => openCenterTab(document, tab, groupId, intent, claimPreview);
+	if (!fileLike || findPlacedResource(document, tab)) return plain();
+	const selectedId = attention.selectedByGroup[groupId];
+	const selected = findCenterGroup(document.center, groupId)?.tabs.find(
+		(candidate) => candidate.id === selectedId,
+	);
+	if (!selected || !runsAgent(selected)) return plain();
+	const groups = collectCenterGroups(document.center);
+	const neighbour = groups[groups.findIndex((group) => group.id === groupId) + 1];
+	if (neighbour) return openCenterTab(document, tab, neighbour.id, intent, claimPreview);
+	const opened = plain();
+	if (isLayoutUnavailable(opened) || !opened.focusTabId) return opened;
+	const placed = findLayoutTab(opened.document, opened.focusTabId);
+	if (!placed || placed.kind === "tool") return opened;
+	const split = splitCenterGroup(opened.document, groupId, "right", placed);
+	return isLayoutUnavailable(split) ? opened : split;
 }
 
 export function splitCenterGroup(
@@ -849,8 +1373,6 @@ export function setBottomVisibility(
 	return { ...document, bottom: { ...document.bottom, visible: nextVisible } };
 }
 
-const TOOL_RESTORE_ORDER = LAYOUT_TOOLS;
-
 export function hideSide(
 	document: WorkspaceLayoutDocument,
 	side: LayoutSide,
@@ -886,8 +1408,14 @@ export function hideBottom(
 	};
 }
 
-export function canShowSide(document: WorkspaceLayoutDocument, side: LayoutSide): boolean {
-	return document[side].groups.length > 0 || unplacedToolsForRegion(document, side).length > 0;
+export function canShowSide(
+	document: WorkspaceLayoutDocument,
+	side: LayoutSide,
+	catalog: LayoutToolCatalog = BUILTIN_LAYOUT_TOOL_CATALOG,
+): boolean {
+	return (
+		document[side].groups.length > 0 || unplacedToolsForSide(document, side, catalog).length > 0
+	);
 }
 
 function focusUnfoldedGroup(
@@ -910,6 +1438,7 @@ export function showBottom(
 	maxSideGroups: number,
 	maxBottomGroups: number,
 	attention?: LayoutAttention,
+	catalog: LayoutToolCatalog = BUILTIN_LAYOUT_TOOL_CATALOG,
 ): LayoutOperationResult {
 	const populated = document.bottom.groups.some((group) => group.tabs.length > 0);
 	if (populated) {
@@ -922,12 +1451,12 @@ export function showBottom(
 		if (!group) return { document: shown };
 		return focusUnfoldedGroup(shown, "bottom", group, attention);
 	}
-	const tool = TOOL_RESTORE_ORDER.find(
+	const tool = [...catalog.keys()].find(
 		(candidate) =>
 			document.toolRestoreTargets[candidate]?.region === "bottom" &&
-			!findPlacedResource(document, toolTab(candidate)),
+			!findPlacedResource(document, toolTab(candidate, catalog)),
 	);
-	if (tool) return revealTool(document, tool, maxSideGroups, maxBottomGroups);
+	if (tool) return revealTool(document, tool, maxSideGroups, maxBottomGroups, undefined, catalog);
 	if (document.bottom.groups.length > 0) {
 		const shown = setBottomVisibility(document, true);
 		const preferredId = attention?.lastFocusedSideGroupId.bottom;
@@ -956,6 +1485,7 @@ export function showSide(
 	side: LayoutSide,
 	maxSideGroups: number,
 	attention?: LayoutAttention,
+	catalog: LayoutToolCatalog = BUILTIN_LAYOUT_TOOL_CATALOG,
 ): LayoutOperationResult {
 	if (document[side].groups.length > 0) {
 		const shown = setSideVisibility(document, side, true);
@@ -967,32 +1497,34 @@ export function showSide(
 		const tab = group.tabs.find((candidate) => candidate.id === selectedId) ?? group.tabs[0];
 		if (!tab) {
 			const restore =
-				TOOL_RESTORE_ORDER.find(
+				[...catalog.keys()].find(
 					(candidate) =>
 						document.toolRestoreTargets[candidate]?.region === side &&
-						!findPlacedResource(document, toolTab(candidate)),
+						!findPlacedResource(document, toolTab(candidate, catalog)),
 				) ??
-				TOOL_RESTORE_ORDER.find(
+				[...catalog.keys()].find(
 					(candidate) =>
-						LAYOUT_TOOL_DEFAULT_SIDES[candidate] === side &&
-						!findPlacedResource(document, toolTab(candidate)),
+						resolveLayoutTool(catalog, candidate).defaultSide === side &&
+						!findPlacedResource(document, toolTab(candidate, catalog)),
 				);
-			if (restore) return revealTool(shown, restore, maxSideGroups);
+			if (restore) return revealTool(shown, restore, maxSideGroups, undefined, undefined, catalog);
 		}
 		return focusUnfoldedGroup(shown, side, group, attention);
 	}
 	const tool =
-		TOOL_RESTORE_ORDER.find(
+		[...catalog.keys()].find(
 			(candidate) =>
 				document.toolRestoreTargets[candidate]?.region === side &&
-				!findPlacedResource(document, toolTab(candidate)),
+				!findPlacedResource(document, toolTab(candidate, catalog)),
 		) ??
-		TOOL_RESTORE_ORDER.find(
+		[...catalog.keys()].find(
 			(candidate) =>
-				LAYOUT_TOOL_DEFAULT_SIDES[candidate] === side &&
-				!findPlacedResource(document, toolTab(candidate)),
+				resolveLayoutTool(catalog, candidate).defaultSide === side &&
+				!findPlacedResource(document, toolTab(candidate, catalog)),
 		);
-	return tool ? revealTool(document, tool, maxSideGroups) : { document };
+	return tool
+		? revealTool(document, tool, maxSideGroups, undefined, undefined, catalog)
+		: { document };
 }
 
 export function revealTool(
@@ -1000,10 +1532,34 @@ export function revealTool(
 	tool: LayoutToolId,
 	maxSideGroups: number,
 	maxBottomGroups = 3,
+	target?: LayoutGroupLocation,
+	catalog: LayoutToolCatalog = BUILTIN_LAYOUT_TOOL_CATALOG,
 ): LayoutOperationResult {
-	const requestedTab = withAvailablePlacementId(document, toolTab(tool));
+	const requestedTab = withAvailablePlacementId(document, toolTab(tool, catalog));
 	const placedTab = resolvePlacedResource(document, requestedTab).placed;
 	const existing = placedTab ? findTabLocation(document, placedTab.id) : null;
+	if (!placedTab && target && target.area !== "center") {
+		const region = document[target.area];
+		const group = region.groups.find((candidate) => candidate.id === target.groupId);
+		if (group) {
+			return {
+				document: {
+					...document,
+					[target.area]: {
+						...region,
+						visible: true,
+						groups: region.groups.map((candidate) =>
+							candidate.id === group.id
+								? { ...candidate, folded: false, tabs: [...candidate.tabs, requestedTab] }
+								: candidate,
+						),
+					},
+				},
+				focusGroupId: group.id,
+				focusTabId: requestedTab.id,
+			};
+		}
+	}
 	if (placedTab && existing && existing.area !== "center") {
 		const region = document[existing.area];
 		const group = region.groups.find((candidate) => candidate.id === existing.groupId);
@@ -1026,7 +1582,8 @@ export function revealTool(
 		};
 	}
 	const restore = document.toolRestoreTargets[tool];
-	const region: LayoutAuxiliaryRegion = restore?.region ?? LAYOUT_TOOL_DEFAULT_SIDES[tool];
+	const region: LayoutAuxiliaryRegion =
+		restore?.region ?? resolveLayoutTool(catalog, tool).defaultSide;
 	const groups = document[region].groups;
 	const restoreGroup = restore?.groupId
 		? groups.find((group) => group.id === restore.groupId)

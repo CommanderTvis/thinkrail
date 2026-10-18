@@ -597,6 +597,7 @@ test("resource handlers scope every read/control to a registered workspace and a
 		expect(await handleRequest("session.resources", scope, CTX)).toEqual({
 			...scope,
 			commands: [],
+			mcpServers: [],
 			subagents: [],
 		});
 		expect(

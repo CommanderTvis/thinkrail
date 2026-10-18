@@ -52,28 +52,28 @@ describe("hidden model actions", () => {
 		const store = useAppStore.getState();
 		store.setModelVisibility(b, false);
 		store.setModelVisibility(b, false);
-		expect(useAppStore.getState().hiddenModels).toEqual([{ provider: "openai", id: "gpt" }]);
+		expect(useAppStore.getState().hiddenModelRefs).toEqual([{ provider: "openai", id: "gpt" }]);
 		useAppStore.getState().setModelVisibility(b, true);
-		expect(useAppStore.getState().hiddenModels).toEqual([]);
+		expect(useAppStore.getState().hiddenModelRefs).toEqual([]);
 	});
 
 	test("a no-op visibility change keeps the same array", () => {
 		useAppStore.getState().setModelVisibility(b, false);
-		const before = useAppStore.getState().hiddenModels;
+		const before = useAppStore.getState().hiddenModelRefs;
 		useAppStore.getState().setModelVisibility(b, false);
 		useAppStore.getState().setModelVisibility(c, true);
-		expect(useAppStore.getState().hiddenModels).toBe(before);
+		expect(useAppStore.getState().hiddenModelRefs).toBe(before);
 	});
 
 	test("toggleModelVisibility flips one model", () => {
 		useAppStore.getState().toggleModelVisibility(a);
-		expect(useAppStore.getState().hiddenModels).toEqual([{ provider: "anthropic", id: "opus" }]);
+		expect(useAppStore.getState().hiddenModelRefs).toEqual([{ provider: "anthropic", id: "opus" }]);
 		useAppStore.getState().toggleModelVisibility(a);
-		expect(useAppStore.getState().hiddenModels).toEqual([]);
+		expect(useAppStore.getState().hiddenModelRefs).toEqual([]);
 	});
 
 	test("hydrateHiddenModels replaces the list", () => {
 		useAppStore.getState().hydrateHiddenModels([{ provider: "openai", id: "o3" }]);
-		expect(useAppStore.getState().hiddenModels).toEqual([{ provider: "openai", id: "o3" }]);
+		expect(useAppStore.getState().hiddenModelRefs).toEqual([{ provider: "openai", id: "o3" }]);
 	});
 });

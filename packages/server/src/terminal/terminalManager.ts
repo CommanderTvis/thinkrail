@@ -471,9 +471,6 @@ function announceDisplaced(id: string, caller: string): void {
 	pushToClient(caller, WS_CHANNELS.terminalDetached, push);
 }
 
-export function writeTerminal(id: string, data: string, caller: string): string | null {
-	assertTerminalData(data);
-
 export function saveTerminalImage(
 	id: string,
 	data: string,
@@ -485,6 +482,9 @@ export function saveTerminalImage(
 		throw new Error("This terminal is no longer attached. Paste again after reconnecting.");
 	return entry.images.save(data, mimeType);
 }
+
+export function writeTerminal(id: string, data: string, caller: string): string | null {
+	assertTerminalData(data);
 
 	const entry = attachedEntry(id, caller);
 	if (!entry) {

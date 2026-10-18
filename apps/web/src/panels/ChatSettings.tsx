@@ -1,11 +1,19 @@
-import type { AppConfigUpdate, ComposerGrowthLimit, SubagentOverride } from "@thinkrail/contracts";
+import { RiCloseLine as X } from "@remixicon/react";
+import {
+	type AppConfigUpdate,
+	type ComposerGrowthLimit,
+	matchesModelPattern,
+	type SubagentOverride,
+} from "@thinkrail/contracts";
 import { cn } from "@thinkrail/ui/utils";
+import { useState } from "react";
 import {
 	type ChatMessageOrder,
 	moveStreamingResponseHandle,
 	STREAMING_RESPONSE_MOVEMENT_LIMITS,
 	type StreamingResponseMovement,
 } from "@/chat/chatPreferences";
+import { useModelCatalog } from "@/chat/useModelCatalog";
 import { selectActiveWorkspace, toast, useAppStore } from "@/store";
 import { errorText, getTransport } from "@/transport";
 import { LineWidthControl } from "./LineWidthSettings";
@@ -121,6 +129,86 @@ function saveSetting(config: AppConfigUpdate, failure: string): void {
 		.catch((err: unknown) => toast.error(errorText(err), failure));
 }
 
+function HiddenModelsSettings() {
+	const hiddenModels = useAppStore((state) => state.hiddenModels);
+	const { models } = useModelCatalog(true);
+	const [draft, setDraft] = useState("");
+	const add = (value: string) => {
+		const pattern = value.trim();
+		if (!pattern || hiddenModels.includes(pattern)) return;
+		saveSetting({ hiddenModels: [...hiddenModels, pattern] }, "Couldn't add hidden model pattern");
+		setDraft("");
+	};
+	const remove = (pattern: string) =>
+		saveSetting(
+			{ hiddenModels: hiddenModels.filter((value) => value !== pattern) },
+			"Couldn't remove hidden model pattern",
+		);
+	return (
+		<div
+			data-testid="settings-hidden-models"
+			className="flex flex-col gap-8 border-border-muted border-b py-12"
+		>
+			<div className="flex flex-col gap-4">
+				<span className="tr-text-ui text-text-default">Hidden models</span>
+				<p className="text-text-muted tr-text-metadata">
+					Filter out unwanted models. Accepts exact IDs, wildcards, or /regex/.
+				</p>
+			</div>
+			<form
+				onSubmit={(event) => {
+					event.preventDefault();
+					add(draft);
+				}}
+				className="flex items-center gap-8"
+			>
+				<input
+					type="text"
+					data-testid="hidden-models-input"
+					value={draft}
+					onChange={(event) => setDraft(event.currentTarget.value)}
+					placeholder="e.g. *-2024* or model ID"
+					className="h-32 min-w-0 flex-1 rounded-sm border border-control-border-default bg-control-bg px-8 tr-text-ui text-text-default placeholder:text-text-muted outline-none focus:border-control-border-active focus:ring-2 focus:ring-primary"
+				/>
+				<button
+					type="submit"
+					data-testid="hidden-models-add"
+					disabled={!draft.trim() || hiddenModels.includes(draft.trim())}
+					className="h-32 rounded-sm border border-control-border-default bg-control-bg px-12 tr-text-ui text-text-default disabled:opacity-50"
+				>
+					Add
+				</button>
+			</form>
+			<div className="flex flex-wrap gap-4">
+				{hiddenModels.map((pattern) => {
+					const count = models.filter((model) => matchesModelPattern(model, pattern)).length;
+					return (
+						<div
+							key={pattern}
+							data-testid={`hidden-model-chip-${pattern}`}
+							className="flex items-center gap-4 rounded-sm border border-border-default bg-container-elevated-bg py-2 pr-4 pl-8 tr-text-metadata text-text-default"
+						>
+							<span className="tr-code-text">
+								{pattern}
+								{count ? ` (${count} model${count === 1 ? "" : "s"})` : ""}
+							</span>
+							<button
+								type="button"
+								data-testid={`hidden-model-remove-${pattern}`}
+								onClick={() => remove(pattern)}
+								title="Remove pattern"
+								className="rounded-xs p-2 text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
+							>
+								<X className="size-14" />
+							</button>
+						</div>
+					);
+				})}
+			</div>
+		</div>
+	);
+}
+
 export function ChatSettings() {
 	const messageOrder = useAppStore((state) => state.chatMessageOrder);
 	const growthLimit = useAppStore((state) => state.composerGrowthLimit);
@@ -163,6 +251,7 @@ export function ChatSettings() {
 	return (
 		<SettingsPageContainer testId="settings-chat">
 			<SettingsGroup title="Appearance and behavior">
+				<HiddenModelsSettings />
 				<SettingsRow
 					label="Message order"
 					description="Oldest first shows early messages at top."

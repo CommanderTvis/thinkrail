@@ -618,6 +618,13 @@ export function refreshSubagentTools(workspaceId?: string): void {
 	}
 }
 
+export function isWorkspaceStreaming(workspaceId: string): boolean {
+	for (const entry of sessions.values()) {
+		if (entry.workspaceId === workspaceId && entry.session.isStreaming) return true;
+	}
+	return false;
+}
+
 // Injected by the host (never an agent → settings edge, see agent/SPEC.md); default on. Gates the
 // worker's in-session request_review tool live: `setActiveToolsByName` rebuilds the system prompt from
 // only the active tools' guidelines, so toggling the tool off also drops its guidance. The Review button

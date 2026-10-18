@@ -112,7 +112,7 @@ function MappingValue({
 						data-testid="frontmatter-map-remove"
 						aria-label={`Remove entry ${key}`}
 						onClick={() => onCommit(Object.fromEntries(pairs.filter((_, at) => at !== index)))}
-						className="shrink-0 rounded-[var(--radius-sm)] p-2 text-text-subtle hover:bg-control-bg-hovered hover:text-text-default"
+						className="shrink-0 rounded-sm p-2 text-text-subtle hover:bg-control-bg-hovered hover:text-text-default"
 					>
 						<X className="size-14" />
 					</button>
@@ -122,7 +122,7 @@ function MappingValue({
 				type="button"
 				data-testid="frontmatter-map-add"
 				onClick={add}
-				className="flex w-fit items-center gap-4 rounded-[var(--radius-sm)] px-4 py-2 tr-text-metadata text-text-subtle hover:bg-control-bg-hovered hover:text-text-default"
+				className="flex w-fit items-center gap-4 rounded-sm px-4 py-2 tr-text-metadata text-text-subtle hover:bg-control-bg-hovered hover:text-text-default"
 			>
 				<Plus className="size-14" />
 				Add entry
@@ -165,7 +165,7 @@ function TextValue({
 						event.currentTarget.blur();
 					}
 				}}
-				className="w-full min-w-0 rounded-[var(--radius-sm)] border border-transparent bg-transparent px-4 py-2 tr-text-ui text-text-default outline-none hover:border-border-default focus:border-control-border-active"
+				className="w-full min-w-0 rounded-sm border border-transparent bg-transparent px-4 py-2 tr-text-ui text-text-default outline-none hover:border-border-default focus:border-control-border-active"
 			/>
 			{suggestions ? (
 				<datalist id={listId}>
@@ -222,7 +222,7 @@ function ListValue({ items, onCommit }: { items: string[]; onCommit: (next: stri
 					if (event.key === "Enter") add();
 					if (event.key === "Escape") setDraft("");
 				}}
-				className="w-64 min-w-0 rounded-[var(--radius-sm)] border border-transparent bg-transparent px-4 py-2 tr-text-metadata text-text-default outline-none placeholder:text-text-subtle hover:border-border-default focus:border-control-border-active"
+				className="w-64 min-w-0 rounded-sm border border-transparent bg-transparent px-4 py-2 tr-text-metadata text-text-default outline-none placeholder:text-text-subtle hover:border-border-default focus:border-control-border-active"
 			/>
 		</div>
 	);
@@ -308,7 +308,7 @@ export function FrontmatterProperties({
 					Properties
 				</button>
 				{open && !editable && !block.editable ? (
-					<pre className="mt-4 overflow-x-auto rounded-[var(--radius-sm)] bg-container-content-bg p-8 tr-code-text text-text-muted">
+					<pre className="mt-4 overflow-x-auto rounded-sm bg-container-content-bg p-8 tr-code-text text-text-muted">
 						{block.raw}
 					</pre>
 				) : null}
@@ -342,7 +342,7 @@ export function FrontmatterProperties({
 										data-value-type={shapeOf(property.value)}
 										aria-label={`Change type of ${property.key}`}
 										title="Property type"
-										className="mt-4 shrink-0 rounded-[var(--radius-sm)] p-2 text-text-subtle outline-none hover:bg-control-bg-hovered hover:text-text-default"
+										className="mt-4 shrink-0 rounded-sm p-2 text-text-subtle outline-none hover:bg-control-bg-hovered hover:text-text-default"
 									>
 										{shapeOf(property.value) === "sequence" ? (
 											<ListIcon className="size-14" />
@@ -400,7 +400,7 @@ export function FrontmatterProperties({
 									data-testid="frontmatter-remove"
 									aria-label={`Remove property ${property.key}`}
 									onClick={() => commit(properties.filter((_, at) => at !== index))}
-									className="shrink-0 rounded-[var(--radius-sm)] p-2 text-text-subtle hover:bg-control-bg-hovered hover:text-text-default"
+									className="shrink-0 rounded-sm p-2 text-text-subtle hover:bg-control-bg-hovered hover:text-text-default"
 								>
 									<X className="size-14" />
 								</button>
@@ -410,7 +410,7 @@ export function FrontmatterProperties({
 							type="button"
 							data-testid="frontmatter-add"
 							onClick={addProperty}
-							className="mt-2 flex w-fit items-center gap-4 rounded-[var(--radius-sm)] px-4 py-2 tr-text-metadata text-text-subtle hover:bg-control-bg-hovered hover:text-text-default"
+							className="mt-2 flex w-fit items-center gap-4 rounded-sm px-4 py-2 tr-text-metadata text-text-subtle hover:bg-control-bg-hovered hover:text-text-default"
 						>
 							<Plus className="size-14" />
 							Add property

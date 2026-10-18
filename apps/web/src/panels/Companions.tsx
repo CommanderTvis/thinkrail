@@ -118,7 +118,7 @@ export function Companions({ host, children }: { host: CompanionHost; children: 
 											.getState()
 											.focusEmbeddedPane(host.workspaceId, hostKey, registration.kind)
 									}
-									className="flex shrink-0 cursor-pointer items-center gap-2 rounded-[var(--radius-sm)] bg-container-elevated-bg px-4 tr-text-label-pill text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
+									className="flex shrink-0 cursor-pointer items-center gap-2 rounded-sm bg-container-elevated-bg px-4 tr-text-label-pill text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
 								>
 									<registration.icon className="size-12 shrink-0" />
 									<span className="max-w-[10rem] truncate">{titleFor(registration)}</span>

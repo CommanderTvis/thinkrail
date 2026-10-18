@@ -21,6 +21,7 @@ import type {
 import type { ToolRenderProps } from "@thinkrail/extension-api/web";
 import { Button } from "@thinkrail/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@thinkrail/ui/dialog";
+import { formatTokens } from "@thinkrail/ui/tokenUsage";
 import { cn } from "@thinkrail/ui/utils";
 import {
 	memo,
@@ -41,7 +42,7 @@ import { Markdown } from "./Markdown";
 import { ReviewPackageComments } from "./ReviewPackageComments";
 import { parseReviewPackage, reviewFixCommentsToItems, reviewPackageLabel } from "./reviewPackage";
 import { type ChatRow, LARGE_USER_MESSAGE, type TurnDividerData } from "./rows";
-import { formatElapsed, formatTokens } from "./SessionStatsBar";
+import { formatElapsed } from "./SessionStatsBar";
 import { ToolCard } from "./ToolCard";
 import { ToolRendererBody } from "./ToolRendererBody";
 import { getToolChrome, getToolSummary } from "./toolRegistry";
@@ -69,7 +70,7 @@ function ChatTurnViewImpl({
 	onOpenSpec?: ((path: string) => void) | undefined;
 	onOpenChange?: ((path: string) => void) | undefined;
 	onReviewTurn?: ((scope: GitDiffScope) => void) | undefined;
-	onReveal?: ((tab: "specs" | "changes") => void) | undefined;
+	onReveal?: ((tab: string, path?: string) => void) | undefined;
 	onTryAgain?: (() => void) | undefined;
 	/** Live-resource deep link for this chat's latest turn divider only. */
 	stillRunning?: StillRunning | undefined;
@@ -683,7 +684,7 @@ function FileDiffGlyph({ className }: { className?: string }) {
 }
 
 interface ArtifactGroup {
-	id: "specs" | "files";
+	id: string;
 	icon: typeof FileText | ((props: { className?: string }) => ReactNode);
 	paths: string[];
 	label: (count: number) => string;
@@ -801,10 +802,10 @@ export function TurnDivider({
 	onOpenSpec: (path: string) => void;
 	onOpenChange: (path: string) => void;
 	onReviewTurn?: ((scope: GitDiffScope) => void) | undefined;
-	onReveal: (tab: "specs" | "changes") => void;
+	onReveal: (tab: string, path?: string) => void;
 	stillRunning?: StillRunning | undefined;
 }) {
-	const { elapsedMs, toolCount, specs, changedFiles, receipt } = data;
+	const { elapsedMs, toolCount, groups: writtenGroups, changedFiles, receipt } = data;
 	const [selected, select] = useSelection(`${id}:artifacts`);
 	const stats = receipt
 		? new Map(
@@ -826,31 +827,20 @@ export function TurnDivider({
 					{ added: 0, removed: 0 },
 				)
 		: null;
-	const allGroups: ArtifactGroup[] = [
-		{
-			id: "specs",
-			icon: FileText,
-			paths: specs,
-			label: (n) => `${n} ${n === 1 ? "spec" : "specs"}`,
-			expanded: selected === "specs",
-			onOpen: onOpenSpec,
-			reveal: () => onReveal("specs"),
-		},
-		{
-			id: "files",
-			icon: FileDiffGlyph,
-			paths: changedFiles,
-			label: (n) =>
-				`${n} ${n === 1 ? "file changed" : "files changed"}${
-					totals ? ` · +${totals.added} −${totals.removed}` : ""
-				}`,
-			expanded: selected === "files",
-			onOpen: onOpenChange,
-			reveal: () => onReveal("changes"),
-			...(stats ? { stats } : {}),
-		},
-	];
-	const groups = allGroups.filter((group) => group.paths.length > 0);
+	const groups: ArtifactGroup[] = writtenGroups.map((group) => ({
+		...group,
+		icon: group.id === "specs" ? FileText : FileDiffGlyph,
+		expanded: selected === group.id,
+		onOpen: group.tool === "changes" ? onOpenChange : onOpenSpec,
+		reveal: () => onReveal(group.tool, group.paths[0]),
+		...(group.id === "files" && stats ? { stats } : {}),
+		...(group.id === "files" && totals
+			? {
+					label: (count: number) =>
+						`${count} ${count === 1 ? "file changed" : "files changed"} · +${totals.added} −${totals.removed}`,
+				}
+			: {}),
+	}));
 	const running = stillRunning && stillRunning.count > 0 ? stillRunning : null;
 
 	if (

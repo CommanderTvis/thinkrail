@@ -8,11 +8,14 @@ import {
 	isComposerGrowthLimit,
 	isJbcentralQuotaRefreshSeconds,
 	isLineWidth,
+	isSettleIdleDays,
+	isSubagentMaxConcurrent,
 	isTerminalWindowsShell,
 	normalizeThemePreference,
 	type Project,
 	type SessionCompletion,
 	type TerminalAgentRecord,
+	type TurnChangeSet,
 	type WireModel,
 	type Workspace,
 } from "@thinkrail/contracts";
@@ -252,6 +255,81 @@ export function writePluginState(id: string, name: string, value: unknown): void
 	writeJson(pluginStateFile(id, name), value);
 }
 
+export const TURNS_VERSION = 1;
+
+export interface PersistedTurns {
+	version: typeof TURNS_VERSION;
+	byWorkspace: Record<string, TurnChangeSet[]>;
+}
+
+const TURN_STATUSES = new Set(["added", "modified", "deleted", "renamed", "untracked"]);
+
+function turnChangeSet(value: unknown): TurnChangeSet | null {
+	if (!isRecord(value) || !Array.isArray(value.changes)) return null;
+	const { id, workspaceId, sessionId, startedAt, settledAt, baseTree, headTree } = value;
+	if (
+		typeof id !== "string" ||
+		typeof workspaceId !== "string" ||
+		typeof sessionId !== "string" ||
+		typeof startedAt !== "number" ||
+		typeof settledAt !== "number" ||
+		typeof baseTree !== "string" ||
+		typeof headTree !== "string"
+	)
+		return null;
+	const changes: TurnChangeSet["changes"] = [];
+	for (const change of value.changes) {
+		if (
+			!isRecord(change) ||
+			typeof change.path !== "string" ||
+			typeof change.status !== "string" ||
+			!TURN_STATUSES.has(change.status)
+		)
+			return null;
+		changes.push({
+			path: change.path,
+			status: change.status as TurnChangeSet["changes"][number]["status"],
+			...(typeof change.added === "number" ? { added: change.added } : {}),
+			...(typeof change.removed === "number" ? { removed: change.removed } : {}),
+		});
+	}
+	return { id, workspaceId, sessionId, startedAt, settledAt, baseTree, headTree, changes };
+}
+
+function parseTurns(raw: unknown): PersistedTurns | null {
+	if (!isRecord(raw) || raw.version !== TURNS_VERSION || !isRecord(raw.byWorkspace)) return null;
+	const byWorkspace: Record<string, TurnChangeSet[]> = {};
+	for (const [workspaceId, list] of Object.entries(raw.byWorkspace)) {
+		if (!Array.isArray(list)) return null;
+		const turns: TurnChangeSet[] = [];
+		for (const item of list) {
+			const turn = turnChangeSet(item);
+			if (!turn) return null;
+			turns.push(turn);
+		}
+		byWorkspace[workspaceId] = turns;
+	}
+	return { version: TURNS_VERSION, byWorkspace };
+}
+
+export function loadTurns(): PersistedTurns {
+	const loaded = loadSessionMetadata("turns.json", parseTurns);
+	return loaded.kind === "loaded" ? loaded.value : { version: TURNS_VERSION, byWorkspace: {} };
+}
+
+export function saveTurns(turns: PersistedTurns): void {
+	writeJsonAtomic("turns.json", turns);
+}
+
+function storedExtensionNames(value: unknown): string[] {
+	if (!Array.isArray(value)) return [];
+	return [
+		...new Set(
+			value.filter((name): name is string => typeof name === "string" && name.trim().length > 0),
+		),
+	];
+}
+
 export function loadConfig(): AppConfig {
 	const raw = readJson<unknown>("config.json", {});
 	if (!raw || typeof raw !== "object" || Array.isArray(raw)) return structuredClone(DEFAULT_CONFIG);
@@ -308,6 +386,9 @@ export function loadConfig(): AppConfig {
 			typeof value.subagentsEnabled === "boolean"
 				? value.subagentsEnabled
 				: DEFAULT_CONFIG.subagentsEnabled,
+		subagentMaxConcurrent: isSubagentMaxConcurrent(value.subagentMaxConcurrent)
+			? value.subagentMaxConcurrent
+			: DEFAULT_CONFIG.subagentMaxConcurrent,
 		editorGpuRendering:
 			typeof value.editorGpuRendering === "boolean"
 				? value.editorGpuRendering
@@ -335,6 +416,10 @@ export function loadConfig(): AppConfig {
 		terminalWindowsShell: isTerminalWindowsShell(value.terminalWindowsShell)
 			? value.terminalWindowsShell
 			: DEFAULT_CONFIG.terminalWindowsShell,
+		settleIdleDays: isSettleIdleDays(value.settleIdleDays)
+			? value.settleIdleDays
+			: DEFAULT_CONFIG.settleIdleDays,
+		disabledExtensions: storedExtensionNames(value.disabledExtensions),
 		hiddenModels: Array.isArray(value.hiddenModels)
 			? value.hiddenModels.filter(
 					(id): id is string => typeof id === "string" && id.trim().length > 0,

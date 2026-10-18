@@ -1,5 +1,8 @@
 # ThinkRail — CommanderTvis fork
 
+> [!TIP]
+> Check out [SharpRail](https://github.com/CommanderTvis/sharprail/).
+
 A fork of [JetBrains/thinkrail](https://github.com/JetBrains/thinkrail). Upstream is a desktop-and-mobile
 client for the [`pi`](https://www.npmjs.com/package/@earendil-works/pi-coding-agent) coding agent. This
 fork turns it into a workbench for more than one agent: Claude Code runs in its terminals as a first-class

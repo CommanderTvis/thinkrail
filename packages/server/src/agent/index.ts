@@ -11,8 +11,10 @@ export {
 export {
 	type ReviewSubagentRun,
 	readChildTranscript,
+	refreshSubagentConcurrency,
 	resetDelegationServices,
 	runReviewSubagent,
+	setSubagentConcurrencyResolver,
 } from "./delegation";
 export {
 	type BundledExtensionFactory,
@@ -26,8 +28,12 @@ export {
 	type PiExtensionPackage,
 	type PluginPiResources,
 	registerBundledRuntime,
+	setDisabledExtensionsResolver,
 	setPluginResourcesProvider,
 } from "./extensions";
+export * from "./mcp";
+export * from "./mcpSessions";
+export * from "./mcpSignIn";
 export {
 	listModelContextSettings,
 	setModelContextPublisher,
@@ -48,6 +54,7 @@ export {
 	preparePiRuntimeGeneration,
 	settledAvailableModels,
 } from "./piRuntime";
+export * from "./projectTrust";
 export { describeProviderAuth, type ProviderAuthFacts } from "./providerAuth";
 export {
 	REQUEST_REVIEW_TOOL_NAME,
@@ -65,7 +72,7 @@ export {
 } from "./reviewTool";
 export * from "./sessionRepair";
 export * from "./sessionState";
-export type { SkillAdmissionContext, SkillDecision, SkillFacts } from "./skillAdmission";
+export * from "./skillAdmission";
 export { isProjectSkillPath } from "./skillSources";
 export {
 	SET_TITLE_TOOL_NAME,

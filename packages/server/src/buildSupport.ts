@@ -73,6 +73,7 @@ export function resolveBuildRuntimeSources(): BuildRuntimeSources {
 		...piPackages
 			.filter((pkg) => pkg.skills)
 			.map((pkg) => requiredPath(join(dirname(pkg.entry), "skills"))),
+		requiredPath(join(import.meta.dir, "..", "skills")),
 		...serverExtensions.flatMap(resolveExtensionSkillRoots).map(requiredPath),
 	];
 	const ptyRelease = join(

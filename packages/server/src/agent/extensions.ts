@@ -1,6 +1,5 @@
 import { createRequire } from "node:module";
 import { dirname, join, resolve, sep } from "node:path";
-import { fileURLToPath } from "node:url";
 import {
 	createSyntheticSourceInfo,
 	DefaultPackageManager,
@@ -17,7 +16,6 @@ import {
 	type Skill,
 } from "@earendil-works/pi-coding-agent";
 import type { SkillCatalogEntry, SlashCommandInfo } from "@thinkrail/contracts";
-import specGraphExtension from "pi-spec-graph";
 import {
 	omitDisabledRegistryExtensions,
 	registryInlineExtensions,
@@ -43,14 +41,74 @@ import { setTitleExtension } from "./titleTool";
 
 export type BundledExtensionFactory = ExtensionFactory;
 
+let disabledExtensionsResolver: () => ReadonlySet<string> = () => new Set();
+
+export function setDisabledExtensionsResolver(resolver: () => ReadonlySet<string>): void {
+	disabledExtensionsResolver = resolver;
+}
+
+export function disabledExtensions(): ReadonlySet<string> {
+	try {
+		return disabledExtensionsResolver();
+	} catch {
+		return new Set();
+	}
+}
+
+export interface BundledPluginRuntime {
+	factories: ExtensionFactory[];
+	skillsDir: string | null;
+	assetsDir: string | null;
+}
+
 export interface BundledExtensions {
 	factories: BundledExtensionFactory[];
 	skillsDir: string;
 	trashHelpers: BundledTrashHelpers;
 	webAccessFactory: BundledExtensionFactory;
+	plugins?: Record<string, BundledPluginRuntime>;
 }
 
 let bundled: BundledExtensions | undefined;
+
+const EMPTY_BUNDLED_PLUGIN_RUNTIME: BundledPluginRuntime = {
+	factories: [],
+	skillsDir: null,
+	assetsDir: null,
+};
+
+/** A builtin plugin's staged runtime in the compiled binary/desktop, or the empty runtime in dev. */
+export function bundledPluginRuntime(id: string): BundledPluginRuntime {
+	return bundled?.plugins?.[id] ?? EMPTY_BUNDLED_PLUGIN_RUNTIME;
+}
+
+/** What the plugin loader contributes to every session's resources. */
+export interface PluginPiResources {
+	factories: ExtensionFactory[];
+	extensionPaths: string[];
+	skillPaths: string[];
+	childFactories: ExtensionFactory[];
+	toolsExtension: ExtensionFactory;
+}
+
+const noopToolsExtension: ExtensionFactory = () => {};
+
+function defaultPluginResources(): PluginPiResources {
+	return {
+		factories: [],
+		extensionPaths: [],
+		skillPaths: [],
+		childFactories: [],
+		toolsExtension: noopToolsExtension,
+	};
+}
+
+let pluginResourcesProvider: () => PluginPiResources = defaultPluginResources;
+
+/** Installed by the plugin loader: what every session's resource loader should add for active plugins. */
+export function setPluginResourcesProvider(fn: (() => PluginPiResources) | null): void {
+	pluginResourcesProvider = fn ?? defaultPluginResources;
+}
 
 export async function registerBundledRuntime(extensions: BundledExtensions): Promise<void> {
 	bundled = extensions;
@@ -65,21 +123,31 @@ export async function registerBundledRuntime(extensions: BundledExtensions): Pro
 	setBedrockProviderModule(bedrockProviderModule);
 }
 
+export const PI_EXTENSION_PACKAGES = [
+	"pi-web-access",
+	"pi-thinkrail-workflow",
+	"pi-todos",
+] as const;
+
+export type PiExtensionPackage = (typeof PI_EXTENSION_PACKAGES)[number];
+
+function piExtensionResolver(): (name: PiExtensionPackage) => string {
+	const require = createRequire(import.meta.url);
+	return (name) => require.resolve(`${name}/index.ts`);
+}
+
 let devPaths: { extensionPaths: string[]; skillPaths: string[] } | undefined;
 function resolveDevPaths(): { extensionPaths: string[]; skillPaths: string[] } {
 	if (devPaths) return devPaths;
-	const require = createRequire(import.meta.url);
-	const webAccessPath = require.resolve("pi-web-access/index.ts");
-	const specGraphPath = require.resolve("pi-spec-graph/index.ts");
-	const workflowPath = require.resolve("pi-thinkrail-workflow/index.ts");
-	const todosPath = require.resolve("pi-todos/index.ts");
+	const resolveEntry = piExtensionResolver();
+	const webAccessPath = resolveEntry("pi-web-access");
+	const workflowPath = resolveEntry("pi-thinkrail-workflow");
+	const todosPath = resolveEntry("pi-todos");
 	devPaths = {
-		extensionPaths: [webAccessPath, specGraphPath, workflowPath, todosPath],
+		extensionPaths: [webAccessPath, workflowPath, todosPath],
 		skillPaths: [
-			join(dirname(specGraphPath), "skills"),
 			join(dirname(workflowPath), "skills"),
 			join(dirname(todosPath), "skills"),
-			fileURLToPath(new URL("../../skills", import.meta.url)),
 			...serverExtensions.flatMap(resolveExtensionSkillRoots),
 		],
 	};
@@ -143,6 +211,8 @@ function skillsGate(cwd: string, bundledPaths: string[], getCtx: () => SkillAdmi
 				.map((skill) => relabelAliasProvenance(skill, sources))
 				.filter((skill) => {
 					const { group, isPlugin } = skillGroup(skill.filePath, sources, bundledPaths);
+					const projectNative = isUnderPath(skill.filePath, join(cwd, ".pi", "skills"));
+					if (projectNative && !ctx.piResourceTrusted) return false;
 					return (
 						decideSkill(
 							{ name: skill.name, isProjectAlias: isProjectAlias(skill.filePath), group, isPlugin },
@@ -184,34 +254,16 @@ export function toSkillCommands(skills: readonly Skill[]): SlashCommandInfo[] {
 	}));
 }
 
-let devWebAccessFactory: Promise<BundledExtensionFactory> | undefined;
-const devWebAccess: BundledExtensionFactory = async (pi) => {
-	devWebAccessFactory ??= import("jiti").then(({ createJiti }) =>
-		createJiti(import.meta.url).import<BundledExtensionFactory>("pi-web-access/index.ts", {
-			default: true,
-		}),
-	);
-	await (await devWebAccessFactory)(pi);
-};
-
+let devWebAccessFactory: BundledExtensionFactory | undefined;
 function webAccessFactory(): BundledExtensionFactory {
-	return bundled ? bundled.webAccessFactory : devWebAccess;
-}
-
-let disabledExtensionsResolver: () => ReadonlySet<string> = () => new Set();
-export function setDisabledExtensionsResolver(resolver: () => ReadonlySet<string>): void {
-	disabledExtensionsResolver = resolver;
-}
-
-export function disabledExtensions(): ReadonlySet<string> {
-	try {
-		return disabledExtensionsResolver();
-	} catch {
-		return new Set();
+	if (bundled) return bundled.webAccessFactory;
+	if (!devWebAccessFactory) {
+		const require = createRequire(import.meta.url);
+		const loaded: { default: BundledExtensionFactory } = require("pi-web-access/index.ts");
+		devWebAccessFactory = loaded.default;
 	}
+	return devWebAccessFactory;
 }
-
-const isExtensionDisabled = (name: string): boolean => disabledExtensions().has(name);
 
 export function childBaseExtensionFactories(): InlineExtension[] {
 	return [oversizedImageGuard];
@@ -221,8 +273,8 @@ export function childExtensionFactories(): InlineExtension[] {
 	return [
 		headlessSearchPolicy,
 		webAccessFactory(),
-		specGraphExtension,
-		...registryInlineExtensions("childExtensions", isExtensionDisabled),
+		...registryInlineExtensions("childExtensions"),
+		...pluginResourcesProvider().childFactories,
 	];
 }
 
@@ -236,6 +288,7 @@ export async function buildResourceLoader(
 ): Promise<ResourceLoader> {
 	let disabledAtReload = disabledExtensions();
 	const isDisabledAtReload = (name: string): boolean => disabledAtReload.has(name);
+	const pluginResources = pluginResourcesProvider();
 	const sharedFactories: InlineExtension[] = [
 		...registryInlineExtensions("extensions", isDisabledAtReload),
 		headlessSearchPolicy,
@@ -244,9 +297,10 @@ export async function buildResourceLoader(
 		requestReviewExtension,
 		setTitleExtension,
 		oversizedImageGuard,
+		pluginResources.toolsExtension,
+		...pluginResources.factories,
 		...extraFactories,
 	];
-	const extensionFactories = bundled ? [...bundled.factories, ...sharedFactories] : sharedFactories;
 	const skillInputs = resolveSkillInputs(cwd, getAdmission);
 	const agentDir = getAgentDir();
 	const common = {
@@ -254,33 +308,36 @@ export async function buildResourceLoader(
 		agentDir,
 		settingsManager,
 		...skillInputs,
-		extensionFactories,
+		additionalSkillPaths: [...skillInputs.additionalSkillPaths, ...pluginResources.skillPaths],
+		extensionFactories: [...(bundled?.factories ?? []), ...sharedFactories],
 		extensionsOverride: (result: LoadExtensionsResult) =>
 			omitDisabledRegistryExtensions(result, isDisabledAtReload),
 	};
-	const devExtensionPaths = bundled ? [] : resolveDevPaths().extensionPaths;
 	const applyCurrentPolicy = (): void => {
 		settingsManager.setProjectTrusted(getAdmission().piResourceTrusted);
 		disabledAtReload = disabledExtensions();
 	};
 
+	const extensionFactories = [...(bundled?.factories ?? []), ...sharedFactories];
+	const devExtensionPaths = bundled ? [] : resolveDevPaths().extensionPaths;
+	const pluginExtensionPaths = pluginResources.extensionPaths;
 	const excluded = new Set(excludedExtensionPaths.map((path) => resolve(path)));
+
 	if (excluded.size === 0) {
 		const loader = new DefaultResourceLoader({
 			...common,
-			additionalExtensionPaths: devExtensionPaths,
+			additionalExtensionPaths: [...devExtensionPaths, ...pluginExtensionPaths],
 		});
-		const reloadTrusted = loader.reload.bind(loader);
+		const reload = loader.reload.bind(loader);
 		loader.reload = async (options) => {
 			applyCurrentPolicy();
-			await reloadTrusted(options);
+			await reload(options);
 		};
 		await loader.reload();
 		return loader;
 	}
 
-	// pi keeps a reference to this array and reads it on every reload, so it is rebuilt in place.
-	const additionalExtensionPaths: string[] = [...devExtensionPaths];
+	const additionalExtensionPaths: string[] = [...devExtensionPaths, ...pluginExtensionPaths];
 	const packageManager = new DefaultPackageManager({
 		cwd,
 		agentDir,
@@ -290,10 +347,10 @@ export async function buildResourceLoader(
 	let discoveredMetadata = new Map<string, PathMetadata>();
 	const resolveExclusionPaths = async (): Promise<void> => {
 		await settingsManager.reload();
-		const resolvedResources = await packageManager.resolve();
+		const resolved = await packageManager.resolve();
 		const next: string[] = [];
 		const metadata = new Map<string, PathMetadata>();
-		for (const resource of resolvedResources.extensions) {
+		for (const resource of resolved.extensions) {
 			if (!resource.enabled) continue;
 			if (resource.path.startsWith(BUILTIN_EXTENSION_PREFIX)) {
 				next.push(resource.path);
@@ -307,6 +364,7 @@ export async function buildResourceLoader(
 			0,
 			additionalExtensionPaths.length,
 			...devExtensionPaths,
+			...pluginExtensionPaths,
 			...next,
 		);
 		discoveredMetadata = metadata;
@@ -316,11 +374,11 @@ export async function buildResourceLoader(
 		noExtensions: true,
 		additionalExtensionPaths,
 	});
-	const reloadResolved = loader.reload.bind(loader);
+	const reload = loader.reload.bind(loader);
 	loader.reload = async (options) => {
 		applyCurrentPolicy();
 		await resolveExclusionPaths();
-		await reloadResolved(options);
+		await reload(options);
 		relabelDiscoveredExtensions(loader, discoveredMetadata);
 	};
 	await loader.reload();
@@ -328,6 +386,25 @@ export async function buildResourceLoader(
 }
 
 const BUILTIN_EXTENSION_PREFIX = "builtin:";
+
+function builtinExtensionNames(factories: readonly InlineExtension[]): string[] {
+	return factories.flatMap((entry) =>
+		typeof entry !== "function" && entry.builtin ? [entry.name] : [],
+	);
+}
+
+function relabelDiscoveredExtensions(
+	loader: ResourceLoader,
+	discoveredMetadata: ReadonlyMap<string, PathMetadata>,
+): void {
+	for (const extension of loader.getExtensions().extensions) {
+		const metadata = discoveredMetadata.get(resolve(extension.resolvedPath));
+		if (!metadata) continue;
+		extension.sourceInfo = createSyntheticSourceInfo(extension.path, metadata);
+		for (const command of extension.commands.values()) command.sourceInfo = extension.sourceInfo;
+		for (const tool of extension.tools.values()) tool.sourceInfo = extension.sourceInfo;
+	}
+}
 
 export async function isBuiltinExtensionEnabled(
 	cwd: string,
@@ -343,27 +420,7 @@ export async function isBuiltinExtensionEnabled(
 		builtinExtensions: [name],
 	});
 	const { extensions } = await packageManager.resolve(async () => "skip");
-	const path = `${BUILTIN_EXTENSION_PREFIX}${name}`;
-	return extensions.some((resource) => resource.path === path && resource.enabled);
-}
-
-function builtinExtensionNames(factories: readonly InlineExtension[]): string[] {
-	return factories.flatMap((entry) =>
-		typeof entry !== "function" && entry.builtin ? [entry.name] : [],
-	);
-}
-
-function relabelDiscoveredExtensions(
-	loader: DefaultResourceLoader,
-	discoveredMetadata: ReadonlyMap<string, PathMetadata>,
-): void {
-	for (const extension of loader.getExtensions().extensions) {
-		const metadata = discoveredMetadata.get(resolve(extension.resolvedPath));
-		if (!metadata) continue;
-		extension.sourceInfo = createSyntheticSourceInfo(extension.path, metadata);
-		for (const command of extension.commands.values()) command.sourceInfo = extension.sourceInfo;
-		for (const tool of extension.tools.values()) tool.sourceInfo = extension.sourceInfo;
-	}
+	return extensions.some((resource) => resource.path === `builtin:${name}` && resource.enabled);
 }
 
 function admissionCacheKey(cwd: string, ctx: SkillAdmissionContext): string {
@@ -388,9 +445,7 @@ export async function listSkillCommands(
 	const cacheKey = admissionCacheKey(cwd, admission);
 	const cached = skillListCache.get(cacheKey);
 	if (cached && Date.now() - cached.at < SKILL_LIST_TTL_MS) return cached.value;
-	const settingsManager = SettingsManager.create(cwd, getAgentDir(), {
-		projectTrusted: admission.piResourceTrusted,
-	});
+	const settingsManager = SettingsManager.create(cwd, getAgentDir(), { projectTrusted: true });
 	const loader = new DefaultResourceLoader({
 		cwd,
 		agentDir: getAgentDir(),
@@ -412,7 +467,7 @@ export async function listProjectAliasSkillNames(cwd: string): Promise<string[]>
 		.filter((source) => source.scope === "project")
 		.map((source) => source.path);
 	if (projectPaths.length === 0) return [];
-	const settingsManager = SettingsManager.create(cwd, getAgentDir(), { projectTrusted: false });
+	const settingsManager = SettingsManager.create(cwd, getAgentDir(), { projectTrusted: true });
 	const loader = new DefaultResourceLoader({
 		cwd,
 		agentDir: getAgentDir(),
@@ -438,9 +493,7 @@ export async function listSkillCatalog(
 	const personal = discovered.filter((s) => s.scope === "user");
 	const project = discovered.filter((s) => s.scope === "project");
 	const bundledSkillPaths = bundled ? [bundled.skillsDir] : resolveDevPaths().skillPaths;
-	const settingsManager = SettingsManager.create(cwd, getAgentDir(), {
-		projectTrusted: admission.piResourceTrusted,
-	});
+	const settingsManager = SettingsManager.create(cwd, getAgentDir(), { projectTrusted: true });
 	const loader = new DefaultResourceLoader({
 		cwd,
 		agentDir: getAgentDir(),

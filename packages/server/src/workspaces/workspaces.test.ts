@@ -13,8 +13,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Workspace } from "@thinkrail/contracts";
 import {
-	backfillWorkspaceActivity,
 	adoptManagedWorktrees,
+	backfillWorkspaceActivity,
 	completeInitialTerminalReservation,
 	createWorkspace,
 	ensureWorkspaceScratchDir,

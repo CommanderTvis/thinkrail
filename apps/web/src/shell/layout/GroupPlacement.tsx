@@ -30,10 +30,10 @@ export interface PlacementRegion {
 }
 
 const CELL_CLASS =
-	"min-w-0 justify-center overflow-hidden rounded-[var(--radius-sm)] border border-border-default bg-control-bg px-4 py-2 text-center tr-text-label-pill text-text-muted focus:text-text-default data-[disabled]:border-border-muted data-[disabled]:bg-transparent";
+	"min-w-0 justify-center overflow-hidden rounded-sm border border-border-default bg-control-bg px-4 py-2 text-center tr-text-label-pill text-text-muted focus:text-text-default data-[disabled]:border-border-muted data-[disabled]:bg-transparent";
 
 const SLOT_CLASS =
-	"justify-center rounded-[var(--radius-sm)] border border-border-default bg-control-bg px-0 py-0 text-text-muted focus:bg-primary-subtle focus:text-text-default data-[disabled]:border-border-muted data-[disabled]:border-dashed data-[disabled]:bg-transparent data-[disabled]:text-control-disabled-text [&_svg]:size-12";
+	"justify-center rounded-sm border border-border-default bg-control-bg px-0 py-0 text-text-muted focus:bg-primary-subtle focus:text-text-default data-[disabled]:border-border-muted data-[disabled]:border-dashed data-[disabled]:bg-transparent data-[disabled]:text-control-disabled-text [&_svg]:size-12";
 
 function Slot({
 	region,
@@ -96,7 +96,7 @@ function Cell({
 function Outline({ label, wide }: { label: string; wide?: boolean }) {
 	return (
 		<div
-			className={`min-w-0 overflow-hidden rounded-[var(--radius-sm)] border border-border-muted border-dashed px-4 py-2 text-center tr-text-label-pill text-control-disabled-text ${wide ? "flex-1" : ""}`}
+			className={`min-w-0 overflow-hidden rounded-sm border border-border-muted border-dashed px-4 py-2 text-center tr-text-label-pill text-control-disabled-text ${wide ? "flex-1" : ""}`}
 		>
 			<span className="line-clamp-2 block break-all">{label}</span>
 		</div>
@@ -167,7 +167,7 @@ export function GroupPlacementPicker({
 			<div className="flex gap-4">
 				{column(left)}
 				<div className="flex min-w-0 flex-1 flex-col gap-2">
-					<div className="flex flex-1 flex-col gap-2 rounded-[var(--radius-sm)] border border-border-muted border-dashed p-4">
+					<div className="flex flex-1 flex-col gap-2 rounded-sm border border-border-muted border-dashed p-4">
 						{center.length === 0 || !centerAllowed ? (
 							center.length === 0 ? (
 								<span className="m-auto tr-text-label-pill text-text-muted">Editor</span>

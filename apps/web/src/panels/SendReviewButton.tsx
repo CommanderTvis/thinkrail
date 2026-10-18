@@ -39,13 +39,19 @@ export function SendReviewButton({
 	);
 }
 
-export function SendAllReviewsButton({ workspaceId }: { workspaceId: string }) {
+export function SendAllReviewsButton({
+	workspaceId,
+	testid = "review-send-all",
+}: {
+	workspaceId: string;
+	testid?: string;
+}) {
 	const comments = useAppStore((s) => s.reviewsByWorkspace[workspaceId]?.comments);
 	const count = useMemo(() => allDraftIds(comments).length, [comments]);
 	return (
 		<SendButtonBase
 			workspaceId={workspaceId}
-			testid="review-send-all"
+			testid={testid}
 			label={`Send all (${count})`}
 			count={count}
 			send={(recipient) => sendReviewBatch(workspaceId, undefined, recipient)}
@@ -92,7 +98,7 @@ function SendButtonBase({
 				disabled={busy}
 				onClick={() => void run()}
 				className={`flex items-center gap-4 bg-control-primary-bg px-8 text-control-primary-text tr-text-action transition-colors hover:bg-control-primary-bg-hovered disabled:bg-control-primary-disabled-bg disabled:text-control-primary-disabled-text ${
-					targets.length > 0 ? "rounded-l-[var(--radius-sm)]" : "rounded-[var(--radius-sm)]"
+					targets.length > 0 ? "rounded-l-sm" : "rounded-sm"
 				}`}
 			>
 				<Send className="size-12" />
@@ -106,7 +112,7 @@ function SendButtonBase({
 							data-testid={`${testid}-target`}
 							aria-label="Send to…"
 							disabled={busy}
-							className="flex items-center rounded-r-[var(--radius-sm)] bg-control-primary-bg px-2 text-control-primary-text transition-colors hover:bg-control-primary-bg-hovered disabled:bg-control-primary-disabled-bg disabled:text-control-primary-disabled-text"
+							className="flex items-center rounded-r-sm bg-control-primary-bg px-2 text-control-primary-text transition-colors hover:bg-control-primary-bg-hovered disabled:bg-control-primary-disabled-bg disabled:text-control-primary-disabled-text"
 						>
 							<ChevronDown className="size-12" />
 						</button>

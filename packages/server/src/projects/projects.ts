@@ -1,11 +1,11 @@
 import { randomUUID } from "node:crypto";
-import { rmSync, statSync } from "node:fs";
+import { existsSync, mkdirSync, rmdirSync, rmSync, statSync } from "node:fs";
 import { homedir } from "node:os";
-import { basename, isAbsolute, join, resolve } from "node:path";
+import { basename, isAbsolute, join, resolve, sep } from "node:path";
 import type { McpProjectOverride, Project, ProjectPathStatus } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
-import { canonicalPath, git } from "../git";
-import { loadProjects, loadWorkspaces, saveProjects } from "../persistence";
+import { canonicalPath, git, gitAsync } from "../git";
+import { dataDir, loadProjects, loadWorkspaces, saveProjects } from "../persistence";
 
 type ProjectPublisher = (project: Project) => void;
 
@@ -34,6 +34,11 @@ function gitToplevel(path: string): string | null {
 	return result.ok ? result.out || null : null;
 }
 
+function stampGit(project: Project, hasGit: boolean): void {
+	if (hasGit) delete project.hasGit;
+	else project.hasGit = false;
+}
+
 function slugify(name: string): string {
 	return (
 		name
@@ -41,6 +46,59 @@ function slugify(name: string): string {
 			.replace(/[^a-z0-9]+/g, "-")
 			.replace(/^-+|-+$/g, "") || "project"
 	);
+}
+
+const REJECTED_NAME = /[/\\]|^\.\.?$|^\s*$|\0/;
+const CLONE_TIMEOUT_MS = 10 * 60_000;
+
+function newFolderTarget(parentPath: string, name: string): string {
+	const trimmed = name.trim();
+	if (REJECTED_NAME.test(trimmed)) throw new Error(`Not a usable folder name: ${name}`);
+	let parent: ReturnType<typeof statSync>;
+	try {
+		parent = statSync(parentPath);
+	} catch {
+		throw new Error(`No such folder: ${parentPath}`);
+	}
+	if (!parent.isDirectory()) throw new Error(`Not a folder: ${parentPath}`);
+	const target = join(parentPath, trimmed);
+	if (existsSync(target)) throw new Error(`Already exists: ${target}`);
+	return target;
+}
+
+export function createProject(parentPath: string, name: string): Project {
+	const target = newFolderTarget(parentPath, name);
+	mkdirSync(target);
+	try {
+		return initProject(target);
+	} catch (error) {
+		rmdirSync(target);
+		throw error;
+	}
+}
+
+export async function cloneProject(
+	url: string,
+	parentPath: string,
+	name: string,
+	depth?: number,
+): Promise<Project> {
+	const source = url.trim();
+	if (!source || source.startsWith("-")) throw new Error(`Not a repository URL: ${url}`);
+	if (depth !== undefined && (!Number.isInteger(depth) || depth < 1)) {
+		throw new Error(`Clone depth must be a whole number of commits, at least 1: ${depth}`);
+	}
+	const target = newFolderTarget(parentPath, name);
+	const shallow = depth === undefined ? [] : ["--depth", String(depth)];
+	const clone = await gitAsync(parentPath, ["clone", ...shallow, "--", source, target], {
+		network: true,
+		timeoutMs: CLONE_TIMEOUT_MS,
+	});
+	if (!clone.ok) {
+		rmSync(target, { recursive: true, force: true });
+		throw new Error(clone.err || `git clone failed: ${source}`);
+	}
+	return openProject(target);
 }
 
 function uniqueSlug(base: string, taken: Set<string>): string {
@@ -79,21 +137,38 @@ export function getProjects(): Project[] {
 
 export function openProject(inputPath: string): Project {
 	const path = resolveProjectPath(inputPath);
-	const root = gitToplevel(path);
-	if (!root) throw new CodedError("NOT_GIT", `Not a git repository: ${path}`);
+	let stat: ReturnType<typeof statSync>;
+	try {
+		stat = statSync(path);
+	} catch {
+		throw new Error(`No such folder: ${path}`);
+	}
+	if (!stat.isDirectory()) throw new Error(`Not a folder: ${path}`);
+	const gitRoot = gitToplevel(path);
+	const hasGit = gitRoot !== null;
+	const root = gitRoot ?? canonicalPath(path);
 
 	const projects = getProjects();
 	const existing = projects.find((p) => p.path === root);
 	if (existing) {
 		delete existing.closed;
 		existing.lastOpened = Date.now();
+		stampGit(existing, hasGit);
 		saveProjects(projects);
 		emit(existing);
 		return existing;
 	}
 
 	const wanted = canonicalPath(root);
-	if (loadWorkspaces().some((ws) => canonicalPath(ws.worktreePath) === wanted))
+	const projectIds = new Set(projects.map((project) => project.id));
+	if (
+		loadWorkspaces().some(
+			(workspace) =>
+				canonicalPath(workspace.worktreePath) === wanted &&
+				(projectIds.has(workspace.projectId) ||
+					wanted.startsWith(canonicalPath(join(dataDir(), "worktrees")) + sep)),
+		)
+	)
 		throw new CodedError(
 			"ALREADY_OPEN",
 			`This folder is already open in ThinkRail as a workspace: ${root}`,
@@ -108,6 +183,7 @@ export function openProject(inputPath: string): Project {
 		lastOpened: Date.now(),
 		piResourceTrust: piTrustSeed?.(root) ? "granted" : "untrusted",
 	};
+	stampGit(project, hasGit);
 	projects.push(project);
 	saveProjects(projects);
 	emit(project);
@@ -123,7 +199,19 @@ export function listProjects(): Project[] {
 }
 
 export function listRecentProjects(): Project[] {
-	return newestFirst(getProjects());
+	return newestFirst(
+		getProjects().filter((project) => {
+			try {
+				return statSync(project.path).isDirectory();
+			} catch (error) {
+				return !(
+					error instanceof Error &&
+					"code" in error &&
+					(error.code === "ENOENT" || error.code === "ENOTDIR")
+				);
+			}
+		}),
+	);
 }
 
 export function closeProject(id: string): Project {

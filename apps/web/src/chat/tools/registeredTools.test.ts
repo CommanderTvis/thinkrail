@@ -20,11 +20,6 @@ const INTENTIONAL_TOOLS = [
 	"ask_user_question",
 	"resolve_comment",
 	"request_review",
-	"tool_search",
-	"list_mcp_resources",
-	"list_mcp_resource_templates",
-	"read_mcp_resource",
-	"mcp__any_server__any_tool",
 ] as const;
 
 function props(
@@ -51,7 +46,7 @@ function renderTool(toolName: string, args: Record<string, unknown>, result: unk
 }
 
 describe("intentional bundled tool renderers", () => {
-	it("registers every non-TODO tool exposed by a normal session", () => {
+	it("registers every core and web-extension renderer owned by this surface", () => {
 		for (const toolName of INTENTIONAL_TOOLS) {
 			expect(getToolRenderer(toolName)).not.toBe(DefaultToolRenderer);
 		}

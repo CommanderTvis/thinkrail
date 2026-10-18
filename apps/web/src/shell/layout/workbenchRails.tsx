@@ -163,7 +163,7 @@ export function AuxiliaryRegionRail({
 	attention: LayoutAttention;
 	trailing?: ReactNode;
 }) {
-	const entries = projectAuxiliaryRail(shared.document, attention, region);
+	const entries = projectAuxiliaryRail(shared.document, attention, region, shared.catalog);
 	const groups = shared.document[region].groups;
 	const draggedAuxiliary =
 		shared.draggingTab?.kind === "tool" || shared.draggingTab?.kind === "terminal"
@@ -296,6 +296,7 @@ export function AuxiliaryRegionRail({
 									onRenameChat={shared.onRenameChat}
 									canFocusAdjacentGroup={shared.canFocusAdjacentGroup}
 									renderTabAdornment={shared.renderTabAdornment}
+									renderTabIcon={shared.renderTabIcon}
 									draggingTab={shared.draggingTab}
 									panelId={groupPanelId(location)}
 									onKeyDown={(event) => {

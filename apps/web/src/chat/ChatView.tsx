@@ -122,14 +122,15 @@ export default function ChatView({
 		refreshing: modelsRefreshing,
 		refresh: onRefreshModels,
 	} = useModelCatalog();
-	const hiddenModels = useAppStore((s) => s.hiddenModels);
+	const hiddenModels = useAppStore((s) => s.hiddenModelRefs);
+	const hiddenPatterns = useAppStore((s) => s.hiddenModels);
 	const visibleModels = useMemo(
-		() => selectPickerModels(allModels, hiddenModels, []),
-		[allModels, hiddenModels],
+		() => selectPickerModels(allModels, hiddenModels, [], hiddenPatterns),
+		[allModels, hiddenModels, hiddenPatterns],
 	);
 	const models = useMemo(
-		() => selectPickerModels(allModels, hiddenModels, [sessionModel]),
-		[allModels, hiddenModels, sessionModel],
+		() => selectPickerModels(allModels, hiddenModels, [sessionModel], hiddenPatterns),
+		[allModels, hiddenModels, hiddenPatterns, sessionModel],
 	);
 	const modelPreferences = useModelPreferences(visibleModels);
 	const projectId = useAppStore(

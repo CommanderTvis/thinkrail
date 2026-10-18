@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { RiDiscussLine } from "@remixicon/react";
 import {
 	activateAuxiliaryRailEntry,
 	clusterAuxiliaryRail,
@@ -9,7 +10,13 @@ import {
 	restoreWorkbenchRatio,
 	visibleAuxiliaryGroups,
 } from "./auxiliaryPresentation";
-import { closeLayoutTab, reconcileAttention, selectTab, toolTab } from "./model";
+import {
+	buildLayoutToolCatalog,
+	closeLayoutTab,
+	reconcileAttention,
+	selectTab,
+	toolTab,
+} from "./model";
 import type { LayoutTerminalTab, WorkspaceLayoutDocument } from "./types";
 
 const terminal = (id: string): LayoutTerminalTab => ({
@@ -101,8 +108,17 @@ test("rail entries keep each pane's terminals together and tools in their own pa
 test("rail clusters mirror the panes in order and park unplaced tools in a trailing cluster", () => {
 	const doc = document();
 	const attention = reconcileAttention(doc);
+	const catalog = buildLayoutToolCatalog([
+		{
+			id: "plugin:spec-dialect:specs",
+			label: "Specs",
+			icon: RiDiscussLine,
+			defaultSide: "right",
+			dormant: false,
+		},
+	]);
 	expect(
-		clusterAuxiliaryRail(projectAuxiliaryRail(doc, attention, "right")).map((cluster) => [
+		clusterAuxiliaryRail(projectAuxiliaryRail(doc, attention, "right", catalog)).map((cluster) => [
 			cluster.groupId,
 			cluster.entries.map((entry) => (entry.kind === "tool" ? entry.tool : entry.kind)),
 		]),
@@ -110,15 +126,15 @@ test("rail clusters mirror the panes in order and park unplaced tools in a trail
 		["tools", ["files", "changes"]],
 		["shells", ["terminals"]],
 		["other", ["terminals"]],
-		[null, ["specs", "review", "plan"]],
+		[null, ["review", "plugin:spec-dialect:specs"]],
 	]);
 	const closed = closeLayoutTab(doc, "custom-files").document;
 	closed.toolRestoreTargets.files = { region: "right", index: 0 };
-	const clusters = clusterAuxiliaryRail(projectAuxiliaryRail(closed, attention, "right"));
+	const clusters = clusterAuxiliaryRail(projectAuxiliaryRail(closed, attention, "right", catalog));
 	expect(clusters.map((cluster) => cluster.groupId)).toEqual(["tools", "shells", "other", null]);
 	const unplaced = clusters.at(-1)?.entries ?? [];
 	expect(unplaced.map((entry) => (entry.kind === "tool" ? entry.tool : entry.kind)).sort()).toEqual(
-		["files", "plan", "review", "specs"],
+		["files", "plugin:spec-dialect:specs", "review"],
 	);
 	expect(unplaced.every(isUnplacedRailEntry)).toBe(true);
 	expect(

@@ -212,7 +212,7 @@ export function FrontmatterDiff({ model }: { model: FrontmatterDiffModel }) {
 		>
 			<div className="tr-text-metadata text-text-subtle">Properties</div>
 			{model.kind === "raw" ? (
-				<pre className="mt-4 overflow-x-auto rounded-[var(--radius-sm)] bg-container-content-bg p-8 tr-code-text text-text-muted">
+				<pre className="mt-4 overflow-x-auto rounded-sm bg-container-content-bg p-8 tr-code-text text-text-muted">
 					<Marked parts={diffLines(model.before, model.after)} lines />
 				</pre>
 			) : (

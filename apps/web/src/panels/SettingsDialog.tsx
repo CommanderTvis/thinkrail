@@ -11,11 +11,9 @@ import {
 	RiNotification3Line as NotificationBell,
 	RiPaletteLine as Palette,
 	RiPuzzle2Line as Puzzle,
-	RiSearchEyeLine as ScanEye,
 	RiShieldCheckLine as ShieldCheck,
 	RiEqualizerLine as SlidersHorizontal,
 	RiTerminalBoxLine as SquareTerminal,
-	RiTextWrap as TextWrap,
 } from "@remixicon/react";
 import { DEFAULT_MODEL_PROTOCOL_VERSION } from "@thinkrail/contracts";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@thinkrail/ui/dialog";
@@ -27,13 +25,11 @@ import { AppearanceSettings } from "./AppearanceSettings";
 import { ChatSettings } from "./ChatSettings";
 import { FeedbackSettings } from "./FeedbackSettings";
 import { GithubSettings } from "./GithubSettings";
-import { LineWidthSettings } from "./LineWidthSettings";
 import { ModelsSettings } from "./ModelsSettings";
 import { NotificationsSettings } from "./NotificationsSettings";
 import { PluginsSettings } from "./PluginsSettings";
 import { PrivacySettings } from "./PrivacySettings";
 import { ProvidersSettings } from "./ProvidersSettings";
-import { ReviewSettings } from "./ReviewSettings";
 import { TemplatesSettings } from "./TemplatesSettings";
 import { TerminalSettings } from "./TerminalSettings";
 
@@ -55,7 +51,6 @@ const CORE_SECTIONS: {
 	},
 	{ id: SettingsSection.Github, label: "GitHub", icon: GitBranch },
 	{ id: SettingsSection.Appearance, label: "Appearance", icon: Palette },
-	{ id: SettingsSection.LineWidth, label: "Line width", icon: TextWrap },
 	{ id: SettingsSection.Chat, label: "Chat", icon: MessageSquareText },
 	{ id: SettingsSection.Layout, label: "Layout", icon: LayoutPanelTop },
 	{
@@ -66,7 +61,6 @@ const CORE_SECTIONS: {
 	},
 	{ id: SettingsSection.Terminal, label: "Terminal", icon: SquareTerminal },
 	{ id: SettingsSection.Templates, label: "Templates", icon: LayoutTemplate },
-	{ id: SettingsSection.Review, label: "Review", icon: ScanEye },
 	{ id: SettingsSection.Notifications, label: "Notifications", icon: NotificationBell },
 	{ id: SettingsSection.Privacy, label: "Privacy", icon: ShieldCheck },
 	{ id: SettingsSection.Plugins, label: "Plugins", icon: Puzzle },
@@ -78,11 +72,9 @@ const CORE_CONTENT: Partial<Record<SettingsSection, () => ReactNode>> = {
 	[SettingsSection.Providers]: () => <ProvidersSettings />,
 	[SettingsSection.Models]: () => <ModelsSettings />,
 	[SettingsSection.Github]: () => <GithubSettings />,
-	[SettingsSection.LineWidth]: () => <LineWidthSettings />,
 	[SettingsSection.Chat]: () => <ChatSettings />,
 	[SettingsSection.Terminal]: () => <TerminalSettings />,
 	[SettingsSection.Templates]: () => <TemplatesSettings />,
-	[SettingsSection.Review]: () => <ReviewSettings />,
 	[SettingsSection.Notifications]: () => <NotificationsSettings />,
 	[SettingsSection.Privacy]: () => <PrivacySettings />,
 	[SettingsSection.Plugins]: () => <PluginsSettings />,
@@ -132,7 +124,7 @@ export function SettingsDialog({
 				data-active={active}
 				onClick={() => useAppStore.getState().setSettingsSection(id)}
 				className={cn(
-					"flex shrink-0 items-center gap-8 rounded-[var(--radius-sm)] px-12 py-8 text-left tr-text-ui outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary",
+					"flex shrink-0 items-center gap-8 rounded-sm px-12 py-8 text-left tr-text-ui outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary",
 					active
 						? "bg-primary-subtle text-primary"
 						: "text-text-muted hover:bg-control-bg-hovered hover:text-text-default",
@@ -197,7 +189,7 @@ export function SettingsDialog({
 						{SOON.map(({ label, icon: Icon }) => (
 							<span
 								key={label}
-								className="flex shrink-0 cursor-default items-center gap-8 rounded-[var(--radius-sm)] px-12 py-8 text-text-disabled tr-text-ui"
+								className="flex shrink-0 cursor-default items-center gap-8 rounded-sm px-12 py-8 text-text-disabled tr-text-ui"
 							>
 								<Icon className="size-16 shrink-0" />
 								{label}

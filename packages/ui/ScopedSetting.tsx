@@ -23,7 +23,7 @@ export function ScopeChip({ scope, testId }: { scope: string; testId?: string })
 			data-testid={testId}
 			data-scope={scope}
 			className={cn(
-				"shrink-0 rounded-[var(--radius-sm)] px-4 tr-text-label-pill uppercase",
+				"shrink-0 rounded-sm px-4 tr-text-label-pill uppercase",
 				SCOPE_STYLES[scope] ?? SCOPE_STYLES.default,
 			)}
 		>
@@ -71,7 +71,7 @@ export function RowAction({
 			data-testid={testid}
 			onClick={onClick}
 			className={cn(
-				"shrink-0 rounded-[var(--radius-sm)] border border-border-default px-8 tr-text-label-pill uppercase hover:bg-control-bg-hovered",
+				"shrink-0 rounded-sm border border-border-default px-8 tr-text-label-pill uppercase hover:bg-control-bg-hovered",
 				tone === "danger"
 					? "text-text-subtle hover:text-feedback-error"
 					: "text-text-muted hover:text-text-default",
@@ -185,14 +185,14 @@ export function SettingsToolbar({
 				onChange={(event) => onQuery(event.target.value)}
 				placeholder="Filter keys…"
 				aria-label="Filter settings keys"
-				className="min-w-0 flex-1 rounded-[var(--radius-sm)] border border-border-default bg-control-bg px-8 py-4 tr-text-ui text-text-default outline-none placeholder:text-text-subtle focus:border-primary"
+				className="min-w-0 flex-1 rounded-sm border border-border-default bg-control-bg px-8 py-4 tr-text-ui text-text-default outline-none placeholder:text-text-subtle focus:border-primary"
 			/>
 			{onAdd ? (
 				<button
 					type="button"
 					data-testid={`${testIdPrefix}-setting-add`}
 					onClick={onAdd}
-					className="flex shrink-0 items-center gap-4 rounded-[var(--radius-sm)] border border-border-default px-12 py-4 tr-text-ui text-text-default hover:bg-control-bg-hovered"
+					className="flex shrink-0 items-center gap-4 rounded-sm border border-border-default px-12 py-4 tr-text-ui text-text-default hover:bg-control-bg-hovered"
 				>
 					<Plus className="size-14" /> Add a setting
 				</button>

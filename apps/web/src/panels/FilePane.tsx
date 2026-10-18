@@ -245,7 +245,7 @@ function FilePaneBody({ tab }: { tab: FileTab | ExternalFileTab }) {
 				// Editor chrome never takes the caret: the buffer keeps focus so Ctrl+S still reaches it.
 				onMouseDown={(event) => event.preventDefault()}
 				onClick={() => mergeDiskIntoDraft(tab.workspaceId, tab.id)}
-				className="rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg px-8 py-2 hover:bg-control-bg-hovered"
+				className="rounded-sm border border-border-default bg-container-elevated-bg px-8 py-2 hover:bg-control-bg-hovered"
 			>
 				Merge into my edits
 			</button>
@@ -254,7 +254,7 @@ function FilePaneBody({ tab }: { tab: FileTab | ExternalFileTab }) {
 				data-testid="file-disk-discard"
 				onMouseDown={(event) => event.preventDefault()}
 				onClick={() => useAppStore.getState().discardFileTabDraft(tab.workspaceId, tab.id)}
-				className="rounded-[var(--radius-sm)] border border-border-default px-8 py-2 text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
+				className="rounded-sm border border-border-default px-8 py-2 text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
 			>
 				Discard mine, take the file
 			</button>

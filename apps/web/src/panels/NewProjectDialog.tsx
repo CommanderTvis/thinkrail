@@ -96,7 +96,7 @@ export function NewProjectDialog({
 							onKeyDown={(event) => {
 								if (event.key === "Enter" && parent && trimmed) void create();
 							}}
-							className="w-full rounded-[var(--radius-sm)] border border-control-border-default bg-control-bg px-12 py-8 text-text-default outline-none focus:border-control-border-active"
+							className="w-full rounded-sm border border-control-border-default bg-control-bg px-12 py-8 text-text-default outline-none focus:border-control-border-active"
 						/>
 
 						{target ? (

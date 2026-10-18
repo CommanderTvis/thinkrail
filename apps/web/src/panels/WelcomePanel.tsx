@@ -6,13 +6,15 @@ import {
 	RiSparkling2Line as Sparkles,
 } from "@remixicon/react";
 import { cn } from "@thinkrail/ui/utils";
-import { type ComponentPropsWithoutRef, forwardRef, useState } from "react";
+import { type ComponentPropsWithoutRef, forwardRef, useEffect, useState } from "react";
 import { PRODUCT_NAME } from "../constants/branding";
 import { selectProjectActions, usePluginRegistry } from "../plugins/registry";
 import { useAppStore } from "../store";
 import { getTransport } from "../transport";
 import { AddProjectMenu } from "./AddProjectMenu";
+import { CloneProjectDialog } from "./CloneProjectDialog";
 import { enterDefaultWorkspace } from "./defaultWorkspace";
+import { NewProjectDialog } from "./NewProjectDialog";
 import { NewWorkspaceDialog } from "./NewWorkspaceDialog";
 import { ProjectTrustNotice } from "./ProjectTrustNotice";
 import { ProviderWarningBanner } from "./ProviderWarningBanner";
@@ -34,6 +36,8 @@ export function WelcomePanel() {
 		note?: string;
 	} | null>(null);
 	const [hasSpecs, setHasSpecs] = useState<boolean | null>(null);
+	const [newProjectOpen, setNewProjectOpen] = useState(false);
+	const [cloneProjectOpen, setCloneProjectOpen] = useState(false);
 
 	const project = projects.find((p) => p.id === selectedProjectId) ?? projects[0] ?? null;
 
@@ -78,6 +82,8 @@ export function WelcomePanel() {
 			recentProjects={recentProjects}
 			onOpen={() => void pickAndOpen()}
 			onEnterHostPath={enterHostPath}
+			onNew={() => setNewProjectOpen(true)}
+			onClone={() => setCloneProjectOpen(true)}
 			onOpenRecent={(path) => void openProject(path)}
 			align="start"
 		>
@@ -172,6 +178,20 @@ export function WelcomePanel() {
 				/>
 			) : null}
 			{dialogs}
+			{newProjectOpen ? (
+				<NewProjectDialog
+					onOpenChange={setNewProjectOpen}
+					onCreated={(created) =>
+						useAppStore.getState().selectProject(created.id, { reveal: true })
+					}
+				/>
+			) : null}
+			{cloneProjectOpen ? (
+				<CloneProjectDialog
+					onOpenChange={setCloneProjectOpen}
+					onCloned={(cloned) => useAppStore.getState().selectProject(cloned.id, { reveal: true })}
+				/>
+			) : null}
 		</div>
 	);
 }

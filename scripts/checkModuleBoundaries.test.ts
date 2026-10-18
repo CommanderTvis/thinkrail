@@ -14,7 +14,7 @@ const modules = {
 	"packages/pi-background-commands": "pi-background-commands",
 	"packages/pi-subagents": "pi-subagents",
 	"packages/pi-dag": "pi-dag",
-	"pi-extensions/visualize": "@thinkrail.ai/pi-visualize",
+	"pi-extensions/visualize": "@thinkrail/pi-visualize",
 	"packages/server": "@thinkrail/server",
 	"apps/web": "@thinkrail/web",
 	"apps/cli": "@thinkrail/cli",
@@ -139,15 +139,15 @@ test("keeps published pi packages free of host imports and unwired from the host
 		"pi-extensions/visualize/src/leak.ts",
 		'import "@thinkrail/server"; import "pi-delegation";',
 	);
-	write(root, "packages/server/src/early.ts", 'import "@thinkrail.ai/pi-visualize";');
+	write(root, "packages/server/src/early.ts", 'import "@thinkrail/pi-visualize";');
 	write(
 		root,
 		"apps/web/src/early.ts",
-		'import type { VisualizeParams } from "@thinkrail.ai/pi-visualize";',
+		'import type { VisualizeParams } from "@thinkrail/pi-visualize";',
 	);
 	expect(await moduleBoundaryViolations(root)).toEqual([
-		'apps/web/src/early.ts: import "@thinkrail.ai/pi-visualize" creates forbidden apps/web -> pi-extensions/visualize edge',
-		'packages/server/src/early.ts: import "@thinkrail.ai/pi-visualize" creates forbidden packages/server -> pi-extensions/visualize edge',
+		'apps/web/src/early.ts: import "@thinkrail/pi-visualize" creates forbidden apps/web -> pi-extensions/visualize edge',
+		'packages/server/src/early.ts: import "@thinkrail/pi-visualize" creates forbidden packages/server -> pi-extensions/visualize edge',
 		'pi-extensions/visualize/src/leak.ts: import "@thinkrail/server" creates forbidden pi-extensions/visualize -> packages/server edge',
 		'pi-extensions/visualize/src/leak.ts: import "pi-delegation" creates forbidden pi-extensions/visualize -> packages/pi-delegation edge',
 	]);
@@ -302,11 +302,7 @@ test("discovers new pi and ThinkRail extensions and rejects host and sibling dep
 		"thinkrail-extensions/future/web/pi.ts",
 		'import type { Value } from "@thinkrail.ai/pi-future";',
 	);
-	write(
-		root,
-		"thinkrail-extensions/future/server/sibling.ts",
-		'import "@thinkrail.ai/pi-visualize";',
-	);
+	write(root, "thinkrail-extensions/future/server/sibling.ts", 'import "@thinkrail/pi-visualize";');
 	expect(await moduleBoundaryViolations(root)).toHaveLength(5);
 });
 

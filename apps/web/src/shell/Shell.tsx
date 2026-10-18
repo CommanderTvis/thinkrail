@@ -29,12 +29,12 @@ import { type ConnectionStatus, runHostUpdate, supportsHostUpdateRun } from "../
 import { UpdateReadyButton, UpdateSettings, useUpdates } from "../updates";
 import { AppShortcuts } from "./AppShortcuts";
 import { BrandLogo } from "./BrandLogo";
+import { FindBar } from "./FindBar";
 import { JbcentralQuotaTopbar } from "./JbcentralQuotaTopbar";
 import { LayoutSettings } from "./LayoutSettings";
 import { useLocalLayoutState } from "./layoutState";
 import { LocationBar } from "./locationBar";
 import { NativeWindowControls } from "./NativeWindowControls";
-import { FindBar } from "./FindBar";
 import { PROJECT_HOME_PROJECTS_REGION_ID, ProjectHome } from "./ProjectHome";
 import { SessionSwitcher } from "./SessionSwitcher";
 import { readSettingsShortcutLabel } from "./useAppShortcuts";
