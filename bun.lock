@@ -482,7 +482,7 @@
       "version": "0.1.0",
       "dependencies": {
         "@remixicon/react": "catalog:",
-        "@thinkrail.ai/pi-visualize": "workspace:*",
+        "@thinkrail/pi-visualize": "workspace:*",
         "@thinkrail/contracts": "workspace:*",
         "@thinkrail/ext-visualize": "workspace:*",
         "@thinkrail/plugin-api": "workspace:*",
