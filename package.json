@@ -91,7 +91,7 @@
 		"spacing:generate": "bun --filter @thinkrail/web spacing:generate",
 		"spacing:check": "bun --filter @thinkrail/web spacing:check",
 		"provider-glyphs:check": "bun --filter @thinkrail/web provider-glyphs:check",
-		"compiler:census:generate": "bun --filter @thinkrail/web compiler:census:generate"
+		"compiler:census:generate": "bun --filter @thinkrail/web compiler:census:generate",
 		"check:web-bundle": "bun scripts/check-web-bundle.ts",
 		"api:update": "bun scripts/api-report.ts update",
 		"api:check": "bun scripts/api-report.ts check"
