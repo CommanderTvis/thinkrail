@@ -611,30 +611,26 @@ export function NewWorkspaceDialog({
 				{trustNotice.kind === "untrusted" ? (
 					<div
 						data-testid="ws-trust-notice"
-						className="flex w-full flex-col gap-8 rounded-sm border border-feedback-warning-muted bg-container-elevated-bg px-12 py-8 text-left"
+						className="flex w-full items-center gap-8 rounded-sm border border-feedback-warning-muted bg-container-elevated-bg px-12 py-8 text-left"
 					>
-						<div className="flex items-start gap-8">
-							<TriangleAlert className="mt-2 size-14 shrink-0 text-feedback-warning" aria-hidden />
-							<span className="flex min-w-0 flex-1 flex-col gap-2">
-								<span className="tr-text-ui text-text-default">
-									{untrustedNoticeText(t, trustNotice)} {t("panels.newWorkspace.trustUnaffected")}
-								</span>
-								{trustEnables ? (
-									<span className="text-text-muted tr-text-metadata">{trustEnables}</span>
-								) : null}
+						<TriangleAlert className="size-14 shrink-0 text-feedback-warning" aria-hidden />
+						<span className="flex min-w-0 flex-1 flex-col gap-2">
+							<span className="tr-text-ui text-text-default">
+								{untrustedNoticeText(t, trustNotice)}
 							</span>
-						</div>
-						<div className="flex justify-end">
-							<Button
-								variant="outline"
-								size="sm"
-								data-testid="ws-trust-project"
-								disabled={trusting}
-								onClick={() => void trustProject(trustNotice)}
-							>
-								{t("panels.newWorkspace.trustProject")}
-							</Button>
-						</div>
+							<span className="text-text-muted tr-text-metadata">
+								{trustEnables} {t("panels.newWorkspace.trustUnaffected")}
+							</span>
+						</span>
+						<Button
+							variant="outline"
+							size="sm"
+							data-testid="ws-trust-project"
+							disabled={trusting}
+							onClick={() => void trustProject(trustNotice)}
+						>
+							{t("panels.newWorkspace.trustProject")}
+						</Button>
 					</div>
 				) : null}
 
