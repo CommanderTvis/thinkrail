@@ -19,10 +19,12 @@ import {
 import { useCallback, useEffect, useInsertionEffect, useMemo, useRef, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { useNow } from "@/components/useNow";
+import { selectionLines, selectionQuote } from "@/lib";
 import { type ParsedTemplate, templateToSlashCommand, useTemplateCommandPicker } from "@/prompt";
 import {
 	EMPTY_RUNTIME,
 	SettingsSection,
+	selectAttachedEditorSelection,
 	selectCanRenameChat,
 	selectCatalogModel,
 	selectCompactionTurnIds,
@@ -95,6 +97,13 @@ export default function ChatView({
 	const sessionExists = useAppStore((s) => s.sessions[sessionId] !== undefined);
 	const isStreaming = useAppStore((s) => s.sessions[sessionId]?.isStreaming ?? false);
 	const draft = useAppStore((s) => s.sessions[sessionId]?.draft ?? "");
+	const draftImages = useAppStore((s) => s.sessions[sessionId]?.draftImages);
+	const attachedSelection = useAppStore((s) => selectAttachedEditorSelection(s, workspaceId));
+	const withSelection = (text: string): string => {
+		if (!attachedSelection) return text;
+		useAppStore.getState().detachEditorSelection(workspaceId);
+		return [selectionQuote(attachedSelection), text].filter((part) => part.trim()).join("\n\n");
+	};
 	const queue = useAppStore((s) => s.sessions[sessionId]?.queue ?? EMPTY_RUNTIME.queue);
 	const sessionModel = useAppStore((s) => s.sessions[sessionId]?.model ?? null);
 	const thinkingLevel = useAppStore(
@@ -129,14 +138,15 @@ export default function ChatView({
 		refreshing: modelsRefreshing,
 		refresh: onRefreshModels,
 	} = useModelCatalog();
-	const hiddenModels = useAppStore((s) => s.hiddenModels);
+	const hiddenModels = useAppStore((s) => s.hiddenModelRefs);
+	const hiddenPatterns = useAppStore((s) => s.hiddenModels);
 	const visibleModels = useMemo(
-		() => selectPickerModels(allModels, hiddenModels, []),
-		[allModels, hiddenModels],
+		() => selectPickerModels(allModels, hiddenModels, [], hiddenPatterns),
+		[allModels, hiddenModels, hiddenPatterns],
 	);
 	const models = useMemo(
-		() => selectPickerModels(allModels, hiddenModels, [sessionModel]),
-		[allModels, hiddenModels, sessionModel],
+		() => selectPickerModels(allModels, hiddenModels, [sessionModel], hiddenPatterns),
+		[allModels, hiddenModels, hiddenPatterns, sessionModel],
 	);
 	const modelPreferences = useModelPreferences(visibleModels);
 	const projectId = useAppStore(
@@ -577,6 +587,15 @@ export default function ChatView({
 			});
 	};
 
+	const composerFocusRequest = useAppStore((s) => s.composerFocusRequest);
+	useEffect(() => {
+		if (composerFocusRequest?.sessionId !== sessionId) return;
+		if (useAppStore.getState().composerFocusRequest !== composerFocusRequest) return;
+		useAppStore.getState().clearComposerFocus();
+		composerRef.current?.focusDraftEnd();
+		setTimeout(() => composerRef.current?.focusDraftEnd(), 0);
+	}, [composerFocusRequest, sessionId]);
+
 	const onSubmit = (
 		text: string,
 		attachments: ChatAttachment[],
@@ -598,16 +617,17 @@ export default function ChatView({
 			performRename(prepared.title);
 			return { accepted: true };
 		}
+		const message = withSelection(text);
 		if (behavior !== "interrupt") {
-			performSend(text, attachments, behavior);
+			performSend(message, attachments, behavior);
 			return { accepted: true };
 		}
 		getTransport()
 			.request("session.abort", { sessionId })
-			.then(() => performSend(text, attachments, "send"))
+			.then(() => performSend(message, attachments, "send"))
 			.catch((err) => {
 				useAppStore.getState().appendErrorTurn(sessionId, errorText(err));
-				restoreTextToDraft(text);
+				restoreTextToDraft(message);
 			});
 		return { accepted: true };
 	};
@@ -854,11 +874,22 @@ export default function ChatView({
 					ref={composerRef}
 					value={draft}
 					onChange={(v) => useAppStore.getState().setChatDraft(sessionId, v)}
+					{...(draftImages ? { images: draftImages } : {})}
+					onImagesChange={(images) => useAppStore.getState().setChatDraftImages(sessionId, images)}
 					isStreaming={isStreaming}
 					growthLimit={composerGrowthLimit}
 					commands={mergedCommands}
 					templatePending={templatePending}
 					mentionCandidates={mentionCandidates}
+					selectionChip={
+						attachedSelection
+							? {
+									label: `${attachedSelection.path}:${selectionLines(attachedSelection)}`,
+									title: t("chat.composer.selectionSent"),
+									onRemove: () => useAppStore.getState().detachEditorSelection(workspaceId),
+								}
+							: null
+					}
 					recentPrompts={recentPrompts}
 					models={models}
 					modelsRefreshing={modelsRefreshing}

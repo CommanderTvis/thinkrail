@@ -7,6 +7,7 @@ export {
 export {
 	acknowledgeProjectSkills,
 	approveProjectMcpServer,
+	cloneProject,
 	closeProject,
 	createProject,
 	getProjects,

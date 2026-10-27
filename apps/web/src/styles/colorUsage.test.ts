@@ -76,6 +76,7 @@ const NON_COLOR = new Set([
 	"ellipsis",
 	"clip",
 	"clip-padding",
+	"dashed",
 	"none",
 	"inset",
 	"solid",

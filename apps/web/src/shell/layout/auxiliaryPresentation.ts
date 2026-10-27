@@ -1,6 +1,8 @@
 import { t } from "@thinkrail/locales/react";
 import { type LayoutAttention, readLayoutSelection, tupleKey } from "../../lib";
+import type { LayoutToolCatalog } from "./model";
 import {
+	BUILTIN_LAYOUT_TOOL_CATALOG,
 	findAuxiliaryGroup,
 	findPlacedResource,
 	findTabLocation,
@@ -124,6 +126,7 @@ export function projectAuxiliaryRail(
 	document: WorkspaceLayoutDocument,
 	attention: LayoutAttention,
 	region: LayoutAuxiliaryRegion,
+	catalog: LayoutToolCatalog = BUILTIN_LAYOUT_TOOL_CATALOG,
 ): readonly AuxiliaryRailEntry[] {
 	const entries: AuxiliaryRailEntry[] = [];
 	for (const group of document[region].groups) {
@@ -167,7 +170,7 @@ export function projectAuxiliaryRail(
 				expanded,
 			});
 	}
-	for (const tool of unplacedToolsForRegion(document, region)) {
+	for (const tool of unplacedToolsForRegion(document, region, catalog)) {
 		entries.push({
 			kind: "tool",
 			key: tupleKey("rail-tool", region, tool),
@@ -196,16 +199,6 @@ function showingAuxiliaryEntries(document: WorkspaceLayoutDocument, attention: L
 		projectAuxiliaryRail(document, attention, region).filter(
 			(entry) => entry.selected && entry.expanded,
 		),
-	);
-}
-
-export function isToolShowing(
-	document: WorkspaceLayoutDocument,
-	attention: LayoutAttention,
-	tool: LayoutToolId,
-): boolean {
-	return showingAuxiliaryEntries(document, attention).some(
-		(entry) => entry.kind === "tool" && entry.tool === tool,
 	);
 }
 
@@ -243,10 +236,12 @@ export function activateAuxiliaryRailEntry(
 	entry: AuxiliaryRailEntry,
 	maxSideGroups: number,
 	maxBottomGroups: number,
+	catalog: LayoutToolCatalog = BUILTIN_LAYOUT_TOOL_CATALOG,
 ): LayoutOperationResult {
 	if (entry.kind === "tool") {
-		const placed = findPlacedResource(document, toolTab(entry.tool));
-		if (!placed) return revealTool(document, entry.tool, maxSideGroups, maxBottomGroups);
+		const placed = findPlacedResource(document, toolTab(entry.tool, catalog));
+		if (!placed)
+			return revealTool(document, entry.tool, maxSideGroups, maxBottomGroups, undefined, catalog);
 		const location = findTabLocation(document, placed.id);
 		if (!location || location.area === "center")
 			return { reason: t("workbench.rail.toolUnavailable") };

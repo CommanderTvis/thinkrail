@@ -29,10 +29,11 @@ export function ModelsSettings() {
 	const agentReviewEnabled = useAppStore((s) => s.agentReviewEnabled);
 	const protocolVersion = useAppStore((s) => s.protocolVersion);
 	const { models: allModels, refreshing, refresh } = useModelCatalog(true);
-	const hiddenModels = useAppStore((s) => s.hiddenModels);
+	const hiddenModels = useAppStore((s) => s.hiddenModelRefs);
+	const hiddenPatterns = useAppStore((s) => s.hiddenModels);
 	const visibleModels = useMemo(
-		() => selectPickerModels(allModels, hiddenModels, []),
-		[allModels, hiddenModels],
+		() => selectPickerModels(allModels, hiddenModels, [], hiddenPatterns),
+		[allModels, hiddenModels, hiddenPatterns],
 	);
 	const preferences = useModelPreferences(visibleModels);
 	const [resolvedDefault, setResolvedDefault] = useState<ModelDefault | null>(null);
@@ -81,8 +82,13 @@ export function ModelsSettings() {
 	const configuredModel = selectCatalogModel(allModels, defaultModel ?? null);
 	const model = resolvedDefault ? resolvedDefault.model : configuredModel;
 	const level = resolvedDefault?.thinkingLevel ?? defaultEffort ?? "medium";
-	const chatPickerModels = selectPickerModels(allModels, hiddenModels, [model]);
-	const reviewPickerModels = selectPickerModels(allModels, hiddenModels, [reviewModel]);
+	const chatPickerModels = selectPickerModels(allModels, hiddenModels, [model], hiddenPatterns);
+	const reviewPickerModels = selectPickerModels(
+		allModels,
+		hiddenModels,
+		[reviewModel],
+		hiddenPatterns,
+	);
 
 	const reviewerEffortModel = reviewModel ?? resolvedDefault?.model ?? null;
 	const reviewerEffortLevel =

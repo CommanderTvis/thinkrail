@@ -89,7 +89,7 @@ describe("initModelVisibilityPersistence with the stable adapter", () => {
 		});
 		const dispose = initModelVisibilityPersistence(adapter);
 		try {
-			expect(useAppStore.getState().hiddenModels).toEqual([GPT]);
+			expect(useAppStore.getState().hiddenModelRefs).toEqual([GPT]);
 			useAppStore.getState().setModelVisibility(OPUS, false);
 			expect(JSON.parse(values.get(HIDDEN_MODELS_PREFERENCE_KEY) ?? "")).toEqual([GPT, OPUS]);
 			useAppStore.getState().setModelVisibility(GPT, true);
@@ -105,7 +105,7 @@ describe("initModelVisibilityPersistence with the stable adapter", () => {
 		useAppStore.getState().hydrateHiddenModels([GPT]);
 		const dispose = initModelVisibilityPersistence(adapter);
 		try {
-			expect(useAppStore.getState().hiddenModels).toEqual([]);
+			expect(useAppStore.getState().hiddenModelRefs).toEqual([]);
 		} finally {
 			dispose();
 		}
@@ -114,9 +114,9 @@ describe("initModelVisibilityPersistence with the stable adapter", () => {
 	test("a throwing adapter never breaks startup or later changes", () => {
 		const dispose = initModelVisibilityPersistence(throwing);
 		try {
-			expect(useAppStore.getState().hiddenModels).toEqual([]);
+			expect(useAppStore.getState().hiddenModelRefs).toEqual([]);
 			expect(() => useAppStore.getState().setModelVisibility(GPT, false)).not.toThrow();
-			expect(useAppStore.getState().hiddenModels).toEqual([GPT]);
+			expect(useAppStore.getState().hiddenModelRefs).toEqual([GPT]);
 		} finally {
 			dispose();
 		}
@@ -138,7 +138,7 @@ describe("initModelVisibilityPersistence with browser storage", () => {
 		values.set(browser.target.key, JSON.stringify([OPUS]));
 		const dispose = initModelVisibilityPersistence(null, () => browser.target);
 		try {
-			expect(useAppStore.getState().hiddenModels).toEqual([OPUS]);
+			expect(useAppStore.getState().hiddenModelRefs).toEqual([OPUS]);
 
 			values.set(browser.target.key, JSON.stringify([GPT]));
 			browser.dispatch({
@@ -146,13 +146,13 @@ describe("initModelVisibilityPersistence with browser storage", () => {
 				newValue: JSON.stringify([GPT]),
 				storageArea: storage,
 			});
-			expect(useAppStore.getState().hiddenModels).toEqual([GPT]);
+			expect(useAppStore.getState().hiddenModelRefs).toEqual([GPT]);
 
 			browser.dispatch({ key: "other", newValue: "[]", storageArea: storage });
-			expect(useAppStore.getState().hiddenModels).toEqual([GPT]);
+			expect(useAppStore.getState().hiddenModelRefs).toEqual([GPT]);
 
 			browser.dispatch({ key: null, newValue: null, storageArea: storage });
-			expect(useAppStore.getState().hiddenModels).toEqual([]);
+			expect(useAppStore.getState().hiddenModelRefs).toEqual([]);
 			expect(values.get(browser.target.key)).toBe(JSON.stringify([GPT]));
 
 			useAppStore.getState().setModelVisibility(OPUS, false);
@@ -167,7 +167,7 @@ describe("initModelVisibilityPersistence with browser storage", () => {
 		const dispose = initModelVisibilityPersistence(null, () => null);
 		try {
 			useAppStore.getState().setModelVisibility(GPT, false);
-			expect(useAppStore.getState().hiddenModels).toEqual([GPT]);
+			expect(useAppStore.getState().hiddenModelRefs).toEqual([GPT]);
 		} finally {
 			dispose();
 		}

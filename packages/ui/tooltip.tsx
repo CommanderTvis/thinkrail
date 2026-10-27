@@ -32,12 +32,16 @@ function IconTooltip({
 	side,
 	align,
 	wrapTrigger,
+	delayDuration,
+	passThrough,
 	children,
 }: {
 	label: React.ReactNode;
 	side?: React.ComponentProps<typeof TooltipPrimitive.Content>["side"];
 	align?: React.ComponentProps<typeof TooltipPrimitive.Content>["align"];
 	wrapTrigger?: boolean;
+	delayDuration?: number;
+	passThrough?: boolean;
 	children: React.ReactNode;
 }) {
 	const [open, setOpen] = useState(false);
@@ -61,7 +65,11 @@ function IconTooltip({
 		return () => window.removeEventListener("keydown", onKeyDown, true);
 	}, [open]);
 	return (
-		<Tooltip open={open} onOpenChange={onOpenChange}>
+		<Tooltip
+			open={open}
+			onOpenChange={onOpenChange}
+			{...(delayDuration === undefined ? {} : { delayDuration })}
+		>
 			{wrapTrigger ? (
 				<TooltipTrigger asChild onFocus={onFocus}>
 					<span className="flex">{children}</span>
@@ -71,7 +79,11 @@ function IconTooltip({
 					{children}
 				</TooltipTrigger>
 			)}
-			<TooltipContent {...(side ? { side } : {})} {...(align ? { align } : {})}>
+			<TooltipContent
+				{...(side ? { side } : {})}
+				{...(align ? { align } : {})}
+				{...(passThrough ? { className: "pointer-events-none" } : {})}
+			>
 				{label}
 			</TooltipContent>
 		</Tooltip>
