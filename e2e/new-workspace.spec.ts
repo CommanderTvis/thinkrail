@@ -76,6 +76,7 @@ test("the dialog lists local branches (no stray origin) and creates a worktree",
 	await expect(dialog).toContainText("No isolation");
 	await expect(dialog.getByTestId("ws-branch-picker")).toHaveCount(0);
 	await expect(dialog.getByTestId("ws-current-branch")).toContainText("main");
+	await expect(dialog.getByTestId("ws-checkout-path")).toContainText("sample-project");
 	await expect(page.getByTestId("create-workspace")).toHaveText(/Start/);
 	await dialog.getByTestId("ws-target-worktree").click();
 	await expect(dialog).toContainText("A separate git worktree on its own new branch");
@@ -84,6 +85,7 @@ test("the dialog lists local branches (no stray origin) and creates a worktree",
 
 	await expect(dialog.getByTestId("ws-project-picker")).toContainText("sample-project");
 	await expect(dialog.getByTestId("ws-name")).toHaveAttribute("placeholder", "workspace-1");
+	await expect(dialog.getByTestId("ws-checkout-path")).toContainText(/worktrees\/.*\/workspace-1$/);
 
 	const branchPicker = dialog.getByTestId("ws-branch-picker");
 	await expect(branchPicker).toContainText("From");
@@ -167,6 +169,7 @@ test("an edited name names the worktree, and the placeholder leaves naming to th
 
 	await name.fill("Login Rework");
 	await expect(dialog.getByTestId("workspace-naming-hint")).toHaveCount(0);
+	await expect(dialog.getByTestId("ws-checkout-path")).toContainText(/\/login-rework$/);
 
 	await name.fill("   ");
 	await expect(dialog.getByTestId("workspace-naming-hint")).toBeVisible();

@@ -1,6 +1,7 @@
 import {
 	RiBox3Line as Box,
 	RiArrowDownSLine as ChevronDown,
+	RiFolderOpenLine as FolderOpen,
 	RiGitBranchLine as GitBranch,
 	RiHome2Line as House,
 	RiLoader4Line as Loader2,
@@ -122,6 +123,7 @@ export function NewWorkspaceDialog({
 	const [prompt, setPrompt] = useState("");
 	const [name, setName] = useState("");
 	const [suggestedName, setSuggestedName] = useState("");
+	const [worktreePath, setWorktreePath] = useState("");
 	const [skillCommands, setSkillCommands] = useState<SlashCommandInfo[]>([]);
 	const [templates, setTemplates] = useState<TemplateInfo[]>([]);
 	const [slotSession, setSlotSession] = useState<TemplateSlotSessionState | null>(null);
@@ -258,17 +260,28 @@ export function NewWorkspaceDialog({
 	useEffect(() => {
 		if (!open) return;
 		let cancelled = false;
-		setSuggestedName("");
-		getTransport()
-			.request("workspace.suggestName", { projectId: selectedProjectId })
-			.then((suggested) => {
-				if (!cancelled) setSuggestedName(suggested.name);
-			})
-			.catch(() => {});
+		const typed = name.trim();
+		const timer = setTimeout(
+			() => {
+				getTransport()
+					.request("workspace.suggestName", {
+						projectId: selectedProjectId,
+						...(typed ? { name: typed } : {}),
+					})
+					.then((suggested) => {
+						if (cancelled) return;
+						setWorktreePath(suggested.path);
+						if (!typed) setSuggestedName(suggested.name);
+					})
+					.catch(() => {});
+			},
+			typed ? 200 : 0,
+		);
 		return () => {
 			cancelled = true;
+			clearTimeout(timer);
 		};
-	}, [open, selectedProjectId]);
+	}, [open, selectedProjectId, name]);
 
 	const {
 		models: allModels,
@@ -472,6 +485,7 @@ export function NewWorkspaceDialog({
 	const trustNotice = deriveProjectTrustNotice(selectedProject, trustSummary);
 	const trustEnables = trustNotice.kind === "untrusted" ? trustEnablesText(t, trustNotice) : null;
 	const isolated = target === "worktree";
+	const checkoutPath = isolated ? worktreePath : (selectedProject?.path ?? "");
 
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
@@ -581,6 +595,18 @@ export function NewWorkspaceDialog({
 						className="ml-auto"
 					/>
 				</div>
+
+				{checkoutPath ? (
+					<div
+						data-testid="ws-checkout-path"
+						className="flex min-w-0 items-center gap-8 text-text-subtle tr-text-metadata"
+					>
+						<FolderOpen className="size-14 shrink-0" />
+						<span className="truncate" title={checkoutPath}>
+							{checkoutPath}
+						</span>
+					</div>
+				) : null}
 
 				{trustNotice.kind === "untrusted" ? (
 					<div

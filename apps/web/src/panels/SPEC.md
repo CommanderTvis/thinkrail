@@ -324,7 +324,7 @@ treatment.
   diff against its own head. Empty means "unknown", so `create` omits `baseRef` and the host resolves the
   real branch. Worktree mode also carries a **Name** field (`ws-name`) whose HTML placeholder is
   **`workspace.suggestName`**'s next free `workspace-N`, so the user sees the name they are
-  about to get instead of guessing it. The suggestion is a **placeholder, not a choice**: while the field is
+  about to get instead of guessing it. **`workspace.suggestName`** also returns the checkout `path` the name would get (re-asked, debounced, with the typed name), and both modes show it under the controls (`ws-checkout-path`, FolderOpen + subtle metadata text like `ExistingWorktreeDialog` rows): the worktree path in worktree mode, the project folder in folder mode. The suggestion is a **placeholder, not a choice**: while the field is
   empty `create` omits `name` entirely — the host allocates the slot and its prompt-driven auto-rename
   still applies (the naming hint says so, and disappears the moment the field holds an edit) — and once edited
   the typed name travels with `workspace.create`, which locks it against that rename. Folder mode has no

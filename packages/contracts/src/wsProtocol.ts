@@ -603,7 +603,10 @@ export interface WsMethodMap {
 		params: { projectId: string; name?: string; baseRef?: string };
 		result: Workspace;
 	};
-	"workspace.suggestName": { params: { projectId: string }; result: { name: string } };
+	"workspace.suggestName": {
+		params: { projectId: string; name?: string };
+		result: { name: string; path: string };
+	};
 	"workspace.rename": { params: { id: string; name: string }; result: Workspace };
 	"workspace.listExisting": {
 		params: { projectId: string };
