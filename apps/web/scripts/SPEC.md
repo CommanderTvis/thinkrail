@@ -63,9 +63,9 @@ in agreement about the same functions.
   the wrong shape.
 - **Census exception:** `compiler-census.ts` also uses `@babel/core` and `babel-plugin-react-compiler`
   and reads authored TypeScript from the shared source scan as *text*, so extracting a component into
-  the SDK or an extension does not silently remove it from the report. It must pass the compiler the same options as
-  `reactCompilerPreset()` in `vite.config.ts` and mirror the preset's file filter, so its counts match
-  the real build. Build-time compiler validations differ from the lint rules (for example
+  the SDK or an extension does not silently remove it from the report. It mirrors the build's file filter (`apps/web/src/`), so its function list
+  matches the real build; the build itself compiles with `oxc-transform-react`, so a count that differs
+  only by engine is a census finding to read, not a build failure. Build-time compiler validations differ from the lint rules (for example
   `StaticComponents` is lint-only), so its counts differ from an oxlint React scan by design.
 - **Imported by:** `apps/web/package.json` scripts (`typography:generate` / `:validate` / `:check`,
   `colors:generate` / `:check`, `spacing:generate` / `:check`, `provider-glyphs:generate` / `:check`, `compiler:census:generate`, re-exported from the root `package.json`, plus `compiler:census:check` as the root `check:compiler`; `compiler:census` itself is web-only), and
