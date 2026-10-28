@@ -53,7 +53,10 @@ ourselves and never surface a credential value over the wire.
     - **OAuth-capable ids are first-class rows.** The id universe unions model-catalog providers,
       stored-credential providers (`listCredentials()`), **and** providers whose `Provider.auth.oauth`
       is present — an OAuth id can differ from any model-provider id (`openai-codex` ≠ `openai`), and a
-      stored credential can outlive its models. `canOAuth` = the row's provider carries OAuth auth (so
+      stored credential can outlive its models. **Anthropic is never an OAuth row** (`SUBSCRIPTION_LOGIN_DISABLED`,
+      JetBrains/thinkrail#437): pi's Claude Pro/Max login borrows Claude Code's client and identity, which
+      Anthropic forbids third-party apps; `startLogin` refuses it too, and the API key route stays. `canOAuth` =
+      the row's provider carries OAuth auth (so
       `provider.loginStart(row.id)` uses the credential id pi will actually store under); its row name
       prefers `auth.oauth.name` (more specific for oauth-only rows). `canApiKey` =
       **`Provider.auth.apiKey.login` exists** — pi's public api-key-login truth and *nothing else*

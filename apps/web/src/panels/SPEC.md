@@ -779,6 +779,8 @@ a project picker, the prompt hero, and the reused
   `kind: "central"` row is labelled "JetBrains AI" and its Managed tag points at the JetBrains AI card,
   which owns that connection), the **JetBrains AI** card, **Subscriptions** (unconfigured `canOAuth`
   providers) and **Available (N)** (the `canApiKey`-only rest, capped with a "Show N more" expander).
+  The unconfigured Anthropic row also says that Claude Max and Team plans include monthly API credits and
+  links Anthropic's claiming guide, since its key is the sanctioned route for those subscribers.
   Every unconfigured provider is one row offering **Sign in** when `canOAuth` and **API key** when
   `canApiKey` — **both routes start `provider.loginStart`**
   (`type` `"oauth"` / `"api_key"`, issue #97) into the same store-driven `auth/LoginDialog` (open the

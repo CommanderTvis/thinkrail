@@ -176,6 +176,20 @@ describe("buildProviderReport", () => {
 		]);
 	});
 
+	test("Anthropic offers an API key, never the Claude subscription sign-in", () => {
+		const report = buildProviderReport(
+			sources({
+				modelProviderIds: new Set(["anthropic"]),
+				oauthProviders: [{ id: "anthropic", name: "Anthropic (Claude Pro/Max)" }],
+				apiKeyLogin: () => true,
+			}),
+		);
+		expect(report.providers).toEqual([
+			expect.objectContaining({ id: "anthropic", configured: false, canApiKey: true }),
+		]);
+		expect(report.providers[0]?.canOAuth).toBeUndefined();
+	});
+
 	test("pi-owned API-key capability supports multi-prompt providers", () => {
 		const report = buildProviderReport(
 			sources({

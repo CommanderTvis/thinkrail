@@ -332,7 +332,7 @@ test("the host forwards successful login generation metadata into the basic even
 	try {
 		await handleRequest(
 			"provider.loginStart",
-			{ providerId: "anthropic", type: "oauth" },
+			{ providerId: "openai-codex", type: "oauth" },
 			{ clientKey: "client" },
 		);
 		const deadline = Date.now() + 2_000;
@@ -341,7 +341,7 @@ test("the host forwards successful login generation metadata into the basic even
 		const logins = events.filter((event) => event.event === "provider_login");
 		expect(logins).toHaveLength(1);
 		expect(logins[0]?.properties).toMatchObject({
-			provider: "anthropic",
+			provider: "openai-codex",
 			method: "oauth",
 			auth_method: "subscription",
 		});

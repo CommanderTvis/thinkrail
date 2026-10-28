@@ -1,6 +1,7 @@
 import type { AuthInteraction, AuthPrompt, AuthType } from "@earendil-works/pi-ai";
 import type { LoginFrame, LoginPush, LoginReply } from "@thinkrail/contracts";
 import { type PiRuntimeGeneration, piLoginOptions, usePiRuntime } from "../agent";
+import { SUBSCRIPTION_LOGIN_DISABLED } from "./subscriptionLogin";
 
 let publish: (push: LoginPush, generation?: PiRuntimeGeneration) => void = () => {};
 export function setLoginPublisher(
@@ -57,6 +58,8 @@ export function startLogin(
 	type: AuthType = "oauth",
 	onSuperseded: (loginId: string) => void = () => {},
 ): { loginId: string } {
+	if (type === "oauth" && SUBSCRIPTION_LOGIN_DISABLED.has(providerId))
+		throw new Error(`Subscription sign-in for ${providerId} is not offered; use an API key.`);
 	for (const [id, pending] of [...logins]) {
 		if (pending.providerId !== providerId) continue;
 		onSuperseded(id);

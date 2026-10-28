@@ -12,6 +12,7 @@ import {
 	usePiRuntime,
 } from "../agent";
 import { getJbcentralStatus } from "./jbcentral";
+import { SUBSCRIPTION_LOGIN_DISABLED } from "./subscriptionLogin";
 
 export interface ProviderStatusSources {
 	modelProviderIds: Set<string>;
@@ -29,7 +30,9 @@ export interface ProviderStatusSources {
 }
 
 export function buildProviderReport(sources: ProviderStatusSources): ProviderStatusReport {
-	const oauthIds = new Set(sources.oauthProviders.map((p) => p.id));
+	const oauthIds = new Set(
+		sources.oauthProviders.map((p) => p.id).filter((id) => !SUBSCRIPTION_LOGIN_DISABLED.has(id)),
+	);
 	const oauthName = new Map(sources.oauthProviders.map((p) => [p.id, p.name]));
 	const removable = new Set(sources.credentialProviders);
 	const ids = new Set<string>([

@@ -81,7 +81,7 @@ afterEach(() => {
 describe("startLogin", () => {
 	test("returns a handle synchronously (the flow runs detached, never awaited)", () => {
 		const { frames } = install(() => new Promise(() => {}));
-		const { loginId } = startLogin("anthropic");
+		const { loginId } = startLogin("openai-codex");
 		expect(loginId).toMatch(/^login_\d+$/);
 		expect(frames).toEqual([]);
 	});
@@ -99,9 +99,9 @@ describe("startLogin", () => {
 			i.notify({ type: "progress", message: "Done" });
 		});
 		const originalGeneration = await getPiRuntimeGeneration();
-		const { loginId } = startLogin("anthropic");
+		const { loginId } = startLogin("openai-codex");
 		await tick();
-		expect(h.loginCalls()).toEqual([["anthropic", "oauth"]]);
+		expect(h.loginCalls()).toEqual([["openai-codex", "oauth"]]);
 
 		if (cutover === "configure") configurePiRuntime(replacementGeneration.runtime);
 		else activatePiRuntimeGeneration(replacementGeneration);
@@ -112,9 +112,9 @@ describe("startLogin", () => {
 		completion.resolve();
 		await tick();
 		expect(h.frames).toEqual([
-			{ loginId, providerId: "anthropic", frame: { kind: "progress", message: "Waiting" } },
-			{ loginId, providerId: "anthropic", frame: { kind: "progress", message: "Done" } },
-			{ loginId, providerId: "anthropic", frame: { kind: "success" } },
+			{ loginId, providerId: "openai-codex", frame: { kind: "progress", message: "Waiting" } },
+			{ loginId, providerId: "openai-codex", frame: { kind: "progress", message: "Done" } },
+			{ loginId, providerId: "openai-codex", frame: { kind: "success" } },
 		]);
 		expect(h.publications.slice(0, 2)).toEqual(h.frames.slice(0, 2).map((push) => [push]));
 		expect(h.publications.at(-1)?.[1]).toBe(originalGeneration);
@@ -180,7 +180,7 @@ describe("startLogin", () => {
 				],
 			});
 		});
-		const { loginId } = startLogin("anthropic");
+		const { loginId } = startLogin("openai-codex");
 		await tick();
 		expect(h.frames.at(-1)?.frame).toEqual({
 			kind: "select",
@@ -246,7 +246,7 @@ describe("startLogin", () => {
 				.prompt({ type: "manual_code", message: "Paste code", signal: promptAbort.signal })
 				.catch(() => "callback-won");
 		});
-		const { loginId } = startLogin("anthropic");
+		const { loginId } = startLogin("openai-codex");
 		await tick();
 		expect(h.frames.map((f) => f.frame.kind)).toEqual(["prompt"]);
 		promptAbort.abort();
@@ -261,12 +261,12 @@ describe("startLogin", () => {
 		const h = install(async () => {
 			throw new Error("provider said no");
 		});
-		startLogin("anthropic");
+		startLogin("openai-codex");
 		await tick();
 		expect(h.frames).toEqual([
 			{
 				loginId: expect.any(String),
-				providerId: "anthropic",
+				providerId: "openai-codex",
 				frame: { kind: "error", message: "provider said no" },
 			},
 		]);
@@ -279,7 +279,7 @@ describe("cancelLogin", () => {
 		const h = install(async (_id, i) => {
 			await i.prompt({ type: "text", message: "Paste code" });
 		});
-		const { loginId } = startLogin("anthropic");
+		const { loginId } = startLogin("openai-codex");
 		await tick();
 		expect(h.frames.map((f) => f.frame.kind)).toEqual(["prompt"]);
 
@@ -296,7 +296,7 @@ describe("cancelLogin", () => {
 			i.notify({ type: "progress", message: "Waiting" });
 			await completion.promise;
 		});
-		const { loginId } = startLogin("anthropic");
+		const { loginId } = startLogin("openai-codex");
 		await tick();
 
 		cancelLogin(loginId);
@@ -304,7 +304,7 @@ describe("cancelLogin", () => {
 		await tick();
 		expect(h.lastSignal()?.aborted).toBe(true);
 		expect(h.publications).toEqual([
-			[{ loginId, providerId: "anthropic", frame: { kind: "progress", message: "Waiting" } }],
+			[{ loginId, providerId: "openai-codex", frame: { kind: "progress", message: "Waiting" } }],
 		]);
 	});
 
@@ -312,7 +312,7 @@ describe("cancelLogin", () => {
 		const h = install(async (_id, i) => {
 			await i.prompt({ type: "text", message: "code" });
 		});
-		const { loginId } = startLogin("anthropic");
+		const { loginId } = startLogin("openai-codex");
 		await tick();
 		cancelLogin(loginId);
 		await tick();
@@ -326,7 +326,7 @@ describe("cancelLogin", () => {
 		const h = install(async (_id, i) => {
 			await i.prompt({ type: "text", message: "code" });
 		});
-		const { loginId } = startLogin("anthropic");
+		const { loginId } = startLogin("openai-codex");
 		await tick();
 		cancelLogin(loginId);
 		resolveLogin({ loginId, value: "late" });
@@ -341,10 +341,10 @@ describe("cancelLogin", () => {
 			await i.prompt({ type: "select", message: "method", options: [{ id: "a", label: "A" }] });
 		});
 		const superseded: string[] = [];
-		const first = startLogin("anthropic");
+		const first = startLogin("github-copilot");
 		const other = startLogin("openai-codex");
 		await tick();
-		const second = startLogin("anthropic", "oauth", (id) => superseded.push(id));
+		const second = startLogin("github-copilot", "oauth", (id) => superseded.push(id));
 		await tick();
 
 		expect(signals.map((s) => s?.aborted)).toEqual([true, false, false]);
@@ -360,7 +360,7 @@ describe("cancelLogin", () => {
 		await tick();
 		expect(h.frames.at(-1)).toEqual({
 			loginId: second.loginId,
-			providerId: "anthropic",
+			providerId: "github-copilot",
 			frame: { kind: "success" },
 		});
 	});
@@ -371,7 +371,7 @@ describe("cancelLogin", () => {
 			signals.push(i.signal);
 			await i.prompt({ type: "text", message: "code" });
 		});
-		startLogin("anthropic");
+		startLogin("openai-codex");
 		startLogin("openai-codex");
 		await tick();
 		cancelAllLogins();
@@ -414,17 +414,22 @@ describe("api-key login / logoutProvider", () => {
 
 	test("startLogin defaults to the oauth flow when no type is given", async () => {
 		const h = install(async () => {});
-		startLogin("anthropic");
+		startLogin("openai-codex");
 		await tick();
-		expect(h.loginCalls()).toEqual([["anthropic", "oauth"]]);
+		expect(h.loginCalls()).toEqual([["openai-codex", "oauth"]]);
 	});
 
 	test("logoutProvider removes the credential through the runtime, then announces the change", async () => {
 		const h = install(async () => {});
 		const announced: string[][] = [];
 		setLogoutPublisher(() => announced.push([...h.logoutCalls()]));
-		await logoutProvider("anthropic");
-		expect(h.logoutCalls()).toEqual(["anthropic"]);
-		expect(announced).toEqual([["anthropic"]]);
+		await logoutProvider("openai-codex");
+		expect(h.logoutCalls()).toEqual(["openai-codex"]);
+		expect(announced).toEqual([["openai-codex"]]);
 	});
+});
+
+test("Claude subscription sign-in is refused", () => {
+	expect(() => startLogin("anthropic")).toThrow("not offered");
+	expect(() => startLogin("anthropic", "oauth")).toThrow("not offered");
 });

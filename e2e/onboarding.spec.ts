@@ -227,7 +227,7 @@ test("a cold start shows the onboarding wizard once; Skip setup persists", async
 		'[data-testid="provider-signin-row"][data-provider="anthropic"]',
 	);
 	await expect(anthropicRow).toHaveCount(1);
-	await expect(anthropicRow.getByTestId("provider-signin")).toHaveCount(1);
+	await expect(anthropicRow.getByTestId("provider-signin")).toHaveCount(0);
 	await expect(anthropicRow.getByTestId("provider-apikey")).toHaveCount(1);
 	const oauthFirst = await rows.evaluateAll((els) =>
 		els.map((e) => e.querySelector('[data-testid="provider-signin"]') !== null),
@@ -265,7 +265,7 @@ test("a cold start shows the onboarding wizard once; Skip setup persists", async
 	await expect(page.getByTestId("onboarding-wizard")).toHaveCount(0);
 });
 
-test("Get started detects a signed-in Claude Code and offers its sign-in above the search", async ({
+test("Get started detects a signed-in Claude Code but offers no subscription sign-in for it", async ({
 	page,
 	baseURL,
 }) => {
@@ -281,23 +281,13 @@ test("Get started detects a signed-in Claude Code and offers its sign-in above t
 
 		const wizard = page.getByTestId("onboarding-wizard");
 		await wizard.getByTestId("onboarding-start").click();
-		const detected = wizard.getByTestId("connect-detected");
-		await expect(detected).toHaveCount(1);
-		await expect(detected).toHaveAttribute("data-source", "claude-code");
-		await expect(detected).toHaveAttribute("data-provider", "anthropic");
-		const all = wizard.getByTestId("connect-provider-all");
-		await expect(all.getByTestId("connect-option-detected")).toContainText("Sign in with Claude");
-		const detectedBox = await all.getByTestId("connect-option-detected").boundingBox();
-		const searchBox = await all.getByTestId("connect-provider-search").boundingBox();
-		expect(detectedBox && searchBox && detectedBox.y < searchBox.y).toBe(true);
-		await expect(
-			wizard.getByTestId("connect-provider-list").locator('[data-provider="anthropic"]'),
-		).toHaveCount(0);
-
-		await detected.click();
-		await expect(page.getByTestId("login-dialog")).toHaveAttribute("data-provider", "anthropic");
-		await page.getByTestId("login-cancel").click();
-		await expect(page.getByTestId("login-dialog")).toHaveCount(0);
+		await expect(wizard.getByTestId("connect-provider-all")).toBeVisible();
+		await expect(wizard.getByTestId("connect-detected")).toHaveCount(0);
+		const anthropicRow = wizard
+			.getByTestId("connect-provider-list")
+			.locator('[data-provider="anthropic"]');
+		await expect(anthropicRow.getByTestId("provider-signin")).toHaveCount(0);
+		await expect(anthropicRow.getByTestId("provider-apikey")).toHaveCount(1);
 	} finally {
 		rmSync(claudeConfig, { force: true });
 	}
@@ -636,19 +626,19 @@ test("a sign-in abandoned by a reload does not park the next attempt on Workingâ
 }) => {
 	await openColdStart(page, baseURL);
 
-	const startAnthropicSignIn = async () => {
+	const startOAuthSignIn = async () => {
 		await page.getByTestId("welcome-connect-provider").click();
 		await page
 			.getByTestId("connect-provider-dialog")
-			.locator('[data-testid="provider-signin-row"][data-provider="anthropic"]')
+			.locator('[data-testid="provider-signin-row"][data-provider="openai-codex"]')
 			.getByTestId("provider-signin")
 			.click();
 		await expect(page.getByTestId("login-option").first()).toBeVisible();
 	};
 
-	await startAnthropicSignIn();
+	await startOAuthSignIn();
 	await page.reload();
-	await startAnthropicSignIn();
+	await startOAuthSignIn();
 	await page.getByTestId("login-cancel").click();
 	await expect(page.getByTestId("login-dialog")).toHaveCount(0);
 });
