@@ -1,6 +1,11 @@
 import { expect, test } from "bun:test";
 import { t } from "@thinkrail/locales/react";
-import { loginOptionParts, loginPromptMessage, loginSelectMessage } from "./loginOptions";
+import {
+	loginOptionParts,
+	loginPromptBlocks,
+	loginPromptMessage,
+	loginSelectMessage,
+} from "./loginOptions";
 
 test("loginSelectMessage drops pi's terminal-style trailing colon", () => {
 	expect(loginSelectMessage("Select Anthropic login method:")).toBe(
@@ -37,4 +42,12 @@ test("loginPromptMessage turns pi's terminal hints into dialog copy", () => {
 		"Configure AWS credentials, then choose Continue",
 	);
 	expect(loginPromptMessage("Enter Groq API key", t)).toBe("Enter Groq API key");
+});
+
+test("loginPromptBlocks sets a '$ ' paragraph apart as a command", () => {
+	expect(loginPromptBlocks("Run this:\n\n$ echo hi && echo bye\n\nThen paste.")).toEqual([
+		{ kind: "text", text: "Run this:" },
+		{ kind: "command", text: "echo hi && echo bye" },
+		{ kind: "text", text: "Then paste." },
+	]);
 });

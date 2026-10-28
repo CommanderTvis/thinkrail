@@ -265,6 +265,7 @@ fields as `thinkrail-plugin.json`.
 | `assets` | optional directory the host serves or hands to the plugin — for either origin, static files under it are served at `/plugin/<id>/<assets>/…` (`plugins/index.ts`'s `serveRoute`) and reachable from the web half via `PluginWebContext.assetUrl` (W19) |
 | `contributes` | the statically known parts: side tools with label, icon, default side and whether they need git (`requiresGit`); file viewers with the extensions and file names they claim |
 | `pi` | extension entries and skill directories to load into agent sessions, whether they also reach sub-agent sessions, and whether they modify the system prompt |
+| `runsInBrowserTab` | `false` when the plugin needs a host process (processes, sockets, the git CLI, a native filesystem); a host running in a browser tab ([[module-tab-host]]) refuses it with that reason and the web half stays unloaded. Absent means it runs there too |
 
 `contributes` exists because two rules below need a contribution to be known before any plugin code runs.
 A file viewer's `open` hook is consulted on the layout-rehydrate path, which runs at socket connect, and

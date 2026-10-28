@@ -1,4 +1,4 @@
-import type { VisualizeParams } from "@thinkrail/pi-visualize";
+import type { VisualizeParams } from "@thinkrail/pi-visualize/schema";
 import { definePluginHost } from "@thinkrail/plugin-api/host";
 import { visualizeContract } from "../contracts";
 import { manifest } from "../manifest";

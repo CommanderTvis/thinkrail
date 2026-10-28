@@ -68,6 +68,36 @@ export const THINKRAIL_SHIKI_THEME: ThemeRegistration = {
 			scope: ["punctuation", "meta.brace", "meta.delimiter"],
 			settings: { foreground: "var(--code-punctuation)" },
 		},
+		{
+			scope: ["markup.heading", "markup.heading entity.name", "punctuation.definition.heading"],
+			settings: { foreground: "var(--code-keyword)", fontStyle: "bold" },
+		},
+		{
+			scope: ["markup.inline.raw", "markup.raw", "markup.fenced_code.block"],
+			settings: { foreground: "var(--code-string)" },
+		},
+		{
+			scope: ["markup.bold"],
+			settings: { foreground: "var(--code-foreground)", fontStyle: "bold" },
+		},
+		{
+			scope: ["markup.italic"],
+			settings: { foreground: "var(--code-foreground)", fontStyle: "italic" },
+		},
+		{
+			scope: ["markup.strikethrough"],
+			settings: { foreground: "var(--code-foreground)", fontStyle: "strikethrough" },
+		},
+		{
+			scope: ["string.other.link", "meta.link.inline.markdown string.other.link.title"],
+			settings: { foreground: "var(--code-function)" },
+		},
+		{ scope: ["markup.underline.link"], settings: { foreground: "var(--code-string)" } },
+		{ scope: ["markup.quote"], settings: { foreground: "var(--code-comment)" } },
+		{
+			scope: ["punctuation.definition.list.begin.markdown"],
+			settings: { foreground: "var(--code-punctuation)" },
+		},
 		{ scope: ["markup.inserted"], settings: { foreground: "var(--code-inserted)" } },
 		{ scope: ["markup.deleted"], settings: { foreground: "var(--code-deleted)" } },
 		{

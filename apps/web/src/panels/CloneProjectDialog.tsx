@@ -1,5 +1,5 @@
 import { RiFolderOpenLine as FolderOpen } from "@remixicon/react";
-import type { Project } from "@thinkrail/contracts";
+import { type Project, TAB_HOST_PROJECTS_DIR } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
 import {
@@ -12,7 +12,14 @@ import {
 } from "@thinkrail/ui/dialog";
 import { useEffect, useRef, useState } from "react";
 import { randomId } from "../lib";
-import { errorText, getTransport, wsErrorCode } from "../transport";
+import {
+	errorText,
+	getTransport,
+	gitCorsProxy,
+	hostMode,
+	setGitCorsProxy,
+	wsErrorCode,
+} from "../transport";
 import { cloneDepth, repositoryFolderName } from "./cloneRepository";
 
 const FIELD_CLASS =
@@ -28,7 +35,9 @@ export function CloneProjectDialog({
 	const t = useT();
 	const [url, setUrl] = useState("");
 	const [folderOverride, setFolderOverride] = useState<string | null>(null);
-	const [parent, setParent] = useState("~");
+	const inTab = hostMode() === "tab";
+	const [parent, setParent] = useState(inTab ? TAB_HOST_PROJECTS_DIR : "~");
+	const [corsProxy, setCorsProxy] = useState(gitCorsProxy);
 	const [depthInput, setDepthInput] = useState("");
 	const [busy, setBusy] = useState(false);
 	const [cancelling, setCancelling] = useState(false);
@@ -123,6 +132,7 @@ export function CloneProjectDialog({
 					parentPath,
 					name,
 					...(depth === undefined ? {} : { depth }),
+					...(inTab ? { corsProxy: corsProxy.trim() } : {}),
 				},
 				{ timeoutMs: 31 * 60_000 },
 			)
@@ -131,6 +141,7 @@ export function CloneProjectDialog({
 					activeOperation.current = null;
 					if (!mounted.current) return;
 					if (project) {
+						if (inTab) setGitCorsProxy(corsProxy);
 						onCloned(project);
 						onClose();
 					} else setNotice(t("panels.cloneProject.cancelled"));
@@ -212,31 +223,33 @@ export function CloneProjectDialog({
 								{t("panels.cloneProject.authHint")}
 							</span>
 						</label>
-						<div className="flex flex-col gap-4">
-							<label htmlFor="clone-project-parent" className="tr-title-compact">
-								{t("panels.cloneProject.parent")}
-							</label>
-							<div className="flex gap-8">
-								<input
-									id="clone-project-parent"
-									data-testid="clone-project-parent"
-									autoComplete="off"
-									spellCheck={false}
-									value={parent}
-									onChange={(event) => setParent(event.target.value)}
-									className={FIELD_CLASS}
-								/>
-								<Button
-									variant="outline"
-									size="l"
-									iconLeft={FolderOpen}
-									data-testid="clone-project-browse"
-									onClick={browse}
-								>
-									{t("panels.createProject.browse")}
-								</Button>
+						{inTab ? null : (
+							<div className="flex flex-col gap-4">
+								<label htmlFor="clone-project-parent" className="tr-title-compact">
+									{t("panels.cloneProject.parent")}
+								</label>
+								<div className="flex gap-8">
+									<input
+										id="clone-project-parent"
+										data-testid="clone-project-parent"
+										autoComplete="off"
+										spellCheck={false}
+										value={parent}
+										onChange={(event) => setParent(event.target.value)}
+										className={FIELD_CLASS}
+									/>
+									<Button
+										variant="outline"
+										size="l"
+										iconLeft={FolderOpen}
+										data-testid="clone-project-browse"
+										onClick={browse}
+									>
+										{t("panels.createProject.browse")}
+									</Button>
+								</div>
 							</div>
-						</div>
+						)}
 						<label htmlFor="clone-project-name" className="flex flex-col gap-4">
 							<span className="tr-title-compact">{t("panels.cloneProject.folder")}</span>
 							<input
@@ -285,6 +298,24 @@ export function CloneProjectDialog({
 								{t("panels.cloneProject.depthHint")}
 							</span>
 						</label>
+						{inTab ? (
+							<label htmlFor="clone-project-cors-proxy" className="flex flex-col gap-4">
+								<span className="tr-title-compact">{t("panels.cloneProject.corsProxy")}</span>
+								<input
+									id="clone-project-cors-proxy"
+									data-testid="clone-project-cors-proxy"
+									autoComplete="off"
+									spellCheck={false}
+									value={corsProxy}
+									onChange={(event) => setCorsProxy(event.target.value)}
+									placeholder={t("panels.cloneProject.corsProxyNone")}
+									className={FIELD_CLASS}
+								/>
+								<span className="text-text-muted tr-text-metadata">
+									{t("panels.cloneProject.corsProxyHint")}
+								</span>
+							</label>
+						) : null}
 					</fieldset>
 					{error ? (
 						<p

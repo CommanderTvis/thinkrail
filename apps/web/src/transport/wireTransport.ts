@@ -4,6 +4,7 @@ import type {
 	ExtUiRequest,
 	HostUpdateNotice,
 	LoginPush,
+	McpStatusPayload,
 	PluginRosterEntry,
 	Project,
 	ReviewChangedPayload,
@@ -12,6 +13,7 @@ import type {
 	SessionDeletedPayload,
 	SessionEventPayload,
 	SessionStateRecord,
+	TurnChangeSet,
 	Workspace,
 	WorkspaceFsChangedPayload,
 	WorkspaceRemoved,
@@ -31,6 +33,7 @@ import {
 } from "@thinkrail/contracts";
 import { isConnectedGeneration, useAppStore } from "../store";
 import { createPiEventBatcher, shouldFlushPiEventsBefore } from "./piEventBatcher";
+import { hostMode, hostUrl, openTabHostSocket, unregisterFilesWorker } from "./tabHost";
 import { WsTransport } from "./transport";
 
 let transport: WsTransport | null = null;
@@ -211,8 +214,12 @@ export function initTransport(): WsTransport {
 		useAppStore.getState().handlePiEvents(payloads),
 	);
 
+	if (hostMode() !== "tab") void unregisterFilesWorker().catch(() => undefined);
+	const url = hostMode() === "tab" ? undefined : hostUrl();
 	transport = new WsTransport(
 		{
+			...(hostMode() === "tab" ? { openSocket: openTabHostSocket } : {}),
+			...(url ? { url } : {}),
 			onStatus: (status) => {
 				piEvents.flush();
 				useAppStore.getState().setStatus(status);
@@ -308,7 +315,19 @@ export function initTransport(): WsTransport {
 	});
 
 	transport.subscribe(WS_CHANNELS.providerLogin, (data) => {
-		useAppStore.getState().applyLoginFrame(data as LoginPush);
+		const push = data as LoginPush;
+		const state = useAppStore.getState();
+		if (push.target && state.removedWorkspaceIds[push.target.workspaceId]) {
+			void getTransport()
+				.request("provider.loginCancel", { loginId: push.loginId })
+				.catch(() => {});
+			return;
+		}
+		state.applyLoginFrame(push);
+	});
+
+	transport.subscribe(WS_CHANNELS.mcpStatus, (data) => {
+		useAppStore.getState().applyMcpStatus(data as McpStatusPayload);
 	});
 
 	transport.subscribe(WS_CHANNELS.providerChanged, () => {
@@ -350,7 +369,14 @@ export function initTransport(): WsTransport {
 
 	transport.subscribe(WS_CHANNELS.workspaceRemoved, (data) => {
 		const { projectId, id } = data as WorkspaceRemoved;
-		useAppStore.getState().applyWorkspaceRemoved(projectId, id);
+		const state = useAppStore.getState();
+		const login = state.activeLogin;
+		state.applyWorkspaceRemoved(projectId, id);
+		if (login?.target?.workspaceId === id) {
+			void getTransport()
+				.request("provider.loginCancel", { loginId: login.loginId })
+				.catch(() => {});
+		}
 	});
 
 	transport.subscribe(WS_CHANNELS.reviewChanged, (data) => {
@@ -360,6 +386,10 @@ export function initTransport(): WsTransport {
 
 	transport.subscribe(WS_CHANNELS.workspaceFsChanged, (data) => {
 		useAppStore.getState().noteFsChanged(data as WorkspaceFsChangedPayload);
+	});
+
+	transport.subscribe(WS_CHANNELS.turnChanged, (data) => {
+		useAppStore.getState().applyTurnChanged(data as TurnChangeSet);
 	});
 
 	transport.subscribe(WS_CHANNELS.settingsChanged, (data) => {

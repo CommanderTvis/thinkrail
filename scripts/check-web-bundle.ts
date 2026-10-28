@@ -16,9 +16,39 @@ const TEXT_MARKERS: readonly { needle: string; reason: string }[] = [
 
 const HOST_MODULE_PATTERN = /@thinkrail\/plugin-[a-z0-9-]+\/host\b/;
 
+/** Marks the tab-host worker's entry chunk: its OPFS directory name, from `@thinkrail/tab-host`. */
+const TAB_HOST_MARKER = /["'`]thinkrail-tab-host["'`]/;
+const CHUNK_IMPORT = /["'`]\.\/([\w.-]+\.js)["'`]/g;
+
+/**
+ * The tab-host worker and every chunk it reaches: a host running in the tab, so the host-only
+ * markers below are what it is made of rather than leaks into the page.
+ */
+function tabHostChunks(distAssets: string, files: readonly string[]): Set<string> {
+	const reached = new Set<string>();
+	const queue = files.filter((file) =>
+		TAB_HOST_MARKER.test(readFileSync(join(distAssets, file), "utf8")),
+	);
+	const isWorkerEntry = (file: string) => /^worker-/.test(file);
+	for (const file of queue.filter(isWorkerEntry)) reached.add(file);
+	const pending = [...reached];
+	while (pending.length > 0) {
+		const file = pending.pop() as string;
+		for (const [, next] of readFileSync(join(distAssets, file), "utf8").matchAll(CHUNK_IMPORT)) {
+			if (next && !reached.has(next) && files.includes(next)) {
+				reached.add(next);
+				pending.push(next);
+			}
+		}
+	}
+	return reached;
+}
+
 function findings(distAssets: string): string[] {
 	const violations: string[] = [];
-	const files = readdirSync(distAssets).filter((file) => file.endsWith(".js"));
+	const all = readdirSync(distAssets).filter((file) => file.endsWith(".js"));
+	const tabHost = tabHostChunks(distAssets, all);
+	const files = all.filter((file) => !tabHost.has(file));
 	for (const file of files) {
 		if (/^host[-.]/.test(file)) {
 			violations.push(

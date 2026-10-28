@@ -12,6 +12,7 @@ export const manifest = definePluginManifest({
 	apiGeneration: PLUGIN_API_GENERATION,
 	wireVersion: 1,
 	enabledByDefault: true,
+	runsInBrowserTab: false,
 	dependsOn: [],
 	host: "./host/index.ts",
 	web: "./web/index.ts",

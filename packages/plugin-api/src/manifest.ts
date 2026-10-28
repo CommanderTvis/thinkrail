@@ -69,6 +69,12 @@ export interface PluginManifest {
 	contributes: PluginContributions;
 	/** Agent-facing resources this plugin loads into sessions; see {@link PluginPiBlock}. */
 	pi?: PluginPiBlock;
+	/**
+	 * `false` when the plugin cannot run while ThinkRail's host runs inside a browser tab: no
+	 * processes, sockets, or native filesystem. Such a plugin is refused there, naming this as the
+	 * reason, and its web half is not loaded. Absent means it runs in a tab too.
+	 */
+	runsInBrowserTab?: boolean;
 }
 
 /**

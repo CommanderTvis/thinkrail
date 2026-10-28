@@ -17,8 +17,14 @@ import {
 } from "@thinkrail/ui/dialog";
 import { cn } from "@thinkrail/ui/utils";
 import { type ReactNode, useEffect, useId, useRef, useState } from "react";
+import { CopyButton } from "@/chat/CopyButton";
 import { copyText } from "@/lib";
-import { loginOptionParts, loginPromptMessage, loginSelectMessage } from "./loginOptions";
+import {
+	loginOptionParts,
+	loginPromptBlocks,
+	loginPromptMessage,
+	loginSelectMessage,
+} from "./loginOptions";
 import type { LoginState } from "./loginState";
 import { redirectsToLoopback, uiServedFromLoopback } from "./uiOrigin";
 
@@ -259,9 +265,27 @@ export function LoginDialog({
 										{t("auth.login.pasteHint")}
 									</p>
 								) : state.input.message ? (
-									<p className="text-text-muted tr-text-ui">
-										{loginPromptMessage(state.input.message, t)}
-									</p>
+									loginPromptBlocks(loginPromptMessage(state.input.message, t)).map((block) =>
+										block.kind === "command" ? (
+											<div key={block.text} className="flex items-start gap-8">
+												<pre
+													data-testid="login-command"
+													className="tr-code-text select-all whitespace-pre-wrap break-all min-w-0 flex-1 rounded-sm border border-border-default p-8 text-text-default"
+												>
+													{block.text}
+												</pre>
+												<CopyButton
+													getText={() => block.text}
+													label={t("common.copy")}
+													className="opacity-100"
+												/>
+											</div>
+										) : (
+											<p key={block.text} className="text-text-muted tr-text-ui">
+												{block.text}
+											</p>
+										),
+									)
 								) : null}
 								<input
 									ref={promptRef}

@@ -184,12 +184,13 @@ Clear, fractal module boundaries are a top-priority requirement:
 
 ## Repo-wide invariants
 
-- `apps/web` depends on `contracts`, `locales`, `ui`, `extension-api/web`, `resource-renderers`, and
-  `thinkrail-extensions/*/web` only, never `server` or `shared`.
+- `apps/web` depends on `contracts`, `locales`, `ui`, `extension-api/web`, `resource-renderers`,
+  `thinkrail-extensions/*/web`, and `tab-host` (started only as a Worker) only, never `server` or `shared`.
 - User-facing UI text is a key in `packages/locales/en.json` rendered through `@thinkrail/locales/react`;
   the lint gate rejects hardcoded JSX text and text attributes.
 - Never value-import `pi` into browser-bundled code. Import types only from the `pi-ai` /
-  `pi-agent-core` package roots; `@earendil-works/pi-coding-agent` is server-only.
+  `pi-agent-core` package roots; `@earendil-works/pi-coding-agent` is server-only. The tab-host worker
+  (`packages/tab-host`), a host running in the page, is the one exception for `pi-ai`/`pi-agent-core`.
 - One id model: UI tab id versus `session.sessionId`; there is no separate pi UUID.
 - `pi` owns state. The host exposes what pi reports rather than recomputing cost, stats, or state.
 - Streaming semantics: `text_delta` / `thinking_delta` append;

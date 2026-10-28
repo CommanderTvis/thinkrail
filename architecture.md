@@ -581,7 +581,11 @@ dependency. This keeps test process drivers outside both launchers and the serve
 
 - Never **value**-import `pi` in browser-bundled code; import types only, from the `pi-ai` /
   `pi-agent-core` package roots (type-only imports are erased at build, keeping the bundle provider-free).
-  `@earendil-works/pi-coding-agent` is server-only — it never reaches `contracts`/`web`.
+  `@earendil-works/pi-coding-agent` is server-only — it never reaches `contracts`/`web`. The one
+  exception is the tab-host worker ([[module-tab-host]]): it *is* a host, so it value-imports `pi-ai` and
+  `pi-agent-core`; of `pi-coding-agent` it bundles only the dependency-free truncation module that
+  spec-graph's tools use, and nothing outside its worker chunk graph may
+  (`check-web-bundle` exempts exactly that graph).
 - One id model: the UI tab id vs `session.sessionId` (the `AgentSession` id). No separate pi UUID.
 - The agent runs in-process with **no crash isolation** — wrap session calls and forward errors; a fatal
   fault takes the whole host down (accepted tradeoff vs the subprocess RPC mode).

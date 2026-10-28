@@ -16,6 +16,8 @@ import {
 	DropdownMenuTrigger,
 } from "@thinkrail/ui/dropdown-menu";
 import type { ReactNode } from "react";
+import { hostWording } from "@/lib/desktopShell";
+import { hostMode } from "@/transport";
 
 export function AddProjectMenu({
 	recentProjects,
@@ -50,14 +52,23 @@ export function AddProjectMenu({
 						<DropdownMenuSeparator />
 					</>
 				) : null}
-				<DropdownMenuItem data-testid="menu-open-project" onSelect={() => onOpen()}>
-					<Folder />
-					<span>{t("panels.addProject.open")}</span>
-				</DropdownMenuItem>
-				<DropdownMenuItem data-testid="menu-enter-host-path" onSelect={() => onEnterHostPath()}>
-					<Edit />
-					<span>{t("panels.addProject.enterHostPath")}</span>
-				</DropdownMenuItem>
+				{hostMode() === "tab" ? null : (
+					<>
+						<DropdownMenuItem data-testid="menu-open-project" onSelect={() => onOpen()}>
+							<Folder />
+							<span>{t("panels.addProject.open")}</span>
+						</DropdownMenuItem>
+						<DropdownMenuItem data-testid="menu-enter-host-path" onSelect={() => onEnterHostPath()}>
+							<Edit />
+							<span>
+								{hostWording(
+									t("panels.addProject.enterHostPath"),
+									t("panels.addProject.enterPath"),
+								)}
+							</span>
+						</DropdownMenuItem>
+					</>
+				)}
 				{onClone ? (
 					<DropdownMenuItem data-testid="menu-clone-project" onSelect={onClone}>
 						<Globe />

@@ -1062,6 +1062,8 @@ export interface PluginRosterEntry {
 	channels: Record<string, PluginRosterChannel>;
 	/** External plugins only: paths under `/plugin/<id>/`. */
 	web?: { module: string; styles?: string };
+	/** `false` from a host running in a browser tab for a plugin that cannot run there; it stays off. */
+	runsInBrowserTab?: false;
 	/** The manifest's `assets` subpath, when declared, for any origin — lets the web loader build asset URLs without the manifest. */
 	assets?: string;
 }

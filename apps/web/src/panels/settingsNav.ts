@@ -27,6 +27,7 @@ import {
 } from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
 import { SettingsSection } from "@/store";
+import { hostMode } from "@/transport";
 
 export interface SettingsNavSection {
 	id: SettingsSection;
@@ -34,6 +35,8 @@ export interface SettingsNavSection {
 	icon: RemixiconComponentType;
 	requiresInjectedContent?: true;
 	requiresProtocolVersion?: number;
+	/** Needs a process host: hidden while ThinkRail runs in this browser tab. */
+	needsProcessHost?: true;
 }
 
 export interface SettingsNavGroup {
@@ -57,13 +60,20 @@ const NAV_GROUPS: SettingsNavGroup[] = [
 				label: "settings.nav.mcp",
 				icon: RiPlugLine,
 				requiresProtocolVersion: MCP_PROTOCOL_VERSION,
+				needsProcessHost: true,
 			},
-			{ id: SettingsSection.Templates, label: "settings.nav.templates", icon: RiLayoutGridLine },
+			{
+				id: SettingsSection.Templates,
+				label: "settings.nav.templates",
+				icon: RiLayoutGridLine,
+				needsProcessHost: true,
+			},
 			{
 				id: SettingsSection.Environment,
 				label: "settings.nav.environment",
 				icon: RiFolderSettingsLine,
 				requiresProtocolVersion: HOST_ENVIRONMENT_PROTOCOL_VERSION,
+				needsProcessHost: true,
 			},
 		],
 	},
@@ -79,7 +89,12 @@ const NAV_GROUPS: SettingsNavGroup[] = [
 				requiresProtocolVersion: LOCALES_PROTOCOL_VERSION,
 			},
 			{ id: SettingsSection.Layout, label: "settings.nav.layout", icon: RiLayoutTop2Line },
-			{ id: SettingsSection.Terminal, label: "settings.nav.terminal", icon: RiTerminalBoxLine },
+			{
+				id: SettingsSection.Terminal,
+				label: "settings.nav.terminal",
+				icon: RiTerminalBoxLine,
+				needsProcessHost: true,
+			},
 		],
 	},
 	{
@@ -90,13 +105,20 @@ const NAV_GROUPS: SettingsNavGroup[] = [
 				label: "settings.nav.workspaces",
 				icon: RiGitRepositoryLine,
 				requiresProtocolVersion: WORKSPACE_SETTLE_PROTOCOL_VERSION,
+				needsProcessHost: true,
 			},
-			{ id: SettingsSection.Github, label: "settings.nav.github", icon: RiApps2Line },
+			{
+				id: SettingsSection.Github,
+				label: "settings.nav.github",
+				icon: RiApps2Line,
+				needsProcessHost: true,
+			},
 			{
 				id: SettingsSection.Extensions,
 				label: "settings.nav.extensions",
 				icon: RiPuzzle2Line,
 				requiresProtocolVersion: EXTENSION_CATALOG_PROTOCOL_VERSION,
+				needsProcessHost: true,
 			},
 			{ id: SettingsSection.Plugins, label: "settings.nav.plugins", icon: RiPuzzle2Line },
 			{
@@ -110,6 +132,7 @@ const NAV_GROUPS: SettingsNavGroup[] = [
 				label: "settings.nav.updates",
 				icon: RiDownloadCloud2Line,
 				requiresInjectedContent: true,
+				needsProcessHost: true,
 			},
 		],
 	},
@@ -119,8 +142,10 @@ function isAvailable(
 	section: SettingsNavSection,
 	protocolVersion: number | null,
 	hasUpdates: boolean,
+	inTab: boolean,
 ): boolean {
 	return (
+		!(inTab && section.needsProcessHost) &&
 		(!section.requiresInjectedContent || hasUpdates) &&
 		(section.requiresProtocolVersion === undefined ||
 			(protocolVersion !== null && protocolVersion >= section.requiresProtocolVersion))
@@ -131,18 +156,19 @@ export function settingsNavGroups(
 	protocolVersion: number | null,
 	hasUpdates: boolean,
 ): SettingsNavGroup[] {
-	return filterSettingsNavGroups(NAV_GROUPS, protocolVersion, hasUpdates);
+	return filterSettingsNavGroups(NAV_GROUPS, protocolVersion, hasUpdates, hostMode() === "tab");
 }
 
 export function filterSettingsNavGroups(
 	groups: SettingsNavGroup[],
 	protocolVersion: number | null,
 	hasUpdates: boolean,
+	inTab = false,
 ): SettingsNavGroup[] {
 	return groups
 		.map((group) => ({
 			...group,
-			sections: group.sections.filter((s) => isAvailable(s, protocolVersion, hasUpdates)),
+			sections: group.sections.filter((s) => isAvailable(s, protocolVersion, hasUpdates, inTab)),
 		}))
 		.filter((group) => group.sections.length > 0);
 }

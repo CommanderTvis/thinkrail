@@ -7,9 +7,17 @@ import { RequestError } from "./requestError";
 export type ConnectionStatus = "connecting" | "connected" | "disconnected";
 type PushHandler = (data: unknown) => void;
 
+/** What the transport needs of a socket; a WebSocket, or the carrier to a host running in this tab. */
+export type HostSocket = Pick<
+	WebSocket,
+	"readyState" | "send" | "close" | "onopen" | "onmessage" | "onclose" | "onerror"
+>;
+
 export interface TransportOptions {
 	url?: string;
 	onStatus?: (status: ConnectionStatus) => void;
+	/** Opens the socket for `url`; defaults to a WebSocket. */
+	openSocket?: (url: string) => HostSocket;
 }
 
 interface TransportDispatchHooks {
@@ -49,8 +57,9 @@ export interface RequestOptions {
 }
 
 export class WsTransport {
-	private ws: WebSocket | null = null;
+	private ws: HostSocket | null = null;
 	private readonly url: string;
+	private readonly openSocket: (url: string) => HostSocket;
 	private readonly onStatus: ((status: ConnectionStatus) => void) | undefined;
 	private readonly beforeDispatch: ((message: WsServerMessage) => void) | undefined;
 	private seq = 0;
@@ -72,18 +81,19 @@ export class WsTransport {
 	constructor(opts: TransportOptions = {}, dispatchHooks: TransportDispatchHooks = {}) {
 		this.url = opts.url ?? inferUrl();
 		this.onStatus = opts.onStatus;
+		this.openSocket = opts.openSocket ?? ((url) => new WebSocket(url));
 		this.beforeDispatch = dispatchHooks.beforeDispatch;
 	}
 
 	httpBase(): string {
 		const u = new URL(this.url);
 		u.protocol = u.protocol === "wss:" ? "https:" : "http:";
-		return u.origin;
+		return u.origin + u.pathname.replace(/\/?ws$/, "");
 	}
 
 	connect(): void {
 		this.onStatus?.("connecting");
-		const ws = new WebSocket(withClientId(this.url));
+		const ws = this.openSocket(withClientId(this.url));
 		this.ws = ws;
 		ws.onopen = () => {
 			if (this.ws !== ws) {
@@ -202,5 +212,5 @@ export class WsTransport {
 
 export function inferUrl(): string {
 	const proto = location.protocol === "https:" ? "wss:" : "ws:";
-	return `${proto}//${location.host}/ws`;
+	return `${proto}//${location.host}${import.meta.env.BASE_URL}ws`;
 }

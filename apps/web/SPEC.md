@@ -381,7 +381,7 @@ themselves.
 
 ## Get right
 
-- **`apps/web` depends on `contracts`, `ui`, `extension-api/web`, and `thinkrail-extensions/*/web` only.** Never value-import `pi`; never import `server`/`shared`.
+- **`apps/web` depends on `contracts`, `ui`, `extension-api/web`, `thinkrail-extensions/*/web`, and `tab-host` only.** Never value-import `pi`; never import `server`/`shared`. `tab-host` is reached only as the Worker module the transport starts in tab mode ([[module-tab-host]]), never imported into the page's own graph.
 - Streaming invariant: `text_delta` / `thinking_delta` **APPEND**; `tool_execution_update.partialResult`
   **REPLACE**. Attempt-level `agent_end` never means idle; automatic work ends only at `agent_settled`.
 - Panels stay arrangement-agnostic so the mobile shell is an additive layer, not a rewrite.

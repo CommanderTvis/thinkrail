@@ -4,17 +4,27 @@ import {
 	RiRocketLine as Rocket,
 	RiSparkling2Line as Sparkles,
 } from "@remixicon/react";
-import { useT } from "@thinkrail/locales/react";
+import { T, useT } from "@thinkrail/locales/react";
 import { useEffect, useState } from "react";
 import { PRODUCT_NAME } from "../constants/branding";
 import { selectProjectActions, usePluginRegistry } from "../plugins/registry";
-import { selectOnboardingEligible, selectSupportsOnboarding, toast, useAppStore } from "../store";
-import { errorText, getTransport } from "../transport";
+import {
+	SettingsSection,
+	selectOnboardingEligible,
+	selectSupportsOnboarding,
+	toast,
+	useAppStore,
+} from "../store";
+import { errorText, getTransport, hostMode } from "../transport";
 import { AddProjectMenu } from "./AddProjectMenu";
+import { AnthropicCreditsLink } from "./AnthropicCreditsLink";
 import { ConnectedLine, type ConnectedSummary } from "./ConnectedLine";
 import { connectedProviderName } from "./ConnectProviderOptions";
 import { enterDefaultWorkspace } from "./defaultWorkspace";
-import { NewProjectDialog } from "./NewProjectDialog";
+import { GoogleCreditsLink } from "./GoogleCreditsLink";
+import { JetBrainsLink } from "./JetBrainsLink";
+import { CENTRAL_DOCS_URL, JETBRAINS_LICENSES_URL } from "./jetbrainsAiLinks";
+import { LinkButton } from "./LinkButton";
 import { NewWorkspaceDialog } from "./NewWorkspaceDialog";
 import { OnboardingWizard } from "./OnboardingWizard";
 import { ProjectTrustNotice } from "./ProjectTrustNotice";
@@ -89,6 +99,7 @@ export function WelcomePanel() {
 			if (setup) void startProjectSetupChat(opened.id);
 		});
 	const noProjects = project == null;
+	const inTab = hostMode() === "tab";
 	const showWizard = wizard === "shown" && noProjects;
 
 	useEffect(() => {
@@ -119,7 +130,11 @@ export function WelcomePanel() {
 				primary={primary}
 				icon={FolderOpen}
 				title={t("panels.welcome.openProjectTitle")}
-				subtitle={t("panels.welcome.openProjectSubtitle")}
+				subtitle={t(
+					inTab
+						? "panels.welcome.playgroundOpenProjectSubtitle"
+						: "panels.welcome.openProjectSubtitle",
+				)}
 			/>
 		</AddProjectMenu>
 	);
@@ -195,6 +210,13 @@ export function WelcomePanel() {
 							</>
 						) : noProjects ? (
 							noProjectCards()
+						) : inTab ? (
+							<>
+								{projectFolderCard(project.id)}
+								{projectActions.map((action) => (
+									<action.value.component key={action.pluginId} projectId={project.id} />
+								))}
+							</>
 						) : hasSpecs === null ? (
 							<>
 								<CardSkeleton />
@@ -207,7 +229,11 @@ export function WelcomePanel() {
 									primary
 									icon={Rocket}
 									title={t("panels.welcome.startBuildingTitle")}
-									subtitle={t("panels.welcome.startBuildingSubtitle")}
+									subtitle={
+										project.hasGit === false
+											? t("panels.welcome.startBuildingGitlessSubtitle")
+											: t("panels.welcome.startBuildingSubtitle")
+									}
 									onClick={() => setDialog({ projectId: project.id, prompt: "" })}
 									className="motion-safe:animate-reveal"
 								/>
@@ -228,7 +254,11 @@ export function WelcomePanel() {
 								<Card
 									icon={Rocket}
 									title={t("panels.welcome.startBuildingTitle")}
-									subtitle={t("panels.welcome.startBuildingSecondarySubtitle")}
+									subtitle={
+										project.hasGit === false
+											? t("panels.welcome.startBuildingGitlessSubtitle")
+											: t("panels.welcome.startBuildingSecondarySubtitle")
+									}
 									onClick={() => setDialog({ projectId: project.id, prompt: "" })}
 									className="motion-safe:animate-reveal"
 								/>
@@ -242,6 +272,8 @@ export function WelcomePanel() {
 				</>
 			)}
 
+			{inTab ? <PlaygroundGuide onClone={cloneRepository} /> : null}
+
 			{dialog ? (
 				<NewWorkspaceDialog
 					open
@@ -254,20 +286,56 @@ export function WelcomePanel() {
 				/>
 			) : null}
 			{dialogs}
-			{newProjectOpen ? (
-				<NewProjectDialog
-					onOpenChange={setNewProjectOpen}
-					onCreated={(created) =>
-						useAppStore.getState().selectProject(created.id, { reveal: true })
-					}
-				/>
-			) : null}
-			{cloneProjectOpen ? (
-				<CloneProjectDialog
-					onOpenChange={setCloneProjectOpen}
-					onCloned={(cloned) => useAppStore.getState().selectProject(cloned.id, { reveal: true })}
-				/>
-			) : null}
 		</div>
+	);
+}
+
+/** First steps in the Playground: get a project in, connect a model, then let an agent work on it. */
+function PlaygroundGuide({ onClone }: { onClone: (() => void) | undefined }) {
+	const t = useT();
+	return (
+		<section
+			data-testid="playground-guide"
+			className="mt-24 flex w-full max-w-[520px] flex-col gap-12 rounded-sm border border-border-default bg-container-workspace-bg p-16 text-left"
+		>
+			<h2 className="tr-title-card text-text-default">{t("panels.welcome.playground.title")}</h2>
+			<ol className="flex list-decimal flex-col gap-8 pl-16 tr-text-ui text-text-muted">
+				<li>
+					{t("panels.welcome.playground.clone")}{" "}
+					<LinkButton
+						data-testid="playground-guide-clone"
+						disabled={!onClone}
+						onClick={() => onClone?.()}
+					>
+						{t("panels.welcome.playground.cloneAction")}
+					</LinkButton>
+				</li>
+				<li>
+					{t("panels.welcome.playground.provider")}{" "}
+					<LinkButton
+						data-testid="playground-guide-providers"
+						onClick={() => useAppStore.getState().openSettings(SettingsSection.Providers)}
+					>
+						{t("panels.welcome.playground.providerAction")}
+					</LinkButton>
+				</li>
+				<li>{t("panels.welcome.playground.play")}</li>
+			</ol>
+			<p className="tr-text-metadata text-text-muted">
+				<T
+					i18nKey="panels.welcome.playground.credits"
+					components={[<AnthropicCreditsLink key="claim" />, <GoogleCreditsLink key="activate" />]}
+				/>
+			</p>
+			<p className="tr-text-metadata text-text-muted">
+				<T
+					i18nKey="panels.welcome.playground.jetbrains"
+					components={[
+						<JetBrainsLink key="central" href={CENTRAL_DOCS_URL} />,
+						<JetBrainsLink key="licences" href={JETBRAINS_LICENSES_URL} />,
+					]}
+				/>
+			</p>
+		</section>
 	);
 }

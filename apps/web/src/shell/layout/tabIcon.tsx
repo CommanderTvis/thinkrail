@@ -17,11 +17,13 @@ import {
 } from "@remixicon/react";
 import type { ReactNode } from "react";
 import { CustomIcon } from "../../components/CustomIcon";
+import { FileTypeIcon } from "../../components/FileTypeIcon";
 import type { LayoutTab } from "./types";
 
 export function tabIcon(tab: LayoutTab, active = false, cls = "size-14 shrink-0"): ReactNode {
 	switch (tab.kind) {
 		case "file":
+			return <FileTypeIcon path={tab.path} className={cls} />;
 		case "external-file":
 			return active ? <RiFileFill className={cls} /> : <RiFileLine className={cls} />;
 		case "diff":

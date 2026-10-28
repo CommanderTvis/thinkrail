@@ -39,3 +39,16 @@ export function loginPromptMessage(message: string, t: Translator): string {
 			t("auth.login.promptPressContinue", { action: t("common.continue") }),
 		);
 }
+
+export type LoginPromptBlock = { kind: "text" | "command"; text: string };
+
+export function loginPromptBlocks(message: string): LoginPromptBlock[] {
+	return message
+		.split(/\n\n+/)
+		.filter(Boolean)
+		.map((part) =>
+			part.startsWith("$ ")
+				? { kind: "command", text: part.slice(2) }
+				: { kind: "text", text: part },
+		);
+}

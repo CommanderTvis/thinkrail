@@ -5,5 +5,5 @@
 		"allowImportingTsExtensions": true,
 		"types": ["bun"]
 	},
-	"include": ["index.ts", "index.test.ts", "src"]
+	"include": ["index.ts", "index.test.ts", "schema.ts", "src"]
 }

@@ -5,12 +5,13 @@ import {
 } from "@remixicon/react";
 import type { MessageKey } from "@thinkrail/locales";
 import { useT } from "@thinkrail/locales/react";
-import { IconButton } from "@thinkrail/ui/button";
-import { useEffect, useState } from "react";
+import { Button, IconButton } from "@thinkrail/ui/button";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { NotificationPermissionPrompt, useAttentionNotifications } from "../notifications";
 import { AnalyticsConsentDialog } from "../panels/AnalyticsConsentDialog";
 import { InterviewPromptDialog } from "../panels/InterviewPromptDialog";
 import { NewWorkspaceDialog } from "../panels/NewWorkspaceDialog";
+import { SearchOverlay } from "../panels/SearchOverlay";
 import { SettingsDialog } from "../panels/SettingsDialog";
 import { Toaster } from "../panels/Toaster";
 import { useBranchStatus } from "../panels/useBranchStatus";
@@ -32,7 +33,10 @@ import {
 } from "../themes";
 import {
 	type ConnectionStatus,
+	hostMode,
+	playgroundWaiting,
 	runHostUpdate,
+	subscribePlaygroundWaiting,
 	supportsHostUpdateRun,
 	supportsUserThemes,
 } from "../transport";
@@ -40,6 +44,7 @@ import { UpdateInstallSurfaces, UpdateReadyButton, UpdateSettings, useUpdates } 
 import { AppShortcuts } from "./AppShortcuts";
 import { BrandLogo } from "./BrandLogo";
 import { FindBar } from "./FindBar";
+import { HostChooser } from "./HostChooser";
 import { JbcentralQuotaTopbar } from "./JbcentralQuotaTopbar";
 import { LayoutSettings } from "./LayoutSettings";
 import { useLocalLayoutState } from "./layoutState";
@@ -64,6 +69,8 @@ const STATUS_DOT: Record<ConnectionStatus, string> = {
 	connecting: "text-feedback-warning",
 	disconnected: "text-feedback-error",
 };
+
+const hostInTab = hostMode() === "tab";
 
 export function Shell() {
 	const t = useT();
@@ -101,10 +108,19 @@ export function Shell() {
 		anchor: null,
 	});
 	const welcomeGeneration = useAppStore((s) => s.welcomeGeneration);
+	const [searchOpen, setSearchOpen] = useState(false);
+	const [hostChooserOpen, setHostChooserOpen] = useState(false);
+	const waitingForOtherTab = useSyncExternalStore(subscribePlaygroundWaiting, playgroundWaiting);
 	const theme = useAppStore((s) => s.theme);
 	const themeMode = useAppStore((s) => s.themeMode);
 	const systemThemePair = useAppStore((s) => s.systemThemePair);
 	const userThemes = useAppStore((s) => s.userThemes);
+	const codeFontFamily = useAppStore((s) => s.codeFontFamily);
+	useEffect(() => {
+		const root = document.documentElement;
+		if (codeFontFamily) root.style.setProperty("--tr-font-family-code", codeFontFamily);
+		else root.style.removeProperty("--tr-font-family-code");
+	}, [codeFontFamily]);
 	const userThemesUnsupported = welcomeGeneration > 0 && !supportsUserThemes(protocolVersion);
 	useEffect(() => {
 		if (userThemes) installUserThemes(userThemes.files);
@@ -127,6 +143,7 @@ export function Shell() {
 		userThemesUnsupported,
 	]);
 	useGlobalHotkeys({
+		...(hasActiveWorkspace ? { onSearch: () => setSearchOpen(true) } : {}),
 		onFind: () =>
 			setFind((current) => ({
 				request: current.request + 1,
@@ -168,6 +185,9 @@ export function Shell() {
 	});
 	return (
 		<div data-testid="shell" className="grid h-full grid-cols-[minmax(0,1fr)] grid-rows-[auto_1fr]">
+			{searchOpen && activeWorkspaceId ? (
+				<SearchOverlay workspaceId={activeWorkspaceId} onClose={() => setSearchOpen(false)} />
+			) : null}
 			<header
 				data-testid="topbar"
 				className="relative window-drag flex h-topbar-row min-w-0 select-none items-center border-b border-border-default bg-container-header-bg px-16"
@@ -202,21 +222,29 @@ export function Shell() {
 						/>
 					) : null}
 					<JbcentralQuotaTopbar />
-					<span
+					<Button
+						variant="ghost"
+						size="m"
 						data-testid="connection-status"
 						data-status={status}
-						role="status"
-						aria-label={t(STATUS_LABEL[status])}
-						className="inline-flex items-center gap-8 tr-text-ui text-text-muted"
+						aria-label={t(hostInTab ? "shell.connection.inTab" : STATUS_LABEL[status])}
+						tooltip={t("shell.connection.chooseHost")}
+						onClick={() => setHostChooserOpen(true)}
 					>
-						<StatusDot
-							aria-hidden="true"
-							className={`size-8 shrink-0 fill-current ${STATUS_DOT[status]}`}
-						/>
-						<span aria-hidden="true" className="hidden sm:inline">
-							{t(STATUS_LABEL[status])}
-						</span>
-					</span>
+						{hostInTab && status === "connected" ? (
+							<span className="hidden sm:inline">{t("shell.connection.inTab")}</span>
+						) : (
+							<>
+								<StatusDot
+									aria-hidden="true"
+									className={`size-8 shrink-0 fill-current ${STATUS_DOT[status]}`}
+								/>
+								<span aria-hidden="true" className="hidden sm:inline">
+									{t(STATUS_LABEL[status])}
+								</span>
+							</>
+						)}
+					</Button>
 					<IconButton
 						variant="ghost"
 						size="m"
@@ -258,7 +286,19 @@ export function Shell() {
 					/>
 				) : null}
 			</header>
-			{hasActiveWorkspace && activeWorkspaceId ? (
+			{hostInTab && waitingForOtherTab && status !== "connected" ? (
+				<div
+					data-testid="playground-other-tab"
+					className="flex h-full items-center justify-center px-24 text-center tr-text-ui text-text-muted"
+				>
+					{t("shell.playground.otherTab")}
+				</div>
+			) : hostChooserOpen || (status === "disconnected" && welcomeGeneration === 0) ? (
+				<HostChooser
+					status={status}
+					{...(hostChooserOpen ? { onClose: () => setHostChooserOpen(false) } : {})}
+				/>
+			) : hasActiveWorkspace && activeWorkspaceId ? (
 				<div data-testid="workspace-shell-layout" className="h-full min-h-0 min-w-0">
 					<WorkspaceWorkbench workspaceId={activeWorkspaceId} />
 				</div>

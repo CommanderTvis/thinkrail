@@ -200,6 +200,15 @@ export interface HostUpdateNotice {
 	status?: HostUpdateStatus;
 }
 
+/** The CORS proxy a host in a browser tab clones through unless told otherwise. */
+export const DEFAULT_GIT_CORS_PROXY = "https://cors.isomorphic-git.org";
+
+/** The origin-private storage directory that holds the ThinkRail Playground's whole filesystem. */
+export const TAB_HOST_OPFS_DIRECTORY = "thinkrail-tab-host";
+
+/** Where a host in a browser tab keeps every project; it offers no other folder. */
+export const TAB_HOST_PROJECTS_DIR = "/projects";
+
 export interface ServerWelcome {
 	protocolVersion: number;
 	appVersion?: string;
@@ -228,6 +237,7 @@ export const WS_METHODS = {
 	projectList: "project.list",
 	projectClose: "project.close",
 	projectRename: "project.rename",
+	projectDelete: "project.delete",
 	projectInspect: "project.inspect",
 	projectInit: "project.init",
 	projectCreate: "project.create",
@@ -646,6 +656,8 @@ export interface WsMethodMap {
 	"project.list": { params: Record<string, never>; result: Project[] };
 	"project.close": { params: { id: string }; result: Ack };
 	"project.rename": { params: { id: string; name: string }; result: Project };
+	/** Deletes a project and its files; served only by the ThinkRail Playground, whose files have no other home. */
+	"project.delete": { params: { id: string }; result: Ack };
 	"project.inspect": { params: { path: string }; result: ProjectPathStatus };
 	"project.init": { params: { path: string }; result: Project };
 	"project.create": {
@@ -657,7 +669,15 @@ export interface WsMethodMap {
 		result: { path: string };
 	};
 	"project.clone": {
-		params: { operationId: string; url: string; parentPath: string; name: string; depth?: number };
+		/** `corsProxy` is read only by a host running in a browser tab; empty clones without one. */
+		params: {
+			operationId: string;
+			url: string;
+			parentPath: string;
+			name: string;
+			depth?: number;
+			corsProxy?: string;
+		};
 		result: Project | null;
 	};
 	"project.cancelClone": { params: { operationId: string }; result: Ack };

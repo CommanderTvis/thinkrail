@@ -244,7 +244,7 @@ import {
 	openExistingWorktree,
 	reclaimWorktree,
 	recordWorkspaceActivity,
-	refreshUserOwnedWorkspace,
+	refreshWorkspaceBranch,
 	renameWorkspace,
 	settleWorkspace,
 	setWorkspaceDiffBase,
@@ -590,6 +590,11 @@ const handlers: WsHandlers = {
 		return { ok: true } as const;
 	},
 	"project.rename": (params) => renameProject(params.id, params.name),
+	"project.delete": () => {
+		throw new Error(
+			"Deleting a project is only offered in the ThinkRail Playground; close it here and remove its folder yourself.",
+		);
+	},
 	"project.setTrust": async (p) => {
 		const project = listProjects().find((candidate) => candidate.id === p.id);
 		if (!project) throw new Error(`Unknown project: ${p.id}`);
@@ -763,7 +768,7 @@ const handlers: WsHandlers = {
 		return { ok: true } as const;
 	},
 	"pr.open": async (p) => {
-		refreshUserOwnedWorkspace(p.workspaceId);
+		refreshWorkspaceBranch(p.workspaceId);
 		recordWorkspaceActivity(p.workspaceId);
 		const { branch, ...result } = await observePrAction(() => openPr(p), p.source ?? "other");
 		if (result.review) {

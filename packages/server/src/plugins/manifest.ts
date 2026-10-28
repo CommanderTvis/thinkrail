@@ -54,6 +54,7 @@ export const PluginManifestSchema = Type.Object({
 	assets: Type.Optional(Type.String()),
 	contributes: ContributionsSchema,
 	pi: Type.Optional(PiBlockSchema),
+	runsInBrowserTab: Type.Optional(Type.Boolean()),
 });
 
 export type ManifestValidation = { manifest: PluginManifest } | { refused: string };

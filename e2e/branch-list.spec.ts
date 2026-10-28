@@ -190,7 +190,6 @@ test("Fetch brings the remotes up to date from the branch list", async ({ page }
 	git(E2E_FIXTURE_REPO, "remote", "add", "fetch-origin", origin);
 	git(E2E_FIXTURE_REPO, "push", "-q", "fetch-origin", "main");
 	git(E2E_DATA_DIR, "clone", "-q", origin, writer);
-	git(writer, "config", "commit.gpgsign", "false");
 	git(writer, "commit", "--allow-empty", "-q", "-m", "written on the remote");
 	git(writer, "push", "-q", "origin", "main");
 

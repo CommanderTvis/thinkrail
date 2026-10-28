@@ -5,7 +5,7 @@ import {
 } from "@remixicon/react";
 import type { PluginRosterEntry } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
-import { Button } from "@thinkrail/ui/button";
+import { Button, IconButton } from "@thinkrail/ui/button";
 import {
 	Dialog,
 	DialogContent,
@@ -92,7 +92,8 @@ function PluginRow({ entry }: { entry: PluginRosterEntry }) {
 	const httpBase = usePluginRegistry((s) => s.httpBase);
 	const [confirmDeps, setConfirmDeps] = useState<string[] | null>(null);
 	const Icon = pluginIcon(entry.icon, false, pluginAssetBase(entry, httpBase));
-	const enabled = entry.status !== "disabled";
+	const unavailable = entry.runsInBrowserTab === false;
+	const enabled = entry.status !== "disabled" && !unavailable;
 	const dependents = enabled ? activeDependents(entry.id, roster) : [];
 	const labelOf = (id: string) => roster.find((candidate) => candidate.id === id)?.label ?? id;
 	const summary = contributionSummary(entry);
@@ -152,7 +153,7 @@ function PluginRow({ entry }: { entry: PluginRosterEntry }) {
 				{entry.status === "failed" ? (
 					<Button
 						variant="outline"
-						size="sm"
+						size="m"
 						data-testid="settings-plugin-retry"
 						onClick={() => {
 							getTransport()
@@ -167,6 +168,7 @@ function PluginRow({ entry }: { entry: PluginRosterEntry }) {
 				) : null}
 				<SettingsSwitch
 					checked={enabled}
+					disabled={unavailable}
 					label={t("settings.plugins.enabled", { plugin: entry.label })}
 					testId="settings-plugin-toggle"
 					onChange={toggle}
@@ -243,14 +245,14 @@ function PluginPathsEditor() {
 						className="flex items-center gap-8 rounded-sm border border-border-default bg-control-bg px-12 py-4"
 					>
 						<span className="min-w-0 flex-1 truncate tr-code-text text-text-default">{path}</span>
-						<button
-							type="button"
-							aria-label={t("settings.plugins.removePath", { path })}
+						<IconButton
+							variant="ghost"
+							size="m"
+							tone="danger"
+							icon={Trash2}
+							label={t("settings.plugins.removePath", { path })}
 							onClick={() => save(pluginPaths.filter((candidate) => candidate !== path))}
-							className="flex size-24 shrink-0 items-center justify-center rounded-sm text-text-muted transition hover:bg-control-bg-hovered hover:text-feedback-error"
-						>
-							<Trash2 className="size-14" />
-						</button>
+						/>
 					</div>
 				))}
 			</div>
@@ -265,7 +267,7 @@ function PluginPathsEditor() {
 					spellCheck={false}
 					className="min-w-0 flex-1 rounded-sm border border-border-default bg-control-bg px-8 py-4 tr-code-text text-text-default outline-none placeholder:text-text-subtle focus:border-primary"
 				/>
-				<Button size="sm" variant="outline" data-testid="settings-plugin-path-add" onClick={add}>
+				<Button size="m" variant="outline" data-testid="settings-plugin-path-add" onClick={add}>
 					<Plus className="size-14" />
 					{t("common.add")}
 				</Button>
@@ -287,7 +289,7 @@ export function PluginsSettings() {
 				</div>
 				<Button
 					variant="outline"
-					size="sm"
+					size="m"
 					data-testid="settings-plugins-rescan"
 					onClick={() => {
 						getTransport()
@@ -303,10 +305,25 @@ export function PluginsSettings() {
 			</div>
 
 			<div className="flex flex-col gap-8">
-				{roster.map((entry) => (
-					<PluginRow key={entry.id} entry={entry} />
-				))}
+				{roster
+					.filter((entry) => entry.runsInBrowserTab !== false)
+					.map((entry) => (
+						<PluginRow key={entry.id} entry={entry} />
+					))}
 			</div>
+
+			{roster.some((entry) => entry.runsInBrowserTab === false) ? (
+				<div data-testid="settings-plugins-unavailable" className="flex flex-col gap-8">
+					<span className="tr-text-eyebrow text-text-muted">
+						{t("settings.plugins.unavailableInTab")}
+					</span>
+					{roster
+						.filter((entry) => entry.runsInBrowserTab === false)
+						.map((entry) => (
+							<PluginRow key={entry.id} entry={entry} />
+						))}
+				</div>
+			) : null}
 
 			<PluginPathsEditor />
 		</section>

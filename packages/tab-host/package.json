@@ -1,0 +1,50 @@
+{
+	"name": "@thinkrail/tab-host",
+	"version": "0.0.0",
+	"private": true,
+	"type": "module",
+	"sideEffects": [
+		"./src/globals.ts",
+		"./src/worker.ts",
+		"./src/runtime/worker.ts"
+	],
+	"exports": {
+		".": "./src/index.ts",
+		"./worker": "./src/worker.ts",
+		"./build-support": "./build-support.ts"
+	},
+	"scripts": {
+		"test": "bun test",
+		"typecheck": "tsc --noEmit -p tsconfig.json"
+	},
+	"dependencies": {
+		"@earendil-works/pi-agent-core": "catalog:",
+		"@earendil-works/pi-ai": "catalog:",
+		"@thinkrail/contracts": "workspace:*",
+		"@thinkrail/plugin-api": "workspace:*",
+		"@thinkrail/plugin-blueprint": "workspace:*",
+		"@thinkrail/plugin-branch-graph": "workspace:*",
+		"@thinkrail/plugin-claude-code": "workspace:*",
+		"@thinkrail/plugin-codex": "workspace:*",
+		"@thinkrail/plugin-discord": "workspace:*",
+		"@thinkrail/plugin-file-icons": "workspace:*",
+		"@thinkrail/plugin-spec-dialect": "workspace:*",
+		"@thinkrail/plugin-visualize": "workspace:*",
+		"buffer": "6.0.3",
+		"diff": "catalog:",
+		"events": "3.3.0",
+		"isomorphic-git": "1.44.5",
+		"just-bash": "3.6.0",
+		"memfs": "4.80.0",
+		"pathe": "2.0.3",
+		"semver": "7.8.5",
+		"sucrase": "3.35.1",
+		"typebox": "catalog:"
+	},
+	"devDependencies": {
+		"@jsonjoy.com/fs-node-to-fsa": "4.80.0",
+		"@types/bun": "catalog:",
+		"@types/semver": "7.8.0",
+		"typescript": "catalog:"
+	}
+}

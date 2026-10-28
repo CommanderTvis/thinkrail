@@ -45,6 +45,7 @@
 		"@thinkrail/plugin-file-icons": "workspace:*",
 		"@thinkrail/plugin-spec-dialect": "workspace:*",
 		"@thinkrail/plugin-visualize": "workspace:*",
+		"@thinkrail/tab-host": "workspace:*",
 		"@thinkrail/ui": "workspace:*",
 		"@xterm/addon-clipboard": "0.2.0",
 		"@xterm/addon-fit": "0.11.0",

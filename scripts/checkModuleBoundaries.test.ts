@@ -16,6 +16,7 @@ const modules = {
 	"packages/pi-dag": "pi-dag",
 	"pi-extensions/visualize": "@thinkrail/pi-visualize",
 	"packages/server": "@thinkrail/server",
+	"packages/tab-host": "@thinkrail/tab-host",
 	"apps/web": "@thinkrail/web",
 	"apps/cli": "@thinkrail/cli",
 	"apps/desktop": "@thinkrail/desktop",

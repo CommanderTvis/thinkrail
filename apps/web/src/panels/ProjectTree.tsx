@@ -71,14 +71,13 @@ import {
 	toast,
 	useAppStore,
 	type WorkspaceReadAction,
+	workspaceBranchLabel,
 	workspaceName,
 } from "../store";
-import { errorText, getTransport } from "../transport";
+import { errorText, getTransport, hostMode } from "../transport";
 import { AddProjectMenu } from "./AddProjectMenu";
-import { CloneProjectDialog } from "./CloneProjectDialog";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { ExistingWorktreeDialog } from "./ExistingWorktreeDialog";
-import { NewProjectDialog } from "./NewProjectDialog";
 import { NewWorkspaceDialog } from "./NewWorkspaceDialog";
 import { RemoveWorkspaceDialog } from "./RemoveWorkspaceDialog";
 import {
@@ -135,8 +134,6 @@ export function ProjectTree({
 	const expandedProjectIds = useAppStore((s) => s.expandedProjectIds);
 	const [dialogProjectId, setDialogProjectId] = useState<string | null>(null);
 	const [existingDialogProjectId, setExistingDialogProjectId] = useState<string | null>(null);
-	const [newProject, setNewProject] = useState(false);
-	const [cloneProject, setCloneProject] = useState(false);
 	const addProjectButtonRef = useRef<HTMLButtonElement>(null);
 	const projectNameButtonsRef = useRef(new Map<string, HTMLButtonElement>());
 	const pendingCloseFocusProjectIdRef = useRef<string | null>(null);
@@ -414,21 +411,6 @@ export function ProjectTree({
 			) : null}
 
 			{dialogs}
-			{newProject ? (
-				<NewProjectDialog
-					onOpenChange={setNewProject}
-					onCreated={(project) =>
-						useAppStore.getState().selectProject(project.id, { reveal: true })
-					}
-				/>
-			) : null}
-
-			{cloneProject ? (
-				<CloneProjectDialog
-					onOpenChange={setCloneProject}
-					onCloned={(project) => useAppStore.getState().selectProject(project.id, { reveal: true })}
-				/>
-			) : null}
 		</nav>
 	);
 }
@@ -561,6 +543,7 @@ function ProjectRow({
 	const Folder = isSelected ? RiFolderFill : RiFolderLine;
 	const [menuOpen, setMenuOpen] = useState(false);
 	const [confirmOpen, setConfirmOpen] = useState(false);
+	const [deleteOpen, setDeleteOpen] = useState(false);
 	const openingDialogRef = useRef(false);
 	const closeConfirmedRef = useRef(false);
 	const {
@@ -737,6 +720,18 @@ function ProjectRow({
 						<X />
 						{t("panels.projectTree.closeProject")}
 					</ContextMenuItem>
+					{hostMode() === "tab" ? (
+						<ContextMenuItem
+							data-testid="project-menu-delete"
+							onSelect={(event) => {
+								event.preventDefault();
+								openDialogAfterMenu(() => setDeleteOpen(true));
+							}}
+						>
+							<Trash2 />
+							{t("panels.projectTree.deleteProject")}
+						</ContextMenuItem>
+					) : null}
 				</ContextMenuContent>
 			</ContextMenu>
 			<ConfirmDialog
@@ -753,6 +748,24 @@ function ProjectRow({
 				onClosedAutoFocus={() => {
 					if (!closeConfirmedRef.current) onRestoreFocus();
 					closeConfirmedRef.current = false;
+				}}
+			/>
+			<ConfirmDialog
+				open={deleteOpen}
+				onOpenChange={setDeleteOpen}
+				destructive
+				title={t("panels.projectTree.deleteTitle", { name: project.name })}
+				description={t("panels.projectTree.deleteDescription")}
+				confirmLabel={t("panels.projectTree.deleteProject")}
+				confirmTestId="confirm-delete-project"
+				onConfirm={() => {
+					void getTransport()
+						.request("project.delete", { id: project.id })
+						.catch((err) =>
+							toast.error(
+								errorText(err, t("panels.projectTree.deleteFailed", { name: project.name })),
+							),
+						);
 				}}
 			/>
 		</>
@@ -822,7 +835,7 @@ function WorkspaceRow({
 			: isExternal
 				? FolderOpen
 				: GitBranch;
-	const isTwoLine = !isSettled && workspace.branch !== workspace.name;
+	const isTwoLine = !isSettled;
 	const displayName = workspaceName(t, workspace);
 	const [menuOpen, setMenuOpen] = useState(false);
 	const openMenuFromContext = (event: MouseEvent) => {
@@ -857,7 +870,7 @@ function WorkspaceRow({
 			data-testid="workspace-branch"
 			className="truncate text-text-subtle tr-text-metadata leading-tight"
 		>
-			{workspace.branch}
+			{workspaceBranchLabel(workspace)}
 		</span>
 	) : null;
 

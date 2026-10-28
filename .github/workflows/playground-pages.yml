@@ -1,0 +1,54 @@
+name: Playground
+
+on:
+  push:
+    branches: [claude-code-integration-plugin-api]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: playground-pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build the ThinkRail Playground
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+      - name: Cache bun install
+        uses: actions/cache@v6
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: ${{ runner.os }}-bun-
+      - run: bun install --frozen-lockfile
+      - name: Build the web client as the Playground
+        working-directory: apps/web
+        env:
+          VITE_BASE: /${{ github.event.repository.name }}/
+          VITE_HOST_MODE: tab
+        run: bunx vite build
+      - run: bun scripts/check-web-bundle.ts
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: apps/web/dist
+
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: build
+    runs-on: ubuntu-24.04
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5

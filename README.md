@@ -116,6 +116,69 @@ Kept as atomic commits so each can become a pull request:
   after a lost drain event, a pty that no longer inherits a stale utmpx user, live reattach that restores
   full-screen input modes, and a default model, hidden models and JetBrains AI org switching in Settings.
 
+## ThinkRail Playground
+
+Try it without installing anything: **https://commandertvis.github.io/thinkrail/** opens the Playground
+straight away. With no ThinkRail host to connect to, the host screen (click the connection status in the top bar) offers
+**Open the ThinkRail Playground**. The host then runs in a Web Worker of the page
+([`packages/tab-host`](packages/tab-host/SPEC.md)): projects live in an in-memory filesystem mirrored to
+the browser's origin-private storage, so they survive a reload; git is isomorphic-git, cloning over HTTPS
+through a CORS proxy you can change in the clone dialog; `pi` chats run with an API key you connect under
+Settings → Providers, or with your JetBrains AI licence (below). Terminals and the agent's `bash` run a simulated shell (just-bash: coreutils, `rg`,
+`jq`, pipes, and `git` including `pull`/`push`), plus `node`, `npm install`, `npx` and `tsc`.
+
+**JetBrains AI.** With an AI licence, install [Central](https://www.jetbrains.com/help/central-cli/quickstart.html)
+and choose JetBrains AI under Settings → Providers: enter your licence ID and the dialog shows a one-line command, with it filled in, to run in your terminal. It signs in with `central login`, exchanges the
+session at JetBrains' OAuth endpoint and asks Grazie (`api.jetbrains.ai`) for a licence JWT, and needs `curl`
+and `jq`. Paste the token it prints into the dialog. The command runs
+in your terminal because JetBrains' OAuth endpoint answers browsers on some origins only (localhost, not
+`github.io`); where it does, pasting `central login export` works instead. Grazie allows browser origins,
+so chat goes from the tab straight to it with the JWT and no other custom header; no proxy is involved. Usage
+is billed to the licence, not to a Central workspace, which no browser-reachable endpoint accepts. The long-lived
+Central session never enters the page. The tab holds only the licence JWT, in the page worker's memory for one
+hour: it is never written to the Playground's storage or the project volume, so a reload, disconnecting or
+closing the tab discards it. Until then, code running in that worker could use your licence. Nothing of yours
+ships with the Playground: you enter your own licence ID and token. This is an unofficial fork, not affiliated
+with JetBrains.
+
+**Risks.** `node`, `npm` and `npx` run third-party code from the npm registry inside your browser tab. It
+runs in a separate worker on a copy of the project, without your API keys, but it can change or delete the
+project's files and reach the network. npm never runs install scripts, native addons don't work, and
+`node` is an emulation: no child processes, servers or sockets. The first use in each shell prints this
+warning.
+
+Plugins that need a host process (Claude Code, Codex, Discord, Git Graph) declare
+`runsInBrowserTab: false` and stay off. To remove everything the Playground stored (projects, chats,
+settings, API keys), open the host screen and press **Delete all Playground data**, or clear the site's
+data for its address in your browser's settings.
+
+## Install
+
+Nightly builds of this fork (branch `claude-code-integration-plugin-api`) are published whenever it
+changes, checked daily at 03:00 UTC. They install as `thinkrail` (CLI) and a desktop app.
+
+macOS (Apple Silicon), from [commandertvis/homebrew-thinkrail](https://github.com/CommanderTvis/homebrew-thinkrail):
+
+```sh
+brew trust --tap commandertvis/thinkrail   # Homebrew 7+ refuses untrusted taps
+brew tap commandertvis/thinkrail
+brew install commandertvis/thinkrail/thinkrail                  # CLI
+brew install --cask commandertvis/thinkrail/thinkrail-desktop   # desktop app (ThinkRail-canary.app)
+```
+
+Windows, from [CommanderTvis/winget-thinkrail](https://github.com/CommanderTvis/winget-thinkrail) (the
+CLI for x64 and ARM64, the desktop for x64 on Windows 11):
+
+```powershell
+winget source add --name thinkrail --arg https://winget-thinkrail.vercel.app --type Microsoft.Rest   # once, as administrator
+winget install --id CommanderTvis.ThinkRail --exact --source thinkrail --scope user                  # CLI
+winget install --id CommanderTvis.ThinkRail.Desktop --exact --source thinkrail --scope user --interactive   # desktop app
+```
+
+Update through Homebrew or WinGet rather than the CLI's built-in self-update; the desktop app also updates
+itself from the fork's nightly feed. Each repository's README covers upgrading, uninstalling and the
+other packages it carries.
+
 ## Clone and run
 
 The fork is developed and tested on macOS only. Other platforms build, but nothing here has been run on
@@ -139,7 +202,7 @@ bun run desktop:dev
 ```
 
 Update this checkout with Git and rebuild it. The upstream installers and releases install JetBrains'
-build, without this fork's plugins.
+build, without this fork's plugins; use the [Install](#install) builds above for this fork.
 
 ## Analytics & privacy
 

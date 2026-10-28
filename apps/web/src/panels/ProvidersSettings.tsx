@@ -15,7 +15,7 @@ import { SkeletonRows } from "@thinkrail/ui/skeleton";
 import { useCallback, useState } from "react";
 import { AUTH_KIND_LABEL } from "@/chat/modelPicker";
 import { toast, useAppStore } from "@/store";
-import { errorText, getTransport } from "@/transport";
+import { errorText, getTransport, hostMode } from "@/transport";
 import { JetBrainsAiCard } from "./JetBrainsAiCard";
 import { ProviderRow } from "./ProviderRow";
 import { SettingsGroup, SettingsPageContainer } from "./SettingsGroup";
@@ -76,7 +76,13 @@ export function ProvidersSettings() {
 	return (
 		<div data-testid="settings-providers" className="flex flex-col gap-24">
 			<div className="flex items-center justify-between gap-12">
-				<p className="tr-text-metadata text-text-muted">{t("settings.providers.intro")}</p>
+				<p className="tr-text-metadata text-text-muted">
+					{t(
+						hostMode() === "tab"
+							? "settings.providers.playgroundIntro"
+							: "settings.providers.intro",
+					)}
+				</p>
 				<Button
 					variant="ghost"
 					size="m"
@@ -112,7 +118,7 @@ export function ProvidersSettings() {
 						</SettingsGroup>
 					) : null}
 
-					{report ? (
+					{report && hostMode() !== "tab" ? (
 						<JetBrainsAiCard
 							status={report.jbcentral}
 							install={report.jbcentralInstall}
