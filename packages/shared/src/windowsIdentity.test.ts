@@ -20,6 +20,15 @@ test("names each channel and maps its version to four numeric parts", () => {
 	});
 });
 
+test("a timestamp-style nightly build identifier does not fit a part and maps to 0", () => {
+	expect(
+		windowsFileIdentity({ version: "0.0.0-nightly.20261028092946", channel: "nightly" }),
+	).toMatchObject({ fileVersion: "0.0.0.0", fileVersionParts: [0, 0, 0, 0] });
+	expect(() =>
+		windowsFileIdentity({ version: "65536.0.0-nightly.20261028092946", channel: "nightly" }),
+	).toThrow("has a part above 65535");
+});
+
 test("rejects an unknown channel and versions Windows cannot carry", () => {
 	expect(() => windowsFileIdentity({ version: "0.2.0", channel: "beta" })).toThrow(
 		'unknown release channel "beta"',

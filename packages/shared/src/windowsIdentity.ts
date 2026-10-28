@@ -17,6 +17,7 @@ const CHANNEL_SUFFIXES: Readonly<Record<string, string>> = {
 };
 
 const MAX_VERSION_PART = 0xffff;
+const TIMESTAMP_MIN_DIGITS = 8;
 
 export function windowsProductName(channel: string): string {
 	const suffix = CHANNEL_SUFFIXES[channel];
@@ -47,7 +48,7 @@ function windowsVersionParts(version: string): [number, number, number, number] 
 		Number(match[1]),
 		Number(match[2]),
 		Number(match[3]),
-		build && /^\d+$/.test(build) ? Number(build) : 0,
+		build && /^\d+$/.test(build) && build.length < TIMESTAMP_MIN_DIGITS ? Number(build) : 0,
 	];
 	if (parts.some((part) => part > MAX_VERSION_PART)) {
 		throw new Error(`version "${version}" has a part above ${MAX_VERSION_PART}`);
